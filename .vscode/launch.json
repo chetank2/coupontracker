@@ -1,0 +1,29 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Android App",
+            "type": "pwa-node",
+            "request": "launch",
+            "runtimeExecutable": "bash",
+            "runtimeArgs": [
+                "-c",
+                "~/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am start -n com.example.coupontracker/.ui.activity.MainActivity"
+            ],
+            "preLaunchTask": "Install App",
+            "skipFiles": [
+                "<node_internals>/**"
+            ]
+        },
+        {
+            "type": "java",
+            "name": "Debug Tests",
+            "request": "launch",
+            "mainClass": "com.example.coupontracker.ExampleUnitTest",
+            "projectName": "CouponTracker3"
+        }
+    ]
+}

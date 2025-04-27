@@ -1,0 +1,13 @@
+{
+    "java.configuration.updateBuildConfiguration": "automatic",
+    "java.import.gradle.version": "8.10.2",
+    "java.import.gradle.wrapper.enabled": true,
+    "java.import.gradle.home": "",
+    "java.home": "",
+    "java.jdt.ls.java.home": "",
+    "android.sdk.path": "~/Library/Android/sdk",
+    "files.exclude": {
+        "**/.gradle": false,
+        "**/.idea": false
+    }
+}

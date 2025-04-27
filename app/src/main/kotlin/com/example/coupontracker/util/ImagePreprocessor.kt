@@ -1,0 +1,296 @@
+package com.example.coupontracker.util
+
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
+import android.graphics.RectF
+import android.util.Log
+import java.io.ByteArrayOutputStream
+import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * Advanced image preprocessor for improving text extraction from coupon images
+ */
+class ImagePreprocessor {
+    companion object {
+        private const val TAG = "ImagePreprocessor"
+        
+        // Image processing constants
+        private const val MAX_IMAGE_DIMENSION = 1600
+        private const val MIN_IMAGE_DIMENSION = 800
+        private const val JPEG_QUALITY = 90
+    }
+
+    init {
+        // Log initialization
+        Log.d(TAG, "Initializing image processor with built-in Android APIs")
+    }
+
+    /**
+     * Preprocess image for better text recognition
+     * @param bitmap Input image
+     * @return Preprocessed image optimized for OCR
+     */
+    fun preprocess(bitmap: Bitmap): Bitmap {
+        try {
+            Log.d(TAG, "Preprocessing image: ${bitmap.width}x${bitmap.height}")
+            
+            // 1. Resize image to reasonable dimensions
+            var processedBitmap = resizeBitmap(bitmap)
+            
+            // 2. Apply enhanced processing
+            try {
+                processedBitmap = applyEnhancedProcessing(processedBitmap)
+            } catch (e: Exception) {
+                Log.w(TAG, "Enhanced processing failed, using standard processing", e)
+                // 3. Fall back to standard Android image processing
+                processedBitmap = applyStandardProcessing(processedBitmap)
+            }
+            
+            Log.d(TAG, "Image preprocessing complete: ${processedBitmap.width}x${processedBitmap.height}")
+            return processedBitmap
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during image preprocessing, returning original", e)
+            return bitmap
+        }
+    }
+    
+    /**
+     * Resize bitmap to reasonable dimensions for processing
+     */
+    private fun resizeBitmap(bitmap: Bitmap): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        
+        // Calculate appropriate dimensions
+        var newWidth = width
+        var newHeight = height
+        
+        // Scale down large images
+        if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+            val scaleFactor = MAX_IMAGE_DIMENSION.toFloat() / max(width, height)
+            newWidth = (width * scaleFactor).toInt()
+            newHeight = (height * scaleFactor).toInt()
+            Log.d(TAG, "Scaling down image to: ${newWidth}x${newHeight}")
+        }
+        
+        // Scale up small images
+        if (width < MIN_IMAGE_DIMENSION && height < MIN_IMAGE_DIMENSION) {
+            val scaleFactor = MIN_IMAGE_DIMENSION.toFloat() / max(width, height)
+            newWidth = (width * scaleFactor).toInt()
+            newHeight = (height * scaleFactor).toInt()
+            Log.d(TAG, "Scaling up image to: ${newWidth}x${newHeight}")
+        }
+        
+        // If dimensions didn't change, return original
+        if (newWidth == width && newHeight == height) {
+            return bitmap
+        }
+        
+        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+    }
+    
+    /**
+     * Apply standard Android image processing 
+     */
+    private fun applyStandardProcessing(bitmap: Bitmap): Bitmap {
+        // Create output bitmap
+        val outputBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(outputBitmap)
+        
+        // Apply high contrast paint
+        val paint = Paint()
+        val colorMatrix = ColorMatrix()
+        
+        // Increase contrast
+        colorMatrix.set(floatArrayOf(
+            2.0f, 0f, 0f, 0f, -160f, // Red
+            0f, 2.0f, 0f, 0f, -160f, // Green
+            0f, 0f, 2.0f, 0f, -160f, // Blue
+            0f, 0f, 0f, 1.0f, 0f     // Alpha
+        ))
+        
+        paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
+        
+        return outputBitmap
+    }
+    
+    /**
+     * Apply enhanced processing techniques using Android APIs
+     */
+    private fun applyEnhancedProcessing(bitmap: Bitmap): Bitmap {
+        try {
+            // Create output bitmap
+            val outputBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(outputBitmap)
+            
+            // Convert to grayscale
+            val grayscalePaint = Paint()
+            val grayscaleMatrix = ColorMatrix()
+            grayscaleMatrix.setSaturation(0f)
+            grayscalePaint.colorFilter = ColorMatrixColorFilter(grayscaleMatrix)
+            canvas.drawBitmap(bitmap, 0f, 0f, grayscalePaint)
+            
+            // Apply contrast enhancement
+            val contrastBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+            val contrastCanvas = Canvas(contrastBitmap)
+            val contrastPaint = Paint()
+            val contrastMatrix = ColorMatrix(floatArrayOf(
+                2.0f, 0f, 0f, 0f, -160f, // Red
+                0f, 2.0f, 0f, 0f, -160f, // Green
+                0f, 0f, 2.0f, 0f, -160f, // Blue
+                0f, 0f, 0f, 1.0f, 0f     // Alpha
+            ))
+            contrastPaint.colorFilter = ColorMatrixColorFilter(contrastMatrix)
+            contrastCanvas.drawBitmap(outputBitmap, 0f, 0f, contrastPaint)
+            
+            // Apply local threshold-like effect (simulated with a contrast enhancement)
+            val thresholdBitmap = Bitmap.createBitmap(bitmap.width, bitmap.height, Bitmap.Config.ARGB_8888)
+            val thresholdCanvas = Canvas(thresholdBitmap)
+            val thresholdPaint = Paint()
+            val thresholdMatrix = ColorMatrix(floatArrayOf(
+                3.0f, 0f, 0f, 0f, -200f, // Red
+                0f, 3.0f, 0f, 0f, -200f, // Green
+                0f, 0f, 3.0f, 0f, -200f, // Blue
+                0f, 0f, 0f, 1.0f, 0f     // Alpha
+            ))
+            thresholdPaint.colorFilter = ColorMatrixColorFilter(thresholdMatrix)
+            thresholdCanvas.drawBitmap(contrastBitmap, 0f, 0f, thresholdPaint)
+            
+            return thresholdBitmap
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in enhanced image processing, returning original", e)
+            return bitmap
+        }
+    }
+    
+    /**
+     * Apply sharpening filter to enhance text edges
+     */
+    fun applySharpening(bitmap: Bitmap): Bitmap {
+        try {
+            // Clone the bitmap
+            val width = bitmap.width
+            val height = bitmap.height
+            val pixels = IntArray(width * height)
+            val outputPixels = IntArray(width * height)
+            
+            // Get pixels
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            System.arraycopy(pixels, 0, outputPixels, 0, pixels.size)
+            
+            // Apply a simple sharpening with a 3x3 convolution (without actual convolution)
+            // This is a simplified version, not as effective as a real convolution
+            for (y in 1 until height - 1) {
+                for (x in 1 until width - 1) {
+                    val index = y * width + x
+                    
+                    // Get surrounding pixels (skip edges)
+                    val centerPixel = pixels[index]
+                    val topPixel = pixels[index - width]
+                    val bottomPixel = pixels[index + width]
+                    val leftPixel = pixels[index - 1]
+                    val rightPixel = pixels[index + 1]
+                    
+                    // Extract color channels
+                    val centerRed = Color.red(centerPixel)
+                    val centerGreen = Color.green(centerPixel)
+                    val centerBlue = Color.blue(centerPixel)
+                    
+                    // Apply simplified sharpening logic
+                    val red = min(255, max(0, 
+                        5 * centerRed - Color.red(topPixel) - Color.red(bottomPixel) - 
+                        Color.red(leftPixel) - Color.red(rightPixel)))
+                    val green = min(255, max(0, 
+                        5 * centerGreen - Color.green(topPixel) - Color.green(bottomPixel) - 
+                        Color.green(leftPixel) - Color.green(rightPixel)))
+                    val blue = min(255, max(0, 
+                        5 * centerBlue - Color.blue(topPixel) - Color.blue(bottomPixel) - 
+                        Color.blue(leftPixel) - Color.blue(rightPixel)))
+                    
+                    // Combine new RGB values
+                    outputPixels[index] = Color.rgb(red, green, blue)
+                }
+            }
+            
+            // Create output bitmap
+            val outputBitmap = Bitmap.createBitmap(width, height, bitmap.config)
+            outputBitmap.setPixels(outputPixels, 0, width, 0, 0, width, height)
+            
+            return outputBitmap
+        } catch (e: Exception) {
+            Log.e(TAG, "Error applying sharpening filter", e)
+            return bitmap
+        }
+    }
+    
+    /**
+     * Create multiple versions of the image with different preprocessing techniques
+     * This can be useful for trying different approaches with the Vision API
+     */
+    fun createProcessingVariants(bitmap: Bitmap): List<Bitmap> {
+        val variants = mutableListOf<Bitmap>()
+        
+        try {
+            // Add original resized bitmap
+            val resized = resizeBitmap(bitmap)
+            variants.add(resized)
+            
+            // Add high contrast variant
+            val highContrast = applyStandardProcessing(resized)
+            variants.add(highContrast)
+            
+            // Try enhanced processing
+            try {
+                val enhancedImage = applyEnhancedProcessing(resized)
+                variants.add(enhancedImage)
+            } catch (e: Exception) {
+                Log.d(TAG, "Enhanced variant creation skipped")
+            }
+            
+            // Add grayscale variant
+            val grayscale = convertToGrayscale(resized)
+            variants.add(grayscale)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating processing variants", e)
+            // Ensure we return at least the original image
+            if (variants.isEmpty()) {
+                variants.add(bitmap)
+            }
+        }
+        
+        Log.d(TAG, "Created ${variants.size} preprocessing variants")
+        return variants
+    }
+    
+    /**
+     * Convert bitmap to grayscale
+     */
+    private fun convertToGrayscale(bitmap: Bitmap): Bitmap {
+        val width = bitmap.width
+        val height = bitmap.height
+        val grayscaleBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(grayscaleBitmap)
+        val paint = Paint()
+        val colorMatrix = ColorMatrix()
+        colorMatrix.setSaturation(0f)
+        paint.colorFilter = ColorMatrixColorFilter(colorMatrix)
+        canvas.drawBitmap(bitmap, 0f, 0f, paint)
+        return grayscaleBitmap
+    }
+    
+    /**
+     * Optimize bitmap for network transmission to cloud OCR services
+     */
+    fun optimizeForCloudOcr(bitmap: Bitmap): ByteArray {
+        val outputStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, outputStream)
+        return outputStream.toByteArray()
+    }
+}

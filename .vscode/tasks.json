@@ -1,0 +1,33 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Debug APK",
+            "type": "shell",
+            "command": "chmod +x ./gradlew && ./gradlew assembleDebug",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Install App",
+            "type": "shell",
+            "command": "~/Library/Android/sdk/platform-tools/adb -s emulator-5554 install -r app/build/outputs/apk/debug/app-debug.apk",
+            "dependsOn": ["Build Debug APK"],
+            "group": "test"
+        },
+        {
+            "label": "Clean Project",
+            "type": "shell",
+            "command": "chmod +x ./gradlew && ./gradlew clean",
+            "group": "none"
+        },
+        {
+            "label": "List Connected Devices",
+            "type": "shell",
+            "command": "~/Library/Android/sdk/platform-tools/adb devices -l",
+            "group": "none"
+        }
+    ]
+} 

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Uber brand colors with WCAG compliance for dark theme -->
+    <color name="primary">#000000</color>           <!-- Uber Black -->
+    <color name="primary_variant">#333333</color>   <!-- Darker Black -->
+    <color name="secondary">#276EF1</color>         <!-- Uber Blue - WCAG AA compliant -->
+    <color name="secondary_variant">#5B91F5</color> <!-- Lighter Blue - WCAG AAA compliant on dark backgrounds -->
+    
+    <!-- Accent colors for dark theme -->
+    <color name="accent_green">#3DB97F</color>      <!-- Lighter green - WCAG AA compliant on dark backgrounds -->
+    <color name="accent_red">#FF6E59</color>        <!-- Lighter red - WCAG AA compliant on dark backgrounds -->
+    <color name="accent_yellow">#FFD27D</color>     <!-- Lighter yellow - WCAG AA compliant on dark backgrounds -->
+    
+    <!-- Text colors for dark theme -->
+    <color name="text_primary">#FFFFFF</color>      <!-- White text for dark mode -->
+    <color name="text_secondary">#E0E0E0</color>    <!-- Slightly dimmed white for secondary text -->
+    <color name="text_tertiary">#BDBDBD</color>     <!-- More dimmed white for tertiary text -->
+    <color name="text_on_dark">#000000</color>      <!-- Black text for light elements in dark mode -->
+    <color name="text_on_dark_secondary">#333333</color> <!-- Dark gray for secondary text on light elements -->
+    
+    <!-- Background colors for dark theme -->
+    <color name="background">#121212</color>        <!-- Uber dark theme background -->
+    <color name="surface">#1E1E1E</color>           <!-- Slightly lighter than background -->
+    <color name="card">#2C2C2C</color>              <!-- Even lighter for cards -->
+    
+    <!-- Status colors for dark theme -->
+    <color name="success">#3DB97F</color>           <!-- Lighter green - WCAG AA compliant on dark backgrounds -->
+    <color name="error">#FF6E59</color>             <!-- Lighter red - WCAG AA compliant on dark backgrounds -->
+    <color name="warning">#FFD27D</color>           <!-- Lighter yellow - WCAG AA compliant on dark backgrounds -->
+    <color name="info">#5B91F5</color>              <!-- Lighter blue - WCAG AA compliant on dark backgrounds -->
+    
+    <!-- Legacy Android colors (required) -->
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
+</resources> 
