@@ -6,5 +6,5 @@ package com.example.coupontracker.util
  */
 object ApiKeys {
     // Replace this with your actual Google Cloud Vision API key
-    const val GOOGLE_CLOUD_VISION_API_KEY = "AIzaSyD4krpwCDZXenzCJ0yxJHQjUcSb-Eh2F8M"
+    const val GOOGLE_CLOUD_VISION_API_KEY = ""
 } 
