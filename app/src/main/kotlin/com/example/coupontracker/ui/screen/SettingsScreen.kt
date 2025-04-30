@@ -35,7 +35,8 @@ enum class ApiType(val displayName: String) {
     GOOGLE_CLOUD_VISION("Google Cloud Vision"),
     MISTRAL("Mistral AI"),
     COMBINED("Combined Vision+Mistral"),
-    ML_KIT("ML Kit (On-device)")
+    ML_KIT("ML Kit (On-device)"),
+    SUPER("Super OCR (All Technologies)")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,45 +45,45 @@ fun SettingsScreen(
     navController: NavController
 ) {
     val context = LocalContext.current
-    val sharedPreferences = remember { 
+    val sharedPreferences = remember {
         context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
     }
-    
+
     // API keys
-    var googleCloudVisionApiKey by remember { 
-        mutableStateOf(sharedPreferences.getString(KEY_GOOGLE_CLOUD_VISION_API_KEY, "") ?: "") 
+    var googleCloudVisionApiKey by remember {
+        mutableStateOf(sharedPreferences.getString(KEY_GOOGLE_CLOUD_VISION_API_KEY, "") ?: "")
     }
-    var mistralApiKey by remember { 
-        mutableStateOf(sharedPreferences.getString(KEY_MISTRAL_API_KEY, "") ?: "") 
+    var mistralApiKey by remember {
+        mutableStateOf(sharedPreferences.getString(KEY_MISTRAL_API_KEY, "") ?: "")
     }
-    
+
     // Selected API
     val savedApiType = sharedPreferences.getString(KEY_SELECTED_API, ApiType.GOOGLE_CLOUD_VISION.name)
-    var selectedApiType by remember { 
+    var selectedApiType by remember {
         mutableStateOf(
             try {
                 ApiType.valueOf(savedApiType ?: ApiType.GOOGLE_CLOUD_VISION.name)
             } catch (e: Exception) {
                 ApiType.GOOGLE_CLOUD_VISION
             }
-        ) 
+        )
     }
-    
+
     // UI states
     var isGoogleKeyVisible by remember { mutableStateOf(false) }
     var isMistralKeyVisible by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
-    
+
     // Coroutine scope
     val scope = rememberCoroutineScope()
-    
+
     // API test states
     var isTestingGoogleApi by remember { mutableStateOf(false) }
     var googleApiTestResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
-    
+
     var isTestingMistralApi by remember { mutableStateOf(false) }
     var mistralApiTestResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -110,7 +111,7 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
-            
+
             // API Selection Card
             Card(
                 modifier = Modifier
@@ -125,7 +126,7 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
-                    
+
                     ApiType.values().forEach { apiType ->
                         Row(
                             modifier = Modifier
@@ -135,38 +136,39 @@ fun SettingsScreen(
                         ) {
                             RadioButton(
                                 selected = selectedApiType == apiType,
-                                onClick = { 
+                                onClick = {
                                     selectedApiType = apiType
                                     saveApiPreference(sharedPreferences, KEY_SELECTED_API, apiType.name)
-                                    
+
                                     // For backward compatibility
                                     if (apiType == ApiType.MISTRAL) {
                                         saveApiPreference(sharedPreferences, KEY_USE_MISTRAL_API, true)
                                     } else {
                                         saveApiPreference(sharedPreferences, KEY_USE_MISTRAL_API, false)
                                     }
-                                    
+
                                     Toast.makeText(context, "${apiType.displayName} selected as primary OCR API", Toast.LENGTH_SHORT).show()
                                 }
                             )
-                            
+
                             Text(
                                 text = apiType.displayName,
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.padding(start = 8.dp)
                             )
-                            
+
                             // Show status icon for APIs that need keys
                             if (apiType != ApiType.ML_KIT) {
                                 Spacer(modifier = Modifier.weight(1f))
-                                
+
                                 val isKeyValid = when (apiType) {
                                     ApiType.GOOGLE_CLOUD_VISION -> googleCloudVisionApiKey.isNotBlank()
                                     ApiType.MISTRAL -> mistralApiKey.isNotBlank()
                                     ApiType.COMBINED -> googleCloudVisionApiKey.isNotBlank() && mistralApiKey.isNotBlank()
+                                    ApiType.SUPER -> googleCloudVisionApiKey.isNotBlank() || mistralApiKey.isNotBlank()
                                     else -> false
                                 }
-                                
+
                                 Icon(
                                     imageVector = if (isKeyValid) Icons.Default.Check else Icons.Default.Warning,
                                     contentDescription = null,
@@ -175,26 +177,27 @@ fun SettingsScreen(
                             }
                         }
                     }
-                    
+
                     // API Selection Help Text
                     Text(
                         text = "Note: If the selected API fails, the app will try the next one in order. " +
-                              "The 'Combined' option uses Google Cloud Vision results validated by Mistral AI for best accuracy.",
+                              "The 'Combined' option uses Google Cloud Vision results validated by Mistral AI. " +
+                              "The 'Super OCR' option uses all available technologies in parallel and selects the best results.",
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 16.dp)
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Google Cloud Vision API Key
             Text(
                 text = "API Keys",
                 style = MaterialTheme.typography.titleLarge,
                 modifier = Modifier.padding(bottom = 16.dp)
             )
-            
+
             // Google Cloud Vision API Key Card
             Card(
                 modifier = Modifier
@@ -208,15 +211,15 @@ fun SettingsScreen(
                         text = "Google Cloud Vision API Key",
                         style = MaterialTheme.typography.titleMedium
                     )
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     OutlinedTextField(
                         value = googleCloudVisionApiKey,
                         onValueChange = { googleCloudVisionApiKey = it },
                         label = { Text("API Key") },
                         modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = if (isGoogleKeyVisible) VisualTransformation.None 
+                        visualTransformation = if (isGoogleKeyVisible) VisualTransformation.None
                                              else PasswordVisualTransformation(),
                         trailingIcon = {
                             Button(
@@ -227,9 +230,9 @@ fun SettingsScreen(
                             }
                         }
                     )
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
@@ -244,12 +247,12 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                         }
-                        
+
                         OutlinedButton(
                             onClick = {
                                 isTestingGoogleApi = true
                                 googleApiTestResult = null
-                                
+
                                 scope.launch {
                                     val apiTester = ApiTester(context)
                                     googleApiTestResult = apiTester.testGoogleVisionApi(googleCloudVisionApiKey)
@@ -267,11 +270,11 @@ fun SettingsScreen(
                             }
                             Text("Test API")
                         }
-                        
+
                         Spacer(modifier = Modifier.width(8.dp))
-                        
+
                         Button(
-                            onClick = { 
+                            onClick = {
                                 saveApiPreference(sharedPreferences, KEY_GOOGLE_CLOUD_VISION_API_KEY, googleCloudVisionApiKey)
                                 Toast.makeText(context, "Google Cloud Vision API key saved", Toast.LENGTH_SHORT).show()
                             }
@@ -279,36 +282,36 @@ fun SettingsScreen(
                             Text("Save Key")
                         }
                     }
-                    
+
                     // Advanced Test Section
                     var isAdvancedTestOpen by remember { mutableStateOf(false) }
                     var isRunningAdvancedTest by remember { mutableStateOf(false) }
                     var advancedTestResult by remember { mutableStateOf<String?>(null) }
-                    
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     OutlinedButton(
                         onClick = { isAdvancedTestOpen = !isAdvancedTestOpen },
                         modifier = Modifier.align(Alignment.End)
                     ) {
                         Text(if (isAdvancedTestOpen) "Hide Advanced Test" else "Advanced Test")
                     }
-                    
+
                     if (isAdvancedTestOpen) {
                         Spacer(modifier = Modifier.height(8.dp))
-                        
+
                         Text(
                             text = "Run a direct raw API test to diagnose connection issues",
                             style = MaterialTheme.typography.bodySmall
                         )
-                        
+
                         Spacer(modifier = Modifier.height(8.dp))
-                        
+
                         OutlinedButton(
                             onClick = {
                                 isRunningAdvancedTest = true
                                 advancedTestResult = null
-                                
+
                                 scope.launch {
                                     val debugLogger = DebugLoggerUtil(context)
                                     advancedTestResult = debugLogger.testVisionApiDirectly(googleCloudVisionApiKey)
@@ -327,7 +330,7 @@ fun SettingsScreen(
                             }
                             Text("Run Raw API Test")
                         }
-                        
+
                         // Show advanced test result
                         advancedTestResult?.let { result ->
                             Spacer(modifier = Modifier.height(8.dp))
@@ -338,7 +341,7 @@ fun SettingsScreen(
                             )
                         }
                     }
-                    
+
                     // Show test result message if available
                     googleApiTestResult?.let { (success, message) ->
                         Spacer(modifier = Modifier.height(8.dp))
@@ -350,7 +353,7 @@ fun SettingsScreen(
                     }
                 }
             }
-            
+
             // Mistral API Key Card
             Card(
                 modifier = Modifier
@@ -364,15 +367,15 @@ fun SettingsScreen(
                         text = "Mistral AI API Key",
                         style = MaterialTheme.typography.titleMedium
                     )
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     OutlinedTextField(
                         value = mistralApiKey,
                         onValueChange = { mistralApiKey = it },
                         label = { Text("API Key") },
                         modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = if (isMistralKeyVisible) VisualTransformation.None 
+                        visualTransformation = if (isMistralKeyVisible) VisualTransformation.None
                                              else PasswordVisualTransformation(),
                         trailingIcon = {
                             Button(
@@ -383,9 +386,9 @@ fun SettingsScreen(
                             }
                         }
                     )
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
@@ -400,12 +403,12 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                         }
-                        
+
                         OutlinedButton(
                             onClick = {
                                 isTestingMistralApi = true
                                 mistralApiTestResult = null
-                                
+
                                 scope.launch {
                                     val apiTester = ApiTester(context)
                                     mistralApiTestResult = apiTester.testMistralApi(mistralApiKey)
@@ -423,11 +426,11 @@ fun SettingsScreen(
                             }
                             Text("Test API")
                         }
-                        
+
                         Spacer(modifier = Modifier.width(8.dp))
-                        
+
                         Button(
-                            onClick = { 
+                            onClick = {
                                 saveApiPreference(sharedPreferences, KEY_MISTRAL_API_KEY, mistralApiKey)
                                 Toast.makeText(context, "Mistral API key saved", Toast.LENGTH_SHORT).show()
                             }
@@ -435,7 +438,7 @@ fun SettingsScreen(
                             Text("Save Key")
                         }
                     }
-                    
+
                     // Show test result message if available
                     mistralApiTestResult?.let { (success, message) ->
                         Spacer(modifier = Modifier.height(8.dp))
@@ -447,7 +450,7 @@ fun SettingsScreen(
                     }
                 }
             }
-            
+
             // ML Kit Info
             Card(
                 modifier = Modifier.fillMaxWidth()
@@ -459,9 +462,9 @@ fun SettingsScreen(
                         text = "ML Kit (On-device OCR)",
                         style = MaterialTheme.typography.titleMedium
                     )
-                    
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     Text(
                         text = "ML Kit runs directly on your device and doesn't require an API key. " +
                               "It's used as a fallback when other API methods fail.",
@@ -486,4 +489,4 @@ private fun <T> saveApiPreference(sharedPreferences: SharedPreferences, key: Str
         }
         apply()
     }
-} 
+}

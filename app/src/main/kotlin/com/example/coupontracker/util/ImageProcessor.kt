@@ -37,9 +37,9 @@ class ImageProcessor(
     private val TAG = "ImageProcessor"
     private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private val textExtractor = TextExtractor()
-    
+
     // Initialize services based on available API keys
-    private var googleVisionHelper: EnhancedGoogleVisionHelper? = googleCloudVisionApiKey?.let { 
+    private var googleVisionHelper: EnhancedGoogleVisionHelper? = googleCloudVisionApiKey?.let {
         if (it.isBlank()) {
             Log.w(TAG, "Google Cloud Vision API key is blank, not initializing service")
             null
@@ -48,8 +48,8 @@ class ImageProcessor(
             EnhancedGoogleVisionHelper(it, context)
         }
     }
-    
-    private var mistralOcrService: MistralOcrService? = mistralApiKey?.let { 
+
+    private var mistralOcrService: MistralOcrService? = mistralApiKey?.let {
         if (it.isBlank()) {
             Log.w(TAG, "Mistral API key is blank, not initializing service")
             null
@@ -58,9 +58,9 @@ class ImageProcessor(
             MistralOcrService(it)
         }
     }
-    
+
     // Combined OCR service using both Google Vision and Mistral AI
-    private var combinedOcrService: CombinedOCRService? = 
+    private var combinedOcrService: CombinedOCRService? =
         if (googleVisionHelper != null && mistralOcrService != null) {
             Log.d(TAG, "Initializing Combined OCR service with Google Vision and Mistral AI")
             CombinedOCRService(googleVisionHelper!!, mistralOcrService!!)
@@ -68,17 +68,25 @@ class ImageProcessor(
             Log.w(TAG, "Unable to initialize Combined OCR service, missing required services")
             null
         }
-    
+
+    // Super OCR service using all available technologies
+    private var superOcrService: SuperOCRService? = SuperOCRService(
+        context,
+        googleCloudVisionApiKey,
+        mistralApiKey
+    )
+
     // Track the currently selected API
     private var selectedApiType: ApiType = ApiType.GOOGLE_CLOUD_VISION
-    
+
     // Track API availability
     private var googleVisionAvailable = false
     private var mistralApiAvailable = false
     private var combinedServiceAvailable = false
-    
+    private var superServiceAvailable = false
+
     // SharedPreferences listener
-    private val sharedPreferencesListener = 
+    private val sharedPreferencesListener =
         SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
             when (key) {
                 KEY_SELECTED_API -> {
@@ -94,39 +102,41 @@ class ImageProcessor(
                     val newApiKey = prefs.getString(KEY_GOOGLE_CLOUD_VISION_API_KEY, null)
                     refreshGoogleVisionHelper(newApiKey)
                     updateCombinedService()
+                    updateSuperOcrService()
                 }
                 KEY_MISTRAL_API_KEY -> {
                     val newApiKey = prefs.getString(KEY_MISTRAL_API_KEY, null)
                     refreshMistralService(newApiKey)
                     updateCombinedService()
+                    updateSuperOcrService()
                 }
             }
         }
-    
+
     init {
         val sharedPreferences = context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
         val savedApiType = sharedPreferences.getString(KEY_SELECTED_API, ApiType.GOOGLE_CLOUD_VISION.name)
-        
+
         selectedApiType = try {
             ApiType.valueOf(savedApiType ?: ApiType.GOOGLE_CLOUD_VISION.name)
         } catch (e: Exception) {
             ApiType.GOOGLE_CLOUD_VISION
         }
-        
+
         // Register for preferences changes
         sharedPreferences.registerOnSharedPreferenceChangeListener(sharedPreferencesListener)
-        
+
         Log.d(TAG, "ImageProcessor initialized. Selected API: ${selectedApiType.name}")
         Log.d(TAG, "Google Cloud Vision API: ${if (googleVisionHelper != null) "available" else "unavailable"}")
         Log.d(TAG, "Mistral API: ${if (mistralOcrService != null) "available" else "unavailable"}")
         Log.d(TAG, "Combined OCR Service: ${if (combinedOcrService != null) "available" else "unavailable"}")
-        
+
         // Test services in a background thread
         MainScope().launch {
             testApiServices()
         }
     }
-    
+
     /**
      * Test all available API services to check their actual availability
      */
@@ -134,7 +144,7 @@ class ImageProcessor(
         try {
             // Test Google Vision API
             googleVisionAvailable = googleVisionHelper != null
-            
+
             // Test Mistral API if available
             val localMistralService = mistralOcrService
             if (localMistralService != null) {
@@ -149,7 +159,7 @@ class ImageProcessor(
             } else {
                 mistralApiAvailable = false
             }
-            
+
             // Test combined service if both APIs are available
             val localCombinedService = combinedOcrService
             if (localCombinedService != null && googleVisionAvailable) {
@@ -170,16 +180,27 @@ class ImageProcessor(
             } else {
                 combinedServiceAvailable = false
             }
-            
+
+            // Test Super OCR service
+            try {
+                superOcrService?.testApiAvailability()
+                superServiceAvailable = true
+                Log.d(TAG, "Super OCR Service tested successfully")
+            } catch (e: Exception) {
+                Log.e(TAG, "Super OCR Service test failed", e)
+                superServiceAvailable = false
+            }
+
             Log.d(TAG, "API Service availability: " +
                   "Google Vision: $googleVisionAvailable, " +
                   "Mistral: $mistralApiAvailable, " +
-                  "Combined: $combinedServiceAvailable")
+                  "Combined: $combinedServiceAvailable, " +
+                  "Super: $superServiceAvailable")
         } catch (e: Exception) {
             Log.e(TAG, "Error testing API services", e)
         }
     }
-    
+
     /**
      * Process an image URI and extract coupon information based on the selected API priority
      * @param imageUri The URI of the image to process
@@ -190,9 +211,41 @@ class ImageProcessor(
             Log.d(TAG, "Processing image: $imageUri")
             val bitmap = getBitmapFromUri(imageUri)
             Log.d(TAG, "Successfully loaded bitmap from URI")
-            
+
             // Process according to selected API priority
             when (selectedApiType) {
+                ApiType.SUPER -> {
+                    // Use the Super OCR service that combines all technologies
+                    if (superOcrService != null) {
+                        try {
+                            Log.d(TAG, "Using Super OCR Service (All Technologies)")
+                            val result = trySuperOcr(bitmap)
+                            if (result != null) {
+                                return@withContext result
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error using Super OCR Service, falling back to Combined OCR", e)
+                        }
+                    } else {
+                        Log.w(TAG, "Super OCR Service not available, check API key configuration")
+                    }
+
+                    // Fall back to Combined OCR if Super OCR fails
+                    if (combinedOcrService != null) {
+                        try {
+                            Log.d(TAG, "Falling back to Combined OCR Service")
+                            val result = tryCombinedOcr(bitmap)
+                            if (result != null) {
+                                return@withContext result
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error using Combined OCR Service, falling back to individual services", e)
+                        }
+                    }
+
+                    // Continue with fallback to other methods...
+                }
+
                 ApiType.COMBINED -> {
                     // Use the combined OCR service directly if available
                     if (combinedOcrService != null) {
@@ -208,7 +261,7 @@ class ImageProcessor(
                     } else {
                         Log.w(TAG, "Combined OCR Service not available, check API key configuration")
                     }
-                    
+
                     // Try Google Cloud Vision next
                     if (googleVisionHelper != null) {
                         try {
@@ -221,7 +274,7 @@ class ImageProcessor(
                             Log.e(TAG, "Error using Google Cloud Vision API, trying Mistral", e)
                         }
                     }
-                    
+
                     // Try Mistral API next
                     if (mistralOcrService != null) {
                         try {
@@ -234,11 +287,11 @@ class ImageProcessor(
                             Log.e(TAG, "Error using Mistral OCR API, falling back to ML Kit", e)
                         }
                     }
-                    
+
                     // Finally, use ML Kit
                     return@withContext tryMlKit(bitmap)
                 }
-                
+
                 ApiType.GOOGLE_CLOUD_VISION -> {
                     // Try combined service first if available (Google Vision + Mistral validation)
                     if (combinedOcrService != null) {
@@ -252,7 +305,7 @@ class ImageProcessor(
                             Log.e(TAG, "Error using Combined OCR Service, falling back to individual services", e)
                         }
                     }
-                    
+
                     // Try Google Cloud Vision next
                     if (googleVisionHelper != null) {
                         try {
@@ -267,7 +320,7 @@ class ImageProcessor(
                     } else {
                         Log.d(TAG, "Google Cloud Vision service not available, trying next option")
                     }
-                    
+
                     // Try Mistral API next
                     if (mistralOcrService != null) {
                         try {
@@ -282,11 +335,11 @@ class ImageProcessor(
                     } else {
                         Log.d(TAG, "Mistral OCR service not available, falling back to ML Kit")
                     }
-                    
+
                     // Finally, use ML Kit
                     return@withContext tryMlKit(bitmap)
                 }
-                
+
                 ApiType.MISTRAL -> {
                     // Try combined service first if available (this is always useful)
                     if (combinedOcrService != null) {
@@ -300,7 +353,7 @@ class ImageProcessor(
                             Log.e(TAG, "Error using Combined OCR Service, falling back to individual services", e)
                         }
                     }
-                    
+
                     // Try Mistral API next
                     if (mistralOcrService != null) {
                         try {
@@ -315,7 +368,7 @@ class ImageProcessor(
                     } else {
                         Log.d(TAG, "Mistral OCR service not available, trying next option")
                     }
-                    
+
                     // Try Google Cloud Vision next
                     if (googleVisionHelper != null) {
                         try {
@@ -330,11 +383,11 @@ class ImageProcessor(
                     } else {
                         Log.d(TAG, "Google Cloud Vision service not available, falling back to ML Kit")
                     }
-                    
+
                     // Finally, use ML Kit
                     return@withContext tryMlKit(bitmap)
                 }
-                
+
                 ApiType.ML_KIT -> {
                     // Use ML Kit directly
                     Log.d(TAG, "Using ML Kit directly as selected OCR method")
@@ -346,24 +399,49 @@ class ImageProcessor(
             throw IOException("Failed to process image: ${e.message}", e)
         }
     }
-    
+
+    /**
+     * Try processing with Super OCR Service (All Technologies)
+     */
+    private suspend fun trySuperOcr(bitmap: Bitmap): CouponInfo? {
+        return try {
+            val service = superOcrService ?: return null
+
+            Log.d(TAG, "Extracting info with Super OCR Service")
+            val couponInfo = service.extractCouponInfo(bitmap)
+
+            // Check if we got meaningful results
+            if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&
+                couponInfo.cashbackAmount == null && couponInfo.redeemCode.isNullOrBlank()) {
+                Log.w(TAG, "Super OCR Service returned empty results")
+                return null
+            }
+
+            Log.d(TAG, "Successfully extracted coupon info using Super OCR Service: $couponInfo")
+            couponInfo
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing with Super OCR Service", e)
+            null
+        }
+    }
+
     /**
      * Try processing with Combined OCR Service (Google Vision + Mistral validation)
      */
     private suspend fun tryCombinedOcr(bitmap: Bitmap): CouponInfo? {
         return try {
             val service = combinedOcrService ?: return null
-            
+
             Log.d(TAG, "Extracting info with Combined OCR Service")
             val couponInfo = service.extractCouponInfoWithValidation(bitmap)
-            
+
             // Check if we got meaningful results
-            if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() && 
+            if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&
                 couponInfo.cashbackAmount == null && couponInfo.redeemCode.isNullOrBlank()) {
                 Log.w(TAG, "Combined OCR Service returned empty results")
                 return null
             }
-            
+
             Log.d(TAG, "Successfully extracted coupon info using Combined OCR Service: $couponInfo")
             couponInfo
         } catch (e: Exception) {
@@ -371,7 +449,7 @@ class ImageProcessor(
             null
         }
     }
-    
+
     /**
      * Try processing with Google Cloud Vision API
      */
@@ -382,27 +460,27 @@ class ImageProcessor(
                 Log.e(TAG, "Google Cloud Vision helper is null, check API key configuration")
                 return null
             }
-            
+
             Log.d(TAG, "Extracting text with Google Cloud Vision")
             val text = helper.extractText(bitmap)
-            
+
             if (text.isBlank()) {
                 Log.w(TAG, "Google Cloud Vision returned empty text")
                 return null
             }
-            
+
             Log.d(TAG, "Google Cloud Vision text result (length: ${text.length})")
             Log.d(TAG, "Text sample: ${text.take(200)}...")
-            
+
             val couponInfo = textExtractor.extractCouponInfo(text)
-            
+
             // Check if we got meaningful results
-            if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() && 
+            if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&
                 couponInfo.cashbackAmount == null && couponInfo.redeemCode.isNullOrBlank()) {
                 Log.w(TAG, "Google Cloud Vision returned empty structured results")
                 return null
             }
-            
+
             Log.d(TAG, "Successfully extracted coupon info using Google Cloud Vision: $couponInfo")
             couponInfo
         } catch (e: Exception) {
@@ -410,24 +488,24 @@ class ImageProcessor(
             null
         }
     }
-    
+
     /**
      * Try processing with Mistral API
      */
     private suspend fun tryMistralApi(bitmap: Bitmap): CouponInfo? {
         return try {
             val service = mistralOcrService ?: return null
-            
+
             Log.d(TAG, "Extracting info with Mistral API")
             val couponInfo = service.extractCouponInfo(bitmap)
-            
+
             // Check if we got meaningful results
-            if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() && 
+            if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&
                 couponInfo.cashbackAmount == null && couponInfo.redeemCode.isNullOrBlank()) {
                 Log.w(TAG, "Mistral API returned empty results")
                 return null
             }
-            
+
             Log.d(TAG, "Successfully extracted coupon info using Mistral API: $couponInfo")
             couponInfo
         } catch (e: Exception) {
@@ -435,7 +513,7 @@ class ImageProcessor(
             null
         }
     }
-    
+
     /**
      * Try processing with ML Kit (guaranteed fallback)
      */
@@ -443,12 +521,12 @@ class ImageProcessor(
         Log.d(TAG, "Using ML Kit for text extraction")
         val text = recognizeText(bitmap)
         Log.d(TAG, "ML Kit recognized text: ${text.take(100)}...")
-        
+
         val couponInfo = textExtractor.extractCouponInfo(text)
         Log.d(TAG, "Successfully extracted coupon info using ML Kit: $couponInfo")
         return couponInfo
     }
-    
+
     /**
      * Get a bitmap from a URI using the appropriate method based on Android version
      * @param uri The URI to get the bitmap from
@@ -473,7 +551,7 @@ class ImageProcessor(
             throw IOException("Failed to load image: ${e.message}", e)
         }
     }
-    
+
     /**
      * Recognize text in a bitmap using ML Kit
      * @param bitmap The bitmap to process
@@ -492,7 +570,7 @@ class ImageProcessor(
                     Log.e(TAG, "ML Kit text recognition failed", e)
                     continuation.resumeWithException(e)
                 }
-                
+
             continuation.invokeOnCancellation {
                 Log.d(TAG, "Text recognition task cancelled")
             }
@@ -501,7 +579,7 @@ class ImageProcessor(
             continuation.resumeWithException(e)
         }
     }
-    
+
     /**
      * Update combined service if both required services are available
      */
@@ -509,7 +587,7 @@ class ImageProcessor(
         Log.d(TAG, "Updating combined OCR service")
         Log.d(TAG, "Google Vision available: ${googleVisionHelper != null}")
         Log.d(TAG, "Mistral API available: ${mistralOcrService != null}")
-        
+
         combinedOcrService = if (googleVisionHelper != null && mistralOcrService != null) {
             Log.d(TAG, "Updating Combined OCR service with current API services")
             CombinedOCRService(googleVisionHelper!!, mistralOcrService!!)
@@ -517,15 +595,15 @@ class ImageProcessor(
             Log.w(TAG, "Unable to update Combined OCR service, missing required services")
             null
         }
-        
+
         Log.d(TAG, "Combined OCR Service initialized: ${combinedOcrService != null}")
-        
+
         // Test services in a background thread
         MainScope().launch {
             testApiServices()
         }
     }
-    
+
     /**
      * Refresh Google Vision Helper with new API key
      */
@@ -539,7 +617,7 @@ class ImageProcessor(
         }
         updateCombinedService()
     }
-    
+
     /**
      * Refresh Mistral OCR Service with new API key
      */
@@ -553,7 +631,32 @@ class ImageProcessor(
         }
         updateCombinedService()
     }
-    
+
+    /**
+     * Update Super OCR Service with current API keys
+     */
+    private fun updateSuperOcrService() {
+        Log.d(TAG, "Updating Super OCR service")
+
+        superOcrService = SuperOCRService(
+            context,
+            googleCloudVisionApiKey,
+            mistralApiKey
+        )
+
+        // Test service in a background thread
+        MainScope().launch {
+            try {
+                superOcrService?.testApiAvailability()
+                superServiceAvailable = true
+                Log.d(TAG, "Super OCR Service initialized and tested")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error testing Super OCR Service", e)
+                superServiceAvailable = false
+            }
+        }
+    }
+
     /**
      * Clean up resources
      */
@@ -569,17 +672,41 @@ class ImageProcessor(
     suspend fun processSingleCoupon(bitmap: Bitmap, origImageUri: Uri?, preferredApiType: ApiType?): CouponInfo {
         val apiType = preferredApiType ?: this.selectedApiType
         Log.d(TAG, "Processing single coupon with API type: $apiType")
-        
+
         return when (apiType) {
+            ApiType.SUPER -> {
+                try {
+                    // Use the Super OCR service if available
+                    if (superOcrService != null) {
+                        Log.d(TAG, "Using Super OCR Service for single coupon")
+                        return superOcrService!!.extractCouponInfo(bitmap)
+                    } else {
+                        Log.w(TAG, "Super OCR Service not available, falling back to Combined")
+                        // Fall back to Combined if Super is not available
+                        if (combinedOcrService != null) {
+                            return combinedOcrService!!.extractCouponInfoWithValidation(bitmap)
+                        } else {
+                            // Fall back to Google Vision if Combined is not available
+                            Log.w(TAG, "Combined OCR Service not available, falling back to Google Vision")
+                            return processSingleCoupon(bitmap, origImageUri, ApiType.GOOGLE_CLOUD_VISION)
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing with Super OCR Service", e)
+                    // Fall back to Google Vision
+                    return processSingleCoupon(bitmap, origImageUri, ApiType.GOOGLE_CLOUD_VISION)
+                }
+            }
+
             ApiType.GOOGLE_CLOUD_VISION -> {
                 try {
                     // First extract raw text with Google Vision
                     val rawText = googleVisionHelper?.extractText(bitmap) ?: ""
-                    
+
                     // Try template-based extraction first
                     val templateExtractor = CouponTemplateExtractor()
                     val template = templateExtractor.identifyTemplate(bitmap, rawText)
-                    
+
                     if (template != CouponTemplateExtractor.CouponTemplate.Unknown) {
                         Log.d(TAG, "Using template-based extraction with identified template")
                         templateExtractor.extractFromTemplate(bitmap, rawText, template)
@@ -598,7 +725,7 @@ class ImageProcessor(
                 try {
                     // Extract text with Mistral
                     val rawText = mistralOcrService?.extractTextFromImage(bitmap) ?: ""
-                    
+
                     if (rawText.isBlank()) {
                         Log.w(TAG, "Mistral returned empty text, falling back to Google Vision")
                         val googleText = googleVisionHelper?.extractText(bitmap) ?: ""
@@ -608,7 +735,7 @@ class ImageProcessor(
                         // Try template extraction first
                         val templateExtractor = CouponTemplateExtractor()
                         val template = templateExtractor.identifyTemplate(bitmap, rawText)
-                        
+
                         if (template != CouponTemplateExtractor.CouponTemplate.Unknown) {
                             Log.d(TAG, "Using template-based extraction with Mistral text")
                             templateExtractor.extractFromTemplate(bitmap, rawText, template)
@@ -633,11 +760,11 @@ class ImageProcessor(
                     if (localCombinedService != null) {
                         // First get the raw text using combined service
                         val rawText = localCombinedService.extractTextWithValidation(bitmap)
-                        
+
                         // Check if this is a known template
                         val templateExtractor = CouponTemplateExtractor()
                         val template = templateExtractor.identifyTemplate(bitmap, rawText)
-                        
+
                         val result = if (template != CouponTemplateExtractor.CouponTemplate.Unknown) {
                             // Use template-based extraction for known templates
                             Log.d(TAG, "Using template-based extraction with combined OCR")
@@ -647,11 +774,11 @@ class ImageProcessor(
                             Log.d(TAG, "Using combined OCR service extraction")
                             localCombinedService.extractCouponInfoWithValidation(bitmap)
                         }
-                        
+
                         // Always apply region-based extraction to refine the results
                         val regionExtractor = RegionBasedExtractor(googleVisionHelper, TextExtractor())
                         val regionResult = regionExtractor.extractCouponInfo(bitmap, rawText)
-                        
+
                         // Merge results, preferring the most reliable data
                         CouponInfo(
                             // For store name, prefer template or region-based over combined
@@ -661,7 +788,7 @@ class ImageProcessor(
                                 else -> result.storeName
                             },
                             // For description, prefer non-empty results
-                            description = result.description.takeIf { it.isNotBlank() } 
+                            description = result.description.takeIf { it.isNotBlank() }
                                 ?: regionResult.description,
                             // For dates, take the non-null one
                             expiryDate = result.expiryDate ?: regionResult.expiryDate,
@@ -678,7 +805,7 @@ class ImageProcessor(
                             },
                             // For redeem codes, prefer the longer one if both exist
                             redeemCode = if (result.redeemCode != null && regionResult.redeemCode != null) {
-                                if (result.redeemCode.length >= regionResult.redeemCode.length) 
+                                if (result.redeemCode.length >= regionResult.redeemCode.length)
                                     result.redeemCode else regionResult.redeemCode
                             } else result.redeemCode ?: regionResult.redeemCode,
                             // Take other fields from the most reliable source
@@ -690,11 +817,11 @@ class ImageProcessor(
                         Log.w(TAG, "Combined OCR service is null, using template and region-based extraction")
                         // Get raw text from Google Vision
                         val rawText = googleVisionHelper?.extractText(bitmap) ?: ""
-                        
+
                         // Try template-based extraction first
                         val templateExtractor = CouponTemplateExtractor()
                         val template = templateExtractor.identifyTemplate(bitmap, rawText)
-                        
+
                         if (template != CouponTemplateExtractor.CouponTemplate.Unknown) {
                             templateExtractor.extractFromTemplate(bitmap, rawText, template)
                         } else {
@@ -712,18 +839,18 @@ class ImageProcessor(
             }
             ApiType.ML_KIT -> {
                 val textExtractor = TextExtractor()
-                
+
                 try {
                     val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
                     val inputImage = InputImage.fromBitmap(bitmap, 0)
                     val result = processMLKitTask(textRecognizer.process(inputImage))
                     val text = result.text
-                    
+
                     if (text.isNotBlank()) {
                         // First try template-based extraction
                         val templateExtractor = CouponTemplateExtractor()
                         val template = templateExtractor.identifyTemplate(bitmap, text)
-                        
+
                         if (template != CouponTemplateExtractor.CouponTemplate.Unknown) {
                             Log.d(TAG, "Using template-based extraction with device OCR")
                             templateExtractor.extractFromTemplate(bitmap, text, template)
@@ -755,7 +882,7 @@ class ImageProcessor(
     private suspend fun extractWithGoogleVision(bitmap: Bitmap, origImageUri: Uri?): CouponInfo {
         try {
             Log.d(TAG, "Extracting with Google Vision API")
-            
+
             // Try using the helper if available
             val helper = googleVisionHelper
             if (helper != null) {
@@ -764,7 +891,7 @@ class ImageProcessor(
                     return textExtractor.extractCouponInfo(extractedText)
                 }
             }
-            
+
             // If we get here, either the helper was null or extraction failed
             // Fall back to ML Kit
             Log.w(TAG, "Google Vision extraction failed, falling back to ML Kit")
@@ -774,20 +901,20 @@ class ImageProcessor(
             return extractWithMlKit(bitmap)
         }
     }
-    
+
     /**
      * Extract coupon information using Mistral API
      */
     private suspend fun extractWithMistral(bitmap: Bitmap): CouponInfo {
         try {
             Log.d(TAG, "Extracting with Mistral API")
-            
+
             // Try using the service if available
             val service = mistralOcrService
             if (service != null) {
                 return service.extractCouponInfo(bitmap)
             }
-            
+
             // If we get here, the service was null
             // Fall back to Google Vision
             Log.w(TAG, "Mistral service unavailable, falling back to Google Vision")
@@ -797,18 +924,18 @@ class ImageProcessor(
             return extractWithGoogleVision(bitmap, null)
         }
     }
-    
+
     /**
      * Extract coupon information using ML Kit
      */
     private suspend fun extractWithMlKit(bitmap: Bitmap): CouponInfo {
         try {
             Log.d(TAG, "Extracting with ML Kit")
-            
+
             val inputImage = InputImage.fromBitmap(bitmap, 0)
             val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
             val visionText = processMLKitTask(textRecognizer.process(inputImage))
-            
+
             val extractedText = visionText.text
             return textExtractor.extractCouponInfo(extractedText)
         } catch (e: Exception) {
@@ -823,7 +950,7 @@ class ImageProcessor(
             )
         }
     }
-    
+
     /**
      * Process ML Kit Task and convert it to a suspending coroutine
      */
@@ -834,10 +961,10 @@ class ImageProcessor(
             }.addOnFailureListener { exception ->
                 continuation.resumeWithException(exception)
             }
-            
+
             continuation.invokeOnCancellation {
                 // No need to cancel ML Kit task, it will be garbage collected
             }
         }
     }
-} 
+}
