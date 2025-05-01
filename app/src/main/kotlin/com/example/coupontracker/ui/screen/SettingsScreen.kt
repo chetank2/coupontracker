@@ -24,12 +24,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.util.ApiTester
 import com.example.coupontracker.util.DebugLoggerUtil
 import com.example.coupontracker.util.TesseractLanguageManager
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.text.style.TextAlign
 
@@ -778,6 +780,29 @@ fun SettingsScreen(
 
                     Text(
                         text = "Select the language that matches the text in your coupons for best results.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Custom training button
+                    OutlinedButton(
+                        onClick = { navController.navigate(Screen.TesseractTraining.route) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.School,
+                            contentDescription = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Train Custom Coupon Model")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Create a custom-trained model specifically for coupon recognition to improve accuracy.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

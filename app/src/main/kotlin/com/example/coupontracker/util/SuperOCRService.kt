@@ -31,6 +31,9 @@ class SuperOCRService(
     private val tesseractOCRHelper = TesseractOCRHelper(context)
     private val tesseractLanguageManager = TesseractLanguageManager(context)
 
+    // Flag to use custom Tesseract model if available
+    private var useCustomTesseractModel = tesseractOCRHelper.isCustomModelAvailable()
+
     // Optional components that require API keys
     private val googleVisionHelper = googleVisionApiKey?.takeIf { it.isNotBlank() }?.let {
         EnhancedGoogleVisionHelper(it, context)
@@ -84,10 +87,11 @@ class SuperOCRService(
                 // Get the selected language
                 val selectedLanguage = tesseractLanguageManager.getSelectedLanguage()
 
+                // Try with standard model
                 deferredResults.add(async {
                     try {
                         // Process with the selected language
-                        val text = tesseractOCRHelper.processImageFromBitmap(variants[0], selectedLanguage)
+                        val text = tesseractOCRHelper.processImageFromBitmap(variants[0], selectedLanguage, false)
                         val languageName = tesseractLanguageManager.getLanguageDisplayName(selectedLanguage)
                         Log.d(TAG, "Tesseract OCR ($languageName) processed text: ${text.length} chars")
                         OcrResult("Tesseract ($languageName)", text, text.length)
@@ -97,11 +101,25 @@ class SuperOCRService(
                     }
                 })
 
+                // Try with custom model if available
+                if (useCustomTesseractModel) {
+                    deferredResults.add(async {
+                        try {
+                            val text = tesseractOCRHelper.processImageFromBitmap(variants[0], selectedLanguage, true)
+                            Log.d(TAG, "Tesseract OCR (Custom model) processed text: ${text.length} chars")
+                            OcrResult("Tesseract (Custom)", text, text.length)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Tesseract custom model processing failed", e)
+                            OcrResult("Tesseract (Custom)", "", 0)
+                        }
+                    })
+                }
+
                 // Try with fast mode for a second variant if available
                 if (variants.size > 1) {
                     deferredResults.add(async {
                         try {
-                            val text = tesseractOCRHelper.processImageFast(variants[1])
+                            val text = tesseractOCRHelper.processImageFast(variants[1], useCustomTesseractModel)
                             Log.d(TAG, "Tesseract OCR (Fast mode) processed text: ${text.length} chars")
                             OcrResult("Tesseract (Fast)", text, text.length)
                         } catch (e: Exception) {

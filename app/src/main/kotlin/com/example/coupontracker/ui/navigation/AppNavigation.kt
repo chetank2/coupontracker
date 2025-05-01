@@ -10,6 +10,7 @@ import com.example.coupontracker.ui.screen.ApiTestScreen
 import com.example.coupontracker.ui.screen.HomeScreen
 import com.example.coupontracker.ui.screen.ScannerScreen
 import com.example.coupontracker.ui.screen.SettingsScreen
+import com.example.coupontracker.ui.screen.TesseractTrainingScreen
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
@@ -20,12 +21,13 @@ sealed class Screen(val route: String) {
     object Scanner : Screen("scanner")
     object ApiTest : Screen("api_test")
     object Settings : Screen("settings")
+    object TesseractTraining : Screen("tesseract_training")
 }
 
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
-    
+
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route
@@ -33,13 +35,13 @@ fun AppNavigation() {
         composable(Screen.Home.route) {
             HomeScreen(navController = navController)
         }
-        
+
         composable(Screen.AddCoupon.route) {
             // AddCouponScreen(navController = navController)
             // Temporarily redirect to Home until AddCouponScreen is implemented
             HomeScreen(navController = navController)
         }
-        
+
         composable(
             route = Screen.CouponDetail.route,
             arguments = listOf(
@@ -52,17 +54,21 @@ fun AppNavigation() {
             // Temporarily redirect to Home until CouponDetailScreen is implemented
             HomeScreen(navController = navController)
         }
-        
+
         composable(Screen.Scanner.route) {
             ScannerScreen(navController = navController)
         }
-        
+
         composable(Screen.ApiTest.route) {
             ApiTestScreen(navController = navController)
         }
-        
+
         composable(Screen.Settings.route) {
             SettingsScreen(navController = navController)
         }
+
+        composable(Screen.TesseractTraining.route) {
+            TesseractTrainingScreen(navController = navController)
+        }
     }
-} 
+}
