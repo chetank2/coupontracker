@@ -17,49 +17,55 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
 private val LightColors = lightColorScheme(
-    primary = Color(0xFF1976D2),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFBBDEFB),
-    onPrimaryContainer = Color(0xFF004C8C),
-    secondary = Color(0xFF26A69A),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFB2DFDB),
-    onSecondaryContainer = Color(0xFF00695C),
-    tertiary = Color(0xFFEF6C00),
-    onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFFFE0B2),
-    onTertiaryContainer = Color(0xFFE65100),
-    error = Color(0xFFB00020),
+    primary = BrandColors.Primary,
+    onPrimary = BrandColors.OnPrimary,
+    primaryContainer = BrandColors.Primary.copy(alpha = 0.12f),
+    onPrimaryContainer = BrandColors.Primary,
+    secondary = BrandColors.Secondary,
+    onSecondary = BrandColors.OnSecondary,
+    secondaryContainer = BrandColors.Secondary.copy(alpha = 0.12f),
+    onSecondaryContainer = BrandColors.Secondary,
+    tertiary = BrandColors.Accent,
+    onTertiary = BrandColors.OnAccent,
+    tertiaryContainer = BrandColors.Accent.copy(alpha = 0.12f),
+    onTertiaryContainer = BrandColors.Accent,
+    error = BrandColors.Error,
     onError = Color.White,
-    errorContainer = Color(0xFFFDEDED),
-    onErrorContainer = Color(0xFF5F1412),
-    background = Color(0xFFF5F5F5),
-    onBackground = Color(0xFF121212),
-    surface = Color.White,
-    onSurface = Color(0xFF121212)
+    errorContainer = BrandColors.Error.copy(alpha = 0.12f),
+    onErrorContainer = BrandColors.Error,
+    background = BrandColors.Background,
+    onBackground = BrandColors.OnBackground,
+    surface = BrandColors.Surface,
+    onSurface = BrandColors.OnSurface,
+    surfaceVariant = BrandColors.SurfaceVariant,
+    onSurfaceVariant = BrandColors.OnSurfaceVariant,
+    outline = BrandColors.CardStroke
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF90CAF9),
+    primary = Color(0xFF64B5F6),  // Lighter blue for dark theme
     onPrimary = Color(0xFF0D47A1),
     primaryContainer = Color(0xFF1976D2),
     onPrimaryContainer = Color(0xFFD6E4FF),
-    secondary = Color(0xFF80CBC4),
+    secondary = Color(0xFF4DB6AC),  // Lighter teal for dark theme
     onSecondary = Color(0xFF004D40),
     secondaryContainer = Color(0xFF00796B),
     onSecondaryContainer = Color(0xFFB2DFDB),
-    tertiary = Color(0xFFFFB74D),
+    tertiary = Color(0xFFFFB74D),  // Lighter orange for dark theme
     onTertiary = Color(0xFF662500),
     tertiaryContainer = Color(0xFFE65100),
     onTertiaryContainer = Color(0xFFFFE0B2),
-    error = Color(0xFFCF6679),
+    error = Color(0xFFEF5350),  // Lighter red for dark theme
     onError = Color(0xFF000000),
     errorContainer = Color(0xFFB00020),
     onErrorContainer = Color(0xFFFFDAD6),
     background = Color(0xFF121212),
     onBackground = Color(0xFFE1E1E1),
     surface = Color(0xFF1E1E1E),
-    onSurface = Color(0xFFE1E1E1)
+    onSurface = Color(0xFFE1E1E1),
+    surfaceVariant = Color(0xFF2C2C2C),
+    onSurfaceVariant = Color(0xFFBDBDBD),
+    outline = Color(0xFF3E3E3E)
 )
 
 @Composable
@@ -77,7 +83,7 @@ fun CouponTrackerTheme(
         darkTheme -> DarkColors
         else -> LightColors
     }
-    
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -90,6 +96,7 @@ fun CouponTrackerTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = Shapes,
         content = content
     )
-} 
+}

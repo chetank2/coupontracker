@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="240dp"
+    android:viewportWidth="240"
+    android:viewportHeight="240">
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M120,120m-120,0a120,120 0,1 1,240 0a120,120 0,1 1,-240 0"
+        android:alpha="0.1"/>
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M120,120m-50,0a50,50 0,1 1,100 0a50,50 0,1 1,-100 0"
+        android:alpha="0.3"/>
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M120,120m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M110,110L130,110A5,5 0,0 1,135 115L135,125A5,5 0,0 1,130 130L110,130A5,5 0,0 1,105 125L105,115A5,5 0,0 1,110 110z"/>
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M70,70L80,70A5,5 0,0 1,85 75L85,95A5,5 0,0 1,80 100L70,100A5,5 0,0 1,65 95L65,75A5,5 0,0 1,70 70z"/>
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M70,70L90,70A5,5 0,0 1,95 75L95,85A5,5 0,0 1,90 90L70,90A5,5 0,0 1,65 85L65,75A5,5 0,0 1,70 70z"/>
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M160,70L170,70A5,5 0,0 1,175 75L175,95A5,5 0,0 1,170 100L160,100A5,5 0,0 1,155 95L155,75A5,5 0,0 1,160 70z"/>
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M150,70L170,70A5,5 0,0 1,175 75L175,85A5,5 0,0 1,170 90L150,90A5,5 0,0 1,145 85L145,75A5,5 0,0 1,150 70z"/>
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M70,140L80,140A5,5 0,0 1,85 145L85,165A5,5 0,0 1,80 170L70,170A5,5 0,0 1,65 165L65,145A5,5 0,0 1,70 140z"/>
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M70,150L90,150A5,5 0,0 1,95 155L95,165A5,5 0,0 1,90 170L70,170A5,5 0,0 1,65 165L65,155A5,5 0,0 1,70 150z"/>
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M160,140L170,140A5,5 0,0 1,175 145L175,165A5,5 0,0 1,170 170L160,170A5,5 0,0 1,155 165L155,145A5,5 0,0 1,160 140z"/>
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M150,150L170,150A5,5 0,0 1,175 155L175,165A5,5 0,0 1,170 170L150,170A5,5 0,0 1,145 165L145,155A5,5 0,0 1,150 150z"/>
+</vector>

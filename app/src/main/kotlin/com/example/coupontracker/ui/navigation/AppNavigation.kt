@@ -1,6 +1,9 @@
 package com.example.coupontracker.ui.navigation
 
+import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -10,12 +13,14 @@ import com.example.coupontracker.ui.screen.ApiTestScreen
 import com.example.coupontracker.ui.screen.BatchScannerScreen
 import com.example.coupontracker.ui.screen.HomeScreen
 import com.example.coupontracker.ui.screen.ManualEntryScreen
+import com.example.coupontracker.ui.screen.OnboardingScreen
 import com.example.coupontracker.ui.screen.QRScannerScreen
 import com.example.coupontracker.ui.screen.ScannerScreen
 import com.example.coupontracker.ui.screen.SettingsScreen
 import com.example.coupontracker.ui.screen.TesseractTrainingScreen
 
 sealed class Screen(val route: String) {
+    object Onboarding : Screen("onboarding")
     object Home : Screen("home")
     object AddCoupon : Screen("add_coupon")
     object CouponDetail : Screen("coupon_detail/{couponId}") {
@@ -37,10 +42,27 @@ sealed class Screen(val route: String) {
 fun AppNavigation(
     navController: NavController = rememberNavController()
 ) {
+    // Determine start destination based on onboarding status
+    val context = LocalContext.current
+    val sharedPreferences = remember {
+        context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
+    }
+    val onboardingCompleted = remember {
+        sharedPreferences.getBoolean("onboarding_completed", false)
+    }
+
+    val startDestination = remember {
+        if (onboardingCompleted) Screen.Home.route else Screen.Onboarding.route
+    }
+
     NavHost(
         navController = navController,
-        startDestination = Screen.Home.route
+        startDestination = startDestination
     ) {
+        composable(Screen.Onboarding.route) {
+            OnboardingScreen(navController = navController)
+        }
+
         composable(Screen.Home.route) {
             HomeScreen(navController = navController)
         }
