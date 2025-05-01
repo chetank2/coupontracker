@@ -78,6 +78,7 @@ class ImageProcessor(
 
     // Tesseract OCR helper
     private var tesseractOCRHelper: TesseractOCRHelper = TesseractOCRHelper(context)
+    private var tesseractLanguageManager: TesseractLanguageManager = TesseractLanguageManager(context)
 
     // Track the currently selected API
     private var selectedApiType: ApiType = ApiType.GOOGLE_CLOUD_VISION
@@ -535,14 +536,41 @@ class ImageProcessor(
      */
     private suspend fun tryTesseract(bitmap: Bitmap): CouponInfo? {
         return try {
-            Log.d(TAG, "Extracting info with Tesseract OCR")
-            val couponInfo = tesseractOCRHelper.extractCouponInfo(bitmap)
+            // Get the selected language
+            val selectedLanguage = tesseractLanguageManager.getSelectedLanguage()
+            val languageName = tesseractLanguageManager.getLanguageDisplayName(selectedLanguage)
+
+            Log.d(TAG, "Extracting info with Tesseract OCR using language: $languageName")
+
+            // Try with accurate mode first
+            var couponInfo = tesseractOCRHelper.extractCouponInfo(bitmap, selectedLanguage, true)
 
             // Check if we got meaningful results
             if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&
                 couponInfo.cashbackAmount == null && couponInfo.redeemCode.isNullOrBlank()) {
-                Log.w(TAG, "Tesseract OCR returned empty results")
-                return null
+
+                Log.w(TAG, "Tesseract OCR accurate mode returned empty results, trying fast mode")
+
+                // Try with fast mode as fallback
+                couponInfo = tesseractOCRHelper.extractCouponInfo(bitmap, selectedLanguage, false)
+
+                // Check again
+                if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&
+                    couponInfo.cashbackAmount == null && couponInfo.redeemCode.isNullOrBlank()) {
+
+                    // If selected language is not English, try English as fallback
+                    if (selectedLanguage != "eng") {
+                        Log.w(TAG, "Tesseract OCR with $languageName returned empty results, trying English")
+                        couponInfo = tesseractOCRHelper.extractCouponInfo(bitmap, "eng", true)
+                    }
+
+                    // Final check
+                    if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&
+                        couponInfo.cashbackAmount == null && couponInfo.redeemCode.isNullOrBlank()) {
+                        Log.w(TAG, "Tesseract OCR returned empty results with all attempts")
+                        return null
+                    }
+                }
             }
 
             Log.d(TAG, "Successfully extracted coupon info using Tesseract OCR: $couponInfo")

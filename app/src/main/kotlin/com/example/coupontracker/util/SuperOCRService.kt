@@ -29,6 +29,7 @@ class SuperOCRService(
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor()
     private val tesseractOCRHelper = TesseractOCRHelper(context)
+    private val tesseractLanguageManager = TesseractLanguageManager(context)
 
     // Optional components that require API keys
     private val googleVisionHelper = googleVisionApiKey?.takeIf { it.isNotBlank() }?.let {
@@ -80,15 +81,35 @@ class SuperOCRService(
 
             // Use Tesseract OCR (on-device)
             if (tesseractAvailable.get()) {
+                // Get the selected language
+                val selectedLanguage = tesseractLanguageManager.getSelectedLanguage()
+
                 deferredResults.add(async {
                     try {
-                        val text = tesseractOCRHelper.processImageFromBitmap(variants[0])
-                        OcrResult("Tesseract", text, text.length)
+                        // Process with the selected language
+                        val text = tesseractOCRHelper.processImageFromBitmap(variants[0], selectedLanguage)
+                        val languageName = tesseractLanguageManager.getLanguageDisplayName(selectedLanguage)
+                        Log.d(TAG, "Tesseract OCR ($languageName) processed text: ${text.length} chars")
+                        OcrResult("Tesseract ($languageName)", text, text.length)
                     } catch (e: Exception) {
                         Log.e(TAG, "Tesseract processing failed", e)
                         OcrResult("Tesseract", "", 0)
                     }
                 })
+
+                // Try with fast mode for a second variant if available
+                if (variants.size > 1) {
+                    deferredResults.add(async {
+                        try {
+                            val text = tesseractOCRHelper.processImageFast(variants[1])
+                            Log.d(TAG, "Tesseract OCR (Fast mode) processed text: ${text.length} chars")
+                            OcrResult("Tesseract (Fast)", text, text.length)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Tesseract fast processing failed", e)
+                            OcrResult("Tesseract (Fast)", "", 0)
+                        }
+                    })
+                }
             }
 
             // Use Google Vision if available
@@ -260,13 +281,31 @@ class SuperOCRService(
 
             // 5. Try Tesseract extraction if available
             if (tesseractAvailable.get()) {
+                // Get the selected language
+                val selectedLanguage = tesseractLanguageManager.getSelectedLanguage()
+                val languageName = tesseractLanguageManager.getLanguageDisplayName(selectedLanguage)
+
                 deferredResults.add(async {
                     try {
-                        val info = tesseractOCRHelper.extractCouponInfo(bitmap)
-                        CouponInfoResult("Tesseract", info, calculateCompleteness(info))
+                        // Use accurate mode for better results
+                        val info = tesseractOCRHelper.extractCouponInfo(bitmap, selectedLanguage, true)
+                        Log.d(TAG, "Tesseract OCR ($languageName) extracted coupon info")
+                        CouponInfoResult("Tesseract ($languageName)", info, calculateCompleteness(info))
                     } catch (e: Exception) {
                         Log.e(TAG, "Tesseract extraction failed", e)
                         CouponInfoResult("Tesseract", CouponInfo(), 0.0)
+                    }
+                })
+
+                // Also try fast mode with different preprocessing
+                deferredResults.add(async {
+                    try {
+                        val info = tesseractOCRHelper.extractCouponInfo(bitmap, selectedLanguage, false)
+                        Log.d(TAG, "Tesseract OCR (Fast mode) extracted coupon info")
+                        CouponInfoResult("Tesseract (Fast)", info, calculateCompleteness(info) * 0.9) // Slightly lower weight for fast mode
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Tesseract fast extraction failed", e)
+                        CouponInfoResult("Tesseract (Fast)", CouponInfo(), 0.0)
                     }
                 })
             }
@@ -379,11 +418,26 @@ class SuperOCRService(
                     combinedServiceAvailable.set(combinedOcrService.testApiAvailability())
                 }
 
-                // Test Tesseract availability
+                // Test Tesseract availability with the selected language
                 tesseractAvailable.set(false)
                 try {
-                    tesseractAvailable.set(tesseractOCRHelper.testAvailability())
-                    Log.d(TAG, "Tesseract OCR availability: ${tesseractAvailable.get()}")
+                    val selectedLanguage = tesseractLanguageManager.getSelectedLanguage()
+                    val languageName = tesseractLanguageManager.getLanguageDisplayName(selectedLanguage)
+
+                    tesseractAvailable.set(tesseractOCRHelper.testAvailability(selectedLanguage))
+                    Log.d(TAG, "Tesseract OCR ($languageName) availability: ${tesseractAvailable.get()}")
+
+                    // If the selected language fails, try English as fallback
+                    if (!tesseractAvailable.get() && selectedLanguage != "eng") {
+                        Log.d(TAG, "Selected language failed, trying English as fallback")
+                        tesseractAvailable.set(tesseractOCRHelper.testAvailability("eng"))
+
+                        if (tesseractAvailable.get()) {
+                            // Update the selected language to English
+                            tesseractLanguageManager.setSelectedLanguage("eng")
+                            Log.d(TAG, "Fallback to English successful, updated selected language")
+                        }
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Error testing Tesseract OCR", e)
                 }

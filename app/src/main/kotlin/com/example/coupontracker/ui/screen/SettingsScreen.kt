@@ -26,7 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coupontracker.util.ApiTester
 import com.example.coupontracker.util.DebugLoggerUtil
+import com.example.coupontracker.util.TesseractLanguageManager
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.ui.text.style.TextAlign
 
 // Preference keys
 const val KEY_GOOGLE_CLOUD_VISION_API_KEY = "google_cloud_vision_api_key"
@@ -622,6 +625,63 @@ fun SettingsScreen(
                         text = "Tesseract complements ML Kit by using a different algorithm that may catch text ML Kit misses.",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Tesseract Language Selection
+                    val languageManager = remember { TesseractLanguageManager(context) }
+                    val availableLanguages = remember { languageManager.getAvailableLanguagesWithNames() }
+                    var selectedLanguage by remember { mutableStateOf(languageManager.getSelectedLanguage()) }
+                    var isLanguageDropdownExpanded by remember { mutableStateOf(false) }
+
+                    Text(
+                        text = "Tesseract Language",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Box {
+                        OutlinedButton(
+                            onClick = { isLanguageDropdownExpanded = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = languageManager.getLanguageDisplayName(selectedLanguage),
+                                modifier = Modifier.weight(1f),
+                                textAlign = TextAlign.Start
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = "Select Language"
+                            )
+                        }
+
+                        DropdownMenu(
+                            expanded = isLanguageDropdownExpanded,
+                            onDismissRequest = { isLanguageDropdownExpanded = false },
+                            modifier = Modifier.fillMaxWidth(0.7f)
+                        ) {
+                            availableLanguages.forEach { (code, name) ->
+                                DropdownMenuItem(
+                                    text = { Text(name) },
+                                    onClick = {
+                                        selectedLanguage = code
+                                        languageManager.setSelectedLanguage(code)
+                                        isLanguageDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Select the language that matches the text in your coupons for best results.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
