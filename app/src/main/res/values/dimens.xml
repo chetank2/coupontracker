@@ -1,20 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Spacing -->
-    <dimen name="margin_small">8dp</dimen>
-    <dimen name="margin_medium">16dp</dimen>
-    <dimen name="margin_large">24dp</dimen>
-    <dimen name="margin_xlarge">32dp</dimen>
+    <!-- Spacing (Golden Ratio: 1.618) -->
+    <dimen name="spacing_base">8dp</dimen>
+    <dimen name="spacing_small">@dimen/spacing_base</dimen>
+    <dimen name="spacing_medium">13dp</dimen>
+    <dimen name="spacing_large">21dp</dimen>
+    <dimen name="spacing_xlarge">34dp</dimen>
     
     <!-- Typography -->
-    <dimen name="text_size_large">24sp</dimen>
-    <dimen name="text_size_medium">16sp</dimen>
-    <dimen name="text_size_small">14sp</dimen>
+    <dimen name="text_size_h1">28sp</dimen>
+    <dimen name="text_size_h2">24sp</dimen>
+    <dimen name="text_size_h3">20sp</dimen>
+    <dimen name="text_size_body">16sp</dimen>
+    <dimen name="text_size_caption">14sp</dimen>
     
     <!-- Elevation -->
-    <dimen name="elevation_small">2dp</dimen>
+    <dimen name="elevation_none">0dp</dimen>
+    <dimen name="elevation_low">2dp</dimen>
     <dimen name="elevation_medium">4dp</dimen>
-    <dimen name="elevation_large">8dp</dimen>
+    <dimen name="elevation_high">8dp</dimen>
     
     <!-- Icons -->
     <dimen name="icon_size_small">16dp</dimen>
@@ -22,12 +26,29 @@
     <dimen name="icon_size_large">32dp</dimen>
     
     <!-- Card -->
-    <dimen name="card_corner_radius">12dp</dimen>
-    <dimen name="card_elevation">2dp</dimen>
-    <dimen name="card_margin">8dp</dimen>
+    <dimen name="card_corner_radius">16dp</dimen>
+    <dimen name="card_elevation">@dimen/elevation_medium</dimen>
+    <dimen name="card_margin">@dimen/spacing_medium</dimen>
+    
+    <!-- Button -->
+    <dimen name="button_height">48dp</dimen>
+    <dimen name="button_padding">16dp</dimen>
+    
+    <!-- Badge -->
+    <dimen name="badge_padding">8dp</dimen>
+    <dimen name="badge_corner_radius">12dp</dimen>
     
     <!-- Bottom Navigation -->
     <dimen name="bottom_nav_icon_size">24dp</dimen>
     <dimen name="bottom_nav_height">56dp</dimen>
-    <dimen name="bottom_nav_margin">8dp</dimen>
+    <dimen name="bottom_nav_margin">@dimen/spacing_medium</dimen>
+    
+    <!-- Status Pill -->
+    <dimen name="status_pill_height">24dp</dimen>
+    <dimen name="status_pill_padding">8dp</dimen>
+    <dimen name="status_pill_corner_radius">12dp</dimen>
+    
+    <!-- FAB -->
+    <dimen name="fab_size">56dp</dimen>
+    <dimen name="fab_margin">@dimen/spacing_large</dimen>
 </resources>
