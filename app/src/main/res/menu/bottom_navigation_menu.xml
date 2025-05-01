@@ -6,6 +6,14 @@
         android:title="Home"
         android:checked="true" />
     <item
+        android:id="@+id/navigation_add"
+        android:icon="@drawable/ic_add"
+        android:title="Add" />
+    <item
+        android:id="@+id/navigation_scanner"
+        android:icon="@drawable/ic_camera"
+        android:title="Scan" />
+    <item
         android:id="@+id/navigation_settings"
         android:icon="@drawable/ic_settings"
         android:title="Settings" />
