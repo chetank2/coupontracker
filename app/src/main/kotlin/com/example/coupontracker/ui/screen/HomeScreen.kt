@@ -14,8 +14,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.NetworkCheck
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -53,14 +58,14 @@ fun HomeScreen(
 ) {
     val coupons by viewModel.coupons.collectAsState(initial = emptyList())
     val context = LocalContext.current
-    val sharedPreferences = remember { 
+    val sharedPreferences = remember {
         context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
     }
-    
+
     // Check if this is the first launch
     var showApiDialog by remember { mutableStateOf(false) }
     var isFirstLaunch by remember { mutableStateOf(false) }
-    
+
     LaunchedEffect(key1 = true) {
         val isFirstLaunchPref = sharedPreferences.getBoolean("is_first_launch", true)
         if (isFirstLaunchPref) {
@@ -69,7 +74,7 @@ fun HomeScreen(
             sharedPreferences.edit().putBoolean("is_first_launch", false).apply()
         }
     }
-    
+
     // Show the API selection dialog if needed
     if (showApiDialog) {
         ApiSelectionDialog(
@@ -78,7 +83,7 @@ fun HomeScreen(
             onDismiss = { showApiDialog = false }
         )
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -91,12 +96,95 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { navController.navigate(Screen.Scanner.route) },
-                icon = { Icon(Icons.Default.CameraAlt, contentDescription = null) },
-                text = { Text("Scan") },
-                modifier = Modifier.padding(vertical = 8.dp)
-            )
+            var showMenu by remember { mutableStateOf(false) }
+
+            Column(
+                horizontalAlignment = Alignment.End
+            ) {
+                // Show the menu if expanded
+                if (showMenu) {
+                    Card(
+                        modifier = Modifier
+                            .padding(bottom = 16.dp)
+                            .width(200.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(8.dp)
+                        ) {
+                            // Camera option
+                            Button(
+                                onClick = {
+                                    navController.navigate(Screen.Scanner.route)
+                                    showMenu = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Camera")
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Batch scan option
+                            Button(
+                                onClick = {
+                                    navController.navigate(Screen.BatchScanner.route)
+                                    showMenu = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Collections, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Batch Scan")
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // QR code option
+                            Button(
+                                onClick = {
+                                    navController.navigate(Screen.QRScanner.route)
+                                    showMenu = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.QrCode, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("QR Code")
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Manual entry option
+                            Button(
+                                onClick = {
+                                    navController.navigate(Screen.ManualEntry.route)
+                                    showMenu = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.Edit, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Manual Entry")
+                            }
+                        }
+                    }
+                }
+
+                // Main FAB
+                ExtendedFloatingActionButton(
+                    onClick = { showMenu = !showMenu },
+                    icon = {
+                        Icon(
+                            if (showMenu) Icons.Default.Close else Icons.Default.Add,
+                            contentDescription = null
+                        )
+                    },
+                    text = { Text(if (showMenu) "Close" else "Add Coupon") },
+                    modifier = Modifier.padding(vertical = 8.dp)
+                )
+            }
         }
     ) { paddingValues ->
         if (coupons.isEmpty()) {
@@ -123,34 +211,69 @@ fun HomeScreen(
                                 text = "No Coupons Yet",
                                 style = MaterialTheme.typography.headlineSmall
                             )
-                            
+
                             Spacer(modifier = Modifier.height(16.dp))
-                            
+
                             Text(
                                 text = "Scan a coupon to get started or test the API connection",
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                            
+
                             Spacer(modifier = Modifier.height(16.dp))
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
+
+                            Column(
+                                modifier = Modifier.fillMaxWidth()
                             ) {
+                                Text(
+                                    text = "Choose an input method:",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+
+                                // Camera option
                                 Button(
-                                    onClick = { navController.navigate(Screen.Scanner.route) }
+                                    onClick = { navController.navigate(Screen.Scanner.route) },
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Icon(Icons.Default.CameraAlt, contentDescription = null)
                                     Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                                    Text("Scan")
+                                    Text("Camera")
                                 }
-                                
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Batch scan option
                                 Button(
-                                    onClick = { navController.navigate(Screen.Settings.route) }
+                                    onClick = { navController.navigate(Screen.BatchScanner.route) },
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Icon(Icons.Default.Settings, contentDescription = null)
+                                    Icon(Icons.Default.Collections, contentDescription = null)
                                     Spacer(modifier = Modifier.padding(horizontal = 4.dp))
-                                    Text("Settings")
+                                    Text("Batch Scan")
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // QR code option
+                                Button(
+                                    onClick = { navController.navigate(Screen.QRScanner.route) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.QrCode, contentDescription = null)
+                                    Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                                    Text("QR Code")
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Manual entry option
+                                Button(
+                                    onClick = { navController.navigate(Screen.ManualEntry.route) },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.Edit, contentDescription = null)
+                                    Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                                    Text("Manual Entry")
                                 }
                             }
                         }
@@ -168,7 +291,7 @@ fun HomeScreen(
                 items(coupons) { coupon ->
                     CouponItem(
                         coupon = coupon,
-                        onClick = { 
+                        onClick = {
                             navController.navigate(Screen.CouponDetail.createRoute(coupon.id))
                         }
                     )
@@ -176,4 +299,4 @@ fun HomeScreen(
             }
         }
     }
-} 
+}

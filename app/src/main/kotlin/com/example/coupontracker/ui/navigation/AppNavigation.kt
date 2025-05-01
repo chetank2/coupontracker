@@ -7,7 +7,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.coupontracker.ui.screen.ApiTestScreen
+import com.example.coupontracker.ui.screen.BatchScannerScreen
 import com.example.coupontracker.ui.screen.HomeScreen
+import com.example.coupontracker.ui.screen.ManualEntryScreen
+import com.example.coupontracker.ui.screen.QRScannerScreen
 import com.example.coupontracker.ui.screen.ScannerScreen
 import com.example.coupontracker.ui.screen.SettingsScreen
 import com.example.coupontracker.ui.screen.TesseractTrainingScreen
@@ -19,15 +22,21 @@ sealed class Screen(val route: String) {
         fun createRoute(couponId: Long) = "coupon_detail/$couponId"
     }
     object Scanner : Screen("scanner")
+    object BatchScanner : Screen("batch_scanner")
+    object QRScanner : Screen("qr_scanner")
+    object ManualEntry : Screen("manual_entry")
+    object ManualEntryWithCode : Screen("manual_entry/{code}") {
+        fun createRoute(code: String) = "manual_entry/$code"
+    }
     object ApiTest : Screen("api_test")
     object Settings : Screen("settings")
     object TesseractTraining : Screen("tesseract_training")
 }
 
 @Composable
-fun AppNavigation() {
-    val navController = rememberNavController()
-
+fun AppNavigation(
+    navController: NavController = rememberNavController()
+) {
     NavHost(
         navController = navController,
         startDestination = Screen.Home.route
@@ -69,6 +78,28 @@ fun AppNavigation() {
 
         composable(Screen.TesseractTraining.route) {
             TesseractTrainingScreen(navController = navController)
+        }
+
+        composable(Screen.BatchScanner.route) {
+            BatchScannerScreen(navController = navController)
+        }
+
+        composable(Screen.QRScanner.route) {
+            QRScannerScreen(navController = navController)
+        }
+
+        composable(Screen.ManualEntry.route) {
+            ManualEntryScreen(navController = navController)
+        }
+
+        composable(
+            route = Screen.ManualEntryWithCode.route,
+            arguments = listOf(
+                navArgument("code") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val code = backStackEntry.arguments?.getString("code")
+            ManualEntryScreen(navController = navController, initialCode = code)
         }
     }
 }
