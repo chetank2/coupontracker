@@ -7,6 +7,7 @@ import java.util.Date
 
 @Dao
 interface CouponDao {
+    // Existing queries
     @Query("SELECT * FROM coupons ORDER BY expiryDate ASC")
     fun getAllCoupons(): Flow<List<Coupon>>
 
@@ -36,4 +37,17 @@ interface CouponDao {
 
     @Query("DELETE FROM coupons")
     suspend fun deleteAllCoupons()
-} 
+
+    // New queries
+    @Query("SELECT * FROM coupons WHERE isPriority = 1 ORDER BY expiryDate ASC")
+    fun getPriorityCoupons(): Flow<List<Coupon>>
+
+    @Query("SELECT * FROM coupons WHERE platformType = :platformType ORDER BY expiryDate ASC")
+    fun getCouponsByPlatform(platformType: String): Flow<List<Coupon>>
+
+    @Query("SELECT * FROM coupons WHERE reminderDate IS NOT NULL ORDER BY reminderDate ASC")
+    fun getCouponsWithReminders(): Flow<List<Coupon>>
+
+    @Query("SELECT * FROM coupons WHERE expiryDate BETWEEN :startDate AND :endDate ORDER BY expiryDate ASC")
+    fun getCouponsExpiringBetween(startDate: Date, endDate: Date): Flow<List<Coupon>>
+}

@@ -19,27 +19,37 @@ class AddCouponViewModel @Inject constructor(
 
     private val _savingState = MutableStateFlow<SavingState>(SavingState.Idle)
     val savingState: StateFlow<SavingState> = _savingState
-    
+
     private val _couponSaved = MutableStateFlow(false)
     val couponSaved: StateFlow<Boolean> = _couponSaved
-    
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
-    
+
     var couponId: Long = 0
         private set
-    
+
     private var currentImageUri: Uri? = null
     private var currentExpiryDate: Date = Date()
+    private var currentReminderDate: Date? = null
+    private var isPriority: Boolean = false
 
     fun setImageUri(uri: Uri) {
         currentImageUri = uri
     }
-    
+
     fun setExpiryDate(date: Date) {
         currentExpiryDate = date
     }
-    
+
+    fun setReminderDate(date: Date?) {
+        currentReminderDate = date
+    }
+
+    fun setPriority(priority: Boolean) {
+        isPriority = priority
+    }
+
     fun clearError() {
         _error.value = null
     }
@@ -48,10 +58,15 @@ class AddCouponViewModel @Inject constructor(
         storeName: String,
         description: String,
         cashbackAmount: Double,
-        redeemCode: String?,
-        category: String?,
+        redeemCode: String? = null,
+        category: String? = null,
         rating: String? = null,
-        status: String? = null
+        status: String? = null,
+        minimumPurchase: Double? = null,
+        maximumDiscount: Double? = null,
+        paymentMethod: String? = null,
+        platformType: String? = null,
+        usageLimit: Int? = null
     ) {
         if (storeName.isBlank() || description.isBlank()) {
             _error.value = "Store name and description are required"
@@ -70,7 +85,15 @@ class AddCouponViewModel @Inject constructor(
                     imageUri = currentImageUri?.toString(),
                     category = category,
                     rating = rating,
-                    status = status
+                    status = status ?: "Active",
+                    minimumPurchase = minimumPurchase,
+                    maximumDiscount = maximumDiscount,
+                    isPriority = isPriority,
+                    paymentMethod = paymentMethod,
+                    usageLimit = usageLimit,
+                    usageCount = 0,
+                    reminderDate = currentReminderDate,
+                    platformType = platformType
                 )
                 couponId = repository.insertCoupon(coupon)
                 _couponSaved.value = true
@@ -88,4 +111,4 @@ class AddCouponViewModel @Inject constructor(
         object Success : SavingState()
         data class Error(val message: String) : SavingState()
     }
-} 
+}

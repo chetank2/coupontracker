@@ -15,8 +15,20 @@ data class Coupon(
     val redeemCode: String?,
     val imageUri: String?,
     val category: String? = null,
-    val rating: String? = null,
     val status: String? = null,
+
+    // New fields
+    val minimumPurchase: Double? = null,
+    val maximumDiscount: Double? = null,
+    val isPriority: Boolean = false,
+    val paymentMethod: String? = null,
+    val usageLimit: Int? = null,
+    val usageCount: Int = 0,
+    val reminderDate: Date? = null,
+    val platformType: String? = null,
+
+    // Existing tracking fields
+    val rating: String? = null,
     val createdAt: Date = Date(),
     val updatedAt: Date = Date()
-) 
+)

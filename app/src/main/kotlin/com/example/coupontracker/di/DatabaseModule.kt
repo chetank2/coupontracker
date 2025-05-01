@@ -16,7 +16,7 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
-    
+
     @Provides
     @Singleton
     fun provideCouponDatabase(
@@ -25,8 +25,9 @@ object DatabaseModule {
         return Room.databaseBuilder(
             context,
             CouponDatabase::class.java,
-            "coupon_database"
+            CouponDatabase.DATABASE_NAME
         )
+            .addMigrations(CouponDatabase.MIGRATION_2_3)
             .fallbackToDestructiveMigration()
             .build()
     }
@@ -40,4 +41,4 @@ object DatabaseModule {
     fun provideCouponRepository(
         couponDao: CouponDao
     ): CouponRepository = CouponRepositoryImpl(couponDao)
-} 
+}
