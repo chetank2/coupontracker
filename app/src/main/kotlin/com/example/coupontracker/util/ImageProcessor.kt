@@ -76,6 +76,9 @@ class ImageProcessor(
         mistralApiKey
     )
 
+    // Tesseract OCR helper
+    private var tesseractOCRHelper: TesseractOCRHelper = TesseractOCRHelper(context)
+
     // Track the currently selected API
     private var selectedApiType: ApiType = ApiType.GOOGLE_CLOUD_VISION
 
@@ -393,6 +396,19 @@ class ImageProcessor(
                     Log.d(TAG, "Using ML Kit directly as selected OCR method")
                     return@withContext tryMlKit(bitmap)
                 }
+
+                ApiType.TESSERACT -> {
+                    // Use Tesseract OCR directly
+                    Log.d(TAG, "Using Tesseract OCR directly as selected OCR method")
+                    val result = tryTesseract(bitmap)
+                    if (result != null) {
+                        return@withContext result
+                    }
+
+                    // Fall back to ML Kit if Tesseract fails
+                    Log.d(TAG, "Tesseract OCR failed, falling back to ML Kit")
+                    return@withContext tryMlKit(bitmap)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process image", e)
@@ -510,6 +526,29 @@ class ImageProcessor(
             couponInfo
         } catch (e: Exception) {
             Log.e(TAG, "Error processing with Mistral API", e)
+            null
+        }
+    }
+
+    /**
+     * Try processing with Tesseract OCR
+     */
+    private suspend fun tryTesseract(bitmap: Bitmap): CouponInfo? {
+        return try {
+            Log.d(TAG, "Extracting info with Tesseract OCR")
+            val couponInfo = tesseractOCRHelper.extractCouponInfo(bitmap)
+
+            // Check if we got meaningful results
+            if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&
+                couponInfo.cashbackAmount == null && couponInfo.redeemCode.isNullOrBlank()) {
+                Log.w(TAG, "Tesseract OCR returned empty results")
+                return null
+            }
+
+            Log.d(TAG, "Successfully extracted coupon info using Tesseract OCR: $couponInfo")
+            couponInfo
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing with Tesseract OCR", e)
             null
         }
     }
@@ -871,6 +910,35 @@ class ImageProcessor(
                     val rawText = googleVisionHelper?.extractText(bitmap) ?: ""
                     val templateExtractor = CouponTemplateExtractor()
                     templateExtractor.extractFromTemplate(bitmap, rawText)
+                }
+            }
+
+            ApiType.TESSERACT -> {
+                try {
+                    Log.d(TAG, "Using Tesseract OCR for single coupon")
+                    val text = tesseractOCRHelper.processImageFromBitmap(bitmap)
+
+                    if (text.isNotBlank()) {
+                        // First try template-based extraction
+                        val templateExtractor = CouponTemplateExtractor()
+                        val template = templateExtractor.identifyTemplate(bitmap, text)
+
+                        if (template != CouponTemplateExtractor.CouponTemplate.Unknown) {
+                            Log.d(TAG, "Using template-based extraction with Tesseract OCR")
+                            templateExtractor.extractFromTemplate(bitmap, text, template)
+                        } else {
+                            // Extract coupon info from text
+                            Log.d(TAG, "Using text extraction with Tesseract OCR")
+                            val textExtractor = TextExtractor()
+                            textExtractor.extractCouponInfo(text)
+                        }
+                    } else {
+                        Log.w(TAG, "Tesseract OCR returned empty text, falling back to ML Kit")
+                        return processSingleCoupon(bitmap, origImageUri, ApiType.ML_KIT)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error using Tesseract OCR, falling back to ML Kit", e)
+                    return processSingleCoupon(bitmap, origImageUri, ApiType.ML_KIT)
                 }
             }
         }

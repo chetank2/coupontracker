@@ -40,6 +40,7 @@ enum class ApiType(val displayName: String) {
     MISTRAL("Mistral AI"),
     COMBINED("Combined Vision+Mistral"),
     ML_KIT("ML Kit (On-device)"),
+    TESSERACT("Tesseract OCR (On-device)"),
     SUPER("Super OCR (All Technologies)")
 }
 
@@ -133,7 +134,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "• Google Cloud Vision: Provides high-quality cloud OCR (free tier available)\n• Mistral AI: Enhances results with AI validation (free tier available)\n• Super OCR: Uses all available technologies for best results",
+                        text = "• Google Cloud Vision: Provides high-quality cloud OCR (free tier available)\n• Mistral AI: Enhances results with AI validation (free tier available)\n• Tesseract OCR: Open-source OCR engine (no API key needed)\n• Super OCR: Uses all available technologies for best results",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -192,7 +193,7 @@ fun SettingsScreen(
                             )
 
                             // Show status icon for APIs that need keys
-                            if (apiType != ApiType.ML_KIT) {
+                            if (apiType != ApiType.ML_KIT && apiType != ApiType.TESSERACT) {
                                 Spacer(modifier = Modifier.weight(1f))
 
                                 val isKeyValid = when (apiType) {
@@ -200,6 +201,7 @@ fun SettingsScreen(
                                     ApiType.MISTRAL -> mistralApiKey.isNotBlank()
                                     ApiType.COMBINED -> googleCloudVisionApiKey.isNotBlank() && mistralApiKey.isNotBlank()
                                     ApiType.SUPER -> googleCloudVisionApiKey.isNotBlank() || mistralApiKey.isNotBlank()
+                                    ApiType.ML_KIT, ApiType.TESSERACT -> true // On-device options don't need API keys
                                     else -> false
                                 }
 
@@ -216,6 +218,7 @@ fun SettingsScreen(
                     Text(
                         text = "Note: If the selected API fails, the app will try the next one in order. " +
                               "The 'Combined' option uses Google Cloud Vision results validated by Mistral AI. " +
+                              "The 'Tesseract' option uses an open-source OCR engine that works on-device. " +
                               "The 'Super OCR' option uses all available technologies in parallel and selects the best results.",
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 16.dp)
@@ -521,7 +524,7 @@ fun SettingsScreen(
 
             // ML Kit Info
             Card(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer
                 )
@@ -565,6 +568,58 @@ fun SettingsScreen(
 
                     Text(
                         text = "To get started without API keys, simply select ML Kit as your OCR option above.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            // Tesseract Info
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Tesseract OCR (On-device)",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Surface(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.padding(4.dp)
+                        ) {
+                            Text(
+                                text = "No API Key Required",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Tesseract is an open-source OCR engine that runs on your device. " +
+                              "It's particularly good at recognizing printed text and works without an internet connection or API keys.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Tesseract complements ML Kit by using a different algorithm that may catch text ML Kit misses.",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold
                     )

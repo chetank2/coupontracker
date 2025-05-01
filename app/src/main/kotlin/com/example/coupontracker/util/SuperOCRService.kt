@@ -23,32 +23,34 @@ class SuperOCRService(
     private val mistralApiKey: String?
 ) {
     private val TAG = "SuperOCRService"
-    
+
     // OCR components
     private val mlKitTextRecognition = MLKitRealTextRecognition()
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor()
-    
+    private val tesseractOCRHelper = TesseractOCRHelper(context)
+
     // Optional components that require API keys
     private val googleVisionHelper = googleVisionApiKey?.takeIf { it.isNotBlank() }?.let {
         EnhancedGoogleVisionHelper(it, context)
     }
-    
+
     private val mistralOcrService = mistralApiKey?.takeIf { it.isNotBlank() }?.let {
         MistralOcrService(it)
     }
-    
+
     private val combinedOcrService = if (googleVisionHelper != null && mistralOcrService != null) {
         CombinedOCRService(googleVisionHelper, mistralOcrService)
     } else {
         null
     }
-    
+
     // Track service availability
     private var googleVisionAvailable = AtomicBoolean(false)
     private var mistralApiAvailable = AtomicBoolean(false)
     private var combinedServiceAvailable = AtomicBoolean(false)
-    
+    private var tesseractAvailable = AtomicBoolean(false)
+
     /**
      * Extract text from an image using all available OCR engines
      * @param bitmap The image to process
@@ -57,14 +59,14 @@ class SuperOCRService(
     suspend fun extractText(bitmap: Bitmap): String = coroutineScope {
         try {
             Log.d(TAG, "Extracting text with all available OCR engines")
-            
+
             // Create preprocessing variants
             val variants = imagePreprocessor.createProcessingVariants(bitmap)
             Log.d(TAG, "Created ${variants.size} preprocessing variants")
-            
+
             // Run all available OCR engines in parallel
             val deferredResults = mutableListOf<Deferred<OcrResult>>()
-            
+
             // Always use ML Kit (on-device)
             deferredResults.add(async {
                 try {
@@ -75,7 +77,20 @@ class SuperOCRService(
                     OcrResult("ML Kit", "", 0)
                 }
             })
-            
+
+            // Use Tesseract OCR (on-device)
+            if (tesseractAvailable.get()) {
+                deferredResults.add(async {
+                    try {
+                        val text = tesseractOCRHelper.processImageFromBitmap(variants[0])
+                        OcrResult("Tesseract", text, text.length)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Tesseract processing failed", e)
+                        OcrResult("Tesseract", "", 0)
+                    }
+                })
+            }
+
             // Use Google Vision if available
             if (googleVisionHelper != null && googleVisionAvailable.get()) {
                 deferredResults.add(async {
@@ -87,7 +102,7 @@ class SuperOCRService(
                         OcrResult("Google Vision", "", 0)
                     }
                 })
-                
+
                 // Process a second variant with Google Vision
                 if (variants.size > 1) {
                     deferredResults.add(async {
@@ -101,7 +116,7 @@ class SuperOCRService(
                     })
                 }
             }
-            
+
             // Use Mistral if available
             if (mistralOcrService != null && mistralApiAvailable.get()) {
                 deferredResults.add(async {
@@ -114,7 +129,7 @@ class SuperOCRService(
                     }
                 })
             }
-            
+
             // Use Combined service if available
             if (combinedOcrService != null && combinedServiceAvailable.get()) {
                 deferredResults.add(async {
@@ -127,26 +142,26 @@ class SuperOCRService(
                     }
                 })
             }
-            
+
             // Await all results
             val results = deferredResults.awaitAll()
-            
+
             // Log all results
             results.forEach { result ->
                 Log.d(TAG, "OCR Result from ${result.engine}: ${result.text.length} chars")
             }
-            
+
             // Filter out empty results
             val validResults = results.filter { it.text.isNotBlank() }
-            
+
             if (validResults.isEmpty()) {
                 Log.w(TAG, "No valid OCR results from any engine")
                 return@coroutineScope ""
             }
-            
+
             // Select the best result (highest score)
             val bestResult = validResults.maxByOrNull { it.score }
-            
+
             if (bestResult != null) {
                 Log.d(TAG, "Best OCR result from ${bestResult.engine}: ${bestResult.text.length} chars")
                 return@coroutineScope bestResult.text
@@ -168,24 +183,24 @@ class SuperOCRService(
     suspend fun extractCouponInfo(bitmap: Bitmap): CouponInfo = coroutineScope {
         try {
             Log.d(TAG, "Extracting coupon info with all available OCR engines")
-            
+
             // First get the best text from all OCR engines
             val bestText = extractText(bitmap)
-            
+
             if (bestText.isBlank()) {
                 Log.w(TAG, "No text extracted from any OCR engine")
                 return@coroutineScope CouponInfo()
             }
-            
+
             // Try different extraction methods in parallel
             val deferredResults = mutableListOf<Deferred<CouponInfoResult>>()
-            
+
             // 1. Try template-based extraction
             deferredResults.add(async {
                 try {
                     val templateExtractor = CouponTemplateExtractor()
                     val template = templateExtractor.identifyTemplate(bitmap, bestText)
-                    
+
                     if (template != CouponTemplateExtractor.CouponTemplate.Unknown) {
                         val info = templateExtractor.extractFromTemplate(bitmap, bestText, template)
                         CouponInfoResult("Template", info, calculateCompleteness(info) * 1.5) // Higher weight for template matches
@@ -197,7 +212,7 @@ class SuperOCRService(
                     CouponInfoResult("Template", CouponInfo(), 0.0)
                 }
             })
-            
+
             // 2. Try region-based extraction if Google Vision is available
             if (googleVisionHelper != null) {
                 deferredResults.add(async {
@@ -211,7 +226,7 @@ class SuperOCRService(
                     }
                 })
             }
-            
+
             // 3. Try basic text extraction
             deferredResults.add(async {
                 try {
@@ -222,14 +237,14 @@ class SuperOCRService(
                     CouponInfoResult("Basic", CouponInfo(), 0.0)
                 }
             })
-            
+
             // 4. Try Mistral structured extraction if available
             if (mistralOcrService != null && mistralApiAvailable.get()) {
                 deferredResults.add(async {
                     try {
                         val structuredDataPrompt = createStructuredDataPrompt(bestText)
                         val structuredDataJson = mistralOcrService.processTextWithCustomPrompt(bitmap, structuredDataPrompt)
-                        
+
                         if (structuredDataJson.isNotBlank()) {
                             val info = parseCouponInfoFromJson(structuredDataJson) ?: CouponInfo()
                             CouponInfoResult("Mistral", info, calculateCompleteness(info) * 1.2) // Higher weight for AI extraction
@@ -242,26 +257,39 @@ class SuperOCRService(
                     }
                 })
             }
-            
+
+            // 5. Try Tesseract extraction if available
+            if (tesseractAvailable.get()) {
+                deferredResults.add(async {
+                    try {
+                        val info = tesseractOCRHelper.extractCouponInfo(bitmap)
+                        CouponInfoResult("Tesseract", info, calculateCompleteness(info))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Tesseract extraction failed", e)
+                        CouponInfoResult("Tesseract", CouponInfo(), 0.0)
+                    }
+                })
+            }
+
             // Await all results
             val results = deferredResults.awaitAll()
-            
+
             // Log all results
             results.forEach { result ->
                 Log.d(TAG, "Extraction Result from ${result.method}: Score=${result.score}")
             }
-            
+
             // Filter out empty results
             val validResults = results.filter { it.score > 0 }
-            
+
             if (validResults.isEmpty()) {
                 Log.w(TAG, "No valid extraction results from any method")
                 return@coroutineScope CouponInfo()
             }
-            
+
             // Select the best result (highest score)
             val bestResult = validResults.maxByOrNull { it.score }
-            
+
             if (bestResult != null) {
                 Log.d(TAG, "Best extraction result from ${bestResult.method}: Score=${bestResult.score}")
                 return@coroutineScope bestResult.info
@@ -284,7 +312,7 @@ class SuperOCRService(
             ---
             $text
             ---
-            
+
             Please extract the following information in JSON format:
             {
                 "storeName": "The name of the store or brand",
@@ -294,7 +322,7 @@ class SuperOCRService(
                 "description": "A brief description of the offer",
                 "terms": "Any terms and conditions"
             }
-            
+
             If any field is not found, set it to null. Return ONLY the JSON object, without any explanations or additional text.
         """.trimIndent()
     }
@@ -308,9 +336,9 @@ class SuperOCRService(
             val jsonRegex = """\{[\s\S]*\}""".toRegex()
             val jsonMatch = jsonRegex.find(jsonString)
             val jsonPart = jsonMatch?.value ?: jsonString
-            
+
             val json = JSONObject(jsonPart)
-            
+
             CouponInfo(
                 storeName = json.optString("storeName", ""),
                 redeemCode = json.optString("code", null),
@@ -332,60 +360,70 @@ class SuperOCRService(
         withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Testing API services availability")
-                
+
                 // Test Google Vision availability
                 googleVisionAvailable.set(false)
                 if (googleVisionHelper != null) {
                     googleVisionAvailable.set(googleVisionHelper.testApiAvailability())
                 }
-                
+
                 // Test Mistral API availability
                 mistralApiAvailable.set(false)
                 if (mistralOcrService != null) {
                     mistralApiAvailable.set(mistralOcrService.testApiAvailability())
                 }
-                
+
                 // Test Combined service availability
                 combinedServiceAvailable.set(false)
                 if (combinedOcrService != null && googleVisionAvailable.get() && mistralApiAvailable.get()) {
                     combinedServiceAvailable.set(combinedOcrService.testApiAvailability())
                 }
-                
+
+                // Test Tesseract availability
+                tesseractAvailable.set(false)
+                try {
+                    tesseractAvailable.set(tesseractOCRHelper.testAvailability())
+                    Log.d(TAG, "Tesseract OCR availability: ${tesseractAvailable.get()}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error testing Tesseract OCR", e)
+                }
+
                 Log.d(TAG, "API Service availability: " +
                       "Google Vision: ${googleVisionAvailable.get()}, " +
                       "Mistral: ${mistralApiAvailable.get()}, " +
-                      "Combined: ${combinedServiceAvailable.get()}")
+                      "Combined: ${combinedServiceAvailable.get()}, " +
+                      "Tesseract: ${tesseractAvailable.get()}")
             } catch (e: Exception) {
                 Log.e(TAG, "Error testing API services", e)
             }
         }
     }
-    
+
     // Helper class for OCR results
     private data class OcrResult(
         val engine: String,
         val text: String,
         val score: Int
     )
-    
+
     // Helper class for coupon info results
     private data class CouponInfoResult(
         val method: String,
         val info: CouponInfo,
         val score: Double
     )
-    
+
     // Calculate completeness score for a CouponInfo object
     private fun calculateCompleteness(info: CouponInfo): Double {
         var score = 0.0
-        
+
         if (info.storeName.isNotBlank()) score += 1.0
         if (info.redeemCode != null && info.redeemCode.isNotBlank()) score += 2.0
         if (info.description.isNotBlank()) score += 0.5
         if (info.cashbackAmount != null) score += 1.0
         if (info.expiryDate != null) score += 1.0
         if (info.terms != null && info.terms.isNotBlank()) score += 0.5
-        
+
         return score
     }
 }
