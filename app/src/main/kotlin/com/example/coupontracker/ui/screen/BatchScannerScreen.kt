@@ -34,6 +34,7 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.ui.viewmodel.BatchScannerViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import kotlinx.coroutines.launch
 
@@ -48,12 +49,12 @@ fun BatchScannerScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    
+
     val uiState by viewModel.uiState.collectAsState()
-    
+
     // Camera permission state
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
-    
+
     // Image picker launcher for multiple images
     val multipleImagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -62,7 +63,7 @@ fun BatchScannerScreen(
             viewModel.addImages(uris)
         }
     }
-    
+
     // PDF picker launcher
     val pdfPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -71,14 +72,14 @@ fun BatchScannerScreen(
             viewModel.addPdf(it)
         }
     }
-    
+
     // Reset state when leaving the screen
     DisposableEffect(Unit) {
         onDispose {
             viewModel.resetState()
         }
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -165,7 +166,7 @@ fun BatchScannerScreen(
                             multipleImagePickerLauncher.launch("image/*")
                         },
                         onAddFromCamera = {
-                            if (cameraPermissionState.hasPermission) {
+                            if (cameraPermissionState.status.isGranted) {
                                 navController.navigate("scanner")
                             } else {
                                 cameraPermissionState.launchPermissionRequest()
@@ -212,26 +213,26 @@ fun EmptyBatchScannerView(
             modifier = Modifier.size(100.dp),
             tint = MaterialTheme.colorScheme.primary
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Text(
             text = "No Images Selected",
             style = MaterialTheme.typography.headlineSmall,
             textAlign = TextAlign.Center
         )
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         Text(
             text = "Add images to scan multiple coupons at once",
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        
+
         Spacer(modifier = Modifier.height(32.dp))
-        
+
         // Option buttons
         Button(
             onClick = onAddFromGallery,
@@ -241,9 +242,9 @@ fun EmptyBatchScannerView(
             Spacer(modifier = Modifier.width(8.dp))
             Text("Select from Gallery")
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Button(
             onClick = onAddFromCamera,
             modifier = Modifier.fillMaxWidth()
@@ -252,9 +253,9 @@ fun EmptyBatchScannerView(
             Spacer(modifier = Modifier.width(8.dp))
             Text("Take Photo")
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Button(
             onClick = onAddFromPdf,
             modifier = Modifier.fillMaxWidth()
@@ -286,7 +287,7 @@ fun SelectedImagesView(
                 text = "${images.size} Images Selected",
                 style = MaterialTheme.typography.titleMedium
             )
-            
+
             Button(
                 onClick = onAddMore,
                 colors = ButtonDefaults.buttonColors(
@@ -299,9 +300,9 @@ fun SelectedImagesView(
                 Text("Add More")
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -336,7 +337,7 @@ fun ImageItem(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            
+
             // Remove button
             IconButton(
                 onClick = onRemove,
@@ -382,7 +383,7 @@ fun ProcessedCouponsView(
                 text = "${coupons.size} Coupons Found",
                 style = MaterialTheme.typography.titleMedium
             )
-            
+
             Button(
                 onClick = onScanMore,
                 colors = ButtonDefaults.buttonColors(
@@ -395,9 +396,9 @@ fun ProcessedCouponsView(
                 Text("Scan More")
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
@@ -412,9 +413,9 @@ fun ProcessedCouponsView(
                 )
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Button(
             onClick = onSaveAll,
             modifier = Modifier.fillMaxWidth()
@@ -452,7 +453,7 @@ fun CouponItem(
                     text = coupon.storeName,
                     style = MaterialTheme.typography.titleMedium
                 )
-                
+
                 Row {
                     IconButton(
                         onClick = onEdit,
@@ -465,7 +466,7 @@ fun CouponItem(
                             modifier = Modifier.size(20.dp)
                         )
                     }
-                    
+
                     IconButton(
                         onClick = onRemove,
                         modifier = Modifier.size(32.dp)
@@ -479,17 +480,17 @@ fun CouponItem(
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(4.dp))
-            
+
             Text(
                 text = coupon.description,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -498,7 +499,7 @@ fun CouponItem(
                     text = "Amount: ₹${coupon.cashbackAmount}",
                     style = MaterialTheme.typography.bodySmall
                 )
-                
+
                 coupon.redeemCode?.let {
                     Text(
                         text = "Code: $it",

@@ -7,6 +7,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -277,7 +278,7 @@ fun BrandTextField(
     val focusManager = LocalFocusManager.current
     val focusRequester = remember { FocusRequester() }
     var passwordVisible by remember { mutableStateOf(false) }
-    
+
     Column(modifier = modifier) {
         OutlinedTextField(
             value = value,
@@ -363,7 +364,7 @@ fun BrandTextField(
                 errorLabelColor = MaterialTheme.colorScheme.error
             )
         )
-        
+
         AnimatedVisibility(
             visible = isError && !errorMessage.isNullOrBlank(),
             enter = fadeIn() + expandVertically(),
@@ -400,7 +401,7 @@ fun SectionHeader(
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onBackground
         )
-        
+
         action?.invoke()
     }
 }
@@ -431,23 +432,23 @@ fun EmptyState(
                 .padding(bottom = 16.dp),
             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
         )
-        
+
         Text(
             text = title,
             style = MaterialTheme.typography.titleLarge,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground
         )
-        
+
         Spacer(modifier = Modifier.height(8.dp))
-        
+
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        
+
         if (action != null) {
             Spacer(modifier = Modifier.height(24.dp))
             action()
@@ -472,10 +473,10 @@ fun LoadingIndicator(
             color = MaterialTheme.colorScheme.primary,
             strokeWidth = 3.dp
         )
-        
+
         message?.let {
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Text(
                 text = it,
                 style = MaterialTheme.typography.bodyMedium,
@@ -502,7 +503,7 @@ fun StatusChip(
         StatusType.INFO -> Pair(BrandColors.Info.copy(alpha = 0.12f), BrandColors.Info)
         StatusType.NEUTRAL -> Pair(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.colorScheme.onSurfaceVariant)
     }
-    
+
     Surface(
         modifier = modifier,
         shape = BrandShapes.PillShape,
@@ -528,26 +529,26 @@ object DateFormatter {
     private val fullDateFormat = SimpleDateFormat("MMMM dd, yyyy", Locale.getDefault())
     private val shortDateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
     private val monthDayFormat = SimpleDateFormat("MMM dd", Locale.getDefault())
-    
+
     fun formatFull(date: Date): String = fullDateFormat.format(date)
     fun formatShort(date: Date): String = shortDateFormat.format(date)
     fun formatMonthDay(date: Date): String = monthDayFormat.format(date)
-    
+
     fun getExpiryStatus(expiryDate: Date): StatusType {
         val now = Calendar.getInstance().time
         val daysUntilExpiry = ((expiryDate.time - now.time) / (1000 * 60 * 60 * 24)).toInt()
-        
+
         return when {
             expiryDate.before(now) -> StatusType.ERROR
             daysUntilExpiry <= 7 -> StatusType.WARNING
             else -> StatusType.SUCCESS
         }
     }
-    
+
     fun getExpiryText(expiryDate: Date): String {
         val now = Calendar.getInstance().time
         val daysUntilExpiry = ((expiryDate.time - now.time) / (1000 * 60 * 60 * 24)).toInt()
-        
+
         return when {
             expiryDate.before(now) -> "Expired"
             daysUntilExpiry == 0 -> "Expires today"
@@ -574,7 +575,7 @@ fun EnhancedCouponCard(
 ) {
     val expiryStatus = DateFormatter.getExpiryStatus(expiryDate)
     val expiryText = DateFormatter.getExpiryText(expiryDate)
-    
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -602,15 +603,15 @@ fun EnhancedCouponCard(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
-                
+
                 StatusChip(
                     text = expiryText,
                     type = expiryStatus
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Description
             Text(
                 text = description,
@@ -619,9 +620,9 @@ fun EnhancedCouponCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Amount and code
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -642,7 +643,7 @@ fun EnhancedCouponCard(
                         )
                     }
                 }
-                
+
                 // Code with copy button
                 if (!code.isNullOrBlank() && onCopyCode != null) {
                     Row(
@@ -661,7 +662,7 @@ fun EnhancedCouponCard(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        
+
                         IconButton(
                             onClick = { onCopyCode(code) },
                             modifier = Modifier.size(28.dp)

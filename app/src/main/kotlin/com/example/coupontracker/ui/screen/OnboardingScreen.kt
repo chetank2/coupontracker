@@ -39,7 +39,7 @@ fun OnboardingScreen(
     val context = LocalContext.current
     var currentPage by remember { mutableStateOf(0) }
     val pages = remember { OnboardingPages.getPages() }
-    
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -66,32 +66,17 @@ fun OnboardingScreen(
                     )
                 }
             }
-            
+
             // Page content with animation
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
             ) {
-                pages.forEachIndexed { index, page ->
-                    AnimatedVisibility(
-                        visible = currentPage == index,
-                        enter = fadeIn(animationSpec = tween(300)) + 
-                                slideInHorizontally(
-                                    initialOffsetX = { it },
-                                    animationSpec = tween(300)
-                                ),
-                        exit = fadeOut(animationSpec = tween(300)) + 
-                               slideOutHorizontally(
-                                   targetOffsetX = { -it },
-                                   animationSpec = tween(300)
-                               )
-                    ) {
-                        OnboardingPage(page = page)
-                    }
-                }
+                // Show only the current page
+                OnboardingPage(page = pages[currentPage])
             }
-            
+
             // Indicators
             Row(
                 modifier = Modifier
@@ -105,15 +90,15 @@ fun OnboardingScreen(
                             .size(if (currentPage == index) 12.dp else 8.dp)
                             .clip(CircleShape)
                             .background(
-                                if (currentPage == index) 
-                                    MaterialTheme.colorScheme.primary 
-                                else 
+                                if (currentPage == index)
+                                    MaterialTheme.colorScheme.primary
+                                else
                                     MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                             )
                     )
                 }
             }
-            
+
             // Navigation buttons
             PrimaryButton(
                 text = if (currentPage == pages.size - 1) "Get Started" else "Next",
@@ -148,7 +133,7 @@ fun OnboardingPage(page: OnboardingPage) {
                 .size(280.dp)
                 .padding(bottom = 32.dp)
         )
-        
+
         // Title
         Text(
             text = page.title,
@@ -156,9 +141,9 @@ fun OnboardingPage(page: OnboardingPage) {
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onBackground
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         // Description
         Text(
             text = page.description,
@@ -173,7 +158,7 @@ private fun completeOnboarding(context: Context, navController: NavController) {
     // Save that onboarding is completed
     val sharedPreferences = context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
     sharedPreferences.edit().putBoolean("onboarding_completed", true).apply()
-    
+
     // Navigate to home screen
     navController.navigate(Screen.Home.route) {
         popUpTo(Screen.Onboarding.route) { inclusive = true }

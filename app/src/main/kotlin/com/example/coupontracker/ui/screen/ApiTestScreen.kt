@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -28,6 +29,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -153,7 +155,13 @@ fun ApiTestScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Button(
-                            onClick = { saveApiKey(context, sharedPreferences, apiKey) },
+                            onClick = {
+                                securePreferencesManager.saveString(
+                                    SecurePreferencesManager.KEY_MISTRAL_API_KEY,
+                                    apiKey
+                                )
+                                Toast.makeText(context, "API key saved", Toast.LENGTH_SHORT).show()
+                            },
                             enabled = apiKey.isNotBlank()
                         ) {
                             Text("Save Key")
@@ -174,7 +182,7 @@ fun ApiTestScreen(
                             Text("Test Connection")
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
 
                         Button(
                             onClick = {

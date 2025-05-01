@@ -26,16 +26,16 @@ class ManualEntryViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository
 ) : AndroidViewModel(application) {
-    
+
     private val _uiState = MutableStateFlow(ManualEntryUiState())
     val uiState: StateFlow<ManualEntryUiState> = _uiState.asStateFlow()
-    
+
     private val couponInputManager = CouponInputManager(context)
-    
+
     companion object {
         private const val TAG = "ManualEntryViewModel"
     }
-    
+
     /**
      * Set the URL to process
      * @param url The URL to process
@@ -43,23 +43,23 @@ class ManualEntryViewModel @Inject constructor(
     fun setUrl(url: String) {
         _uiState.value = _uiState.value.copy(url = url)
     }
-    
+
     /**
      * Process the URL to extract coupon information
      */
     fun processUrl() {
         val url = _uiState.value.url ?: return
-        
+
         if (url.isBlank()) {
             return
         }
-        
+
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isProcessingUrl = true, error = null)
-                
+
                 val coupon = couponInputManager.processCouponFromUrl(url)
-                
+
                 _uiState.value = _uiState.value.copy(
                     isProcessingUrl = false,
                     urlData = UrlData(
@@ -78,7 +78,7 @@ class ManualEntryViewModel @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Save the coupon with the provided details
      */
@@ -94,11 +94,11 @@ class ManualEntryViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(error = "Store name is required")
             return
         }
-        
+
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isSaving = true, error = null)
-                
+
                 val coupon = Coupon(
                     id = 0,
                     storeName = storeName,
@@ -106,13 +106,15 @@ class ManualEntryViewModel @Inject constructor(
                     cashbackAmount = amount,
                     expiryDate = expiryDate,
                     redeemCode = code.takeIf { !it.isNullOrBlank() },
-                    createdDate = Date(),
+                    imageUri = null,
                     category = category.takeIf { !it.isNullOrBlank() },
-                    status = "Active"
+                    status = "Active",
+                    createdAt = Date(),
+                    updatedAt = Date()
                 )
-                
+
                 couponRepository.insertCoupon(coupon)
-                
+
                 _uiState.value = _uiState.value.copy(isSaving = false, isSaved = true)
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving coupon", e)
@@ -123,7 +125,7 @@ class ManualEntryViewModel @Inject constructor(
             }
         }
     }
-    
+
     override fun onCleared() {
         super.onCleared()
         couponInputManager.cleanup()

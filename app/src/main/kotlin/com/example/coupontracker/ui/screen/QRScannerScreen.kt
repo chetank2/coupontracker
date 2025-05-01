@@ -50,15 +50,15 @@ fun QRScannerScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    
+
     val uiState by viewModel.uiState.collectAsState()
-    
+
     // Camera permission state
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
-    
+
     // Camera executor
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
-    
+
     // Barcode scanner options
     val options = remember {
         BarcodeScannerOptions.Builder()
@@ -70,10 +70,10 @@ fun QRScannerScreen(
             )
             .build()
     }
-    
+
     // Barcode scanner
     val scanner = remember { BarcodeScanning.getClient(options) }
-    
+
     // Clean up resources when leaving the screen
     DisposableEffect(Unit) {
         onDispose {
@@ -81,7 +81,7 @@ fun QRScannerScreen(
             scanner.close()
         }
     }
-    
+
     // Handle scan result
     LaunchedEffect(uiState.scannedBarcode) {
         uiState.scannedBarcode?.let { barcode ->
@@ -104,7 +104,7 @@ fun QRScannerScreen(
             }
         }
     }
-    
+
     // Handle processing result
     LaunchedEffect(uiState.coupon) {
         uiState.coupon?.let { coupon ->
@@ -112,7 +112,7 @@ fun QRScannerScreen(
             viewModel.saveCoupon()
         }
     }
-    
+
     // Handle save result
     LaunchedEffect(uiState.isSaved) {
         if (uiState.isSaved) {
@@ -120,7 +120,7 @@ fun QRScannerScreen(
             navController.popBackStack()
         }
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -144,15 +144,15 @@ fun QRScannerScreen(
                     factory = { ctx ->
                         val previewView = PreviewView(ctx)
                         val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                        
+
                         cameraProviderFuture.addListener({
                             val cameraProvider = cameraProviderFuture.get()
-                            
+
                             // Preview use case
                             val preview = Preview.Builder().build().also {
                                 it.setSurfaceProvider(previewView.surfaceProvider)
                             }
-                            
+
                             // Image analysis use case
                             val imageAnalysis = ImageAnalysis.Builder()
                                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
@@ -165,7 +165,7 @@ fun QRScannerScreen(
                                                 mediaImage,
                                                 imageProxy.imageInfo.rotationDegrees
                                             )
-                                            
+
                                             // Process the image
                                             scanner.process(image)
                                                 .addOnSuccessListener { barcodes ->
@@ -184,11 +184,11 @@ fun QRScannerScreen(
                                         }
                                     }
                                 }
-                            
+
                             try {
                                 // Unbind all use cases before rebinding
                                 cameraProvider.unbindAll()
-                                
+
                                 // Bind use cases to camera
                                 cameraProvider.bindToLifecycle(
                                     lifecycleOwner,
@@ -200,12 +200,12 @@ fun QRScannerScreen(
                                 Log.e("QRScannerScreen", "Use case binding failed", e)
                             }
                         }, ContextCompat.getMainExecutor(ctx))
-                        
+
                         previewView
                     },
                     modifier = Modifier.fillMaxSize()
                 )
-                
+
                 // Scanning overlay
                 Box(
                     modifier = Modifier
@@ -223,7 +223,7 @@ fun QRScannerScreen(
                             )
                     )
                 }
-                
+
                 // Instructions
                 Box(
                     modifier = Modifier
@@ -247,7 +247,7 @@ fun QRScannerScreen(
                         )
                     }
                 }
-                
+
                 // Processing indicator
                 if (uiState.isProcessing) {
                     Box(
@@ -295,25 +295,25 @@ fun QRScannerScreen(
                         modifier = Modifier.size(72.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Text(
                         text = "Camera Permission Required",
                         style = MaterialTheme.typography.headlineSmall,
                         textAlign = TextAlign.Center
                     )
-                    
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     Text(
                         text = "We need camera permission to scan QR codes and barcodes",
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center
                     )
-                    
+
                     Spacer(modifier = Modifier.height(24.dp))
-                    
+
                     Button(
                         onClick = { cameraPermissionState.launchPermissionRequest() }
                     ) {
@@ -329,7 +329,7 @@ fun QRScannerScreen(
 
 @Composable
 private fun Modifier.border(
-    width: dp,
+    width: androidx.compose.ui.unit.Dp,
     color: Color,
     shape: RoundedCornerShape
 ) = this

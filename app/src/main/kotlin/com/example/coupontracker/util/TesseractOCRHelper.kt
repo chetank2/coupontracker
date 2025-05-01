@@ -42,8 +42,8 @@ class TesseractOCRHelper(private val context: Context) {
     enum class OcrEngineMode(val mode: Int) {
         DEFAULT(TessBaseAPI.OEM_DEFAULT),
         TESSERACT_ONLY(TessBaseAPI.OEM_TESSERACT_ONLY),
-        LSTM_ONLY(TessBaseAPI.OEM_LSTM_ONLY),
-        TESSERACT_LSTM_COMBINED(TessBaseAPI.OEM_TESSERACT_LSTM_COMBINED)
+        LSTM_ONLY(0), // TessBaseAPI.OEM_LSTM_ONLY
+        TESSERACT_LSTM_COMBINED(1) // TessBaseAPI.OEM_TESSERACT_LSTM_COMBINED
     }
 
     // Default settings
@@ -390,7 +390,7 @@ class TesseractOCRHelper(private val context: Context) {
             tessBaseAPI?.setImage(processedBitmap)
 
             // Get the recognized text
-            val recognizedText = tessBaseAPI?.utF8Text() ?: ""
+            val recognizedText = tessBaseAPI?.getUTF8Text() ?: ""
 
             // Calculate processing time
             val processingTime = System.currentTimeMillis() - startTime
@@ -580,8 +580,9 @@ class TesseractOCRHelper(private val context: Context) {
      */
     private suspend fun enhanceCouponInfoWithRegionExtraction(
         bitmap: Bitmap,
-        couponInfo: CouponInfo
+        initialCouponInfo: CouponInfo
     ) = withContext(Dispatchers.IO) {
+        var couponInfo = initialCouponInfo
         // Only proceed if we need to fill in missing information
         if (!couponInfo.storeName.isBlank() &&
             !couponInfo.description.isBlank() &&
@@ -590,47 +591,51 @@ class TesseractOCRHelper(private val context: Context) {
             return@withContext
         }
 
-        // Create a region extractor
-        val regionExtractor = RegionBasedExtractor(null, TextExtractor())
+        // Create a text extractor
+        val textExtractor = TextExtractor()
 
         // Try to extract store name if missing
         if (couponInfo.storeName.isBlank()) {
-            val storeNameRegion = regionExtractor.detectStoreNameRegion(bitmap)
-            if (storeNameRegion != null) {
-                val regionBitmap = Bitmap.createBitmap(
-                    bitmap,
-                    storeNameRegion.left,
-                    storeNameRegion.top,
-                    storeNameRegion.width(),
-                    storeNameRegion.height()
-                )
-                val text = processImageFromBitmap(regionBitmap, "eng", true)
-                if (text.isNotBlank()) {
-                    couponInfo.storeName = text.trim()
+            // Process the top 1/3 of the image for store name
+            val topThird = Bitmap.createBitmap(
+                bitmap,
+                0,
+                0,
+                bitmap.width,
+                bitmap.height / 3
+            )
+            val text = processImageFromBitmap(topThird, "eng", true)
+            if (text.isNotBlank()) {
+                // Extract store name from the text
+                val storeName = textExtractor.extractStoreName(text)
+                if (!storeName.isNullOrBlank()) {
+                    couponInfo = couponInfo.copy(storeName = storeName)
                 }
             }
         }
 
         // Try to extract redeem code if missing
         if (couponInfo.redeemCode.isNullOrBlank()) {
-            val codeRegion = regionExtractor.detectCodeRegion(bitmap)
-            if (codeRegion != null) {
-                val regionBitmap = Bitmap.createBitmap(
-                    bitmap,
-                    codeRegion.left,
-                    codeRegion.top,
-                    codeRegion.width(),
-                    codeRegion.height()
-                )
-                // Use special settings for code recognition
-                configure(PageSegMode.SINGLE_LINE, null, true, PreprocessingType.BINARIZATION, true)
-                val text = processImageFromBitmap(regionBitmap, "eng", true)
-                if (text.isNotBlank()) {
-                    couponInfo.redeemCode = text.trim()
+            // Process the middle 1/3 of the image for code
+            val middleThird = Bitmap.createBitmap(
+                bitmap,
+                0,
+                bitmap.height / 3,
+                bitmap.width,
+                bitmap.height / 3
+            )
+            // Use special settings for code recognition
+            configure(PageSegMode.SINGLE_LINE, null, true, PreprocessingType.BINARIZATION, true)
+            val text = processImageFromBitmap(middleThird, "eng", true)
+            if (text.isNotBlank()) {
+                // Extract code from the text
+                val code = textExtractor.extractRedeemCode(text)
+                if (!code.isNullOrBlank()) {
+                    couponInfo = couponInfo.copy(redeemCode = code)
                 }
-                // Restore default settings
-                configure(PageSegMode.AUTO, null, true, PreprocessingType.ADAPTIVE, true)
             }
+            // Restore default settings
+            configure(PageSegMode.AUTO, null, true, PreprocessingType.ADAPTIVE, true)
         }
     }
 

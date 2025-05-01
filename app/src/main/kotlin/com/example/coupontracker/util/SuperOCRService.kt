@@ -396,13 +396,56 @@ class SuperOCRService(
 
             val json = JSONObject(jsonPart)
 
+            // Parse cashback amount
+            val amountStr = json.optString("amount", "")
+            val cashbackAmount = if (amountStr.isNotBlank()) {
+                try {
+                    // Extract numeric value from the amount string
+                    val numericRegex = """(\d+(?:\.\d+)?)""".toRegex()
+                    val match = numericRegex.find(amountStr)
+                    match?.groupValues?.get(1)?.toDoubleOrNull()
+                } catch (e: Exception) {
+                    null
+                }
+            } else {
+                null
+            }
+
+            // Parse expiry date
+            val expiryDateStr = json.optString("expiryDate", "")
+            val expiryDate = if (expiryDateStr.isNotBlank()) {
+                try {
+                    // Try common date formats
+                    val dateFormats = listOf(
+                        "dd/MM/yyyy", "MM/dd/yyyy", "yyyy-MM-dd",
+                        "dd-MM-yyyy", "dd MMM yyyy", "MMM dd, yyyy"
+                    )
+
+                    var parsedDate: java.util.Date? = null
+                    for (format in dateFormats) {
+                        try {
+                            val sdf = java.text.SimpleDateFormat(format, java.util.Locale.US)
+                            parsedDate = sdf.parse(expiryDateStr)
+                            if (parsedDate != null) break
+                        } catch (e: Exception) {
+                            // Try next format
+                        }
+                    }
+                    parsedDate
+                } catch (e: Exception) {
+                    null
+                }
+            } else {
+                null
+            }
+
             CouponInfo(
                 storeName = json.optString("storeName", ""),
-                redeemCode = json.optString("code", null),
-                cashbackAmount = json.optString("amount", null),
-                expiryDate = json.optString("expiryDate", null),
                 description = json.optString("description", ""),
-                terms = json.optString("terms", null)
+                expiryDate = expiryDate,
+                cashbackAmount = cashbackAmount,
+                redeemCode = json.optString("code", "").takeIf { it.isNotBlank() },
+                category = null
             )
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing JSON response", e)
@@ -494,7 +537,8 @@ class SuperOCRService(
         if (info.description.isNotBlank()) score += 0.5
         if (info.cashbackAmount != null) score += 1.0
         if (info.expiryDate != null) score += 1.0
-        if (info.terms != null && info.terms.isNotBlank()) score += 0.5
+        if (info.category != null && info.category.isNotBlank()) score += 0.5
+        if (info.status != null && info.status.isNotBlank()) score += 0.5
 
         return score
     }

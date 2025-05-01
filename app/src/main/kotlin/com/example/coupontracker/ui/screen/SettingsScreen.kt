@@ -27,6 +27,7 @@ import androidx.navigation.NavController
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.util.ApiTester
 import com.example.coupontracker.util.DebugLoggerUtil
+import com.example.coupontracker.util.SecurePreferencesManager
 import com.example.coupontracker.util.TesseractLanguageManager
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.ArrowDropDown

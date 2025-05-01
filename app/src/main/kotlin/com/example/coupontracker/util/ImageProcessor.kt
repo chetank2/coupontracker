@@ -244,8 +244,24 @@ class ImageProcessor(
             val bitmap = getBitmapFromUri(imageUri)
             Log.d(TAG, "Successfully loaded bitmap from URI")
 
+            return@withContext processImage(bitmap)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to process image", e)
+            throw IOException("Failed to process image: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Process a bitmap image and extract coupon information
+     * @param bitmap The bitmap to process
+     * @return The extracted coupon information
+     */
+    suspend fun processImage(bitmap: Bitmap): CouponInfo = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Processing bitmap image")
+
             // Process according to selected API priority
-            when (selectedApiType) {
+            val result = when (selectedApiType) {
                 ApiType.SUPER -> {
                     // Use the Super OCR service that combines all technologies
                     if (superOcrService != null) {
@@ -253,27 +269,40 @@ class ImageProcessor(
                             Log.d(TAG, "Using Super OCR Service (All Technologies)")
                             val result = trySuperOcr(bitmap)
                             if (result != null) {
-                                return@withContext result
+                                result
+                            } else {
+                                null
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error using Super OCR Service, falling back to Combined OCR", e)
+                            null
                         }
                     } else {
                         Log.w(TAG, "Super OCR Service not available, check API key configuration")
+                        null
                     }
 
                     // Fall back to Combined OCR if Super OCR fails
-                    if (combinedOcrService != null) {
+                    val combinedResult = if (combinedOcrService != null) {
                         try {
                             Log.d(TAG, "Falling back to Combined OCR Service")
                             val result = tryCombinedOcr(bitmap)
                             if (result != null) {
-                                return@withContext result
+                                result
+                            } else {
+                                null
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error using Combined OCR Service, falling back to individual services", e)
+                            null
                         }
+                    } else {
+                        null
                     }
+
+                    // If we got a result from either Super OCR or Combined OCR, return it
+                    // Otherwise, continue with fallback to other methods
+                    combinedResult ?: tryMlKit(bitmap)
 
                     // Continue with fallback to other methods...
                 }
@@ -431,14 +460,17 @@ class ImageProcessor(
                     Log.d(TAG, "Using Tesseract OCR directly as selected OCR method")
                     val result = tryTesseract(bitmap)
                     if (result != null) {
-                        return@withContext result
+                        result
+                    } else {
+                        // Fall back to ML Kit if Tesseract fails
+                        Log.d(TAG, "Tesseract OCR failed, falling back to ML Kit")
+                        tryMlKit(bitmap)
                     }
-
-                    // Fall back to ML Kit if Tesseract fails
-                    Log.d(TAG, "Tesseract OCR failed, falling back to ML Kit")
-                    return@withContext tryMlKit(bitmap)
                 }
             }
+
+            // Return the result from the when expression
+            return@withContext result
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process image", e)
             throw IOException("Failed to process image: ${e.message}", e)

@@ -1,5 +1,6 @@
 package com.example.coupontracker.ui.components
 
+import android.content.SharedPreferences
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.*
@@ -12,7 +13,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.coupontracker.ui.screen.ApiType
 import com.example.coupontracker.util.SecurePreferencesManager
-import android.content.SharedPreferences
+import com.example.coupontracker.util.SecurePreferencesManager.Companion.KEY_GOOGLE_CLOUD_VISION_API_KEY
+import com.example.coupontracker.util.SecurePreferencesManager.Companion.KEY_MISTRAL_API_KEY
+import com.example.coupontracker.util.SecurePreferencesManager.Companion.KEY_SELECTED_API
+import com.example.coupontracker.util.SecurePreferencesManager.Companion.KEY_USE_MISTRAL_API
 
 @Composable
 fun ApiSelectionDialog(
@@ -77,9 +81,11 @@ fun ApiSelectionDialog(
                         ApiType.MISTRAL -> mistralApiKey.isNotBlank()
                         ApiType.COMBINED -> googleApiKey.isNotBlank() && mistralApiKey.isNotBlank()
                         ApiType.ML_KIT -> true // Always available
+                        ApiType.TESSERACT -> true // Always available
+                        ApiType.SUPER -> googleApiKey.isNotBlank() && mistralApiKey.isNotBlank()
                     }
 
-                    val isEnabled = isKeyAvailable || apiType == ApiType.ML_KIT
+                    val isEnabled = isKeyAvailable || apiType == ApiType.ML_KIT || apiType == ApiType.TESSERACT
 
                     Row(
                         modifier = Modifier
