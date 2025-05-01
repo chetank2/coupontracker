@@ -13,12 +13,7 @@
         tools:layout="@layout/fragment_home">
         <action
             android:id="@+id/actionHomeToDetail"
-            app:destination="@id/detailFragment">
-            <argument
-                android:name="couponId"
-                app:argType="long"
-                android:defaultValue="0" />
-        </action>
+            app:destination="@id/detailFragment" />
         <action
             android:id="@+id/actionHomeToAdd"
             app:destination="@id/addFragment" />
@@ -93,4 +88,4 @@
             app:popUpToInclusive="true" />
     </fragment>
 
-</navigation> 
+</navigation>

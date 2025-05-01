@@ -12,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.appcompat.widget.SearchView
+import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
@@ -19,6 +20,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.example.coupontracker.R
 import com.example.coupontracker.databinding.FragmentHomeBinding
 import com.example.coupontracker.ui.adapter.CouponAdapter
 import com.example.coupontracker.ui.viewmodel.CouponViewModel
@@ -32,7 +34,7 @@ class HomeFragment : Fragment() {
     private val binding get() = _binding!!
     private val viewModel: CouponViewModel by viewModels()
     private lateinit var adapter: CouponAdapter
-    
+
     companion object {
         private const val MISTRAL_API_URL = "https://console.mistral.ai/api-keys/"
         private const val TAG = "HomeFragment"
@@ -101,7 +103,7 @@ class HomeFragment : Fragment() {
                     HomeFragmentDirections.actionHomeToAdd()
                 )
             }
-            
+
             // Setup Mistral API key button
             binding.getMistralApiKeyButton.setOnClickListener {
                 openMistralApiWebsite()
@@ -123,7 +125,7 @@ class HomeFragment : Fragment() {
             Log.e(TAG, "Error setting up click listeners", e)
         }
     }
-    
+
     private fun openMistralApiWebsite() {
         try {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(MISTRAL_API_URL))
@@ -169,4 +171,4 @@ class HomeFragment : Fragment() {
         super.onDestroyView()
         _binding = null
     }
-} 
+}
