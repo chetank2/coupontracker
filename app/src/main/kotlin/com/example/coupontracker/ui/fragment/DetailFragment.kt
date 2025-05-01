@@ -1,5 +1,7 @@
 package com.example.coupontracker.ui.fragment
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -12,7 +14,10 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -31,6 +36,8 @@ import com.example.coupontracker.ui.viewmodel.DetailViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 @AndroidEntryPoint
@@ -41,6 +48,7 @@ class DetailFragment : Fragment() {
     private val viewModel: DetailViewModel by viewModels()
     private val args: DetailFragmentArgs by navArgs()
     private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+    private val dateTimeFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -84,7 +92,7 @@ class DetailFragment : Fragment() {
             }
         }, viewLifecycleOwner, Lifecycle.State.RESUMED)
     }
-    
+
     private fun setupClickListeners() {
         binding.copyButton.setOnClickListener {
             val code = binding.couponCode.text.toString()
@@ -92,6 +100,83 @@ class DetailFragment : Fragment() {
                 copyToClipboard(code)
             }
         }
+
+        binding.togglePriorityButton.setOnClickListener {
+            viewModel.togglePriority()
+        }
+
+        binding.trackUsageButton.setOnClickListener {
+            showUsageTrackingDialog()
+        }
+
+        binding.setReminderButton.setOnClickListener {
+            showReminderDatePicker()
+        }
+
+        binding.cancelReminderButton.setOnClickListener {
+            viewModel.cancelReminder()
+        }
+    }
+
+    private fun showUsageTrackingDialog() {
+        viewModel.coupon.value?.let { coupon ->
+            val dialogView = LayoutInflater.from(requireContext())
+                .inflate(R.layout.dialog_track_usage, null)
+
+            val amountInput = dialogView.findViewById<EditText>(R.id.amountSavedInput)
+            amountInput.setText(coupon.cashbackAmount.toString())
+
+            val usageText = dialogView.findViewById<TextView>(R.id.usageText)
+            if (coupon.usageLimit != null) {
+                usageText.text = "Usage: ${coupon.usageCount} of ${coupon.usageLimit}"
+                usageText.visibility = View.VISIBLE
+            } else {
+                usageText.visibility = View.GONE
+            }
+
+            AlertDialog.Builder(requireContext())
+                .setTitle("Track Coupon Usage")
+                .setView(dialogView)
+                .setPositiveButton("Track") { _, _ ->
+                    val amountSaved = amountInput.text.toString().toDoubleOrNull() ?: coupon.cashbackAmount
+                    viewModel.trackUsage(amountSaved)
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        }
+    }
+
+    private fun showReminderDatePicker() {
+        val calendar = Calendar.getInstance()
+
+        DatePickerDialog(
+            requireContext(),
+            { _, year, month, day ->
+                calendar.set(year, month, day)
+
+                // Show time picker after date is selected
+                showReminderTimePicker(calendar)
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        ).show()
+    }
+
+    private fun showReminderTimePicker(calendar: Calendar) {
+        TimePickerDialog(
+            requireContext(),
+            { _, hour, minute ->
+                calendar.set(Calendar.HOUR_OF_DAY, hour)
+                calendar.set(Calendar.MINUTE, minute)
+
+                // Set the reminder
+                viewModel.setReminder(calendar.time)
+            },
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+            false
+        ).show()
     }
 
     private fun setupObservers() {
@@ -101,10 +186,10 @@ class DetailFragment : Fragment() {
                     coupon?.let {
                         binding.apply {
                             storeName.text = coupon.storeName
-                            
+
                             // Show full description
                             description.text = coupon.description
-                            
+
                             // Always format cashback amount with rupee symbol
                             if (coupon.cashbackAmount > 0) {
                                 cashbackAmount.text = "₹${coupon.cashbackAmount.toInt()}"
@@ -112,9 +197,9 @@ class DetailFragment : Fragment() {
                             } else {
                                 cashbackAmount.visibility = View.GONE
                             }
-                            
+
                             expiryDate.text = "Expires: ${dateFormat.format(coupon.expiryDate)}"
-                            
+
                             // Show category if available
                             coupon.category?.let { category ->
                                 categoryChip.text = category
@@ -122,7 +207,7 @@ class DetailFragment : Fragment() {
                             } ?: run {
                                 categoryChip.visibility = View.GONE
                             }
-                            
+
                             // Show rating if available
                             coupon.rating?.let { rating ->
                                 ratingChip.text = rating
@@ -130,7 +215,7 @@ class DetailFragment : Fragment() {
                             } ?: run {
                                 ratingChip.visibility = View.GONE
                             }
-                            
+
                             // Show status if available
                             coupon.status?.let { status ->
                                 statusChip.text = status
@@ -138,7 +223,15 @@ class DetailFragment : Fragment() {
                             } ?: run {
                                 statusChip.visibility = View.GONE
                             }
-                            
+
+                            // Show platform type if available
+                            coupon.platformType?.let { platform ->
+                                platformTypeChip.text = platform
+                                platformTypeChip.visibility = View.VISIBLE
+                            } ?: run {
+                                platformTypeChip.visibility = View.GONE
+                            }
+
                             // Show redeem code if available
                             coupon.redeemCode?.let { code ->
                                 couponCode.text = code
@@ -146,7 +239,62 @@ class DetailFragment : Fragment() {
                             } ?: run {
                                 couponCode.text = "No code available"
                             }
-                            
+
+                            // Show minimum purchase if available
+                            coupon.minimumPurchase?.let { minPurchase ->
+                                minimumPurchase.text = "₹${minPurchase.toInt()}"
+                                minimumPurchaseContainer.visibility = View.VISIBLE
+                            } ?: run {
+                                minimumPurchaseContainer.visibility = View.GONE
+                            }
+
+                            // Show maximum discount if available
+                            coupon.maximumDiscount?.let { maxDiscount ->
+                                maximumDiscount.text = "₹${maxDiscount.toInt()}"
+                                maximumDiscountContainer.visibility = View.VISIBLE
+                            } ?: run {
+                                maximumDiscountContainer.visibility = View.GONE
+                            }
+
+                            // Show payment method if available
+                            coupon.paymentMethod?.let { method ->
+                                paymentMethod.text = method
+                                paymentMethodContainer.visibility = View.VISIBLE
+                            } ?: run {
+                                paymentMethodContainer.visibility = View.GONE
+                            }
+
+                            // Show usage limit if available
+                            if (coupon.usageLimit != null) {
+                                usageLimit.text = "${coupon.usageCount} of ${coupon.usageLimit} uses"
+                                usageLimitContainer.visibility = View.VISIBLE
+
+                                // Disable track usage button if limit reached
+                                trackUsageButton.isEnabled = coupon.usageCount < coupon.usageLimit
+                            } else if (coupon.usageCount > 0) {
+                                usageLimit.text = "Used ${coupon.usageCount} times"
+                                usageLimitContainer.visibility = View.VISIBLE
+                            } else {
+                                usageLimitContainer.visibility = View.GONE
+                            }
+
+                            // Show reminder if available
+                            coupon.reminderDate?.let { reminder ->
+                                reminderDate.text = dateTimeFormat.format(reminder)
+                                reminderContainer.visibility = View.VISIBLE
+                                cancelReminderButton.isEnabled = true
+                            } ?: run {
+                                reminderContainer.visibility = View.GONE
+                                cancelReminderButton.isEnabled = false
+                            }
+
+                            // Update priority button text based on current state
+                            togglePriorityButton.text = if (coupon.isPriority) {
+                                "Remove Priority"
+                            } else {
+                                "Mark Priority"
+                            }
+
                             // Load store image if available
                             coupon.imageUri?.let { uri ->
                                 val imageUri = Uri.parse(uri)
@@ -185,4 +333,4 @@ class DetailFragment : Fragment() {
         super.onDestroyView()
         _binding = null
     }
-} 
+}

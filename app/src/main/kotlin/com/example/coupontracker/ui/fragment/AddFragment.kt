@@ -52,7 +52,7 @@ class AddFragment : Fragment() {
     private var imageCapture: ImageCapture? = null
     private lateinit var imageProcessor: ImageProcessor
     private lateinit var sharedPreferences: SharedPreferences
-    
+
     companion object {
         private const val TAG = "AddFragment"
         private const val PREFS_NAME = "CouponTrackerPrefs"
@@ -98,14 +98,14 @@ class AddFragment : Fragment() {
         setupClickListeners()
         setupMistralApiSwitch()
         observeViewModel()
-        
+
         // Handle arguments from scanner
         arguments?.let { args ->
             val safeArgs = AddFragmentArgs.fromBundle(args)
             safeArgs.couponInfo?.let { couponInfo ->
                 populateFormWithCouponInfo(couponInfo)
             }
-            
+
             safeArgs.imageUri?.let { uriString ->
                 if (uriString.isNotEmpty()) {
                     val uri = Uri.parse(uriString)
@@ -116,7 +116,7 @@ class AddFragment : Fragment() {
             }
         }
     }
-    
+
     private fun initializeImageProcessor() {
         val useMistralApi = sharedPreferences.getBoolean(KEY_USE_MISTRAL_API, false)
         val mistralApiKey = if (useMistralApi) {
@@ -127,36 +127,36 @@ class AddFragment : Fragment() {
             Log.d(TAG, "Mistral API disabled")
             null
         }
-        
+
         imageProcessor = ImageProcessor(requireContext(), mistralApiKey)
     }
-    
+
     private fun setupMistralApiSwitch() {
         // Set initial state
         val useMistralApi = sharedPreferences.getBoolean(KEY_USE_MISTRAL_API, false)
         binding.mistralApiSwitch.isChecked = useMistralApi
-        
+
         // Update visibility of API key input
         binding.mistralApiKeyLayout.visibility = if (useMistralApi) View.VISIBLE else View.GONE
-        
+
         // Set initial API key value
         val apiKey = sharedPreferences.getString(KEY_MISTRAL_API_KEY, "")
         binding.mistralApiKeyInput.setText(apiKey)
         Log.d(TAG, "Initial API key loaded: ${apiKey?.take(5) ?: "null"}...")
-        
+
         // Handle switch changes
         binding.mistralApiSwitch.setOnCheckedChangeListener { _, isChecked ->
             binding.mistralApiKeyLayout.visibility = if (isChecked) View.VISIBLE else View.GONE
-            
+
             // Save preference
             sharedPreferences.edit().putBoolean(KEY_USE_MISTRAL_API, isChecked).apply()
             Log.d(TAG, "Mistral API switch set to: $isChecked")
-            
+
             // If turning off, reinitialize without API key
             if (!isChecked) {
                 Log.d(TAG, "Reinitializing ImageProcessor without API key")
                 imageProcessor = ImageProcessor(requireContext(), null)
-                
+
                 // Show a message to the user
                 Snackbar.make(binding.root, "Mistral API disabled. Using default text extraction.", Snackbar.LENGTH_SHORT).show()
             } else {
@@ -165,7 +165,7 @@ class AddFragment : Fragment() {
                 if (!savedKey.isNullOrBlank()) {
                     Log.d(TAG, "Reinitializing ImageProcessor with saved API key: ${savedKey.take(5)}...")
                     imageProcessor = ImageProcessor(requireContext(), savedKey)
-                    
+
                     // Show a message to the user
                     Snackbar.make(binding.root, "Mistral API enabled with saved key.", Snackbar.LENGTH_SHORT).show()
                 } else {
@@ -174,7 +174,7 @@ class AddFragment : Fragment() {
                 }
             }
         }
-        
+
         // Handle API key changes
         binding.saveApiKeyButton.setOnClickListener {
             val newApiKey = binding.mistralApiKeyInput.text.toString()
@@ -182,17 +182,17 @@ class AddFragment : Fragment() {
                 Toast.makeText(requireContext(), "API key cannot be empty", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            
+
             Log.d(TAG, "Saving new API key: ${newApiKey.take(5)}...")
-            
+
             // Save to SharedPreferences
             sharedPreferences.edit().putString(KEY_MISTRAL_API_KEY, newApiKey).apply()
-            
+
             // Reinitialize image processor with new key
             imageProcessor = ImageProcessor(requireContext(), newApiKey)
-            
+
             Snackbar.make(binding.root, "API key saved and activated", Snackbar.LENGTH_SHORT).show()
-            
+
             // If we have an image already, reprocess it with the new API key
             imageUri?.let { uri ->
                 Log.d(TAG, "Reprocessing existing image with new API key")
@@ -230,12 +230,57 @@ class AddFragment : Fragment() {
         binding.saveButton.setOnClickListener {
             saveCoupon()
         }
-        
+
         binding.mistralInfoButton.setOnClickListener {
             showMistralApiInfo()
         }
+
+        binding.setReminderButton.setOnClickListener {
+            showReminderDatePicker()
+        }
     }
-    
+
+    private fun showReminderDatePicker() {
+        val calendar = Calendar.getInstance()
+
+        val datePicker = MaterialDatePicker.Builder.datePicker()
+            .setTitleText("Select Reminder Date")
+            .setSelection(MaterialDatePicker.todayInUtcMilliseconds())
+            .build()
+
+        datePicker.addOnPositiveButtonClickListener { selection ->
+            calendar.timeInMillis = selection
+
+            // Show time picker after date is selected
+            showReminderTimePicker(calendar)
+        }
+
+        datePicker.show(parentFragmentManager, "REMINDER_DATE_PICKER")
+    }
+
+    private fun showReminderTimePicker(calendar: Calendar) {
+        val timePickerDialog = android.app.TimePickerDialog(
+            requireContext(),
+            { _, hour, minute ->
+                calendar.set(Calendar.HOUR_OF_DAY, hour)
+                calendar.set(Calendar.MINUTE, minute)
+
+                // Set the reminder date in the view model
+                viewModel.setReminderDate(calendar.time)
+
+                // Update UI to show selected reminder date/time
+                val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+                binding.reminderDateText.text = "Reminder set for: ${dateFormat.format(calendar.time)}"
+                binding.reminderDateText.visibility = View.VISIBLE
+            },
+            calendar.get(Calendar.HOUR_OF_DAY),
+            calendar.get(Calendar.MINUTE),
+            false
+        )
+
+        timePickerDialog.show()
+    }
+
     private fun showMistralApiInfo() {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("About Mistral OCR AI")
@@ -347,7 +392,7 @@ class AddFragment : Fragment() {
         // Hide the camera preview and show the selected image
         binding.viewFinder.visibility = View.GONE
         binding.selectedImageView.visibility = View.VISIBLE
-        
+
         // Load the image using Glide
         Glide.with(requireContext())
             .load(uri)
@@ -355,24 +400,24 @@ class AddFragment : Fragment() {
             .error(R.drawable.ic_image_error)
             .centerCrop()
             .into(binding.selectedImageView)
-            
+
         // Show a message to confirm image selection
         Toast.makeText(requireContext(), "Image selected successfully", Toast.LENGTH_SHORT).show()
     }
-    
+
     private fun processImageForCouponInfo(uri: Uri) {
         binding.processingIndicator.visibility = View.VISIBLE
-        
+
         // Clear any previous error messages
         binding.errorText.visibility = View.GONE
-        
+
         viewLifecycleOwner.lifecycleScope.launch {
             try {
                 Log.d(TAG, "Processing image for coupon info: $uri")
                 // Check if Mistral API is enabled and we have a key
                 val useMistralApi = sharedPreferences.getBoolean(KEY_USE_MISTRAL_API, false)
                 val apiKey = sharedPreferences.getString(KEY_MISTRAL_API_KEY, null)
-                
+
                 if (useMistralApi && apiKey.isNullOrBlank()) {
                     Log.w(TAG, "Mistral API is enabled but no API key is set")
                     binding.errorText.text = "Please set a Mistral API key"
@@ -381,7 +426,7 @@ class AddFragment : Fragment() {
                     binding.processingIndicator.visibility = View.GONE
                     return@launch
                 }
-                
+
                 // Ensure ImageProcessor has the latest API key
                 if (useMistralApi && !apiKey.isNullOrBlank()) {
                     Log.d(TAG, "Using Mistral API with key: ${apiKey.take(5)}...")
@@ -390,11 +435,11 @@ class AddFragment : Fragment() {
                     Log.d(TAG, "Using default text extraction (no Mistral API)")
                     imageProcessor = ImageProcessor(requireContext(), null)
                 }
-                
+
                 val couponInfo = imageProcessor.processImage(uri)
                 Log.d(TAG, "Extracted coupon info: $couponInfo")
-                
-                if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() && 
+
+                if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&
                     couponInfo.cashbackAmount == null && couponInfo.redeemCode.isNullOrBlank()) {
                     Log.w(TAG, "No coupon information was extracted")
                     binding.errorText.text = "Could not extract coupon information from image. Try adjusting the image or entering details manually."
@@ -414,35 +459,56 @@ class AddFragment : Fragment() {
             }
         }
     }
-    
+
     private fun populateFormWithCouponInfo(couponInfo: CouponInfo) {
         with(binding) {
             storeNameInput.setText(couponInfo.storeName)
             descriptionInput.setText(couponInfo.description)
-            
+
             couponInfo.expiryDate?.let { date ->
                 expiryDateInput.setText(SimpleDateFormat("MM/dd/yyyy", Locale.US).format(date))
                 viewModel.setExpiryDate(date)
             }
-            
+
             couponInfo.cashbackAmount?.let { amount ->
                 cashbackAmountInput.setText(amount.toString())
             }
-            
+
             couponInfo.redeemCode?.let { code ->
                 redeemCodeInput.setText(code)
             }
-            
+
             couponInfo.category?.let { category ->
                 categoryInput.setText(category)
             }
-            
+
             couponInfo.rating?.let { rating ->
                 ratingInput.setText(rating)
             }
-            
+
             couponInfo.status?.let { status ->
                 statusInput.setText(status)
+            }
+
+            // Populate new fields
+            couponInfo.minimumPurchase?.let { minPurchase ->
+                minimumPurchaseInput.setText(minPurchase.toString())
+            }
+
+            couponInfo.maximumDiscount?.let { maxDiscount ->
+                maximumDiscountInput.setText(maxDiscount.toString())
+            }
+
+            couponInfo.paymentMethod?.let { method ->
+                paymentMethodInput.setText(method)
+            }
+
+            couponInfo.platformType?.let { platform ->
+                platformTypeInput.setText(platform)
+            }
+
+            couponInfo.usageLimit?.let { limit ->
+                usageLimitInput.setText(limit.toString())
             }
         }
     }
@@ -472,10 +538,21 @@ class AddFragment : Fragment() {
         val rating = binding.ratingInput.text.toString()
         val status = binding.statusInput.text.toString()
 
+        // Get new fields
+        val minimumPurchase = binding.minimumPurchaseInput.text.toString().toDoubleOrNull()
+        val maximumDiscount = binding.maximumDiscountInput.text.toString().toDoubleOrNull()
+        val paymentMethod = binding.paymentMethodInput.text.toString()
+        val platformType = binding.platformTypeInput.text.toString()
+        val usageLimit = binding.usageLimitInput.text.toString().toIntOrNull()
+        val isPriority = binding.priorityCheckbox.isChecked
+
         if (storeName.isBlank() || description.isBlank() || cashbackAmount == null) {
             Toast.makeText(requireContext(), "Please fill all required fields", Toast.LENGTH_SHORT).show()
             return
         }
+
+        // Set priority in view model
+        viewModel.setPriority(isPriority)
 
         viewModel.saveCoupon(
             storeName = storeName,
@@ -484,7 +561,12 @@ class AddFragment : Fragment() {
             redeemCode = redeemCode.takeIf { it.isNotBlank() },
             category = category.takeIf { it.isNotBlank() },
             rating = rating.takeIf { it.isNotBlank() },
-            status = status.takeIf { it.isNotBlank() }
+            status = status.takeIf { it.isNotBlank() },
+            minimumPurchase = minimumPurchase,
+            maximumDiscount = maximumDiscount,
+            paymentMethod = paymentMethod.takeIf { it.isNotBlank() },
+            platformType = platformType.takeIf { it.isNotBlank() },
+            usageLimit = usageLimit
         )
     }
 
@@ -498,4 +580,4 @@ class AddFragment : Fragment() {
         cameraExecutor.shutdown()
         _binding = null
     }
-} 
+}
