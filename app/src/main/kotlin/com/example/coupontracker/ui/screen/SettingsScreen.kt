@@ -29,13 +29,11 @@ import com.example.coupontracker.util.DebugLoggerUtil
 import com.example.coupontracker.util.TesseractLanguageManager
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.text.style.TextAlign
 
-// Preference keys
-const val KEY_GOOGLE_CLOUD_VISION_API_KEY = "google_cloud_vision_api_key"
-const val KEY_MISTRAL_API_KEY = "mistral_api_key"
-const val KEY_SELECTED_API = "selected_api"
-const val KEY_USE_MISTRAL_API = "use_mistral_api" // Keeping for backward compatibility
+// Using keys from SecurePreferencesManager
 
 // API Type enum
 enum class ApiType(val displayName: String) {
@@ -53,20 +51,35 @@ fun SettingsScreen(
     navController: NavController
 ) {
     val context = LocalContext.current
-    val sharedPreferences = remember {
-        context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
+    val securePreferencesManager = remember { SecurePreferencesManager(context) }
+
+    // Initialize secure preferences manager
+    LaunchedEffect(Unit) {
+        securePreferencesManager.initialize()
     }
+
+    // Check for security issues
+    val isDeviceRooted = remember { securePreferencesManager.isDeviceRooted() }
+    val appIntegrityOk = remember { securePreferencesManager.checkAppIntegrity() }
+    val daysUntilKeyRotation = remember { securePreferencesManager.getDaysUntilKeyRotation() }
 
     // API keys
     var googleCloudVisionApiKey by remember {
-        mutableStateOf(sharedPreferences.getString(KEY_GOOGLE_CLOUD_VISION_API_KEY, "") ?: "")
+        mutableStateOf(securePreferencesManager.getString(
+            SecurePreferencesManager.KEY_GOOGLE_CLOUD_VISION_API_KEY, ""
+        ) ?: "")
     }
     var mistralApiKey by remember {
-        mutableStateOf(sharedPreferences.getString(KEY_MISTRAL_API_KEY, "") ?: "")
+        mutableStateOf(securePreferencesManager.getString(
+            SecurePreferencesManager.KEY_MISTRAL_API_KEY, ""
+        ) ?: "")
     }
 
     // Selected API
-    val savedApiType = sharedPreferences.getString(KEY_SELECTED_API, ApiType.GOOGLE_CLOUD_VISION.name)
+    val savedApiType = securePreferencesManager.getString(
+        SecurePreferencesManager.KEY_SELECTED_API,
+        ApiType.GOOGLE_CLOUD_VISION.name
+    )
     var selectedApiType by remember {
         mutableStateOf(
             try {
@@ -143,6 +156,84 @@ fun SettingsScreen(
                 }
             }
 
+            // Security Status Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isDeviceRooted || !appIntegrityOk)
+                        MaterialTheme.colorScheme.errorContainer
+                    else
+                        MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isDeviceRooted || !appIntegrityOk)
+                                Icons.Default.Warning
+                            else
+                                Icons.Default.Check,
+                            contentDescription = "Security Status",
+                            tint = if (isDeviceRooted || !appIntegrityOk)
+                                MaterialTheme.colorScheme.error
+                            else
+                                MaterialTheme.colorScheme.secondary
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Text(
+                            text = "API Key Security Status",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = if (isDeviceRooted)
+                            "⚠️ Warning: Your device appears to be rooted. API keys may be at risk."
+                        else if (!appIntegrityOk)
+                            "⚠️ Warning: App integrity check failed. Your app may be tampered with."
+                        else
+                            "✅ Your API keys are stored securely using encryption.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isDeviceRooted || !appIntegrityOk)
+                            MaterialTheme.colorScheme.error
+                        else
+                            MaterialTheme.colorScheme.secondary
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "API keys are stored using Android's secure encryption. They are automatically rotated every 90 days for enhanced security.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    if (daysUntilKeyRotation < 14) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Your API keys will need rotation in $daysUntilKeyRotation days.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (daysUntilKeyRotation < 7)
+                                MaterialTheme.colorScheme.error
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             // OCR API Selection
             Text(
                 text = "OCR API Selection",
@@ -176,13 +267,16 @@ fun SettingsScreen(
                                 selected = selectedApiType == apiType,
                                 onClick = {
                                     selectedApiType = apiType
-                                    saveApiPreference(sharedPreferences, KEY_SELECTED_API, apiType.name)
+                                    saveApiPreference(securePreferencesManager,
+                                        SecurePreferencesManager.KEY_SELECTED_API, apiType.name)
 
                                     // For backward compatibility
                                     if (apiType == ApiType.MISTRAL) {
-                                        saveApiPreference(sharedPreferences, KEY_USE_MISTRAL_API, true)
+                                        saveApiPreference(securePreferencesManager,
+                                            SecurePreferencesManager.KEY_USE_MISTRAL_API, true)
                                     } else {
-                                        saveApiPreference(sharedPreferences, KEY_USE_MISTRAL_API, false)
+                                        saveApiPreference(securePreferencesManager,
+                                            SecurePreferencesManager.KEY_USE_MISTRAL_API, false)
                                     }
 
                                     Toast.makeText(context, "${apiType.displayName} selected as primary OCR API", Toast.LENGTH_SHORT).show()
@@ -332,8 +426,10 @@ fun SettingsScreen(
 
                         Button(
                             onClick = {
-                                saveApiPreference(sharedPreferences, KEY_GOOGLE_CLOUD_VISION_API_KEY, googleCloudVisionApiKey)
-                                Toast.makeText(context, "Google Cloud Vision API key saved", Toast.LENGTH_SHORT).show()
+                                saveApiPreference(securePreferencesManager,
+                                    SecurePreferencesManager.KEY_GOOGLE_CLOUD_VISION_API_KEY,
+                                    googleCloudVisionApiKey)
+                                Toast.makeText(context, "Google Cloud Vision API key saved securely", Toast.LENGTH_SHORT).show()
                             }
                         ) {
                             Text("Save Key")
@@ -505,8 +601,10 @@ fun SettingsScreen(
 
                         Button(
                             onClick = {
-                                saveApiPreference(sharedPreferences, KEY_MISTRAL_API_KEY, mistralApiKey)
-                                Toast.makeText(context, "Mistral API key saved", Toast.LENGTH_SHORT).show()
+                                saveApiPreference(securePreferencesManager,
+                                    SecurePreferencesManager.KEY_MISTRAL_API_KEY,
+                                    mistralApiKey)
+                                Toast.makeText(context, "Mistral API key saved securely", Toast.LENGTH_SHORT).show()
                             }
                         ) {
                             Text("Save Key")
@@ -689,17 +787,11 @@ fun SettingsScreen(
     }
 }
 
-// Helper function to save preferences
-private fun <T> saveApiPreference(sharedPreferences: SharedPreferences, key: String, value: T) {
-    with(sharedPreferences.edit()) {
-        when (value) {
-            is String -> putString(key, value)
-            is Boolean -> putBoolean(key, value)
-            is Int -> putInt(key, value)
-            is Long -> putLong(key, value)
-            is Float -> putFloat(key, value)
-            else -> throw IllegalArgumentException("Unsupported type")
-        }
-        apply()
+// Helper function to save preferences securely
+private fun <T> saveApiPreference(securePreferencesManager: SecurePreferencesManager, key: String, value: T) {
+    when (value) {
+        is String -> securePreferencesManager.saveString(key, value)
+        is Boolean -> securePreferencesManager.saveBoolean(key, value)
+        else -> throw IllegalArgumentException("Unsupported type")
     }
 }

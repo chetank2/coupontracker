@@ -197,4 +197,7 @@ dependencies {
 
     // Tesseract OCR
     implementation("com.rmtheis:tess-two:9.1.0")
+
+    // Security
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }

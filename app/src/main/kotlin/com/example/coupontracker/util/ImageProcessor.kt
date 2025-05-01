@@ -10,9 +10,6 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.core.graphics.drawable.toBitmap
 import com.example.coupontracker.ui.screen.ApiType
-import com.example.coupontracker.ui.screen.KEY_GOOGLE_CLOUD_VISION_API_KEY
-import com.example.coupontracker.ui.screen.KEY_MISTRAL_API_KEY
-import com.example.coupontracker.ui.screen.KEY_SELECTED_API
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
@@ -89,12 +86,18 @@ class ImageProcessor(
     private var combinedServiceAvailable = false
     private var superServiceAvailable = false
 
+    // Secure preferences manager
+    private val securePreferencesManager = SecurePreferencesManager(context)
+
     // SharedPreferences listener
     private val sharedPreferencesListener =
-        SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+        SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             when (key) {
-                KEY_SELECTED_API -> {
-                    val savedApiType = prefs.getString(KEY_SELECTED_API, ApiType.GOOGLE_CLOUD_VISION.name)
+                SecurePreferencesManager.KEY_SELECTED_API -> {
+                    val savedApiType = securePreferencesManager.getString(
+                        SecurePreferencesManager.KEY_SELECTED_API,
+                        ApiType.GOOGLE_CLOUD_VISION.name
+                    )
                     selectedApiType = try {
                         ApiType.valueOf(savedApiType ?: ApiType.GOOGLE_CLOUD_VISION.name)
                     } catch (e: Exception) {
@@ -102,14 +105,18 @@ class ImageProcessor(
                     }
                     Log.d(TAG, "API selection changed to: ${selectedApiType.name}")
                 }
-                KEY_GOOGLE_CLOUD_VISION_API_KEY -> {
-                    val newApiKey = prefs.getString(KEY_GOOGLE_CLOUD_VISION_API_KEY, null)
+                SecurePreferencesManager.KEY_GOOGLE_CLOUD_VISION_API_KEY -> {
+                    val newApiKey = securePreferencesManager.getString(
+                        SecurePreferencesManager.KEY_GOOGLE_CLOUD_VISION_API_KEY
+                    )
                     refreshGoogleVisionHelper(newApiKey)
                     updateCombinedService()
                     updateSuperOcrService()
                 }
-                KEY_MISTRAL_API_KEY -> {
-                    val newApiKey = prefs.getString(KEY_MISTRAL_API_KEY, null)
+                SecurePreferencesManager.KEY_MISTRAL_API_KEY -> {
+                    val newApiKey = securePreferencesManager.getString(
+                        SecurePreferencesManager.KEY_MISTRAL_API_KEY
+                    )
                     refreshMistralService(newApiKey)
                     updateCombinedService()
                     updateSuperOcrService()
@@ -118,8 +125,23 @@ class ImageProcessor(
         }
 
     init {
-        val sharedPreferences = context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
-        val savedApiType = sharedPreferences.getString(KEY_SELECTED_API, ApiType.GOOGLE_CLOUD_VISION.name)
+        // Initialize secure preferences manager
+        securePreferencesManager.initialize()
+
+        // Check for device security
+        if (securePreferencesManager.isDeviceRooted()) {
+            Log.w(TAG, "WARNING: Device appears to be rooted, API keys may be at risk")
+        }
+
+        if (!securePreferencesManager.checkAppIntegrity()) {
+            Log.w(TAG, "WARNING: App integrity check failed, app may be tampered with")
+        }
+
+        // Get saved API type
+        val savedApiType = securePreferencesManager.getString(
+            SecurePreferencesManager.KEY_SELECTED_API,
+            ApiType.GOOGLE_CLOUD_VISION.name
+        )
 
         selectedApiType = try {
             ApiType.valueOf(savedApiType ?: ApiType.GOOGLE_CLOUD_VISION.name)
@@ -127,8 +149,14 @@ class ImageProcessor(
             ApiType.GOOGLE_CLOUD_VISION
         }
 
-        // Register for preferences changes
-        sharedPreferences.registerOnSharedPreferenceChangeListener(sharedPreferencesListener)
+        // Register for preference changes
+        securePreferencesManager.registerOnSharedPreferenceChangeListener(sharedPreferencesListener)
+
+        // Check if key rotation is needed
+        val daysUntilRotation = securePreferencesManager.getDaysUntilKeyRotation()
+        if (daysUntilRotation < 7) {
+            Log.i(TAG, "API keys should be rotated soon (in $daysUntilRotation days)")
+        }
 
         Log.d(TAG, "ImageProcessor initialized. Selected API: ${selectedApiType.name}")
         Log.d(TAG, "Google Cloud Vision API: ${if (googleVisionHelper != null) "available" else "unavailable"}")
@@ -728,8 +756,8 @@ class ImageProcessor(
      * Clean up resources
      */
     fun cleanup() {
-        val sharedPreferences = context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
-        sharedPreferences.unregisterOnSharedPreferenceChangeListener(sharedPreferencesListener)
+        securePreferencesManager.unregisterOnSharedPreferenceChangeListener(sharedPreferencesListener)
+        tesseractOCRHelper.cleanup()
         Log.d(TAG, "ImageProcessor cleanup completed")
     }
 

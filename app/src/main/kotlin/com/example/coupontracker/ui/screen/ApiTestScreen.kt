@@ -1,8 +1,8 @@
 package com.example.coupontracker.ui.screen
 
 import android.content.Context
-import android.content.SharedPreferences
 import android.widget.Toast
+import com.example.coupontracker.util.SecurePreferencesManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -51,18 +51,27 @@ fun ApiTestScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val sharedPreferences = remember { 
-        context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
+    val securePreferencesManager = remember { SecurePreferencesManager(context) }
+
+    // Initialize secure preferences manager
+    LaunchedEffect(Unit) {
+        securePreferencesManager.initialize()
     }
-    
+
     // States
-    var apiKey by remember { mutableStateOf(getSavedApiKey(sharedPreferences)) }
+    var apiKey by remember {
+        mutableStateOf(securePreferencesManager.getString(SecurePreferencesManager.KEY_MISTRAL_API_KEY, "") ?: "")
+    }
     var isTesting by remember { mutableStateOf(false) }
     var testResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
     var isPasswordVisible by remember { mutableStateOf(false) }
-    
+
+    // Security status
+    val isDeviceRooted = remember { securePreferencesManager.isDeviceRooted() }
+    val appIntegrityOk = remember { securePreferencesManager.checkAppIntegrity() }
+
     val apiTester = remember { ApiTester(context) }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -95,15 +104,15 @@ fun ApiTestScreen(
                         text = "Mistral API Connection Test",
                         style = MaterialTheme.typography.titleMedium
                     )
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     OutlinedTextField(
                         value = apiKey,
                         onValueChange = { apiKey = it },
                         label = { Text("API Key") },
                         modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = if (isPasswordVisible) VisualTransformation.None 
+                        visualTransformation = if (isPasswordVisible) VisualTransformation.None
                                              else PasswordVisualTransformation(),
                         trailingIcon = {
                             Button(
@@ -114,9 +123,9 @@ fun ApiTestScreen(
                             }
                         }
                     )
-                    
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     // Format validation
                     if (apiKey.isNotBlank()) {
                         val isFormatValid = apiTester.isApiKeyFormatValid(apiKey)
@@ -136,9 +145,9 @@ fun ApiTestScreen(
                             )
                         }
                     }
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
@@ -149,7 +158,7 @@ fun ApiTestScreen(
                         ) {
                             Text("Save Key")
                         }
-                        
+
                         Button(
                             onClick = {
                                 isTesting = true
@@ -164,10 +173,24 @@ fun ApiTestScreen(
                         ) {
                             Text("Test Connection")
                         }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Button(
+                            onClick = {
+                                securePreferencesManager.saveString(
+                                    SecurePreferencesManager.KEY_MISTRAL_API_KEY,
+                                    apiKey
+                                )
+                                Toast.makeText(context, "API key saved securely", Toast.LENGTH_SHORT).show()
+                            }
+                        ) {
+                            Text("Save Key Securely")
+                        }
                     }
                 }
             }
-            
+
             // Test Result Card
             if (isTesting || testResult != null) {
                 Card(
@@ -181,9 +204,9 @@ fun ApiTestScreen(
                             text = "Test Result",
                             style = MaterialTheme.typography.titleMedium
                         )
-                        
+
                         Spacer(modifier = Modifier.height(16.dp))
-                        
+
                         if (isTesting) {
                             CircularProgressIndicator()
                             Spacer(modifier = Modifier.height(8.dp))
@@ -195,17 +218,17 @@ fun ApiTestScreen(
                                 tint = if (testResult!!.first) Color.Green else Color.Red,
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
-                            
+
                             Text(
                                 text = if (testResult!!.first) "Connection Successful" else "Connection Failed",
                                 color = if (testResult!!.first) Color.Green else Color.Red,
                                 style = MaterialTheme.typography.titleSmall
                             )
-                            
+
                             Spacer(modifier = Modifier.height(8.dp))
                             Divider()
                             Spacer(modifier = Modifier.height(8.dp))
-                            
+
                             Text(
                                 text = testResult!!.second,
                                 style = MaterialTheme.typography.bodyMedium
@@ -218,15 +241,4 @@ fun ApiTestScreen(
     }
 }
 
-private fun getSavedApiKey(sharedPreferences: SharedPreferences): String {
-    return sharedPreferences.getString("mistral_api_key", "") ?: ""
-}
-
-private fun saveApiKey(
-    context: Context,
-    sharedPreferences: SharedPreferences,
-    apiKey: String
-) {
-    sharedPreferences.edit().putString("mistral_api_key", apiKey).apply()
-    Toast.makeText(context, "API key saved", Toast.LENGTH_SHORT).show()
-} 
+// Helper functions removed - now using SecurePreferencesManager

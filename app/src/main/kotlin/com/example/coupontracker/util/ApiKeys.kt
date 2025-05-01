@@ -1,10 +1,13 @@
 package com.example.coupontracker.util
 
 /**
- * Class to store API keys. In a production app, these would be stored securely
- * and not hardcoded in the source code.
+ * DEPRECATED - DO NOT USE
+ *
+ * API keys should be stored securely using SecurePreferencesManager.
+ * This class is kept for backward compatibility but contains no actual keys.
  */
 object ApiKeys {
-    // Replace this with your actual Google Cloud Vision API key
-    const val GOOGLE_CLOUD_VISION_API_KEY = "AIzaSyD4krpwCDZXenzCJ0yxJHQjUcSb-Eh2F8M"
-} 
+    // This class no longer contains hardcoded API keys
+    // Use SecurePreferencesManager to retrieve API keys securely
+    const val GOOGLE_CLOUD_VISION_API_KEY = ""
+}
