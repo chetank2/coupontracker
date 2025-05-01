@@ -13,6 +13,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.coupontracker.ui.screen.ApiTestScreen
 import com.example.coupontracker.ui.screen.BatchScannerScreen
+import com.example.coupontracker.ui.screen.CouponDetailScreen
 import com.example.coupontracker.ui.screen.HomeScreen
 import com.example.coupontracker.ui.screen.ManualEntryScreen
 import com.example.coupontracker.ui.screen.OnboardingScreen
@@ -81,11 +82,11 @@ fun AppNavigation(
                 navArgument("couponId") { type = NavType.LongType }
             )
         ) { backStackEntry ->
-            // We retrieve the argument but don't use it until CouponDetailScreen is implemented
-            // This is just to ensure type safety with the route format
-            backStackEntry.arguments?.getLong("couponId")
-            // Temporarily redirect to Home until CouponDetailScreen is implemented
-            HomeScreen(navController = navController)
+            val couponId = backStackEntry.arguments?.getLong("couponId") ?: 0L
+            CouponDetailScreen(
+                navController = navController,
+                couponId = couponId
+            )
         }
 
         composable(Screen.Scanner.route) {
