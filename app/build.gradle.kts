@@ -30,6 +30,19 @@ android {
         }
     }
 
+    // Note: For actual use, replace these placeholder values with your real keystore information
+    // You'll need to create a keystore file using Android Studio or the keytool command
+    signingConfigs {
+        create("release") {
+            // You should store these values in a secure location, not in build.gradle
+            // For production, consider using environment variables or a properties file
+            storeFile = file("keystore/coupontracker.keystore") // Path relative to the app directory
+            storePassword = "your_keystore_password" // Replace with your actual password
+            keyAlias = "coupontracker"
+            keyPassword = "your_key_password" // Replace with your actual password
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -37,6 +50,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
