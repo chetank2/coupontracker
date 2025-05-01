@@ -1,7 +1,9 @@
 package com.example.coupontracker.ui.screen
 
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -10,7 +12,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,6 +109,36 @@ fun SettingsScreen(
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.Top
         ) {
+            // API Keys Help Card
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = "About API Keys",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "API keys enhance the OCR capabilities of the app. You can use the app without API keys (ML Kit mode), but adding them will improve text recognition accuracy.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "• Google Cloud Vision: Provides high-quality cloud OCR (free tier available)\n• Mistral AI: Enhances results with AI validation (free tier available)\n• Super OCR: Uses all available technologies for best results",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+
             // OCR API Selection
             Text(
                 text = "OCR API Selection",
@@ -207,10 +241,27 @@ fun SettingsScreen(
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    Text(
-                        text = "Google Cloud Vision API Key",
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Google Cloud Vision API Key",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                val uri = Uri.parse("https://cloud.google.com/vision/docs/setup")
+                                val intent = Intent(Intent.ACTION_VIEW, uri)
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.padding(start = 8.dp)
+                        ) {
+                            Text("Get API Key")
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -363,10 +414,27 @@ fun SettingsScreen(
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    Text(
-                        text = "Mistral AI API Key",
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Mistral AI API Key",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        OutlinedButton(
+                            onClick = {
+                                val uri = Uri.parse("https://console.mistral.ai/")
+                                val intent = Intent(Intent.ACTION_VIEW, uri)
+                                context.startActivity(intent)
+                            },
+                            modifier = Modifier.padding(start = 8.dp)
+                        ) {
+                            Text("Get API Key")
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -453,22 +521,52 @@ fun SettingsScreen(
 
             // ML Kit Info
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    Text(
-                        text = "ML Kit (On-device OCR)",
-                        style = MaterialTheme.typography.titleMedium
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "ML Kit (On-device OCR)",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Surface(
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.padding(4.dp)
+                        ) {
+                            Text(
+                                text = "No API Key Required",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
                         text = "ML Kit runs directly on your device and doesn't require an API key. " +
-                              "It's used as a fallback when other API methods fail.",
+                              "It's used as a fallback when other API methods fail and is always available even if you don't have any API keys.",
                         style = MaterialTheme.typography.bodyMedium
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "To get started without API keys, simply select ML Kit as your OCR option above.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
                     )
                 }
             }
