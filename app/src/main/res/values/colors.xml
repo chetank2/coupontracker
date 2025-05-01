@@ -1,48 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Primary brand colors -->
-    <color name="primary">#3F51B5</color>
-    <color name="primary_variant">#303F9F</color>
+    <color name="primary">#6750A4</color>
+    <color name="primary_container">#EADDFF</color>
     <color name="on_primary">#FFFFFF</color>
+    <color name="on_primary_container">#21005D</color>
     
     <!-- Secondary brand colors -->
-    <color name="secondary">#4CAF50</color>
-    <color name="secondary_variant">#388E3C</color>
+    <color name="secondary">#7D5260</color>
+    <color name="secondary_container">#FFE8E3</color>
     <color name="on_secondary">#FFFFFF</color>
+    <color name="on_secondary_container">#31101D</color>
     
     <!-- Background colors -->
-    <color name="background">#F5F5F5</color>
-    <color name="surface">#FFFFFF</color>
-    <color name="on_background">#212121</color>
-    <color name="on_surface">#212121</color>
+    <color name="background">#FFFBFE</color>
+    <color name="surface">#FFFBFE</color>
+    <color name="on_background">#1C1B1F</color>
+    <color name="on_surface">#1C1B1F</color>
     
     <!-- Card colors -->
-    <color name="card_background">#FFFFFF</color>
-    <color name="card_stroke">#E0E0E0</color>
+    <color name="card_background">#FFFBFE</color>
+    <color name="card_stroke">#E7E0EC</color>
     
     <!-- Status colors -->
-    <color name="error">#F44336</color>
+    <color name="error">#B3261E</color>
     <color name="on_error">#FFFFFF</color>
-    <color name="warning">#FF9800</color>
-    <color name="success">#4CAF50</color>
-    <color name="info">#2196F3</color>
+    <color name="warning">#7950F2</color>
+    <color name="success">#166534</color>
+    <color name="info">#0066FF</color>
     
     <!-- Expiration colors -->
-    <color name="expiring_soon">#FF9800</color>
-    <color name="expired">#F44336</color>
-    <color name="valid">#4CAF50</color>
+    <color name="expiring_soon">#7950F2</color>
+    <color name="expired">#B3261E</color>
+    <color name="valid">#166534</color>
     
     <!-- App icon colors -->
-    <color name="ic_launcher_background">#3F51B5</color>
+    <color name="ic_launcher_background">#6750A4</color>
+    
+    <!-- Bottom navigation colors -->
+    <color name="bottom_nav_icon">?attr/colorPrimary</color>
+    <color name="bottom_nav_text">?attr/colorPrimary</color>
     
     <!-- Legacy colors (for backward compatibility) -->
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     
     <!-- Text colors (for backward compatibility) -->
-    <color name="text_primary">#212121</color>
-    <color name="text_secondary">#757575</color>
-    <color name="text_tertiary">#9E9E9E</color>
+    <color name="text_primary">#1C1B1F</color>
+    <color name="text_secondary">#49454F</color>
+    <color name="text_tertiary">#6750A4</color>
     <color name="text_on_dark">#FFFFFF</color>
-    <color name="text_on_dark_secondary">#E0E0E0</color>
+    <color name="text_on_dark_secondary">#E7E0EC</color>
 </resources>
