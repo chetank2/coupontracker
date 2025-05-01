@@ -74,7 +74,8 @@ class HomeFragment : Fragment() {
             adapter = CouponAdapter(
                 onItemClick = { couponId ->
                     findNavController().navigate(
-                        HomeFragmentDirections.actionHomeToDetail(couponId)
+                        R.id.actionHomeToDetail,
+                        bundleOf("couponId" to couponId)
                     )
                 },
                 onCopyCodeClick = { code ->

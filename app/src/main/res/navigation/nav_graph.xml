@@ -13,7 +13,12 @@
         tools:layout="@layout/fragment_home">
         <action
             android:id="@+id/actionHomeToDetail"
-            app:destination="@id/detailFragment" />
+            app:destination="@id/detailFragment">
+            <argument
+                android:name="couponId"
+                app:argType="long"
+                android:defaultValue="0" />
+        </action>
         <action
             android:id="@+id/actionHomeToAdd"
             app:destination="@id/addFragment" />
