@@ -115,7 +115,7 @@
                             <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
                             <button class="btn btn-primary" id="browseBtn">Browse Files</button>
                         </div>
-                        
+
                         <div class="progress-container" style="display: none;">
                             <div class="progress">
                                 <div class="progress-bar" role="progressbar" style="width: 0%"></div>
@@ -157,11 +157,11 @@
                             <button class="btn btn-danger ms-2" id="clearBtn">Clear</button>
                             <button class="btn btn-success ms-2" id="saveAnnotationsBtn">Save Annotations</button>
                         </div>
-                        
+
                         <div class="annotation-canvas-container">
                             <canvas id="annotationCanvas" width="800" height="600"></canvas>
                         </div>
-                        
+
                         <div class="annotation-list">
                             <h6>Annotations</h6>
                             <ul class="list-group" id="annotationsList">
@@ -240,95 +240,101 @@
         $(document).ready(function() {
             // Initialize fabric.js canvas
             canvas = new fabric.Canvas('annotationCanvas');
-            
+
             // Set up drag and drop
             const dropArea = document.getElementById('dropArea');
-            
+
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
                 dropArea.addEventListener(eventName, preventDefaults, false);
             });
-            
+
             function preventDefaults(e) {
                 e.preventDefault();
                 e.stopPropagation();
             }
-            
+
             ['dragenter', 'dragover'].forEach(eventName => {
                 dropArea.addEventListener(eventName, highlight, false);
             });
-            
+
             ['dragleave', 'drop'].forEach(eventName => {
                 dropArea.addEventListener(eventName, unhighlight, false);
             });
-            
+
             function highlight() {
                 dropArea.classList.add('highlight');
             }
-            
+
             function unhighlight() {
                 dropArea.classList.remove('highlight');
             }
-            
+
             dropArea.addEventListener('drop', handleDrop, false);
-            
+
             function handleDrop(e) {
                 const dt = e.dataTransfer;
                 const files = dt.files;
                 handleFiles(files);
             }
-            
+
             // Browse button click
             $('#browseBtn').click(function() {
                 $('#fileInput').click();
             });
-            
+
             // File input change
             $('#fileInput').change(function() {
                 handleFiles(this.files);
             });
-            
+
             // Annotation type selection
             $('.annotation-type').click(function() {
                 $('.annotation-type').removeClass('active');
                 $(this).addClass('active');
                 selectedAnnotationType = $(this).data('type');
             });
-            
+
             // Set default annotation type
             $('.annotation-type[data-type="store"]').addClass('active');
-            
+
             // Clear button click
             $('#clearBtn').click(function() {
                 canvas.clear();
                 updateAnnotationsList();
             });
-            
+
             // Save annotations button click
             $('#saveAnnotationsBtn').click(function() {
                 if (!selectedImage) {
                     alert('Please select an image first');
                     return;
                 }
-                
+
                 saveAnnotations();
             });
-            
+
             // Train model button click
             $('#trainModelBtn').click(function() {
                 trainModel();
             });
-            
+
             // Canvas mouse down event for drawing rectangles
             canvas.on('mouse:down', function(options) {
-                if (!selectedImage) return;
-                
+                if (!selectedImage) {
+                    alert('Please select an image first');
+                    return;
+                }
+
+                // Only start drawing if we're not on an existing object
+                if (options.target) return;
+
                 const pointer = canvas.getPointer(options.e);
                 const rect = new fabric.Rect({
                     left: pointer.x,
                     top: pointer.y,
                     width: 0,
                     height: 0,
-                    fill: 'transparent',
+                    fill: 'rgba(' + getColorRgbForType(selectedAnnotationType) + ',0.2)',
                     stroke: getColorForType(selectedAnnotationType),
                     strokeWidth: 2,
                     selectable: true,
@@ -336,47 +342,79 @@
                         type: selectedAnnotationType
                     }
                 });
-                
+
                 canvas.add(rect);
                 canvas.setActiveObject(rect);
                 canvas.renderAll();
-                
+
                 canvas.isDrawing = true;
                 canvas.selection = false;
                 canvas.drawingRect = rect;
                 canvas.drawingStartPoint = pointer;
+
+                console.log('Started drawing rectangle at', pointer.x, pointer.y);
             });
-            
+
             // Canvas mouse move event for drawing rectangles
             canvas.on('mouse:move', function(options) {
                 if (!canvas.isDrawing) return;
-                
+
                 const pointer = canvas.getPointer(options.e);
                 const rect = canvas.drawingRect;
-                
+
                 if (pointer.x < canvas.drawingStartPoint.x) {
                     rect.set({ left: pointer.x });
                 }
-                
+
                 if (pointer.y < canvas.drawingStartPoint.y) {
                     rect.set({ top: pointer.y });
                 }
-                
+
                 rect.set({
                     width: Math.abs(pointer.x - canvas.drawingStartPoint.x),
                     height: Math.abs(pointer.y - canvas.drawingStartPoint.y)
                 });
-                
+
                 canvas.renderAll();
             });
-            
+
             // Canvas mouse up event for drawing rectangles
             canvas.on('mouse:up', function() {
+                if (!canvas.isDrawing) return;
+
+                const rect = canvas.drawingRect;
+
+                // Only keep rectangles with some minimum size
+                if (rect.width < 10 || rect.height < 10) {
+                    canvas.remove(rect);
+                    console.log('Rectangle too small, removed');
+                } else {
+                    // Add a label to the rectangle
+                    const label = new fabric.Text(selectedAnnotationType, {
+                        left: rect.left,
+                        top: rect.top - 15,
+                        fontSize: 12,
+                        fill: getColorForType(selectedAnnotationType)
+                    });
+                    canvas.add(label);
+
+                    // Group the rectangle and label
+                    rect.label = label;
+
+                    console.log('Finished drawing rectangle:', {
+                        type: selectedAnnotationType,
+                        left: Math.round(rect.left),
+                        top: Math.round(rect.top),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height)
+                    });
+                }
+
                 canvas.isDrawing = false;
                 canvas.selection = true;
                 canvas.drawingRect = null;
                 canvas.drawingStartPoint = null;
-                
+
                 updateAnnotationsList();
             });
         });
@@ -384,16 +422,16 @@
         // Handle uploaded files
         function handleFiles(files) {
             if (files.length === 0) return;
-            
+
             // Show progress container
             $('.progress-container').show();
-            
+
             // Create FormData
             const formData = new FormData();
             for (let i = 0; i < files.length; i++) {
                 formData.append('files[]', files[i]);
             }
-            
+
             // Upload files
             $.ajax({
                 url: '/api/upload/training',
@@ -415,7 +453,7 @@
                 success: function(response) {
                     // Hide progress container
                     $('.progress-container').hide();
-                    
+
                     // Add uploaded images to the gallery
                     if (response.files && response.files.length > 0) {
                         uploadedImages = uploadedImages.concat(response.files);
@@ -425,7 +463,7 @@
                 error: function(xhr, status, error) {
                     // Hide progress container
                     $('.progress-container').hide();
-                    
+
                     // Show error
                     alert('Error uploading files: ' + error);
                 }
@@ -435,24 +473,24 @@
         // Update image gallery
         function updateImageGallery() {
             const gallery = $('#imageGallery');
-            
+
             if (uploadedImages.length === 0) {
                 gallery.html('<p class="text-center">No images uploaded yet</p>');
                 return;
             }
-            
+
             gallery.empty();
-            
+
             uploadedImages.forEach(function(image, index) {
                 const item = $('<div class="image-item"></div>');
                 item.append('<img src="' + image.url + '" alt="' + image.original_name + '">');
-                
+
                 item.click(function() {
                     $('.image-item').removeClass('selected');
                     $(this).addClass('selected');
                     loadImageForAnnotation(image);
                 });
-                
+
                 gallery.append(item);
             });
         }
@@ -460,10 +498,10 @@
         // Load image for annotation
         function loadImageForAnnotation(image) {
             selectedImage = image;
-            
+
             // Clear canvas
             canvas.clear();
-            
+
             // Load image as background
             fabric.Image.fromURL(image.url, function(img) {
                 // Scale image to fit canvas
@@ -471,9 +509,9 @@
                 const canvasHeight = canvas.height;
                 const imgWidth = img.width;
                 const imgHeight = img.height;
-                
+
                 const scale = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
-                
+
                 img.scale(scale);
                 img.set({
                     left: (canvasWidth - imgWidth * scale) / 2,
@@ -481,10 +519,10 @@
                     selectable: false,
                     evented: false
                 });
-                
+
                 canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
             });
-            
+
             // Clear annotations list
             updateAnnotationsList();
         }
@@ -493,62 +531,79 @@
         function updateAnnotationsList() {
             const list = $('#annotationsList');
             const objects = canvas.getObjects();
-            
-            if (objects.length === 0) {
+
+            // Filter out only rectangle objects (not labels)
+            const rectangles = objects.filter(obj => obj.type === 'rect' && obj.data && obj.data.type);
+
+            if (rectangles.length === 0) {
                 list.html('<li class="list-group-item text-center">No annotations yet</li>');
                 return;
             }
-            
+
             list.empty();
-            
-            objects.forEach(function(obj, index) {
-                if (obj.type === 'rect' && obj.data && obj.data.type) {
-                    const type = obj.data.type;
-                    const left = Math.round(obj.left);
-                    const top = Math.round(obj.top);
-                    const width = Math.round(obj.width);
-                    const height = Math.round(obj.height);
-                    
-                    const item = $('<li class="list-group-item"></li>');
-                    item.html('<span class="badge bg-' + getBadgeColorForType(type) + ' me-2">' + type + '</span> ' +
-                              'Left: ' + left + ', Top: ' + top + ', Width: ' + width + ', Height: ' + height);
-                    
-                    item.append('<button class="btn btn-sm btn-danger float-end">Remove</button>');
-                    
-                    item.find('button').click(function() {
-                        canvas.remove(obj);
-                        updateAnnotationsList();
-                    });
-                    
-                    list.append(item);
-                }
+
+            rectangles.forEach(function(obj, index) {
+                const type = obj.data.type;
+                const left = Math.round(obj.left);
+                const top = Math.round(obj.top);
+                const width = Math.round(obj.width);
+                const height = Math.round(obj.height);
+
+                const item = $('<li class="list-group-item"></li>');
+                item.html('<span class="badge bg-' + getBadgeColorForType(type) + ' me-2">' + type + '</span> ' +
+                          'Left: ' + left + ', Top: ' + top + ', Width: ' + width + ', Height: ' + height);
+
+                item.append('<button class="btn btn-sm btn-danger float-end">Remove</button>');
+
+                item.find('button').click(function() {
+                    // Remove both the rectangle and its label if it exists
+                    if (obj.label) {
+                        canvas.remove(obj.label);
+                    }
+                    canvas.remove(obj);
+                    updateAnnotationsList();
+                });
+
+                list.append(item);
             });
+
+            // Update the annotations count in the UI
+            if (rectangles.length > 0) {
+                $('#annotationsList').closest('.annotation-list').find('h6').text('Annotations (' + rectangles.length + ')');
+            } else {
+                $('#annotationsList').closest('.annotation-list').find('h6').text('Annotations');
+            }
         }
 
         // Save annotations
         function saveAnnotations() {
-            if (!selectedImage) return;
-            
-            const objects = canvas.getObjects();
-            const annotationData = [];
-            
-            objects.forEach(function(obj) {
-                if (obj.type === 'rect' && obj.data && obj.data.type) {
-                    annotationData.push({
-                        type: obj.data.type,
-                        left: Math.round(obj.left),
-                        top: Math.round(obj.top),
-                        width: Math.round(obj.width),
-                        height: Math.round(obj.height)
-                    });
-                }
-            });
-            
-            if (annotationData.length === 0) {
-                alert('No annotations to save');
+            if (!selectedImage) {
+                alert('Please select an image first');
                 return;
             }
-            
+
+            // Filter out only rectangle objects (not labels)
+            const objects = canvas.getObjects().filter(obj => obj.type === 'rect' && obj.data && obj.data.type);
+            const annotationData = [];
+
+            objects.forEach(function(obj) {
+                annotationData.push({
+                    type: obj.data.type,
+                    left: Math.round(obj.left),
+                    top: Math.round(obj.top),
+                    width: Math.round(obj.width),
+                    height: Math.round(obj.height)
+                });
+            });
+
+            if (annotationData.length === 0) {
+                alert('No annotations to save. Please draw at least one annotation.');
+                return;
+            }
+
+            // Show loading indicator
+            $('#saveAnnotationsBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...');
+
             // Save annotations
             $.ajax({
                 url: '/api/annotate',
@@ -559,11 +614,39 @@
                     annotations: annotationData
                 }),
                 success: function(response) {
-                    $('#saveAnnotationsModalBody').html('<div class="alert alert-success">Annotations saved successfully</div>');
+                    // Reset button
+                    $('#saveAnnotationsBtn').prop('disabled', false).text('Save Annotations');
+
+                    // Show success message with details
+                    let html = '<div class="alert alert-success">Annotations saved successfully</div>';
+                    html += '<p>Image: ' + selectedImage.original_name + '</p>';
+                    html += '<p>Number of annotations: ' + annotationData.length + '</p>';
+                    html += '<ul class="list-group mt-3">';
+
+                    annotationData.forEach(function(annotation) {
+                        html += '<li class="list-group-item">';
+                        html += '<span class="badge bg-' + getBadgeColorForType(annotation.type) + ' me-2">' + annotation.type + '</span> ';
+                        html += 'Left: ' + annotation.left + ', Top: ' + annotation.top + ', ';
+                        html += 'Width: ' + annotation.width + ', Height: ' + annotation.height;
+                        html += '</li>';
+                    });
+
+                    html += '</ul>';
+
+                    $('#saveAnnotationsModalBody').html(html);
                     $('#saveAnnotationsModal').modal('show');
                 },
                 error: function(xhr, status, error) {
-                    $('#saveAnnotationsModalBody').html('<div class="alert alert-danger">Error saving annotations: ' + error + '</div>');
+                    // Reset button
+                    $('#saveAnnotationsBtn').prop('disabled', false).text('Save Annotations');
+
+                    // Show error message
+                    let errorMsg = 'Error saving annotations';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+
+                    $('#saveAnnotationsModalBody').html('<div class="alert alert-danger">' + errorMsg + '</div>');
                     $('#saveAnnotationsModal').modal('show');
                 }
             });
@@ -579,7 +662,7 @@
                     let html = '<div class="alert alert-success">' + response.message + '</div>';
                     html += '<p>Model Version: ' + response.model_info.version + '</p>';
                     html += '<p>Number of Patterns: ' + response.model_info.num_patterns + '</p>';
-                    
+
                     $('#trainingResultModalBody').html(html);
                     $('#trainingResultModal').modal('show');
                 },
@@ -588,7 +671,7 @@
                     if (xhr.responseJSON && xhr.responseJSON.message) {
                         errorMsg = xhr.responseJSON.message;
                     }
-                    
+
                     let html = '<div class="alert alert-danger">' + errorMsg + '</div>';
                     $('#trainingResultModalBody').html(html);
                     $('#trainingResultModal').modal('show');
@@ -605,6 +688,21 @@
                 case 'code': return 'purple';
                 case 'amount': return 'orange';
                 default: return 'black';
+            }
+        }
+
+        // Get RGB color values for annotation type (without the # prefix)
+        function getColorRgbForType(type) {
+            const color = getColorForType(type);
+            // For named colors, return RGB values
+            switch (color) {
+                case 'red': return '255,0,0';
+                case 'blue': return '0,0,255';
+                case 'green': return '0,128,0';
+                case 'purple': return '128,0,128';
+                case 'orange': return '255,165,0';
+                case 'black': return '0,0,0';
+                default: return '0,0,0';
             }
         }
 
