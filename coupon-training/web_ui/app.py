@@ -12,8 +12,8 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import utility modules
-from utils.model_manager import ModelManager
-from utils.image_processor import ImageProcessor
+from .utils.model_manager import ModelManager
+from .utils.image_processor import ImageProcessor
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -47,27 +47,27 @@ def upload_training_images():
     """Handle training image uploads"""
     if 'files[]' not in request.files:
         return jsonify({'error': 'No files provided'}), 400
-    
+
     files = request.files.getlist('files[]')
     uploaded_files = []
-    
+
     for file in files:
         if file and allowed_file(file.filename):
             # Generate a unique filename
             filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
-            
+
             # Process the image (resize, normalize)
             processed_path = image_processor.preprocess_image(filepath)
-            
+
             uploaded_files.append({
                 'original_name': file.filename,
                 'saved_name': filename,
                 'path': processed_path,
                 'url': url_for('static', filename=f'uploads/{filename}')
             })
-    
+
     return jsonify({'files': uploaded_files})
 
 @app.route('/api/upload/testing', methods=['POST'])
@@ -75,20 +75,20 @@ def upload_testing_images():
     """Handle testing image uploads"""
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
-    
+
     file = request.files['file']
     if file and allowed_file(file.filename):
         # Generate a unique filename
         filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
-        
+
         # Process the image
         processed_path = image_processor.preprocess_image(filepath)
-        
+
         # Run pattern recognition
         results = model_manager.test_image(processed_path)
-        
+
         return jsonify({
             'file': {
                 'original_name': file.filename,
@@ -97,7 +97,7 @@ def upload_testing_images():
             },
             'results': results
         })
-    
+
     return jsonify({'error': 'Invalid file'}), 400
 
 @app.route('/api/annotate', methods=['POST'])
@@ -106,13 +106,13 @@ def save_annotation():
     data = request.json
     if not data or 'image' not in data or 'annotations' not in data:
         return jsonify({'error': 'Invalid annotation data'}), 400
-    
+
     image_path = data['image']
     annotations = data['annotations']
-    
+
     # Save annotations
     success = model_manager.save_annotations(image_path, annotations)
-    
+
     if success:
         return jsonify({'status': 'success'})
     else:
@@ -123,7 +123,7 @@ def train_model():
     """Train the model using annotated images"""
     # Start training process
     result = model_manager.train_model()
-    
+
     if result['success']:
         return jsonify({
             'status': 'success',
@@ -140,7 +140,7 @@ def train_model():
 def update_app_model():
     """Update the model in the Android app"""
     result = model_manager.update_app_model()
-    
+
     if result['success']:
         return jsonify({
             'status': 'success',
