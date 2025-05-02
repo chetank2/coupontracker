@@ -1,0 +1,882 @@
+{
+  "timestamp": "20250503_001134",
+  "created_at": "2025-05-03T00:11:34.843155",
+  "directories": {
+    "raw": {
+      "file_count": 41,
+      "size_bytes": 22196506,
+      "files": {
+        "Screenshot_20250502-200507.png": {
+          "hash": "e97f7945d97aa532a32a3d9a4ae1081bbfd712a91aa5c2cc90632d516c270574",
+          "size_bytes": 326537,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201815.png": {
+          "hash": "0d119d81e6fb79f4fc6d0a950759a5fea0b0c56e13a8e43797d6daa17438ac77",
+          "size_bytes": 667493,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        ".DS_Store": {
+          "hash": "51c2c5d232e2c2b1382c2f8db3599b567c0a21e2d0d55f18a9712db08f7e504c",
+          "size_bytes": 10244,
+          "last_modified": "2025-05-02T23:21:40.282978"
+        },
+        "Screenshot_20250502-192756.png": {
+          "hash": "d565199e550934399b07cc8e6745fddc5d3e54a655062ca4d6eef5e0e2db0a32",
+          "size_bytes": 918990,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-202303.png": {
+          "hash": "379a74e10c5b2829031635e7190de8b5a2e9aba23dc4d622481d306f5cb4d269",
+          "size_bytes": 259405,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-192804.png": {
+          "hash": "9b58d1dc99c17448b8ee3393e51e4237f52af6088d5bd97162e649cb454eedbe",
+          "size_bytes": 400186,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201806.png": {
+          "hash": "85505dd5f06042d1593fbb689f161731c3430e037d3737d89ebd4c018188ed05",
+          "size_bytes": 622388,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-192634.png": {
+          "hash": "cea0afd8e982f597a128811c6483a7770577f60743750bba561bc75da75b5dd8",
+          "size_bytes": 799985,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-192647.png": {
+          "hash": "5071a3049f9b8127419110c9e796f29b0f9c58e839997c92622568f05c9f5283",
+          "size_bytes": 738077,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-202039.png": {
+          "hash": "749dabd2fe9b356cb931176e5b05ff542a11b191d8ad09668250beecf0931caf",
+          "size_bytes": 421657,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-202004.png": {
+          "hash": "a8360628e75b358ed1ebf69dc2da8ff73dc7f25fe9aeb3d2e0fa615eca2f9d42",
+          "size_bytes": 681735,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201902.png": {
+          "hash": "e93aac24bdec495007fb80b8a348b6b18bfe97df0a483fee967747a3e36b5cc1",
+          "size_bytes": 767763,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201916.png": {
+          "hash": "b2064aa5b167a95cbcad8f325e0b217a76f1ffdfbecac9bd6ed60e19fbbc20bd",
+          "size_bytes": 420540,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-200639.png": {
+          "hash": "029ee0a0440461de476c38c87ffd524caf8983da01fa650951f8b94e940a26f0",
+          "size_bytes": 1076831,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-192731.png": {
+          "hash": "2b75927ddc93e4311be9d2bf02c632c2e3d6e22f977d5850788692ae8aff763e",
+          "size_bytes": 437351,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-202013.png": {
+          "hash": "ffef17c12f1bf1ba1acf6eb83787999f940d02f013bb21996a6b787b05645ee3",
+          "size_bytes": 533074,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-200601.png": {
+          "hash": "b48ad43d32e7cb0bc4007f347bf41ffb0c779b4ec67f535d36f3e2260a8c405f",
+          "size_bytes": 528637,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-192723.png": {
+          "hash": "00118f179653bc8b09619e1c683efb15b509659c107847f705a581645ccaa60b",
+          "size_bytes": 677569,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-202029.png": {
+          "hash": "e52e871385522273e8ba95e2ee30202a44efd09e4b650d06dbe300c852cd80a7",
+          "size_bytes": 417864,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-200616.png": {
+          "hash": "72664f80b592ed775dab99192068af8400cc2d25e0e820f1aeeb4cbc0355a424",
+          "size_bytes": 402552,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201908.png": {
+          "hash": "8414c1c56ff605e4d43d2588afe28e83b7b9fe4bb21759c83475067549bfbdf3",
+          "size_bytes": 417148,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201854.png": {
+          "hash": "75a77c82b5e10bed7b1d8d29110bab7ca3c1c8da656bd00273f16be7673b81aa",
+          "size_bytes": 545737,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-192711.png": {
+          "hash": "b3673aa6ad95965c38f8cf9f3205cbf3fdf00904d5b96f642e16b48c54a07611",
+          "size_bytes": 409583,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-200547.png": {
+          "hash": "640df81dabe4efe2c4f95b8b49003255a31035e4b5edc1ce0258c78d8b82a27e",
+          "size_bytes": 405758,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-192658.png": {
+          "hash": "affa41b55f26adfdd5a762648a19fc42e4273571bf26f50674217a8ed0484e5b",
+          "size_bytes": 557636,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-200609.png": {
+          "hash": "59f5d893ecd503923788cd70f5c8981889878b35625a46cfb5988e049f24393e",
+          "size_bytes": 386315,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201933.png": {
+          "hash": "50bcba4f543ccc2fe5c65db5d8a3efadab09cd9e63faddb955369d0d2330ce42",
+          "size_bytes": 634519,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-202021.png": {
+          "hash": "78fddc3d15ec11a6700df4b6a0dc96aa0f5219d97635546402324b663226e5ac",
+          "size_bytes": 386739,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-200554.png": {
+          "hash": "8434fdfa2b3f8ab74b5f06ae3b5d93e0fb5681f3a4c50acbf42ee01440023db0",
+          "size_bytes": 617281,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201845.png": {
+          "hash": "110276c58eff8250a19f505fddb3d57610d1aede28ad1add00cf2056737a4f1f",
+          "size_bytes": 419939,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-200623.png": {
+          "hash": "a33bfebe0bb7e060c87949f90f1afb4483973635c36b0ee23b34dcbcb5b99bc6",
+          "size_bytes": 1044698,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201924.png": {
+          "hash": "551d489c4d801b1b2265bdc93e93944ca5f1c84200560a93f19aa0694e82f211",
+          "size_bytes": 378423,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201823.png": {
+          "hash": "713967d7a09cdacbe81a119de02ba28d45fa8c5edb058f7e455b3251a6439170",
+          "size_bytes": 448882,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-202318.png": {
+          "hash": "ae37ca30bd00940e7d5217820bfca25c8d906bea5cb40ba90301be979139d27d",
+          "size_bytes": 249595,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201942.png": {
+          "hash": "d42f8ccaf170b8596444b1036ef6a4af16117b7a8b020d27fedbcd1dfcd054c0",
+          "size_bytes": 604946,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201954.png": {
+          "hash": "1eaf4a38127d64f51391eb654efdb8d031c53f844312cbcf0905bf6051dc3379",
+          "size_bytes": 612552,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-201835.png": {
+          "hash": "fd0521c44bc3ee3de47ab5c3ebca70b3d3dbcf46376c17eecee5df2aba6f6fcb",
+          "size_bytes": 433753,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-200524.png": {
+          "hash": "c3d5934073442055f4ccc04c609b81be9f56697b884cb97350a0e07ec33f34d6",
+          "size_bytes": 555318,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-192749.png": {
+          "hash": "dd3a494ffc2587984980da2da46fb2c13228b2a6b1803da70726435ccfa3dec6",
+          "size_bytes": 666823,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-200536.png": {
+          "hash": "51d1f4a7e03dcfd1dbb75cb8e6725872a5f8c2b0e3214e76faefd5389e0bc7d4",
+          "size_bytes": 681307,
+          "last_modified": "2025-05-02T20:27:58"
+        },
+        "Screenshot_20250502-200654.png": {
+          "hash": "d3347cd960c3d7d43663b71300ed98cae8c8ed105c0c0e34a55a41d8a86313b0",
+          "size_bytes": 630676,
+          "last_modified": "2025-05-02T20:27:58"
+        }
+      }
+    },
+    "annotated": {
+      "file_count": 86,
+      "size_bytes": 13819264,
+      "files": {
+        "Screenshot_20250502-201924_processed_annotated.png": {
+          "hash": "0c289775b209a446bd39ab06c0bb08f2c15a06897cf2e7fce44f38537fe6266d",
+          "size_bytes": 325116,
+          "last_modified": "2025-05-02T20:34:13.817800"
+        },
+        "IMG-20250502-WA0014_processed_annotated.jpg": {
+          "hash": "0d274ac8aa44ab128394145355ee897da7dabe792678cd27e552409afc6242b9",
+          "size_bytes": 142448,
+          "last_modified": "2025-05-02T20:33:15.595668"
+        },
+        "Screenshot_20250502-201916_processed_annotations.json": {
+          "hash": "3d6204890ccd6c7b2404cc7310d3119b49949337af9a197454f9a69a45e1c94a",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:43.628276"
+        },
+        "Screenshot_20250502-192756_processed_annotations.json": {
+          "hash": "9edbd8ba9c2b58558dba8f41eaf25bab79e4d5e177b454f3229af0582daf4c8c",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:55.180573"
+        },
+        "Screenshot_20250502-200623_processed_annotated.png": {
+          "hash": "a4589b5b02446ae016a28b10e83c2dfa148297ad1901f431e12b0b8a16e689d0",
+          "size_bytes": 550651,
+          "last_modified": "2025-05-02T20:34:07.066991"
+        },
+        "Screenshot_20250502-200554_processed_annotations.json": {
+          "hash": "e27be02ffee1bafa96d59f883d4116427dda74b141ee38571f35d5169438d42e",
+          "size_bytes": 660,
+          "last_modified": "2025-05-02T20:33:40.605857"
+        },
+        "IMG-20250502-WA0014_processed_annotations.json": {
+          "hash": "a79c06a46c29198af7564c430a2bb697abd5590e9251262a3854d4d1687ffb2c",
+          "size_bytes": 651,
+          "last_modified": "2025-05-02T20:33:15.589185"
+        },
+        "Screenshot_20250502-200601_processed_annotated.png": {
+          "hash": "aaf80181041dce269450b9b38d2d2e5445eee375cdb51460c582557be8998fd0",
+          "size_bytes": 230299,
+          "last_modified": "2025-05-02T20:33:25.236593"
+        },
+        "Screenshot_20250502-192634_processed_annotated.png": {
+          "hash": "df3c31893f7198af68050a672424456338b0fc7ae28c8e793b20ca34ea9ae5c3",
+          "size_bytes": 335687,
+          "last_modified": "2025-05-02T20:34:16.046741"
+        },
+        "Screenshot_20250502-192658_processed_annotations.json": {
+          "hash": "fe86674462c0107110136d677ef15293fc0e3eb89c774c564f61b46b37b3c6af",
+          "size_bytes": 660,
+          "last_modified": "2025-05-02T20:33:48.622763"
+        },
+        "Screenshot_20250502-200536_processed_annotations.json": {
+          "hash": "95c1fbf8a6fe84ab8fb2375a371471d5654c51f261bff4b61126deb12c90392a",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:34:09.186013"
+        },
+        "Screenshot_20250502-201835_processed_annotated.png": {
+          "hash": "8255ec1db9b7016037832ce4f59d895f338c827e88e3ad4c9d91032af6e09353",
+          "size_bytes": 302206,
+          "last_modified": "2025-05-02T20:33:45.780081"
+        },
+        "Screenshot_20250502-202318_processed_annotated.png": {
+          "hash": "e7f52388d0d198fb17d5db9462ab2e49097cba771b5963756c4e1c61bb105f6a",
+          "size_bytes": 236402,
+          "last_modified": "2025-05-02T20:33:21.320177"
+        },
+        "Screenshot_20250502-200616_processed_annotated.png": {
+          "hash": "89d7073ee37e2015a95dbe0ed689b279e0793b156478f485661f014d9da5023f",
+          "size_bytes": 230886,
+          "last_modified": "2025-05-02T20:33:26.152428"
+        },
+        "Screenshot_20250502-201942_processed_annotated.png": {
+          "hash": "da70ac98434a12e2f5a7fccd308c4f424b6a98adc0a745d95df9563a633e8032",
+          "size_bytes": 500583,
+          "last_modified": "2025-05-02T20:33:34.681226"
+        },
+        "Screenshot_20250502-192804_processed_annotations.json": {
+          "hash": "b6a37f1576d60576e2af674e397b465910d2c376c8f6c3960413f799ab754c22",
+          "size_bytes": 660,
+          "last_modified": "2025-05-02T20:34:14.520179"
+        },
+        "Screenshot_20250502-201933_processed_annotated.png": {
+          "hash": "5095dc232687887e2ba57739900ec270d25b9b3316478a2654deb2a144a51e26",
+          "size_bytes": 558483,
+          "last_modified": "2025-05-02T20:34:12.160024"
+        },
+        "Screenshot_20250502-200654_processed_annotations.json": {
+          "hash": "e18c9b8eca0a5ce3181691908fbef6df1d572e0c6a5b465523df005f00eccc68",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:58.694124"
+        },
+        "Screenshot_20250502-201902_processed_annotated.png": {
+          "hash": "334b30a2a52a638a74191eeec505e677ec7e685778256b1dea58912d837b08ac",
+          "size_bytes": 590721,
+          "last_modified": "2025-05-02T20:33:54.225000"
+        },
+        "Screenshot_20250502-201924_processed_annotations.json": {
+          "hash": "194ffebe8b21762a5801d78f6f61ec730c6072fbc242378d4fa8e35bba1d38d1",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:34:13.807811"
+        },
+        "Screenshot_20250502-202029_processed_annotations.json": {
+          "hash": "9450798b8084250b85380bcfbb4e1c1af71fbc529c11d61ca001144fe919bfe8",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:18.543823"
+        },
+        "cf8130f3-4cf6-4d20-a08e-08f078a3c56b.json": {
+          "hash": "d622b82c4523cdb912a7e8896f44f331d1c938baf8af049f7cc50410ba002760",
+          "size_bytes": 687,
+          "last_modified": "2025-05-02T23:30:51.981054"
+        },
+        "Screenshot_20250502-201854_processed_annotated.png": {
+          "hash": "4725aed2e5f805be813ca3ffd817921eec96d7ad63a6b02b473c087324f07b9f",
+          "size_bytes": 270130,
+          "last_modified": "2025-05-02T20:34:02.446602"
+        },
+        "Screenshot_20250502-200507_processed_annotated.png": {
+          "hash": "838e9a8af64ae7654a897693402d8400a61be6354ab65892b7703b9715913829",
+          "size_bytes": 194054,
+          "last_modified": "2025-05-02T20:33:46.883695"
+        },
+        "Screenshot_20250502-201815_processed_annotations.json": {
+          "hash": "3805a2febb3ce1d756f1af411c70dc7dd534e03bd415a106854713c240d1f148",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:24.573687"
+        },
+        "Screenshot_20250502-192723_processed_annotations.json": {
+          "hash": "317fdd3a783a0159a44c4ab46fddf344a5bcbb3effc029268b926c3a67ad418f",
+          "size_bytes": 660,
+          "last_modified": "2025-05-02T20:33:57.948621"
+        },
+        "Screenshot_20250502-200609_processed_annotations.json": {
+          "hash": "e396455a4469fb8232414c68f94f8f9f13aee03428fe3f3e7b78ae06d2de729c",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:34:06.151231"
+        },
+        "Screenshot_20250502-200536_processed_annotated.png": {
+          "hash": "e8ac05b19a22e37e30c4a98b68a475f1b5130f14d41d13d997d24161b1587a1b",
+          "size_bytes": 249840,
+          "last_modified": "2025-05-02T20:34:09.196795"
+        },
+        "Screenshot_20250502-200547_processed_annotated.png": {
+          "hash": "e88aa82d856aa4c9f1f502dd6e05e081428d38fa2b7640f5ce1259e8abf2f0e2",
+          "size_bytes": 234592,
+          "last_modified": "2025-05-02T20:33:39.678175"
+        },
+        "Screenshot_20250502-200609_processed_annotated.png": {
+          "hash": "6385e617f1752b763532f52fd76b30a87b7f31cff478dda3cef349b16cef45e0",
+          "size_bytes": 239637,
+          "last_modified": "2025-05-02T20:34:06.164904"
+        },
+        "Screenshot_20250502-201933_processed_annotations.json": {
+          "hash": "48926d0f2bf3732f263640a569466fe5871e5dc8bbc8afa0385230aee26ced16",
+          "size_bytes": 666,
+          "last_modified": "2025-05-02T20:34:12.146244"
+        },
+        "Screenshot_20250502-200554_processed_annotated.png": {
+          "hash": "8d34180c65a5217f88d96a4e2db3f127941d1bac5e182ef8c5c29581aae1a66c",
+          "size_bytes": 342382,
+          "last_modified": "2025-05-02T20:33:40.616416"
+        },
+        "Screenshot_20250502-201845_processed_annotations.json": {
+          "hash": "a225f59d5c391687ee2119a49cf134108036867ddc785fb91580de16feb0e4d8",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:50.558182"
+        },
+        "Screenshot_20250502-202303_processed_annotated.png": {
+          "hash": "b5a787648136794ac971a7c2c04c3455f57300dac9bc6eff3265d398f0f74589",
+          "size_bytes": 242057,
+          "last_modified": "2025-05-02T20:34:05.219234"
+        },
+        "Screenshot_20250502-192804_processed_annotated.png": {
+          "hash": "ff4bc3ceef3a42833cf0a3f576c152ddfdd78e81f4e8193aa5b79983574cc93f",
+          "size_bytes": 217362,
+          "last_modified": "2025-05-02T20:34:14.529210"
+        },
+        "edf237a2-16d6-4646-a7a9-c59ad97f4585.json": {
+          "hash": "79ef97a4641315a8ca4591d973d3f8c4c29c4f54c9f77c1cd4c10be2518354d4",
+          "size_bytes": 576,
+          "last_modified": "2025-05-02T23:41:47.797473"
+        },
+        "Screenshot_20250502-201854_processed_annotations.json": {
+          "hash": "ca5303e30b27d495a6a711fae99fbdde7bb9f74b04355f98be1e22daa3b00f5b",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:34:02.436598"
+        },
+        "Screenshot_20250502-202039_processed_annotations.json": {
+          "hash": "8344d64d2ea6c0caafab47fac2c9c5a3628a06c17507b35a6f48a8f2edcd3b12",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:42.049081"
+        },
+        "Screenshot_20250502-192731_processed_annotated.png": {
+          "hash": "f0d5b5db641370eb41ed8df1986a0b6abfc332a76912f2bac788452cb982c3b7",
+          "size_bytes": 242517,
+          "last_modified": "2025-05-02T20:33:47.464188"
+        },
+        "IMG-20250502-WA0015_processed_annotations.json": {
+          "hash": "ca03e541a979ec0ea8f5b80cb7344b63bea036d70ea54776867e292a33406cab",
+          "size_bytes": 658,
+          "last_modified": "2025-05-02T20:33:16.745309"
+        },
+        "Screenshot_20250502-192711_processed_annotations.json": {
+          "hash": "ecb0f693eb46c0d2daaec742601f27066aadf461b689942d1976a561856d6921",
+          "size_bytes": 660,
+          "last_modified": "2025-05-02T20:33:32.337885"
+        },
+        "Screenshot_20250502-201916_processed_annotated.png": {
+          "hash": "5eee35e9ed98aeea169cc199ac6a559d37c2109c8895a0b8d941202ea3e5baec",
+          "size_bytes": 215860,
+          "last_modified": "2025-05-02T20:33:43.636594"
+        },
+        "Screenshot_20250502-201942_processed_annotations.json": {
+          "hash": "61d8a578d0ecacb47324dcd3f01b6bf4130b17de1cbc26895988ec857ff4f379",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:34.666520"
+        },
+        "Screenshot_20250502-202004_processed_annotated.png": {
+          "hash": "88293f6cd85cc1b2d45b8b955e52435c1f377d0c6316eb3da13bd785d026ccc4",
+          "size_bytes": 284486,
+          "last_modified": "2025-05-02T20:33:38.816458"
+        },
+        "Screenshot_20250502-201954_processed_annotations.json": {
+          "hash": "5aed3d7bd0978a6f176522b272ba81ca15795fb3cafeb67bf08cae62e49ad283",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:34:08.472062"
+        },
+        "Screenshot_20250502-201845_processed_annotated.png": {
+          "hash": "78651628835b07f5146134f6f28dbd45295bca4cc54671e9bb29e1ab6484d38c",
+          "size_bytes": 339042,
+          "last_modified": "2025-05-02T20:33:50.567929"
+        },
+        "Screenshot_20250502-202013_processed_annotations.json": {
+          "hash": "c7f03e2d8ccca4bfbcdfa45ad986c8ca95fe7d155f0d9323b686a892672b6b00",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:37.347849"
+        },
+        "Screenshot_20250502-201908_processed_annotations.json": {
+          "hash": "d1eb2fc8a85e18517f851af37c731704d783604ebd0167250512cae6563c4cdf",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:22.609878"
+        },
+        "Screenshot_20250502-202029_processed_annotated.png": {
+          "hash": "8090cb31c27e82239f4e28cf3b4c6d0f9e0027f667eb6fb955ad1814389a6fe8",
+          "size_bytes": 268954,
+          "last_modified": "2025-05-02T20:33:18.553101"
+        },
+        "Screenshot_20250502-202318_processed_annotations.json": {
+          "hash": "8a8dba6e0b6a36a10ba1a85f8e28c5a7a529e1f7129295046c3382627115bdc8",
+          "size_bytes": 659,
+          "last_modified": "2025-05-02T20:33:21.310683"
+        },
+        "Screenshot_20250502-192749_processed_annotated.png": {
+          "hash": "23a0116f9d578affc5c65430acc291e78ee7c51176d55050488229cd43a81fa8",
+          "size_bytes": 305620,
+          "last_modified": "2025-05-02T20:34:16.020370"
+        },
+        "Screenshot_20250502-201823_processed_annotated.png": {
+          "hash": "db1bd29b30ed0d28a5555c7878e84c9fcc43484ffc2fba1726e07927a4f4f459",
+          "size_bytes": 403748,
+          "last_modified": "2025-05-02T20:33:56.782775"
+        },
+        "Screenshot_20250502-201908_processed_annotated.png": {
+          "hash": "39209e77c34418e7ed1d4910f8a3ae276a01e359e98c938a8f396ca2c3b1b743",
+          "size_bytes": 358436,
+          "last_modified": "2025-05-02T20:33:22.620706"
+        },
+        "Screenshot_20250502-202021_processed_annotations.json": {
+          "hash": "9ec4dd4aceaa5a8178b11fa9e3577ad6d4f14a3920a9b43f596267197ef9476a",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:34:01.141355"
+        },
+        "Screenshot_20250502-192711_processed_annotated.png": {
+          "hash": "639b02a470c296c280f2664535a42698b586e625a3ae54fcedc57650624b9eb3",
+          "size_bytes": 199849,
+          "last_modified": "2025-05-02T20:33:32.346292"
+        },
+        "Screenshot_20250502-200623_processed_annotations.json": {
+          "hash": "2bbd4f56301d2006fbfdb1a57fb2a2e8aa0ea0973dec01d560f68a42eeefe04d",
+          "size_bytes": 660,
+          "last_modified": "2025-05-02T20:34:07.053643"
+        },
+        "Screenshot_20250502-202013_processed_annotated.png": {
+          "hash": "f30f4e8e848f4e2f20718075c8c2f0fe7a3c2d3c5091a05f691346db748f2091",
+          "size_bytes": 280651,
+          "last_modified": "2025-05-02T20:33:37.357610"
+        },
+        "Screenshot_20250502-200507_processed_annotations.json": {
+          "hash": "9ca533f1b713b9cb7d95dc104ce5e9843e0085124121d960f2d08750e70a890f",
+          "size_bytes": 660,
+          "last_modified": "2025-05-02T20:33:46.874888"
+        },
+        "Screenshot_20250502-192658_processed_annotated.png": {
+          "hash": "eb6eaca5de81812e0763712c4012729c5f9dc5b3d690dc7311270c2b17b8168c",
+          "size_bytes": 328749,
+          "last_modified": "2025-05-02T20:33:48.634521"
+        },
+        "Screenshot_20250502-200616_processed_annotations.json": {
+          "hash": "947022472596485a16fc65e6d70378a4a23b4a18aa9f66364d998a1aae9e1914",
+          "size_bytes": 660,
+          "last_modified": "2025-05-02T20:33:26.143143"
+        },
+        "Screenshot_20250502-201954_processed_annotated.png": {
+          "hash": "0ba051dfcdddaf405aafb1f170db464b3a24c8c84a83d9e1cefcdae3d1774c07",
+          "size_bytes": 514799,
+          "last_modified": "2025-05-02T20:34:08.483697"
+        },
+        "Screenshot_20250502-200639_processed_annotations.json": {
+          "hash": "02a0c1f2cea72fd47898dbb7fb1018e785615ca7086c54d94b5c20780bbf9c1d",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:34:16.965010"
+        },
+        "Screenshot_20250502-201806_processed_annotations.json": {
+          "hash": "83ac96ffbc0f08c0622d3b09548e63d2cca16388417a7787bfb15cf66d0bc5e8",
+          "size_bytes": 663,
+          "last_modified": "2025-05-02T20:33:31.487583"
+        },
+        "Screenshot_20250502-200524_processed_annotations.json": {
+          "hash": "696a68f193dbf2ea5443c80613d5befaa534ccd978068668f50c3aab2f8e2cca",
+          "size_bytes": 660,
+          "last_modified": "2025-05-02T20:33:35.706816"
+        },
+        "IMG-20250502-WA0015_processed_annotated.jpg": {
+          "hash": "714216980759aaadaa2595f8033cdecbbad3ea702b9e720d4b4ebb12186974c2",
+          "size_bytes": 193804,
+          "last_modified": "2025-05-02T20:33:16.749336"
+        },
+        "Screenshot_20250502-201902_processed_annotations.json": {
+          "hash": "cb8f2e295149972676adef7ba9aea75a64cac4dd61cf6b32086b320a7d46dd2d",
+          "size_bytes": 665,
+          "last_modified": "2025-05-02T20:33:54.210837"
+        },
+        "Screenshot_20250502-192634_processed_annotations.json": {
+          "hash": "1fe9cb5a553104fc8c5398d9fa7f7be8c94ac98f96ea86fb86120888943445e7",
+          "size_bytes": 658,
+          "last_modified": "2025-05-02T20:34:16.036412"
+        },
+        "Screenshot_20250502-202021_processed_annotated.png": {
+          "hash": "f80299076c84a6b4f7daeb4dad1b2c24106e041f114210cc4485db909c4c6f6e",
+          "size_bytes": 440537,
+          "last_modified": "2025-05-02T20:34:01.160544"
+        },
+        "Screenshot_20250502-192723_processed_annotated.png": {
+          "hash": "d597afa63a9a560597a826a6a728735a9baff1bd2d34088952710d745bf2aee5",
+          "size_bytes": 371726,
+          "last_modified": "2025-05-02T20:33:57.960354"
+        },
+        "Screenshot_20250502-192647_processed_annotated.png": {
+          "hash": "589be4461c91f6e47016a22e57b257378f6ff455cdd61b65d125f7d48e3df0da",
+          "size_bytes": 298249,
+          "last_modified": "2025-05-02T20:34:09.226597"
+        },
+        "Screenshot_20250502-200601_processed_annotations.json": {
+          "hash": "18ddc5298c8533f537922513f819d55faaff949b3ec9917d5889675cbd4fd362",
+          "size_bytes": 660,
+          "last_modified": "2025-05-02T20:33:25.227337"
+        },
+        "Screenshot_20250502-192731_processed_annotations.json": {
+          "hash": "3044698cc676cd2b87cd5b5a3411f74b0fa30af10310df503577e789f9c24a25",
+          "size_bytes": 660,
+          "last_modified": "2025-05-02T20:33:47.455027"
+        },
+        "Screenshot_20250502-192647_processed_annotations.json": {
+          "hash": "de53ea90dd5107d29da69724fb3c415381fda526fc559ca4913539412d5b76c6",
+          "size_bytes": 658,
+          "last_modified": "2025-05-02T20:34:09.216935"
+        },
+        "Screenshot_20250502-201835_processed_annotations.json": {
+          "hash": "372fb1d36ebba06c2057740d75d9b83fd936189267f170f5cc53d9f4e7e2cab6",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:45.769762"
+        },
+        "Screenshot_20250502-201806_processed_annotated.png": {
+          "hash": "50baa1f79b41f212efb076d125cda1c21f7a8ae29952c8c2c07d1c44c934b1e1",
+          "size_bytes": 490599,
+          "last_modified": "2025-05-02T20:33:31.500260"
+        },
+        "Screenshot_20250502-200524_processed_annotated.png": {
+          "hash": "a40ebd0bfc8847faa7195b37bc24a65de48dd21b471438ce3e3a7f126558cf95",
+          "size_bytes": 411726,
+          "last_modified": "2025-05-02T20:33:35.719070"
+        },
+        "Screenshot_20250502-200654_processed_annotated.png": {
+          "hash": "20fb3ccf3c1dd95ecb43797a7049834ebfd2567fec89d1b45f792a2932ba63e9",
+          "size_bytes": 222840,
+          "last_modified": "2025-05-02T20:33:58.702844"
+        },
+        "Screenshot_20250502-201823_processed_annotations.json": {
+          "hash": "7d3d418882af20c3869a9ee3391037fed1f21be58224a81e761f1bfa863d404a",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:56.772352"
+        },
+        "Screenshot_20250502-202303_processed_annotations.json": {
+          "hash": "41387c58ca6186cd9835e29fafb345bdb107d70427cc203e51e2da3a610e7211",
+          "size_bytes": 657,
+          "last_modified": "2025-05-02T20:34:05.209560"
+        },
+        "Screenshot_20250502-200547_processed_annotations.json": {
+          "hash": "e1e8226f7a434b094ee00d27b1278744814928f3e8282243dc4aa6b6bc57cfb0",
+          "size_bytes": 658,
+          "last_modified": "2025-05-02T20:33:39.669412"
+        },
+        "Screenshot_20250502-202039_processed_annotated.png": {
+          "hash": "aae7d9b47a71dc817361ba4fcfbec08285c880d042d0f0c0bc56a192e994d226",
+          "size_bytes": 342678,
+          "last_modified": "2025-05-02T20:33:42.059127"
+        },
+        "Screenshot_20250502-201815_processed_annotated.png": {
+          "hash": "d96a384edfd0b35066c23e2c70cca735028e30e4275f1e688056b77616f8771e",
+          "size_bytes": 366140,
+          "last_modified": "2025-05-02T20:33:24.585151"
+        },
+        "Screenshot_20250502-192749_processed_annotations.json": {
+          "hash": "e3ad85248160106e1986682bdf71f6039e5f4f23def1b42ce82f7f45345c8dbd",
+          "size_bytes": 659,
+          "last_modified": "2025-05-02T20:34:16.007988"
+        },
+        "Screenshot_20250502-202004_processed_annotations.json": {
+          "hash": "e7e60966c77c8cc4fedeb876b49fbead8d1fa4c2f54cfe7b9da75ab8b422f9b8",
+          "size_bytes": 661,
+          "last_modified": "2025-05-02T20:33:38.807407"
+        },
+        "Screenshot_20250502-200639_processed_annotated.png": {
+          "hash": "45e985215ef364951878a40ba26006c1524b4268c486f296aa5dd879f3aa8ccc",
+          "size_bytes": 398417,
+          "last_modified": "2025-05-02T20:34:16.975548"
+        },
+        "Screenshot_20250502-192756_processed_annotated.png": {
+          "hash": "a41f32578dfb8fb102b1461d9fb99536ef5f66cf8d75f2925129f0e224d8a4e6",
+          "size_bytes": 517306,
+          "last_modified": "2025-05-02T20:33:55.193439"
+        }
+      }
+    },
+    "processed": {
+      "file_count": 42,
+      "size_bytes": 13260970,
+      "files": {
+        "Screenshot_20250502-202029_processed.png": {
+          "hash": "369e4f022a14076209360963211309fe159f6f02f5360d192a2f0fad0063d442",
+          "size_bytes": 255294,
+          "last_modified": "2025-05-02T20:30:36.144271"
+        },
+        "Screenshot_20250502-202318_processed.png": {
+          "hash": "5174b5e9fe9b3eda0ac09f79b0d5334e187e673a3ad90da4929c9fb2fa072322",
+          "size_bytes": 230465,
+          "last_modified": "2025-05-02T20:30:41.403329"
+        },
+        "Screenshot_20250502-201908_processed.png": {
+          "hash": "749e052536b605058720e57816e7611b7ef4ed3070b7f841ddf6c50e7abe0131",
+          "size_bytes": 348723,
+          "last_modified": "2025-05-02T20:30:36.849674"
+        },
+        "Screenshot_20250502-201815_processed.png": {
+          "hash": "d3e553aaa9bf75702035866987ed9c3b873de1a22907be11a15b1080c4e38410",
+          "size_bytes": 358829,
+          "last_modified": "2025-05-02T20:30:30.573365"
+        },
+        "Screenshot_20250502-200601_processed.png": {
+          "hash": "69ed11d49b86c2a7444fbe056e78ded35668f75d3634024e9bb39eafde378218",
+          "size_bytes": 214239,
+          "last_modified": "2025-05-02T20:30:35.454727"
+        },
+        "IMG-20250502-WA0014_processed.jpg": {
+          "hash": "96fa32331eef2d5d281abe6c12629cf923dd3bbd86cc488056b23c35a79c59ad",
+          "size_bytes": 96641,
+          "last_modified": "2025-05-02T20:30:29.541024"
+        },
+        "Screenshot_20250502-200616_processed.png": {
+          "hash": "e8fef6ad4d8da8f6fc8ce7a05024d4fd0d72c7a3904d88d1d28dfa8fe848a798",
+          "size_bytes": 217418,
+          "last_modified": "2025-05-02T20:30:36.515904"
+        },
+        "Screenshot_20250502-201806_processed.png": {
+          "hash": "dfa0d3aeee0f992a11bc67d5895956f6ee217c9d39cb2be768485d59a3147e59",
+          "size_bytes": 483190,
+          "last_modified": "2025-05-02T20:30:31.950094"
+        },
+        "Screenshot_20250502-192711_processed.png": {
+          "hash": "6414073390b1e879625e304aeba22fb8600d0417e38e2b51d33cd763d9ada921",
+          "size_bytes": 186277,
+          "last_modified": "2025-05-02T20:30:37.566674"
+        },
+        "Screenshot_20250502-201942_processed.png": {
+          "hash": "911e57f268fb697baf4a4e72c858d65715bc09baff5f2769b04bbd7d1eaefa49",
+          "size_bytes": 496716,
+          "last_modified": "2025-05-02T20:30:41.739885"
+        },
+        "Screenshot_20250502-200524_processed.png": {
+          "hash": "e982af2465e2e4217b55d8abfcf0c398f793653a54c238768b93842b5154a2b9",
+          "size_bytes": 401017,
+          "last_modified": "2025-05-02T20:30:42.791180"
+        },
+        "Screenshot_20250502-202013_processed.png": {
+          "hash": "705a141972ca9606d7114a96aba7d3a266b1515f9c6720da80fad7c747748771",
+          "size_bytes": 267855,
+          "last_modified": "2025-05-02T20:30:35.102489"
+        },
+        "Screenshot_20250502-202004_processed.png": {
+          "hash": "c8b1f295c6974d5c33cbb2983f5cb6e40d335702b110256415b3bc02aead73df",
+          "size_bytes": 272593,
+          "last_modified": "2025-05-02T20:30:33.356985"
+        },
+        "Screenshot_20250502-200547_processed.png": {
+          "hash": "3fe8dfda502b2a58930b0b3f48d1edaa58b74f4b5818c30e9a7439a69c528f23",
+          "size_bytes": 222391,
+          "last_modified": "2025-05-02T20:30:37.905900"
+        },
+        "Screenshot_20250502-200554_processed.png": {
+          "hash": "90e36c87f0805d8124660a158686be77c7c2f15c46e085bce81420ac1208318c",
+          "size_bytes": 331047,
+          "last_modified": "2025-05-02T20:30:39.632928"
+        },
+        "Screenshot_20250502-202039_processed.png": {
+          "hash": "e21113599a5a935fdacfec1e04dc7658b4c4d593728f585b78fd5c606b2a75a4",
+          "size_bytes": 335934,
+          "last_modified": "2025-05-02T20:30:33.027431"
+        },
+        "Screenshot_20250502-201916_processed.png": {
+          "hash": "7194a748b643274f78557c68b155f30bcba0292023f637f80559336938c41122",
+          "size_bytes": 201725,
+          "last_modified": "2025-05-02T20:30:34.085658"
+        },
+        "Screenshot_20250502-201835_processed.png": {
+          "hash": "8f08cde2bdce1ecdb57de77511c86533aab27dfda1a4d1c51a7538de11580a55",
+          "size_bytes": 290681,
+          "last_modified": "2025-05-02T20:30:42.435040"
+        },
+        "Screenshot_20250502-200507_processed.png": {
+          "hash": "a17f3a6eb176da007ea8a9992e0121da64eb4c5b4f82953d16cb2fcb8c3f8a38",
+          "size_bytes": 179330,
+          "last_modified": "2025-05-02T20:30:30.237899"
+        },
+        "Screenshot_20250502-192731_processed.png": {
+          "hash": "daf6b609cd650f5aec44c9340fc3a1a75706dc4b36b807c85374ab4feb2b4732",
+          "size_bytes": 228279,
+          "last_modified": "2025-05-02T20:30:34.761531"
+        },
+        "Screenshot_20250502-192658_processed.png": {
+          "hash": "28b7a9117dc63cc67a3a2fb23ad877fcf42e2d0eb9ee3be00e3fe427a53e0235",
+          "size_bytes": 315036,
+          "last_modified": "2025-05-02T20:30:38.248569"
+        },
+        "Screenshot_20250502-201845_processed.png": {
+          "hash": "ed18f6ca53420953387c5c8681a0125726f83bf6f8439c56dfc068ce5bdc2fd4",
+          "size_bytes": 329121,
+          "last_modified": "2025-05-02T20:30:40.005830"
+        },
+        "Screenshot_20250502-201902_processed.png": {
+          "hash": "f17f95e0b9cc419478a0a7d32a4f84e39e3f4dd4a47e20d2881d7d63717bb25c",
+          "size_bytes": 588375,
+          "last_modified": "2025-05-02T20:30:33.752640"
+        },
+        "Screenshot_20250502-192756_processed.png": {
+          "hash": "9b591a877b31bf075cd27fbfc665d9b7a2694642461a9043886c65bfb77e6f33",
+          "size_bytes": 510712,
+          "last_modified": "2025-05-02T20:30:30.913751"
+        },
+        "Screenshot_20250502-201823_processed.png": {
+          "hash": "bd590a50444e61ad28a56c572c56372d235e8d87a074eb9f89bc79f92d05dd4c",
+          "size_bytes": 393176,
+          "last_modified": "2025-05-02T20:30:41.041337"
+        },
+        "Screenshot_20250502-192723_processed.png": {
+          "hash": "29a2d1b44bd56366d51b28c552c6e495311969e9cc42c65f2bbcf7d57ea37030",
+          "size_bytes": 359126,
+          "last_modified": "2025-05-02T20:30:35.800703"
+        },
+        "Screenshot_20250502-200654_processed.png": {
+          "hash": "9d0ed0e5f063eb0235ffb919ce0aa762838b19e61c2d2df5e939e1d3bcf0d3cc",
+          "size_bytes": 208737,
+          "last_modified": "2025-05-02T20:30:43.808104"
+        },
+        "Screenshot_20250502-202021_processed.png": {
+          "hash": "9d0394fa927739b76be9fae40131c5db821690037561440d1e80da7abdfa5361",
+          "size_bytes": 433899,
+          "last_modified": "2025-05-02T20:30:39.291317"
+        },
+        "Screenshot_20250502-201854_processed.png": {
+          "hash": "743ab9a0e932a4e09c6b354a2285001758bff794d1db92b61b9fa918269d2460",
+          "size_bytes": 260202,
+          "last_modified": "2025-05-02T20:30:37.213818"
+        },
+        "Screenshot_20250502-202303_processed.png": {
+          "hash": "919ac420231934bb9b46294efd5fc27e2a8943eea23b89842ae1c5809914a060",
+          "size_bytes": 232503,
+          "last_modified": "2025-05-02T20:30:31.263346"
+        },
+        "Screenshot_20250502-200609_processed.png": {
+          "hash": "0b1e930f323ebd90b51e2ea290f6ab86b58d86776b130799fc81df87013a9b43",
+          "size_bytes": 223575,
+          "last_modified": "2025-05-02T20:30:38.592791"
+        },
+        "Screenshot_20250502-200623_processed.png": {
+          "hash": "15ed8dbb32d185db111fd336a2bde1ce3a9e45f74092a0bbc7c1e803fb3c8253",
+          "size_bytes": 541367,
+          "last_modified": "2025-05-02T20:30:40.361703"
+        },
+        "Screenshot_20250502-201954_processed.png": {
+          "hash": "f730f587ac4e7115a575ed46c79faac3bee7893d8adf6628cd9753a9c1fe50ec",
+          "size_bytes": 510437,
+          "last_modified": "2025-05-02T20:30:42.101924"
+        },
+        "Screenshot_20250502-200536_processed.png": {
+          "hash": "aa072358998c4e3d3ddaaffa420a96714097331ffbc9e9f5927b362abaa6c133",
+          "size_bytes": 237369,
+          "last_modified": "2025-05-02T20:30:43.468549"
+        },
+        "Screenshot_20250502-192647_processed.png": {
+          "hash": "5675c3ef599338f5e040dfd5156f810acc8878792bc00afab68a55e8af5610b1",
+          "size_bytes": 282316,
+          "last_modified": "2025-05-02T20:30:32.643140"
+        },
+        "Screenshot_20250502-201933_processed.png": {
+          "hash": "f9b5f2132b07f3a2e3bb445d79accb0ee88d42cc7793d591aab8bb6785f10ff5",
+          "size_bytes": 555282,
+          "last_modified": "2025-05-02T20:30:38.946248"
+        },
+        "Screenshot_20250502-201924_processed.png": {
+          "hash": "0e8df2798a9980088ba67ab39a0343119af04bfe7888dd422b568b938caf2147",
+          "size_bytes": 316719,
+          "last_modified": "2025-05-02T20:30:40.699208"
+        },
+        "Screenshot_20250502-192804_processed.png": {
+          "hash": "3c25157065dd139cf6ca86c13bd4f13c40dae5108f969a51593ad393fb6cfad6",
+          "size_bytes": 203621,
+          "last_modified": "2025-05-02T20:30:31.596539"
+        },
+        "Screenshot_20250502-192749_processed.png": {
+          "hash": "28f8bb2c65bfd263ad0da99a8a634fae4ee4fe3ea5df4dca9960ea38f22810d7",
+          "size_bytes": 291602,
+          "last_modified": "2025-05-02T20:30:43.135503"
+        },
+        "Screenshot_20250502-192634_processed.png": {
+          "hash": "41a0906f8d2ae39b59958f59dba1bb70e591f8e1434d169ae1f6dcacb1ed35cf",
+          "size_bytes": 319311,
+          "last_modified": "2025-05-02T20:30:32.299972"
+        },
+        "Screenshot_20250502-200639_processed.png": {
+          "hash": "ee3b5b14c0280faf89472733a59801c6d04d8e43a00dd1b71b0d46aa41d2dd4d",
+          "size_bytes": 387691,
+          "last_modified": "2025-05-02T20:30:34.431605"
+        },
+        "IMG-20250502-WA0015_processed.jpg": {
+          "hash": "0e785cdf8b3079162618e2f15012dfcb68213d9321193ca9e26ff9876d518deb",
+          "size_bytes": 142149,
+          "last_modified": "2025-05-02T20:30:29.898440"
+        }
+      }
+    },
+    "train": {
+      "file_count": 0,
+      "size_bytes": 0,
+      "files": {}
+    },
+    "validation": {
+      "file_count": 0,
+      "size_bytes": 0,
+      "files": {}
+    }
+  },
+  "file_count": 169,
+  "total_size_bytes": 49276740,
+  "description": "Before retraining with enhanced OCR"
+}

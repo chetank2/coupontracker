@@ -1,0 +1,34 @@
+{
+  "image": "edf237a2-16d6-4646-a7a9-c59ad97f4585.jpeg",
+  "annotations": [
+    {
+      "type": "store",
+      "left": 372,
+      "top": 295,
+      "width": 55,
+      "height": 10
+    },
+    {
+      "type": "code",
+      "left": 344,
+      "top": 337,
+      "width": 91,
+      "height": 12
+    },
+    {
+      "type": "amount",
+      "left": 410,
+      "top": 311,
+      "width": 35,
+      "height": 13
+    },
+    {
+      "type": "description",
+      "left": 350,
+      "top": 307,
+      "width": 99,
+      "height": 19
+    }
+  ],
+  "timestamp": "2025-05-02T23:41:47.797305"
+}

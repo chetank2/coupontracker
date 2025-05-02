@@ -1,0 +1,41 @@
+# Coupon recognition patterns
+
+# Store name patterns
+store:0,0,1074,256
+store:375,257,418,288
+store:363,244,423,308
+store:0,0,720,320
+store:372,295,427,305
+
+# Description patterns
+description:350,307,449,326
+description:350,304,443,325
+
+# Coupon code patterns
+code:61,812,703,1013
+code:344,337,435,349
+code:345,334,435,351
+code:72,640,648,960
+code:107,512,966,768
+code:14,20,140,57
+code:286,889,376,916
+code:122,790,482,828
+
+# Expiry date patterns
+expiry:181,1008,562,1108
+expiry:0,1024,1074,1280
+expiry:0,1280,720,1600
+expiry:136,1037,521,1080
+
+# Amount patterns
+amount:460,603,524,958
+amount:129,1136,275,1166
+amount:501,562,635,958
+amount:410,311,445,324
+amount:298,1151,437,1177
+amount:51,1332,408,1370
+amount:156,1381,454,1463
+amount:72,960,648,1280
+amount:107,768,966,1024
+amount:598,498,668,958
+amount:411,308,444,323

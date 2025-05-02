@@ -1,0 +1,41 @@
+{
+  "image": "cf8130f3-4cf6-4d20-a08e-08f078a3c56b.jpeg",
+  "annotations": [
+    {
+      "type": "store",
+      "left": 375,
+      "top": 257,
+      "width": 43,
+      "height": 31
+    },
+    {
+      "type": "amount",
+      "left": 411,
+      "top": 308,
+      "width": 33,
+      "height": 15
+    },
+    {
+      "type": "code",
+      "left": 345,
+      "top": 334,
+      "width": 90,
+      "height": 17
+    },
+    {
+      "type": "description",
+      "left": 350,
+      "top": 304,
+      "width": 93,
+      "height": 21
+    },
+    {
+      "type": "store",
+      "left": 363,
+      "top": 244,
+      "width": 60,
+      "height": 64
+    }
+  ],
+  "timestamp": "2025-05-02T23:30:51.980050"
+}

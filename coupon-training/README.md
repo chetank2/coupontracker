@@ -24,10 +24,15 @@ This is a training environment for building and training a model to detect eleme
 - `data/raw`: Raw coupon images
 - `data/processed`: Preprocessed images
 - `data/annotated`: Annotated coupon images
+- `data/train`: Training dataset
+- `data/validation`: Validation dataset
+- `data/augmented`: Augmented images for training
 - `data/box-files`: Box files for Tesseract training
+- `data/snapshots`: Dataset version snapshots
 - `models`: Output directory for trained models
 - `scripts`: Training scripts
 - `utils`: Utility functions
+- `logs`: Evaluation logs and history
 
 ## Training Workflow
 
@@ -122,8 +127,71 @@ This is a training environment for building and training a model to detect eleme
 - `scripts/train_tesseract.py`: Train the Tesseract model
 - `scripts/evaluate_model.py`: Evaluate the trained model
 - `scripts/prepare_android_model.py`: Prepare the model for Android integration
+- `scripts/data_augmentation.py`: Augment training data with variations
+- `scripts/create_validation_set.py`: Create validation dataset
+- `scripts/dataset_versioning.py`: Version control for datasets
 
 ## Utilities
 
 - `utils/image_utils.py`: Image processing utilities
-- `utils/text_utils.py`: Text extraction utilities
+- `utils/text_utils.py`: Text extraction and post-processing utilities
+
+## Advanced Features
+
+### Data Augmentation
+
+Enhance your training dataset with augmented variations:
+
+```
+cd scripts
+python data_augmentation.py --input ../data/raw --output ../data/augmented --count 5
+```
+
+This creates multiple variations of each image with different transformations:
+- Noise addition (gaussian, salt & pepper, speckle)
+- Brightness and contrast adjustments
+- Blur effects
+- Rotation and perspective transformations
+- Random cropping
+
+### Dataset Validation
+
+Create a validation set to properly evaluate model performance:
+
+```
+cd scripts
+python create_validation_set.py --data-dir ../data --ratio 0.2
+```
+
+This splits your annotated data into training and validation sets.
+
+### Dataset Versioning
+
+Track different versions of your dataset:
+
+```
+cd scripts
+# Create a snapshot
+python dataset_versioning.py create --data-dir ../data --description "Initial dataset"
+
+# List available snapshots
+python dataset_versioning.py list --data-dir ../data
+
+# Restore a snapshot
+python dataset_versioning.py restore --snapshot-dir ../data/snapshots/20230615_120000 --data-dir ../data
+```
+
+### Enhanced OCR with Regex Post-Processing
+
+The system now includes advanced text extraction with specialized processing for different coupon elements:
+
+- Coupon codes: Optimized for alphanumeric characters
+- Amounts/discounts: Specialized for currency and percentage detection
+- Expiry dates: Pattern matching for various date formats
+- Store names: Improved detection of brand names
+
+Each element type uses:
+1. Custom Tesseract configurations
+2. Specialized image preprocessing
+3. Regex pattern matching
+4. Post-processing validation
