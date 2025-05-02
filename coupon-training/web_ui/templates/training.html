@@ -148,11 +148,11 @@
                     <div class="card-body">
                         <div class="annotation-tools">
                             <div class="btn-group" role="group">
-                                <button type="button" class="btn btn-outline-primary annotation-type" data-type="store">Store</button>
+                                <button type="button" class="btn btn-outline-danger annotation-type" data-type="store">Store</button>
                                 <button type="button" class="btn btn-outline-primary annotation-type" data-type="description">Description</button>
-                                <button type="button" class="btn btn-outline-primary annotation-type" data-type="expiry">Expiry Date</button>
-                                <button type="button" class="btn btn-outline-primary annotation-type" data-type="code">Code</button>
-                                <button type="button" class="btn btn-outline-primary annotation-type" data-type="amount">Amount</button>
+                                <button type="button" class="btn btn-outline-success annotation-type" data-type="expiry">Expiry Date</button>
+                                <button type="button" class="btn btn-outline-info annotation-type" data-type="code">Code</button>
+                                <button type="button" class="btn btn-outline-warning annotation-type" data-type="amount">Amount</button>
                             </div>
                             <button class="btn btn-danger ms-2" id="clearBtn">Clear</button>
                             <button class="btn btn-success ms-2" id="saveAnnotationsBtn">Save Annotations</button>
@@ -292,6 +292,7 @@
                 $('.annotation-type').removeClass('active');
                 $(this).addClass('active');
                 selectedAnnotationType = $(this).data('type');
+                console.log('Selected annotation type:', selectedAnnotationType);
             });
 
             // Set default annotation type
