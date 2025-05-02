@@ -119,6 +119,25 @@ body {
     opacity: 0.8;
 }
 
+.annotation-canvas-container {
+    position: relative;
+    margin-top: 20px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
+    width: 100%;
+    min-height: 400px;
+    background-color: #f8f9fa;
+}
+
+#annotationCanvas {
+    background-color: #f8f9fa;
+    cursor: crosshair;
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
 /* Responsive adjustments */
 
 @media (max-width: 768px) {
