@@ -95,7 +95,7 @@
                             <input type="file" id="fileInput" accept="image/*" style="display: none;">
                             <button class="btn btn-primary" id="browseBtn">Browse Files</button>
                         </div>
-                        
+
                         <div class="progress-container" style="display: none;">
                             <div class="progress">
                                 <div class="progress-bar" role="progressbar" style="width: 0%"></div>
@@ -131,7 +131,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="card mt-4">
                     <div class="card-header">
                         <h5>Detected Elements</h5>
@@ -139,6 +139,17 @@
                     <div class="card-body">
                         <div id="detectedElementsContainer">
                             <p class="text-center">No elements detected yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header bg-success text-white">
+                        <h5>Coupon Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="couponSummaryContainer">
+                            <p class="text-center">No coupon data yet</p>
                         </div>
                     </div>
                 </div>
@@ -153,34 +164,34 @@
         $(document).ready(function() {
             // Set up drag and drop
             const dropArea = document.getElementById('dropArea');
-            
+
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
                 dropArea.addEventListener(eventName, preventDefaults, false);
             });
-            
+
             function preventDefaults(e) {
                 e.preventDefault();
                 e.stopPropagation();
             }
-            
+
             ['dragenter', 'dragover'].forEach(eventName => {
                 dropArea.addEventListener(eventName, highlight, false);
             });
-            
+
             ['dragleave', 'drop'].forEach(eventName => {
                 dropArea.addEventListener(eventName, unhighlight, false);
             });
-            
+
             function highlight() {
                 dropArea.classList.add('highlight');
             }
-            
+
             function unhighlight() {
                 dropArea.classList.remove('highlight');
             }
-            
+
             dropArea.addEventListener('drop', handleDrop, false);
-            
+
             function handleDrop(e) {
                 const dt = e.dataTransfer;
                 const files = dt.files;
@@ -188,12 +199,12 @@
                     handleFile(files[0]);
                 }
             }
-            
+
             // Browse button click
             $('#browseBtn').click(function() {
                 $('#fileInput').click();
             });
-            
+
             // File input change
             $('#fileInput').change(function() {
                 if (this.files.length > 0) {
@@ -205,14 +216,14 @@
         // Handle uploaded file
         function handleFile(file) {
             if (!file) return;
-            
+
             // Show progress container
             $('.progress-container').show();
-            
+
             // Create FormData
             const formData = new FormData();
             formData.append('file', file);
-            
+
             // Upload file
             $.ajax({
                 url: '/api/upload/testing',
@@ -234,14 +245,14 @@
                 success: function(response) {
                     // Hide progress container
                     $('.progress-container').hide();
-                    
+
                     // Display results
                     displayResults(response);
                 },
                 error: function(xhr, status, error) {
                     // Hide progress container
                     $('.progress-container').hide();
-                    
+
                     // Show error
                     alert('Error uploading file: ' + error);
                 }
@@ -254,28 +265,28 @@
                 $('#resultContainer').html('<p class="text-center text-danger">Error: Invalid response</p>');
                 return;
             }
-            
+
             // Display image with highlighted regions
             const resultContainer = $('#resultContainer');
             resultContainer.empty();
-            
+
             const imageContainer = $('<div class="result-image-container"></div>');
             const image = $('<img class="result-image" src="' + response.file.url + '" alt="' + response.file.original_name + '">');
-            
+
             imageContainer.append(image);
-            
+
             // Wait for image to load before adding highlight boxes
             image.on('load', function() {
                 const imgWidth = this.width;
                 const imgHeight = this.height;
-                
+
                 // Add highlight boxes for detected elements
                 if (response.results.elements && response.results.elements.length > 0) {
                     response.results.elements.forEach(function(element) {
                         const region = element.region;
                         const type = element.type;
                         const confidence = element.confidence;
-                        
+
                         const box = $('<div class="highlight-box"></div>');
                         box.css({
                             left: region.left + 'px',
@@ -284,7 +295,7 @@
                             height: (region.bottom - region.top) + 'px',
                             borderColor: getColorForType(type)
                         });
-                        
+
                         const label = $('<div class="highlight-label"></div>');
                         label.text(type + ' (' + Math.round(confidence * 100) + '%)');
                         label.css({
@@ -292,55 +303,107 @@
                             top: (region.top - 20) + 'px',
                             backgroundColor: getColorForType(type)
                         });
-                        
+
                         imageContainer.append(box);
                         imageContainer.append(label);
                     });
                 }
             });
-            
+
             resultContainer.append(imageContainer);
-            
+
             // Display extracted text
             const extractedTextContainer = $('#extractedTextContainer');
             extractedTextContainer.empty();
-            
+
             if (response.results.text && Object.keys(response.results.text).length > 0) {
                 const textList = $('<dl class="row"></dl>');
-                
+
                 for (const [type, text] of Object.entries(response.results.text)) {
                     textList.append('<dt class="col-sm-4">' + capitalizeFirstLetter(type) + ':</dt>');
                     textList.append('<dd class="col-sm-8">' + text + '</dd>');
                 }
-                
+
                 extractedTextContainer.append(textList);
             } else {
                 extractedTextContainer.html('<p class="text-center">No text extracted</p>');
             }
-            
+
             // Display detected elements
             const detectedElementsContainer = $('#detectedElementsContainer');
             detectedElementsContainer.empty();
-            
+
             if (response.results.elements && response.results.elements.length > 0) {
                 const elementsList = $('<ul class="list-group"></ul>');
-                
+
                 response.results.elements.forEach(function(element) {
                     const type = element.type;
                     const confidence = element.confidence;
                     const region = element.region;
-                    
+
                     const item = $('<li class="list-group-item"></li>');
                     item.html('<span class="badge bg-' + getBadgeColorForType(type) + ' me-2">' + type + '</span> ' +
                               'Confidence: ' + Math.round(confidence * 100) + '%<br>' +
                               'Region: (' + region.left + ', ' + region.top + ', ' + region.right + ', ' + region.bottom + ')');
-                    
+
                     elementsList.append(item);
                 });
-                
+
                 detectedElementsContainer.append(elementsList);
             } else {
                 detectedElementsContainer.html('<p class="text-center">No elements detected</p>');
+            }
+
+            // Display coupon summary
+            const couponSummaryContainer = $('#couponSummaryContainer');
+            couponSummaryContainer.empty();
+
+            if (response.results.summary) {
+                // Create a styled summary card
+                const summaryCard = $('<div class="card border-success"></div>');
+                const summaryBody = $('<div class="card-body"></div>');
+
+                // Split the summary into lines and create styled elements
+                const summaryLines = response.results.summary.split('\n');
+
+                summaryLines.forEach(function(line) {
+                    if (line.trim()) {
+                        const parts = line.split(':');
+                        if (parts.length >= 2) {
+                            const label = parts[0].trim();
+                            const value = parts.slice(1).join(':').trim();
+
+                            const row = $('<div class="row mb-2"></div>');
+                            row.append('<div class="col-4 fw-bold">' + label + ':</div>');
+                            row.append('<div class="col-8">' + value + '</div>');
+
+                            summaryBody.append(row);
+                        } else {
+                            summaryBody.append('<p>' + line + '</p>');
+                        }
+                    }
+                });
+
+                // Add a "Copy to Clipboard" button
+                const copyBtn = $('<button class="btn btn-sm btn-outline-success mt-3">Copy to Clipboard</button>');
+                copyBtn.click(function() {
+                    navigator.clipboard.writeText(response.results.summary).then(function() {
+                        $(this).text('Copied!');
+                        setTimeout(function() {
+                            copyBtn.text('Copy to Clipboard');
+                        }, 2000);
+                    }.bind(this)).catch(function(err) {
+                        console.error('Could not copy text: ', err);
+                    });
+                });
+
+                summaryBody.append(copyBtn);
+                summaryCard.append(summaryBody);
+                couponSummaryContainer.append(summaryCard);
+            } else if (response.results.error) {
+                couponSummaryContainer.html('<div class="alert alert-danger">' + response.results.error + '</div>');
+            } else {
+                couponSummaryContainer.html('<p class="text-center">No coupon summary available</p>');
             }
         }
 
