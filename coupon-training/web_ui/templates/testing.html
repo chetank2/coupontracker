@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Testing - Coupon Pattern Recognition</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        #dropArea {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #dropArea.highlight {
+            background-color: #f0f8ff;
+            border-color: #007bff;
+        }
+        .result-image-container {
+            position: relative;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            text-align: center;
+        }
+        .result-image {
+            max-width: 100%;
+            max-height: 600px;
+        }
+        .highlight-box {
+            position: absolute;
+            border: 2px solid;
+            background-color: rgba(255, 255, 255, 0.2);
+            pointer-events: none;
+        }
+        .highlight-label {
+            position: absolute;
+            padding: 2px 5px;
+            font-size: 12px;
+            color: white;
+            border-radius: 3px;
+        }
+        .progress-container {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Coupon Pattern Recognition</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/training">Training</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/testing">Testing</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <h1>Testing Interface</h1>
+                <p class="lead">Upload coupon images to test the pattern recognition model and view results.</p>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Upload Test Image</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="dropArea">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                            <h5>Drag & Drop a Coupon Image Here</h5>
+                            <p>or</p>
+                            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                            <button class="btn btn-primary" id="browseBtn">Browse Files</button>
+                        </div>
+                        
+                        <div class="progress-container" style="display: none;">
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <p class="text-center mt-2" id="uploadStatus">Uploading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4 mb-5">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Recognition Results</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="resultContainer">
+                            <p class="text-center">Upload an image to see recognition results</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Extracted Text</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="extractedTextContainer">
+                            <p class="text-center">No text extracted yet</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5>Detected Elements</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="detectedElementsContainer">
+                            <p class="text-center">No elements detected yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="{{ url_for('static', filename='js/testing.js') }}"></script>
+    <script>
+        $(document).ready(function() {
+            // Set up drag and drop
+            const dropArea = document.getElementById('dropArea');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight() {
+                dropArea.classList.add('highlight');
+            }
+            
+            function unhighlight() {
+                dropArea.classList.remove('highlight');
+            }
+            
+            dropArea.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            }
+            
+            // Browse button click
+            $('#browseBtn').click(function() {
+                $('#fileInput').click();
+            });
+            
+            // File input change
+            $('#fileInput').change(function() {
+                if (this.files.length > 0) {
+                    handleFile(this.files[0]);
+                }
+            });
+        });
+
+        // Handle uploaded file
+        function handleFile(file) {
+            if (!file) return;
+            
+            // Show progress container
+            $('.progress-container').show();
+            
+            // Create FormData
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            // Upload file
+            $.ajax({
+                url: '/api/upload/testing',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                xhr: function() {
+                    const xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener('progress', function(e) {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            $('.progress-bar').css('width', percent + '%');
+                            $('#uploadStatus').text('Uploading... ' + percent + '%');
+                        }
+                    }, false);
+                    return xhr;
+                },
+                success: function(response) {
+                    // Hide progress container
+                    $('.progress-container').hide();
+                    
+                    // Display results
+                    displayResults(response);
+                },
+                error: function(xhr, status, error) {
+                    // Hide progress container
+                    $('.progress-container').hide();
+                    
+                    // Show error
+                    alert('Error uploading file: ' + error);
+                }
+            });
+        }
+
+        // Display recognition results
+        function displayResults(response) {
+            if (!response.file || !response.results) {
+                $('#resultContainer').html('<p class="text-center text-danger">Error: Invalid response</p>');
+                return;
+            }
+            
+            // Display image with highlighted regions
+            const resultContainer = $('#resultContainer');
+            resultContainer.empty();
+            
+            const imageContainer = $('<div class="result-image-container"></div>');
+            const image = $('<img class="result-image" src="' + response.file.url + '" alt="' + response.file.original_name + '">');
+            
+            imageContainer.append(image);
+            
+            // Wait for image to load before adding highlight boxes
+            image.on('load', function() {
+                const imgWidth = this.width;
+                const imgHeight = this.height;
+                
+                // Add highlight boxes for detected elements
+                if (response.results.elements && response.results.elements.length > 0) {
+                    response.results.elements.forEach(function(element) {
+                        const region = element.region;
+                        const type = element.type;
+                        const confidence = element.confidence;
+                        
+                        const box = $('<div class="highlight-box"></div>');
+                        box.css({
+                            left: region.left + 'px',
+                            top: region.top + 'px',
+                            width: (region.right - region.left) + 'px',
+                            height: (region.bottom - region.top) + 'px',
+                            borderColor: getColorForType(type)
+                        });
+                        
+                        const label = $('<div class="highlight-label"></div>');
+                        label.text(type + ' (' + Math.round(confidence * 100) + '%)');
+                        label.css({
+                            left: region.left + 'px',
+                            top: (region.top - 20) + 'px',
+                            backgroundColor: getColorForType(type)
+                        });
+                        
+                        imageContainer.append(box);
+                        imageContainer.append(label);
+                    });
+                }
+            });
+            
+            resultContainer.append(imageContainer);
+            
+            // Display extracted text
+            const extractedTextContainer = $('#extractedTextContainer');
+            extractedTextContainer.empty();
+            
+            if (response.results.text && Object.keys(response.results.text).length > 0) {
+                const textList = $('<dl class="row"></dl>');
+                
+                for (const [type, text] of Object.entries(response.results.text)) {
+                    textList.append('<dt class="col-sm-4">' + capitalizeFirstLetter(type) + ':</dt>');
+                    textList.append('<dd class="col-sm-8">' + text + '</dd>');
+                }
+                
+                extractedTextContainer.append(textList);
+            } else {
+                extractedTextContainer.html('<p class="text-center">No text extracted</p>');
+            }
+            
+            // Display detected elements
+            const detectedElementsContainer = $('#detectedElementsContainer');
+            detectedElementsContainer.empty();
+            
+            if (response.results.elements && response.results.elements.length > 0) {
+                const elementsList = $('<ul class="list-group"></ul>');
+                
+                response.results.elements.forEach(function(element) {
+                    const type = element.type;
+                    const confidence = element.confidence;
+                    const region = element.region;
+                    
+                    const item = $('<li class="list-group-item"></li>');
+                    item.html('<span class="badge bg-' + getBadgeColorForType(type) + ' me-2">' + type + '</span> ' +
+                              'Confidence: ' + Math.round(confidence * 100) + '%<br>' +
+                              'Region: (' + region.left + ', ' + region.top + ', ' + region.right + ', ' + region.bottom + ')');
+                    
+                    elementsList.append(item);
+                });
+                
+                detectedElementsContainer.append(elementsList);
+            } else {
+                detectedElementsContainer.html('<p class="text-center">No elements detected</p>');
+            }
+        }
+
+        // Helper functions
+        function getColorForType(type) {
+            switch (type) {
+                case 'store': return 'red';
+                case 'description': return 'blue';
+                case 'expiry': return 'green';
+                case 'code': return 'purple';
+                case 'amount': return 'orange';
+                default: return 'black';
+            }
+        }
+
+        function getBadgeColorForType(type) {
+            switch (type) {
+                case 'store': return 'danger';
+                case 'description': return 'primary';
+                case 'expiry': return 'success';
+                case 'code': return 'info';
+                case 'amount': return 'warning';
+                default: return 'secondary';
+            }
+        }
+
+        function capitalizeFirstLetter(string) {
+            return string.charAt(0).toUpperCase() + string.slice(1);
+        }
+    </script>
+</body>
+</html>
