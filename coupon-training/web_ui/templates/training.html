@@ -134,8 +134,8 @@
                         <h5>Image Gallery</h5>
                     </div>
                     <div class="card-body">
-                        <div id="imageGallery">
-                            <p class="text-center">No images uploaded yet</p>
+                        <div id="imageGallery" class="d-flex flex-wrap gap-2">
+                            <p class="text-center w-100">No images uploaded yet</p>
                         </div>
                     </div>
                 </div>
@@ -228,7 +228,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-    <script src="{{ url_for('static', filename='js/training.js') }}"></script>
+    <!-- <script src="{{ url_for('static', filename='js/training.js') }}"></script> -->
     <script>
         // Global variables
         let canvas;
@@ -455,10 +455,15 @@
                     // Hide progress container
                     $('.progress-container').hide();
 
+                    console.log('Upload response:', response);
+
                     // Add uploaded images to the gallery
                     if (response.files && response.files.length > 0) {
                         uploadedImages = uploadedImages.concat(response.files);
+                        console.log('Updated uploadedImages:', uploadedImages);
                         updateImageGallery();
+                    } else {
+                        console.error('No files in response or empty files array');
                     }
                 },
                 error: function(xhr, status, error) {
@@ -473,9 +478,11 @@
 
         // Update image gallery
         function updateImageGallery() {
+            console.log('Updating image gallery with', uploadedImages.length, 'images');
             const gallery = $('#imageGallery');
 
             if (uploadedImages.length === 0) {
+                console.log('No images to display');
                 gallery.html('<p class="text-center">No images uploaded yet</p>');
                 return;
             }
@@ -483,28 +490,58 @@
             gallery.empty();
 
             uploadedImages.forEach(function(image, index) {
-                const item = $('<div class="image-item"></div>');
-                item.append('<img src="' + image.url + '" alt="' + image.original_name + '">');
+                console.log('Adding image to gallery:', image.original_name, image.url);
 
+                // Create a container for the image
+                const item = $('<div class="image-item"></div>');
+
+                // Create an image element with proper attributes
+                const img = $('<img>');
+                img.attr('src', image.url);
+                img.attr('alt', image.original_name);
+
+                // Append the image to the container
+                item.append(img);
+
+                // Add a title/tooltip
+                item.attr('title', image.original_name);
+
+                // Add click handler
                 item.click(function() {
+                    console.log('Selected image:', image.original_name);
                     $('.image-item').removeClass('selected');
                     $(this).addClass('selected');
                     loadImageForAnnotation(image);
                 });
 
+                // Append the item to the gallery
                 gallery.append(item);
+
+                // Log that the image was added
+                console.log('Added image to gallery:', image.original_name);
             });
+
+            console.log('Image gallery updated');
         }
 
         // Load image for annotation
         function loadImageForAnnotation(image) {
+            console.log('Loading image for annotation:', image);
             selectedImage = image;
 
             // Clear canvas
             canvas.clear();
 
             // Load image as background
+            console.log('Loading image from URL:', image.url);
             fabric.Image.fromURL(image.url, function(img) {
+                if (!img) {
+                    console.error('Failed to load image from URL:', image.url);
+                    return;
+                }
+
+                console.log('Image loaded successfully, dimensions:', img.width, 'x', img.height);
+
                 // Scale image to fit canvas
                 const canvasWidth = canvas.width;
                 const canvasHeight = canvas.height;
@@ -512,6 +549,7 @@
                 const imgHeight = img.height;
 
                 const scale = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
+                console.log('Scaling image by factor:', scale);
 
                 img.scale(scale);
                 img.set({
@@ -522,6 +560,9 @@
                 });
 
                 canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+                console.log('Image set as background');
+            }, function(err) {
+                console.error('Error loading image:', err);
             });
 
             // Clear annotations list

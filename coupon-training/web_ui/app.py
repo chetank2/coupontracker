@@ -45,29 +45,44 @@ def testing():
 @app.route('/api/upload/training', methods=['POST'])
 def upload_training_images():
     """Handle training image uploads"""
+    print("Received training image upload request")
+
     if 'files[]' not in request.files:
+        print("No files found in request")
         return jsonify({'error': 'No files provided'}), 400
 
     files = request.files.getlist('files[]')
+    print(f"Received {len(files)} files")
+
     uploaded_files = []
 
     for file in files:
         if file and allowed_file(file.filename):
+            print(f"Processing file: {file.filename}")
+
             # Generate a unique filename
             filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
+            print(f"Saved file to: {filepath}")
 
             # Process the image (resize, normalize)
             processed_path = image_processor.preprocess_image(filepath)
+            print(f"Processed image path: {processed_path}")
+
+            file_url = url_for('static', filename=f'uploads/{filename}')
+            print(f"File URL: {file_url}")
 
             uploaded_files.append({
                 'original_name': file.filename,
                 'saved_name': filename,
                 'path': processed_path,
-                'url': url_for('static', filename=f'uploads/{filename}')
+                'url': file_url
             })
+        else:
+            print(f"Invalid file: {file.filename if file else 'None'}")
 
+    print(f"Returning {len(uploaded_files)} uploaded files")
     return jsonify({'files': uploaded_files})
 
 @app.route('/api/upload/testing', methods=['POST'])
