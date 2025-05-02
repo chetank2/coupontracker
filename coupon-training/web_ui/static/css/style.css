@@ -125,17 +125,18 @@ body {
     border: 1px solid #ddd;
     border-radius: 4px;
     overflow: hidden;
-    width: 100%;
-    min-height: 400px;
+    text-align: center;
     background-color: #f8f9fa;
+    padding: 10px;
 }
 
 #annotationCanvas {
-    background-color: #f8f9fa;
+    background-color: #ffffff;
     cursor: crosshair;
-    display: block;
-    width: 100% !important;
-    height: 100% !important;
+    display: inline-block !important;
+    border: 1px solid #eee;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    max-width: 100%;
 }
 
 /* Responsive adjustments */

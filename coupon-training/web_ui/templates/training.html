@@ -159,7 +159,7 @@
                         </div>
 
                         <div class="annotation-canvas-container">
-                            <canvas id="annotationCanvas" width="100%" height="100%"></canvas>
+                            <canvas id="annotationCanvas" width="800" height="600"></canvas>
                         </div>
 
                         <div class="annotation-list">
@@ -238,34 +238,30 @@
         let annotations = [];
 
         $(document).ready(function() {
-            // Initialize fabric.js canvas
+            // Initialize fabric.js canvas with fixed dimensions
+            const canvasElement = document.getElementById('annotationCanvas');
+
+            // Set fixed dimensions for the canvas
+            canvasElement.width = 800;
+            canvasElement.height = 600;
+
+            // Initialize the canvas
             canvas = new fabric.Canvas('annotationCanvas');
 
-            // Set canvas dimensions to match the container
-            function resizeCanvas() {
-                const container = $('.annotation-canvas-container');
-                const width = container.width();
-                const height = Math.min(600, Math.max(400, width * 0.75)); // Maintain aspect ratio with min/max height
-
-                canvas.setWidth(width);
-                canvas.setHeight(height);
-                canvas.renderAll();
-
-                console.log('Canvas resized to:', width, 'x', height);
-
-                // If an image is loaded, reposition it
-                if (selectedImage) {
-                    loadImageForAnnotation(selectedImage);
-                }
-            }
-
-            // Initial sizing
-            resizeCanvas();
-
-            // Resize on window resize
-            $(window).resize(function() {
-                resizeCanvas();
+            // Add a welcome message to the canvas
+            const welcomeText = new fabric.Text('Select an image from the gallery to start annotating', {
+                left: canvas.width / 2,
+                top: canvas.height / 2,
+                originX: 'center',
+                originY: 'center',
+                fontSize: 16,
+                fill: '#666',
+                textAlign: 'center'
             });
+            canvas.add(welcomeText);
+            canvas.renderAll();
+
+            console.log('Canvas initialized with dimensions:', canvas.width, 'x', canvas.height);
 
             // Set up drag and drop
             const dropArea = document.getElementById('dropArea');
@@ -537,6 +533,11 @@
                     console.log('Selected image:', image.original_name);
                     $('.image-item').removeClass('selected');
                     $(this).addClass('selected');
+
+                    // Alert to confirm click is working
+                    alert('Loading image: ' + image.original_name);
+
+                    // Load the image
                     loadImageForAnnotation(image);
                 });
 
@@ -558,47 +559,88 @@
             // Clear canvas
             canvas.clear();
 
-            // Create a new image object
-            const imgObj = new Image();
+            // Show loading message directly on canvas
+            const loadingText = new fabric.Text('Loading image...', {
+                left: canvas.width / 2,
+                top: canvas.height / 2,
+                originX: 'center',
+                originY: 'center',
+                fontSize: 20
+            });
+            canvas.add(loadingText);
+            canvas.renderAll();
 
-            // Set up onload handler
-            imgObj.onload = function() {
-                console.log('Image loaded successfully, dimensions:', imgObj.width, 'x', imgObj.height);
+            // Use a simple approach with direct URL
+            const imgUrl = image.url;
+            console.log('Image URL:', imgUrl);
 
-                // Create fabric image from the loaded image
-                const fabricImg = new fabric.Image(imgObj);
+            // Create a new image element
+            const imgElement = new Image();
 
-                // Scale image to fit canvas
+            imgElement.onload = function() {
+                console.log('Image loaded successfully:', imgElement.width, 'x', imgElement.height);
+
+                // Remove loading text
+                canvas.remove(loadingText);
+
+                // Create fabric image
+                const fabricImage = new fabric.Image(imgElement);
+
+                // Calculate scale to fit canvas
                 const canvasWidth = canvas.width;
                 const canvasHeight = canvas.height;
-                const imgWidth = imgObj.width;
-                const imgHeight = imgObj.height;
+                const scale = Math.min(
+                    canvasWidth / imgElement.width,
+                    canvasHeight / imgElement.height
+                ) * 0.9; // 90% of max size to leave some margin
 
-                const scale = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
-                console.log('Scaling image by factor:', scale);
+                console.log('Canvas size:', canvasWidth, 'x', canvasHeight);
+                console.log('Scale factor:', scale);
 
-                fabricImg.scale(scale);
-                fabricImg.set({
-                    left: (canvasWidth - imgWidth * scale) / 2,
-                    top: (canvasHeight - imgHeight * scale) / 2,
+                // Scale and center the image
+                fabricImage.scale(scale);
+                fabricImage.set({
+                    left: (canvasWidth - imgElement.width * scale) / 2,
+                    top: (canvasHeight - imgElement.height * scale) / 2,
                     selectable: false,
                     evented: false
                 });
 
-                // Set as background and render
-                canvas.setBackgroundImage(fabricImg, canvas.renderAll.bind(canvas));
-                console.log('Image set as background');
+                // Set as background
+                canvas.setBackgroundImage(fabricImage, function() {
+                    canvas.renderAll();
+                    console.log('Background image set and rendered');
+
+                    // Add a confirmation message
+                    alert('Image loaded successfully. You can now draw annotations.');
+                });
             };
 
-            // Set up error handler
-            imgObj.onerror = function() {
-                console.error('Failed to load image from URL:', image.url);
-                alert('Failed to load the image. Please try again or select a different image.');
+            imgElement.onerror = function(e) {
+                console.error('Error loading image:', e);
+                canvas.remove(loadingText);
+
+                // Add error message to canvas
+                const errorText = new fabric.Text('Error loading image. Please try again.', {
+                    left: canvas.width / 2,
+                    top: canvas.height / 2,
+                    originX: 'center',
+                    originY: 'center',
+                    fontSize: 20,
+                    fill: 'red'
+                });
+                canvas.add(errorText);
+                canvas.renderAll();
+
+                alert('Failed to load the image. Error: ' + e.message);
             };
+
+            // Set crossOrigin to anonymous to avoid CORS issues
+            imgElement.crossOrigin = 'anonymous';
 
             // Start loading the image
-            console.log('Loading image from URL:', image.url);
-            imgObj.src = image.url;
+            imgElement.src = imgUrl;
+            console.log('Image loading started');
 
             // Clear annotations list
             updateAnnotationsList();
