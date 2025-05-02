@@ -98,11 +98,21 @@ def upload_testing_images():
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
 
-        # Process the image
-        processed_path = image_processor.preprocess_image(filepath)
+        try:
+            # Process the image
+            processed_path = image_processor.preprocess_image(filepath)
 
-        # Run pattern recognition
-        results = model_manager.test_image(processed_path)
+            # Check if the processed image exists
+            if not os.path.exists(processed_path):
+                print(f"Processed image not found: {processed_path}, using original")
+                processed_path = filepath
+
+            # Run pattern recognition
+            results = model_manager.test_image(processed_path)
+        except Exception as e:
+            print(f"Error processing image: {e}")
+            # If processing fails, try using the original image
+            results = model_manager.test_image(filepath)
 
         return jsonify({
             'file': {
