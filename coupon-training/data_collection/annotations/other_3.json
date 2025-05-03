@@ -1,0 +1,31 @@
+{
+  "image_id": "other_3",
+  "source": "sample_generator",
+  "annotation_date": "2025-05-03T19:44:17.473078",
+  "annotator_id": "sample_generator",
+  "fields": {
+    "store_name": {
+      "text": "Domino's",
+      "confidence": 1.0
+    },
+    "coupon_code": {
+      "text": "MONSOON50",
+      "confidence": 1.0
+    },
+    "expiry_date": {
+      "text": "25 Jul 2025",
+      "confidence": 1.0,
+      "normalized_date": "2025-07-25"
+    },
+    "discount_amount": {
+      "text": "CASHBACK \u20b9300",
+      "confidence": 1.0
+    },
+    "min_purchase": {
+      "text": "Minimum Order: \u20b9299",
+      "confidence": 1.0,
+      "value": 299
+    }
+  },
+  "verification_status": "verified"
+}

@@ -1,0 +1,17 @@
+{
+  "training_date": "2025-05-03T19:46:37.068753",
+  "train_split": 0.7,
+  "val_split": 0.15,
+  "test_split": 0.15,
+  "num_train": 3,
+  "num_val": 0,
+  "num_test": 2,
+  "total_samples": 5,
+  "classes": [
+    "store_name",
+    "coupon_code",
+    "expiry_date",
+    "discount_amount",
+    "min_purchase"
+  ]
+}

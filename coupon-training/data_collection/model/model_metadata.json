@@ -1,0 +1,20 @@
+{
+  "training_date": "2025-05-03T19:47:12.757865",
+  "epochs": 10,
+  "batch_size": 4,
+  "learning_rate": 0.001,
+  "train_samples": 3,
+  "val_samples": 0,
+  "test_samples": 2,
+  "final_train_loss": 0.23782601967822023,
+  "final_val_loss": 0.5739964534793579,
+  "test_accuracy": 0.8690532185055614,
+  "classes": [
+    "store_name",
+    "coupon_code",
+    "expiry_date",
+    "discount_amount",
+    "min_purchase"
+  ],
+  "model_type": "simulated_coupon_recognizer"
+}

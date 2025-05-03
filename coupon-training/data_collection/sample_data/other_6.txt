@@ -1,0 +1,6 @@
+
+Store: Burger King
+Discount: CASHBACK ₹250
+Code: JYCDW5O0
+Valid till: 30 Jul 2025
+Minimum Order: ₹499

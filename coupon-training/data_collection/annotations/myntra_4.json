@@ -1,0 +1,30 @@
+{
+  "image_id": "myntra_4",
+  "source": "sample_generator",
+  "annotation_date": "2025-05-03T19:45:36.319795",
+  "annotator_id": "sample_generator",
+  "fields": {
+    "store_name": {
+      "text": "Myntra",
+      "confidence": 1.0
+    },
+    "coupon_code": {
+      "text": "MYNTRA500",
+      "confidence": 1.0
+    },
+    "expiry_date": {
+      "text": "30 Sep 2025",
+      "confidence": 1.0
+    },
+    "discount_amount": {
+      "text": "FLAT \u20b9500 OFF",
+      "confidence": 1.0
+    },
+    "min_purchase": {
+      "text": "Minimum Order: \u20b91999",
+      "confidence": 1.0,
+      "value": 1999
+    }
+  },
+  "verification_status": "verified"
+}

@@ -1,0 +1,31 @@
+{
+  "image_id": "other_9",
+  "source": "sample_generator",
+  "annotation_date": "2025-05-03T19:44:17.488062",
+  "annotator_id": "sample_generator",
+  "fields": {
+    "store_name": {
+      "text": "Tata CLiQ",
+      "confidence": 1.0
+    },
+    "coupon_code": {
+      "text": "8C4QTH1Z",
+      "confidence": 1.0
+    },
+    "expiry_date": {
+      "text": "10 Jul 2025",
+      "confidence": 1.0,
+      "normalized_date": "2025-07-10"
+    },
+    "discount_amount": {
+      "text": "UPTO \u20b950 OFF",
+      "confidence": 1.0
+    },
+    "min_purchase": {
+      "text": "Minimum Order: \u20b999",
+      "confidence": 1.0,
+      "value": 99
+    }
+  },
+  "verification_status": "verified"
+}

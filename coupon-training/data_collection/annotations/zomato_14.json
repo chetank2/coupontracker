@@ -1,0 +1,31 @@
+{
+  "image_id": "zomato_14",
+  "source": "sample_generator",
+  "annotation_date": "2025-05-03T19:44:17.501779",
+  "annotator_id": "sample_generator",
+  "fields": {
+    "store_name": {
+      "text": "Zomato",
+      "confidence": 1.0
+    },
+    "coupon_code": {
+      "text": "EXTRA10",
+      "confidence": 1.0
+    },
+    "expiry_date": {
+      "text": "14 Jul 2025",
+      "confidence": 1.0,
+      "normalized_date": "2025-07-14"
+    },
+    "discount_amount": {
+      "text": "UPTO \u20b9200 OFF",
+      "confidence": 1.0
+    },
+    "min_purchase": {
+      "text": "Minimum Order: \u20b9299",
+      "confidence": 1.0,
+      "value": 299
+    }
+  },
+  "verification_status": "verified"
+}

@@ -1,0 +1,31 @@
+{
+  "image_id": "other_6",
+  "source": "sample_generator",
+  "annotation_date": "2025-05-03T19:44:17.479605",
+  "annotator_id": "sample_generator",
+  "fields": {
+    "store_name": {
+      "text": "Burger King",
+      "confidence": 1.0
+    },
+    "coupon_code": {
+      "text": "JYCDW5O0",
+      "confidence": 1.0
+    },
+    "expiry_date": {
+      "text": "30 Jul 2025",
+      "confidence": 1.0,
+      "normalized_date": "2025-07-30"
+    },
+    "discount_amount": {
+      "text": "CASHBACK \u20b9250",
+      "confidence": 1.0
+    },
+    "min_purchase": {
+      "text": "Minimum Order: \u20b9499",
+      "confidence": 1.0,
+      "value": 499
+    }
+  },
+  "verification_status": "verified"
+}

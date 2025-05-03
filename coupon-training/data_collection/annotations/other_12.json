@@ -1,0 +1,26 @@
+{
+  "image_id": "other_12",
+  "source": "sample_generator",
+  "annotation_date": "2025-05-03T19:44:17.497908",
+  "annotator_id": "sample_generator",
+  "fields": {
+    "store_name": {
+      "text": "Ajio",
+      "confidence": 1.0
+    },
+    "coupon_code": {
+      "text": "7LE626AE",
+      "confidence": 1.0
+    },
+    "expiry_date": {
+      "text": "24 May 2025",
+      "confidence": 1.0,
+      "normalized_date": "2025-05-24"
+    },
+    "discount_amount": {
+      "text": "FLAT 6% OFF",
+      "confidence": 1.0
+    }
+  },
+  "verification_status": "verified"
+}

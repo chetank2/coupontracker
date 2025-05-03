@@ -1,0 +1,31 @@
+{
+  "image_id": "phonepe_7",
+  "source": "sample_generator",
+  "annotation_date": "2025-05-03T19:44:17.481866",
+  "annotator_id": "sample_generator",
+  "fields": {
+    "store_name": {
+      "text": "PhonePe",
+      "confidence": 1.0
+    },
+    "coupon_code": {
+      "text": "FIRST100",
+      "confidence": 1.0
+    },
+    "expiry_date": {
+      "text": "01 Jul 2025",
+      "confidence": 1.0,
+      "normalized_date": "2025-07-01"
+    },
+    "discount_amount": {
+      "text": "\u20b9500 OFF",
+      "confidence": 1.0
+    },
+    "min_purchase": {
+      "text": "Minimum Order: \u20b9499",
+      "confidence": 1.0,
+      "value": 499
+    }
+  },
+  "verification_status": "verified"
+}

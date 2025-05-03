@@ -1,0 +1,6 @@
+
+Store: Pizza Hut
+Discount: FLAT 40% OFF
+Code: SUMMER40
+Valid till: 25 Jul 2025
+Minimum Order: ₹999

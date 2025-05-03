@@ -1,0 +1,31 @@
+{
+  "image_id": "other_17",
+  "source": "sample_generator",
+  "annotation_date": "2025-05-03T19:44:17.512216",
+  "annotator_id": "sample_generator",
+  "fields": {
+    "store_name": {
+      "text": "Swiggy",
+      "confidence": 1.0
+    },
+    "coupon_code": {
+      "text": "FESTIVE30",
+      "confidence": 1.0
+    },
+    "expiry_date": {
+      "text": "17 Jun 2025",
+      "confidence": 1.0,
+      "normalized_date": "2025-06-17"
+    },
+    "discount_amount": {
+      "text": "UPTO \u20b9300 OFF",
+      "confidence": 1.0
+    },
+    "min_purchase": {
+      "text": "Minimum Order: \u20b9999",
+      "confidence": 1.0,
+      "value": 999
+    }
+  },
+  "verification_status": "verified"
+}

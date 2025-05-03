@@ -1,0 +1,6 @@
+
+Store: Swiggy
+Discount: UPTO ₹300 OFF
+Code: FESTIVE30
+Valid till: 17 Jun 2025
+Minimum Order: ₹999

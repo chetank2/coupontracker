@@ -1,0 +1,7 @@
+{
+  "model_type": "simulated_coupon_recognizer",
+  "version": "1.0.0",
+  "accuracy": 0.8690532185055614,
+  "created_at": "2025-05-03T19:47:12.762562",
+  "description": "This is a simulated coupon recognition model for demonstration purposes."
+}

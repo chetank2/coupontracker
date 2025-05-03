@@ -1,0 +1,5 @@
+
+Store: BigBasket
+Discount: FLAT 43% OFF
+Code: FIRST100
+Valid till: 14 May 2025
