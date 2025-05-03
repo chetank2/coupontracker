@@ -1,0 +1,28 @@
+# Core dependencies
+numpy>=1.19.0
+opencv-python>=4.5.0
+scikit-learn>=0.24.0
+matplotlib>=3.3.0
+pandas>=1.2.0
+
+# Data collection
+requests>=2.25.0
+praw>=7.5.0  # Python Reddit API Wrapper
+
+# Image processing
+Pillow>=8.0.0
+pytesseract>=0.3.8
+
+# Deep learning
+tensorflow>=2.5.0
+keras>=2.4.0
+
+# Web and annotation tools
+flask>=2.0.0
+flask-cors>=3.0.10
+werkzeug>=2.0.0
+
+# Utilities
+tqdm>=4.60.0
+python-dotenv>=0.17.0
+jsonschema>=3.2.0
