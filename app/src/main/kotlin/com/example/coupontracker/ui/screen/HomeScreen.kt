@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -62,6 +63,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.data.model.Coupon
@@ -75,7 +78,7 @@ import com.example.coupontracker.ui.components.OutlinedBrandButton
 import com.example.coupontracker.ui.components.PrimaryButton
 import com.example.coupontracker.ui.components.SecondaryButton
 import com.example.coupontracker.ui.components.SectionHeader
-import com.example.coupontracker.ui.components.SimpleCaptureBottomSheet
+import com.example.coupontracker.ui.components.SimplifiedCaptureBottomSheet
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
@@ -93,6 +96,21 @@ fun HomeScreen(
 
     val sharedPreferences = remember {
         context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
+    }
+
+    // Image picker launcher
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            // Navigate to CouponForm with the selected image
+            navController.navigate(
+                Screen.CouponForm.createRoute(
+                    imageUri = it.toString(),
+                    isBatchMode = false
+                )
+            )
+        }
     }
 
     // Search state
@@ -179,18 +197,16 @@ fun HomeScreen(
                 modifier = Modifier.padding(vertical = BrandSpacing.Small)
             )
 
-            // Show the simple capture bottom sheet when the FAB is clicked
+            // Show the simplified capture bottom sheet when the FAB is clicked
             if (showCaptureBottomSheet) {
-                SimpleCaptureBottomSheet(
+                SimplifiedCaptureBottomSheet(
                     onDismiss = { showCaptureBottomSheet = false },
                     onCameraCapture = {
-                        navController.navigate(Screen.Scanner.route)
+                        navController.navigate(Screen.UnifiedCamera.route)
                     },
-                    onBatchScan = {
-                        navController.navigate(Screen.BatchScanner.route)
-                    },
-                    onQrScan = {
-                        navController.navigate(Screen.QRScanner.route)
+                    onUpload = {
+                        // Launch image picker directly instead of navigating to another screen
+                        imagePickerLauncher.launch("image/*")
                     },
                     onManualEntry = {
                         navController.navigate(Screen.ManualEntry.route)
@@ -223,14 +239,28 @@ fun HomeScreen(
                     icon = Icons.Outlined.Info,
                     modifier = Modifier.fillMaxWidth(0.9f),
                     action = {
-                        PrimaryButton(
-                            text = "Scan Coupon",
-                            onClick = { showCaptureBottomSheet = true },
-                            leadingIcon = Icons.Default.CameraAlt,
-                            modifier = Modifier
-                                .fillMaxWidth(0.7f)
-                                .padding(top = BrandSpacing.Medium)
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.fillMaxWidth(0.7f)
+                        ) {
+                            PrimaryButton(
+                                text = "Scan Coupon",
+                                onClick = { navController.navigate(Screen.UnifiedCamera.route) },
+                                leadingIcon = Icons.Default.CameraAlt,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = BrandSpacing.Medium)
+                            )
+
+                            Spacer(modifier = Modifier.height(BrandSpacing.Small))
+
+                            SecondaryButton(
+                                text = "Upload Image",
+                                onClick = { imagePickerLauncher.launch("image/*") },
+                                leadingIcon = Icons.Default.Upload,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 )
             }
@@ -320,6 +350,7 @@ fun HomeScreen(
                             expiryDate = coupon.expiryDate,
                             amount = coupon.cashbackAmount,
                             code = coupon.redeemCode,
+                            imageUri = coupon.imageUri,
                             onClick = {
                                 navController.navigate(Screen.CouponDetail.createRoute(coupon.id))
                             },

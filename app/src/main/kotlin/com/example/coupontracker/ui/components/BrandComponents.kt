@@ -31,11 +31,15 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -560,7 +564,7 @@ object DateFormatter {
 }
 
 /**
- * Enhanced coupon card with consistent styling
+ * Enhanced coupon card with consistent styling and image thumbnail
  */
 @Composable
 fun EnhancedCouponCard(
@@ -569,12 +573,14 @@ fun EnhancedCouponCard(
     expiryDate: Date,
     amount: Double? = null,
     code: String? = null,
+    imageUri: String? = null,
     onClick: () -> Unit,
     onCopyCode: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val expiryStatus = DateFormatter.getExpiryStatus(expiryDate)
     val expiryText = DateFormatter.getExpiryText(expiryDate)
+    val context = LocalContext.current
 
     Card(
         modifier = modifier
@@ -587,96 +593,152 @@ fun EnhancedCouponCard(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        Row(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            // Store name and expiry status
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = storeName,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-
-                StatusChip(
-                    text = expiryText,
-                    type = expiryStatus
-                )
+            // Image thumbnail (if available)
+            if (!imageUri.isNullOrEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .height(120.dp)
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(imageUri)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "Coupon Image",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Description
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Amount and code
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Content
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(16.dp)
             ) {
-                // Amount
-                if (amount != null && amount > 0) {
-                    Surface(
-                        shape = BrandShapes.MediumCornerShape,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                    ) {
-                        Text(
-                            text = "₹${amount.toInt()}",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
+                // Store name and expiry status
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = storeName,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    StatusChip(
+                        text = expiryText,
+                        type = expiryStatus
+                    )
                 }
 
-                // Code with copy button
-                if (!code.isNullOrBlank() && onCopyCode != null) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .clip(BrandShapes.PillShape)
-                            .border(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.outline,
-                                shape = BrandShapes.PillShape
-                            )
-                            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
-                    ) {
-                        Text(
-                            text = code,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                Spacer(modifier = Modifier.height(8.dp))
 
-                        IconButton(
-                            onClick = { onCopyCode(code) },
-                            modifier = Modifier.size(28.dp)
+                // Description
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Amount and code
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Amount
+                    if (amount != null && amount > 0) {
+                        Surface(
+                            shape = BrandShapes.MediumCornerShape,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy code",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
+                            Text(
+                                text = "₹${amount.toInt()}",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
+                        }
+                    }
+
+                    // Code with copy button
+                    if (!code.isNullOrBlank() && onCopyCode != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .clip(BrandShapes.PillShape)
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    shape = BrandShapes.PillShape
+                                )
+                                .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                        ) {
+                            Text(
+                                text = code,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            IconButton(
+                                onClick = { onCopyCode(code) },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy code",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     }
+}
+
+/**
+ * Legacy version of EnhancedCouponCard for backward compatibility
+ */
+@Composable
+fun EnhancedCouponCard(
+    storeName: String,
+    description: String,
+    expiryDate: Date,
+    amount: Double? = null,
+    code: String? = null,
+    onClick: () -> Unit,
+    onCopyCode: ((String) -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    // Call the new version with imageUri = null
+    EnhancedCouponCard(
+        storeName = storeName,
+        description = description,
+        expiryDate = expiryDate,
+        amount = amount,
+        code = code,
+        imageUri = null,
+        onClick = onClick,
+        onCopyCode = onCopyCode,
+        modifier = modifier
+    )
 }
