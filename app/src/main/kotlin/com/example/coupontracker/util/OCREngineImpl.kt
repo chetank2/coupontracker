@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
-import com.example.coupontracker.util.SecurePreferencesManager.Companion.KEY_GOOGLE_CLOUD_VISION_API_KEY
+
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -20,12 +20,7 @@ class OCREngineImpl(private val context: Context) {
     private val sharedPreferences: SharedPreferences =
         context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
 
-    private val googleApiKey = sharedPreferences.getString(KEY_GOOGLE_CLOUD_VISION_API_KEY, "")
-    private val googleVisionHelper = if (!googleApiKey.isNullOrBlank()) {
-        GoogleVisionHelper(googleApiKey)
-    } else {
-        null
-    }
+    // We've removed Google Cloud Vision API dependencies as we're using on-device OCR only
 
     private val enhancedOCRHelper = EnhancedOCRHelper()
     private val mlKitTextRecognitionHelper = MLKitTextRecognitionHelper()
@@ -40,17 +35,8 @@ class OCREngineImpl(private val context: Context) {
                 try {
                     enhancedOCRHelper.processImageFromUri(context, imageUri)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Enhanced OCR failed, trying Google Vision API if available", e)
-                    try {
-                        if (googleVisionHelper != null) {
-                            googleVisionHelper.processImageFromUri(context, imageUri)
-                        } else {
-                            throw Exception("Google Vision API not available (no API key)")
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Google Vision API failed or not available, trying ML Kit", e)
-                        mlKitTextRecognitionHelper.processImageFromUri(context, imageUri)
-                    }
+                    Log.e(TAG, "Enhanced OCR failed, falling back to ML Kit", e)
+                    mlKitTextRecognitionHelper.processImageFromUri(context, imageUri)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "All OCR methods failed", e)
@@ -69,17 +55,8 @@ class OCREngineImpl(private val context: Context) {
                 try {
                     enhancedOCRHelper.processImageFromBitmap(bitmap)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Enhanced OCR failed, trying Google Vision API if available", e)
-                    try {
-                        if (googleVisionHelper != null) {
-                            googleVisionHelper.processImageFromBitmap(bitmap)
-                        } else {
-                            throw Exception("Google Vision API not available (no API key)")
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Google Vision API failed or not available, trying ML Kit", e)
-                        mlKitTextRecognitionHelper.processImageFromBitmap(bitmap)
-                    }
+                    Log.e(TAG, "Enhanced OCR failed, falling back to ML Kit", e)
+                    mlKitTextRecognitionHelper.processImageFromBitmap(bitmap)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "All OCR methods failed", e)
@@ -111,21 +88,7 @@ class OCREngineImpl(private val context: Context) {
             Log.e(TAG, "Enhanced OCR extraction failed", e)
         }
 
-        if (googleVisionHelper != null) {
-            try {
-                val googleResult = googleVisionHelper.extractCouponInfo(text)
-
-                // Handle Myntra coupons
-                val result = googleResult.toMutableMap()
-                if (isMyntraCoupon && result["storeName"] != "Myntra") {
-                    result["storeName"] = "Myntra"
-                }
-
-                return result
-            } catch (e: Exception) {
-                Log.e(TAG, "Google Vision extraction failed", e)
-            }
-        }
+        // We've removed Google Cloud Vision API as we're using on-device OCR only
 
         // Fallback to a basic extraction if all methods fail
         val results = mutableMapOf<String, String>()

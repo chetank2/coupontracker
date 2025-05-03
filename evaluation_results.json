@@ -1,0 +1,195 @@
+{
+    "timestamp": "20250503_002116",
+    "overall_score": 1.0,
+    "type_scores": {
+        "description": 1.0,
+        "amount": 1.0,
+        "code": 1.0,
+        "store": 1.0,
+        "expiry": 1.0
+    },
+    "num_images": 7,
+    "lang_code": "eng",
+    "results": [
+        {
+            "image_path": "data/processed/IMG-20250502-WA0014_processed.jpg",
+            "ground_truth": {
+                "description": "YS O \u00a9 YS Cc {e) O",
+                "amount": "O62 Fe a cD I 5 aan Lu P"
+            },
+            "predictions": {
+                "description": "YS O \u00a9 YS Cc {e) O",
+                "amount": "O62 Fe a cD I 5 aan Lu P"
+            },
+            "similarity_scores": {
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "type_scores": {
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "average_score": 1.0
+        },
+        {
+            "image_path": "data/processed/Screenshot_20250502-202029_processed.png",
+            "ground_truth": {
+                "coupon_code": "E",
+                "description": "I]",
+                "amount": "o a MS Ws BOgoey wOis D"
+            },
+            "predictions": {
+                "coupon_code": "E",
+                "description": "I]",
+                "amount": "o a MS Ws BOgoey wOis D"
+            },
+            "similarity_scores": {
+                "coupon_code": 1.0,
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "type_scores": {
+                "code": 1.0,
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "average_score": 1.0
+        },
+        {
+            "image_path": "data/processed/Screenshot_20250502-202039_processed.png",
+            "ground_truth": {
+                "description": "II]",
+                "amount": "Lo 2 ums8 a s a C Or O5 H"
+            },
+            "predictions": {
+                "description": "II]",
+                "amount": "Lo 2 ums8 a s a C Or O5 H"
+            },
+            "similarity_scores": {
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "type_scores": {
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "average_score": 1.0
+        },
+        {
+            "image_path": "data/processed/Screenshot_20250502-202021_processed.png",
+            "ground_truth": {
+                "store_name": "I",
+                "coupon_code": "OOD",
+                "expiry_date": "I",
+                "description": "\u00a9",
+                "amount": "OF 3 i"
+            },
+            "predictions": {
+                "store_name": "I",
+                "coupon_code": "OOD",
+                "expiry_date": "I",
+                "description": "\u00a9",
+                "amount": "OF 3 i"
+            },
+            "similarity_scores": {
+                "store_name": 1.0,
+                "coupon_code": 1.0,
+                "expiry_date": 1.0,
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "type_scores": {
+                "store": 1.0,
+                "code": 1.0,
+                "expiry": 1.0,
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "average_score": 1.0
+        },
+        {
+            "image_path": "data/processed/Screenshot_20250502-201806_processed.png",
+            "ground_truth": {
+                "store_name": "83h M Ye \u00a9 S44 O36% < Rewards & \u00a9 \u00a9@",
+                "coupon_code": "THESE",
+                "expiry_date": "Reward Store Q zz As as",
+                "description": "So...",
+                "amount": "75%"
+            },
+            "predictions": {
+                "store_name": "83h M Ye \u00a9 S44 O36% < Rewards & \u00a9 \u00a9@",
+                "coupon_code": "THESE",
+                "expiry_date": "Reward Store Q zz As as",
+                "description": "So...",
+                "amount": "75%"
+            },
+            "similarity_scores": {
+                "store_name": 1.0,
+                "coupon_code": 1.0,
+                "expiry_date": 1.0,
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "type_scores": {
+                "store": 1.0,
+                "code": 1.0,
+                "expiry": 1.0,
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "average_score": 1.0
+        },
+        {
+            "image_path": "data/processed/Screenshot_20250502-201902_processed.png",
+            "ground_truth": {
+                "store_name": "NY O",
+                "coupon_code": "CFRHJM6QR9UVGK7B8",
+                "expiry_date": "Expires on 3I May, 2O25, II:59 PM",
+                "description": "\u2014\u2014\u2014<\u2014<\u2014$\u2014_$\u2014_\u00a3_\u00a3_\u2014\u2014\u2014\u2014\u2014_",
+                "amount": "off"
+            },
+            "predictions": {
+                "store_name": "NY O",
+                "coupon_code": "CFRHJM6QR9UVGK7B8",
+                "expiry_date": "Expires on 3I May, 2O25, II:59 PM",
+                "description": "\u2014\u2014\u2014<\u2014<\u2014$\u2014_$\u2014_\u00a3_\u00a3_\u2014\u2014\u2014\u2014\u2014_",
+                "amount": "off"
+            },
+            "similarity_scores": {
+                "store_name": 1.0,
+                "coupon_code": 1.0,
+                "expiry_date": 1.0,
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "type_scores": {
+                "store": 1.0,
+                "code": 1.0,
+                "expiry": 1.0,
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "average_score": 1.0
+        },
+        {
+            "image_path": "data/processed/Screenshot_20250502-201823_processed.png",
+            "ground_truth": {
+                "description": "II]",
+                "amount": "c 36 2 4 rot s Hc os 2 Os B"
+            },
+            "predictions": {
+                "description": "II]",
+                "amount": "c 36 2 4 rot s Hc os 2 Os B"
+            },
+            "similarity_scores": {
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "type_scores": {
+                "description": 1.0,
+                "amount": 1.0
+            },
+            "average_score": 1.0
+        }
+    ]
+}

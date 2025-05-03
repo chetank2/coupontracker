@@ -58,7 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.data.model.Coupon
-import com.example.coupontracker.ui.components.ApiSelectionDialog
+
 import com.example.coupontracker.ui.components.BrandCard
 import com.example.coupontracker.ui.components.EmptyState
 import com.example.coupontracker.ui.components.EnhancedCouponCard
@@ -85,10 +85,6 @@ fun HomeScreen(
         context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
     }
 
-    // Check if this is the first launch
-    var showApiDialog by remember { mutableStateOf(false) }
-    var isFirstLaunch by remember { mutableStateOf(false) }
-
     // Search state
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
@@ -96,19 +92,9 @@ fun HomeScreen(
     LaunchedEffect(key1 = true) {
         val isFirstLaunchPref = sharedPreferences.getBoolean("is_first_launch", true)
         if (isFirstLaunchPref) {
-            isFirstLaunch = true
-            showApiDialog = true
+            // Mark first launch as completed
             sharedPreferences.edit().putBoolean("is_first_launch", false).apply()
         }
-    }
-
-    // Show the API selection dialog if needed
-    if (showApiDialog) {
-        ApiSelectionDialog(
-            sharedPreferences = sharedPreferences,
-            isFirstLaunch = isFirstLaunch,
-            onDismiss = { showApiDialog = false }
-        )
     }
 
     Scaffold(

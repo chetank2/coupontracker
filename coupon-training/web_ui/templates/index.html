@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coupon Pattern Recognition - Web UI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Coupon Pattern Recognition</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/training">Training</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/testing">Testing</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-md-12 text-center">
+                <h1>Coupon Pattern Recognition</h1>
+                <p class="lead">Train, test, and update the coupon pattern recognition model</p>
+            </div>
+        </div>
+
+        <div class="row mt-5">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Training</h5>
+                        <p class="card-text">Upload coupon images and annotate them to train the pattern recognition model.</p>
+                        <a href="/training" class="btn btn-primary">Go to Training</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Testing</h5>
+                        <p class="card-text">Upload coupon images to test the pattern recognition model and view results.</p>
+                        <a href="/testing" class="btn btn-primary">Go to Testing</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Update App</h5>
+                        <p class="card-text">Update the model in the Android app with the latest trained model.</p>
+                        <button id="updateAppBtn" class="btn btn-success">Update App Model</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-5">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Model History</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="modelHistory">
+                            <p class="text-center">Loading model history...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update App Modal -->
+    <div class="modal fade" id="updateAppModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Update App Model</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to update the model in the Android app?</p>
+                    <p>This will replace the current model with the latest trained model.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" id="confirmUpdateBtn">Update</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Result Modal -->
+    <div class="modal fade" id="updateResultModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Update Result</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="updateResultContent">
+                    <!-- Result content will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-light py-3 mt-5">
+        <div class="container text-center">
+            <p>Coupon Pattern Recognition Web UI</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        $(document).ready(function() {
+            // Load model history
+            loadModelHistory();
+
+            // Update App button click
+            $('#updateAppBtn').click(function() {
+                $('#updateAppModal').modal('show');
+            });
+
+            // Confirm Update button click
+            $('#confirmUpdateBtn').click(function() {
+                updateAppModel();
+            });
+        });
+
+        function loadModelHistory() {
+            $.ajax({
+                url: '/api/models',
+                type: 'GET',
+                success: function(response) {
+                    displayModelHistory(response.models);
+                },
+                error: function(xhr, status, error) {
+                    $('#modelHistory').html('<p class="text-danger">Error loading model history: ' + error + '</p>');
+                }
+            });
+        }
+
+        function displayModelHistory(models) {
+            if (!models || models.length === 0) {
+                $('#modelHistory').html('<p class="text-center">No models available</p>');
+                return;
+            }
+
+            let html = '<table class="table table-striped">';
+            html += '<thead><tr><th>Version</th><th>Date</th><th>Patterns</th></tr></thead>';
+            html += '<tbody>';
+
+            models.forEach(function(model) {
+                const date = new Date(model.timestamp);
+                const formattedDate = date.toLocaleString();
+                
+                html += '<tr>';
+                html += '<td>' + model.version + '</td>';
+                html += '<td>' + formattedDate + '</td>';
+                html += '<td>' + model.num_patterns + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            $('#modelHistory').html(html);
+        }
+
+        function updateAppModel() {
+            $('#updateAppModal').modal('hide');
+            
+            $.ajax({
+                url: '/api/update-app',
+                type: 'POST',
+                contentType: 'application/json',
+                success: function(response) {
+                    let html = '<div class="alert alert-success">' + response.message + '</div>';
+                    html += '<p>Model Version: ' + response.details.model_version + '</p>';
+                    html += '<p>App Pattern File: ' + response.details.app_pattern_file + '</p>';
+                    
+                    $('#updateResultContent').html(html);
+                    $('#updateResultModal').modal('show');
+                },
+                error: function(xhr, status, error) {
+                    let errorMsg = 'Error updating app model';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+                    
+                    let html = '<div class="alert alert-danger">' + errorMsg + '</div>';
+                    $('#updateResultContent').html(html);
+                    $('#updateResultModal').modal('show');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+{
+    "image_path": "../data/processed/Screenshot_20250502-201806_processed.png",
+    "image_width": 720,
+    "image_height": 1600,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            720,
+            320
+        ],
+        "coupon_code": [
+            286,
+            889,
+            376,
+            916
+        ],
+        "expiry_date": [
+            0,
+            1280,
+            720,
+            1600
+        ],
+        "description": [
+            23,
+            1397,
+            357,
+            1566
+        ],
+        "amount": [
+            298,
+            1151,
+            437,
+            1177
+        ]
+    }
+}

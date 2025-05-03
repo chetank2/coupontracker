@@ -1,0 +1,14 @@
+[
+  {
+    "version": "20250502_234156",
+    "timestamp": "2025-05-02T23:41:56.158075",
+    "pattern_file": "/Users/Personal/AndroidStudioProjects/CouponTracker3/coupon-training/models/simplified/coupon_patterns.txt",
+    "num_patterns": 30
+  },
+  {
+    "version": "20250503_001956",
+    "timestamp": "2025-05-03T00:19:56.692203",
+    "pattern_file": "/Users/Personal/AndroidStudioProjects/CouponTracker3/coupon-training/models/simplified/coupon_patterns.txt",
+    "num_patterns": 30
+  }
+]
