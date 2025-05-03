@@ -26,9 +26,12 @@ data_collection/
 
 1. **Data Collection**: Scripts to collect coupon images from Reddit and other sources
 2. **Preprocessing**: Tools to clean, normalize, and enhance coupon images
-3. **Annotation**: Web-based tool for annotating coupon fields
-4. **Outlier Detection**: System to identify and handle unusual coupon formats
-5. **Data Management**: Tools for versioning and tracking the dataset
+3. **Outlier Detection**: System to identify and handle unusual coupon formats
+4. **Automatic Field Detection**: Tools to automatically detect common fields in coupons
+5. **Annotation**: Web-based tool for annotating coupon fields
+6. **Data Augmentation**: Tools to increase dataset diversity through image transformations
+7. **Model Training Integration**: Components to prepare data for model training
+8. **Data Management**: Tools for versioning and tracking the dataset
 
 ## Getting Started
 
@@ -41,22 +44,47 @@ data_collection/
 
 1. **Collect data**:
    ```
-   python reddit_scraper.py
+   python main.py collect
    ```
 
-2. **Preprocess images**:
+2. **Test with real Reddit links**:
    ```
-   python image_preprocessor.py
-   ```
-
-3. **Detect outliers**:
-   ```
-   python outlier_detector.py
+   python main.py test-real-data
    ```
 
-4. **Start annotation server**:
+3. **Preprocess images**:
    ```
-   python annotation_server.py
+   python main.py preprocess
+   ```
+
+4. **Detect outliers**:
+   ```
+   python main.py outliers
+   ```
+
+5. **Run enhanced outlier detection**:
+   ```
+   python main.py enhanced-outliers
+   ```
+
+6. **Automatically detect fields**:
+   ```
+   python main.py auto-detect
+   ```
+
+7. **Start annotation server**:
+   ```
+   python main.py annotate
+   ```
+
+8. **Prepare data for model training**:
+   ```
+   python main.py prepare-training
+   ```
+
+9. **Run the entire pipeline**:
+   ```
+   python main.py all
    ```
 
 ## Implementation Plan
