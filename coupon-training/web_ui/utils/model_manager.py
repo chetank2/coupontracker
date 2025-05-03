@@ -4,9 +4,8 @@
 import os
 import sys
 import json
-import shutil
+import time
 import datetime
-from pathlib import Path
 
 # Add parent directory to path to import from scripts
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -165,7 +164,6 @@ class ModelManager:
         try:
             import cv2
             from PIL import Image
-            import numpy as np
 
             # Check if Tesseract is available
             try:
@@ -183,28 +181,17 @@ class ModelManager:
                 print("Pattern file not found:", pattern_file)
                 print("Creating default patterns for testing")
 
-                # Create a default pattern that covers the whole image
-                patterns = {
-                    'store': [{'left': 100, 'top': 100, 'right': 400, 'bottom': 200}],
-                    'description': [{'left': 100, 'top': 250, 'right': 400, 'bottom': 350}],
-                    'expiry': [{'left': 100, 'top': 400, 'right': 300, 'bottom': 450}],
-                    'code': [{'left': 100, 'top': 500, 'right': 300, 'bottom': 550}],
-                    'amount': [{'left': 100, 'top': 600, 'right': 300, 'bottom': 650}]
-                }
+                # Instead of using fixed default patterns, let's try to detect regions in the image
+                print("No pattern file found. Will attempt to auto-detect regions in the image.")
+                patterns = self._auto_detect_regions(image_path)
             else:
                 # Read patterns from file
                 patterns = self._read_patterns(pattern_file)
 
-                # If no patterns found, create default ones
+                # If no patterns found, auto-detect regions
                 if not patterns:
-                    print("No patterns found in pattern file, creating defaults")
-                    patterns = {
-                        'store': [{'left': 100, 'top': 100, 'right': 400, 'bottom': 200}],
-                        'description': [{'left': 100, 'top': 250, 'right': 400, 'bottom': 350}],
-                        'expiry': [{'left': 100, 'top': 400, 'right': 300, 'bottom': 450}],
-                        'code': [{'left': 100, 'top': 500, 'right': 300, 'bottom': 550}],
-                        'amount': [{'left': 100, 'top': 600, 'right': 300, 'bottom': 650}]
-                    }
+                    print("No patterns found in pattern file, will auto-detect regions")
+                    patterns = self._auto_detect_regions(image_path)
 
             print(f"Found {sum(len(regions) for regions in patterns.values())} patterns")
 
@@ -255,11 +242,42 @@ class ModelManager:
                     right = region['right']
                     bottom = region['bottom']
 
+                    # Calculate a more meaningful confidence score
+                    # For auto-detected regions, base confidence on region size and position
+                    region_width = right - left
+                    region_height = bottom - top
+                    region_area = region_width * region_height
+                    image_area = img_width * img_height
+
+                    # Regions that are too small or too large are less likely to be correct
+                    area_ratio = region_area / image_area
+                    size_confidence = 0.5
+                    if 0.01 <= area_ratio <= 0.3:  # Reasonable size for a coupon element
+                        size_confidence = 0.9
+
+                    # Position confidence based on expected positions for each type
+                    position_confidence = 0.7
+                    normalized_y = top / img_height  # 0 at top, 1 at bottom
+
+                    if pattern_type == 'store' and normalized_y < 0.3:
+                        position_confidence = 0.9  # Store name usually at the top
+                    elif pattern_type == 'code' and 0.3 <= normalized_y <= 0.7:
+                        position_confidence = 0.9  # Code usually in the middle
+                    elif pattern_type == 'amount' and 0.2 <= normalized_y <= 0.6:
+                        position_confidence = 0.9  # Amount usually in the middle
+                    elif pattern_type == 'description' and 0.4 <= normalized_y <= 0.8:
+                        position_confidence = 0.9  # Description usually in the middle/bottom
+                    elif pattern_type == 'expiry' and normalized_y > 0.6:
+                        position_confidence = 0.9  # Expiry usually at the bottom
+
+                    # Combine confidence scores
+                    confidence = (size_confidence + position_confidence) / 2
+
                     # Add the region to the results
                     results['elements'].append({
                         'type': pattern_type,
                         'region': region,
-                        'confidence': 0.85 + (i * 0.02)  # Simulated confidence score for now
+                        'confidence': confidence
                     })
 
                     # Extract the region from the image
@@ -279,8 +297,14 @@ class ModelManager:
                         # Extract text based on available OCR
                         if tesseract_available:
                             try:
-                                # Use Tesseract to extract text
-                                extracted_text = pytesseract.image_to_string(region_pil).strip()
+                                # Apply a comprehensive OCR preprocessing pipeline
+                                extracted_text = self._extract_text_with_advanced_ocr(region_img, pattern_type)
+
+                                # Save the processed region for debugging
+                                debug_dir = os.path.join(self.base_dir, 'web_ui', 'static', 'debug')
+                                os.makedirs(debug_dir, exist_ok=True)
+                                debug_path = os.path.join(debug_dir, f"{pattern_type}_{int(time.time())}.jpg")
+                                cv2.imwrite(debug_path, region_img)
                             except Exception as ocr_error:
                                 print(f"Tesseract OCR error: {ocr_error}")
                                 extracted_text = ""
@@ -486,3 +510,451 @@ class ModelManager:
             print(f"Error reading patterns: {e}")
 
         return patterns
+
+    def _auto_detect_regions(self, image_path):
+        """Automatically detect regions in an image using advanced computer vision techniques
+
+        Args:
+            image_path (str): Path to the image
+
+        Returns:
+            dict: Dictionary of pattern types and regions
+        """
+        try:
+            import cv2
+            import numpy as np
+            from PIL import Image
+
+            # Load the image
+            image = cv2.imread(image_path)
+            if image is None:
+                print(f"Error: Could not load image {image_path}")
+                return self._get_default_patterns()
+
+            # Get image dimensions
+            height, width = image.shape[:2]
+
+            # Create a copy for visualization
+            debug_image = image.copy()
+
+            # Convert to grayscale
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+            # Apply Gaussian blur to reduce noise
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+            # Apply adaptive thresholding
+            binary = cv2.adaptiveThreshold(
+                blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY_INV, 11, 2
+            )
+
+            # Perform morphological operations to clean up the binary image
+            kernel = np.ones((3, 3), np.uint8)
+            binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+            binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+
+            # Find text regions using MSER (Maximally Stable Extremal Regions)
+            # This is better for detecting text regions
+            mser = cv2.MSER_create()
+            regions, _ = mser.detectRegions(gray)
+
+            # Convert regions to bounding boxes
+            text_boxes = []
+            for region in regions:
+                x, y, w, h = cv2.boundingRect(region)
+                # Filter out very small regions
+                if w > 10 and h > 10 and w < width/2 and h < height/2:
+                    text_boxes.append((x, y, x+w, y+h))
+
+            # Merge overlapping boxes
+            merged_boxes = self._merge_boxes(text_boxes)
+
+            # Group boxes by proximity (likely to be part of the same element)
+            grouped_boxes = self._group_boxes_by_proximity(merged_boxes)
+
+            # Create patterns dictionary
+            patterns = {
+                'store': [],
+                'code': [],
+                'amount': [],
+                'description': [],
+                'expiry': []
+            }
+
+            # If we have text regions, analyze them
+            if grouped_boxes:
+                # Sort boxes by y-coordinate (top to bottom)
+                sorted_boxes = sorted(grouped_boxes, key=lambda box: box[1])
+
+                # Analyze the content of each box to determine its type
+                for i, box in enumerate(sorted_boxes):
+                    x1, y1, x2, y2 = box
+
+                    # Extract the region
+                    region_img = image[y1:y2, x1:x2]
+
+                    # Skip if region is too small
+                    if region_img.size == 0:
+                        continue
+
+                    # Convert to PIL for OCR
+                    region_pil = Image.fromarray(cv2.cvtColor(region_img, cv2.COLOR_BGR2RGB))
+
+                    # Try to determine the type of content
+                    region_type = self._determine_region_type(region_pil, box, height, width)
+
+                    # Add to patterns
+                    patterns[region_type].append({
+                        'left': x1,
+                        'top': y1,
+                        'right': x2,
+                        'bottom': y2
+                    })
+
+                    # Draw on debug image
+                    cv2.rectangle(debug_image, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                    cv2.putText(debug_image, region_type, (x1, y1-5),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+            # If we don't have enough regions, use a more aggressive approach
+            if sum(len(regions) for regions in patterns.values()) < 3:
+                print("Not enough regions detected. Using alternative detection method.")
+
+                # Use edge detection
+                edges = cv2.Canny(gray, 50, 150)
+
+                # Dilate to connect nearby edges
+                dilated = cv2.dilate(edges, kernel, iterations=2)
+
+                # Find contours in the edge image
+                contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                # Filter and sort contours
+                valid_contours = [cnt for cnt in contours if cv2.contourArea(cnt) > (width * height * 0.005)]
+                valid_contours = sorted(valid_contours, key=lambda c: cv2.boundingRect(c)[1])
+
+                # Assign contours to pattern types
+                pattern_types = ['store', 'code', 'amount', 'description', 'expiry']
+                for i, cnt in enumerate(valid_contours[:5]):
+                    x, y, w, h = cv2.boundingRect(cnt)
+                    pattern_type = pattern_types[min(i, len(pattern_types)-1)]
+
+                    # Only add if we don't already have this type
+                    if not patterns[pattern_type]:
+                        patterns[pattern_type].append({
+                            'left': x,
+                            'top': y,
+                            'right': x + w,
+                            'bottom': y + h
+                        })
+
+            # Ensure we have at least one region for each type
+            for field in patterns.keys():
+                if not patterns[field]:
+                    # Use intelligent placement based on typical coupon layout
+                    if field == 'store':
+                        # Store name usually at the top
+                        y = height // 10
+                        h = height // 6
+                    elif field == 'code':
+                        # Code usually in the middle or bottom
+                        y = height // 2
+                        h = height // 8
+                    elif field == 'amount':
+                        # Amount usually prominent in the middle
+                        y = height * 3 // 10
+                        h = height // 7
+                    elif field == 'description':
+                        # Description usually in the middle
+                        y = height * 4 // 10
+                        h = height // 5
+                    elif field == 'expiry':
+                        # Expiry usually at the bottom
+                        y = height * 7 // 10
+                        h = height // 10
+
+                    patterns[field].append({
+                        'left': width // 4,
+                        'top': y,
+                        'right': width * 3 // 4,
+                        'bottom': y + h
+                    })
+
+            # Save debug image
+            debug_path = os.path.join(os.path.dirname(image_path), 'debug_regions.jpg')
+            cv2.imwrite(debug_path, debug_image)
+            print(f"Saved debug image to {debug_path}")
+
+            return patterns
+
+        except Exception as e:
+            print(f"Error in auto-detection: {e}")
+            import traceback
+            traceback.print_exc()
+            return self._get_default_patterns()
+
+    def _merge_boxes(self, boxes):
+        """Merge overlapping boxes
+
+        Args:
+            boxes (list): List of boxes as (x1, y1, x2, y2)
+
+        Returns:
+            list: Merged boxes
+        """
+        if not boxes:
+            return []
+
+        # Sort boxes by x coordinate
+        sorted_boxes = sorted(boxes, key=lambda box: box[0])
+
+        merged = []
+        current = sorted_boxes[0]
+
+        for box in sorted_boxes[1:]:
+            # Check if boxes overlap
+            if (current[2] >= box[0] and
+                current[0] <= box[2] and
+                current[3] >= box[1] and
+                current[1] <= box[3]):
+                # Merge boxes
+                current = (
+                    min(current[0], box[0]),
+                    min(current[1], box[1]),
+                    max(current[2], box[2]),
+                    max(current[3], box[3])
+                )
+            else:
+                merged.append(current)
+                current = box
+
+        merged.append(current)
+        return merged
+
+    def _group_boxes_by_proximity(self, boxes, proximity_threshold=20):
+        """Group boxes that are close to each other
+
+        Args:
+            boxes (list): List of boxes as (x1, y1, x2, y2)
+            proximity_threshold (int): Maximum distance between boxes to be grouped
+
+        Returns:
+            list: Grouped boxes
+        """
+        if not boxes:
+            return []
+
+        # Sort boxes by y coordinate
+        sorted_boxes = sorted(boxes, key=lambda box: box[1])
+
+        groups = []
+        current_group = [sorted_boxes[0]]
+
+        for box in sorted_boxes[1:]:
+            # Check if box is close to any box in current group
+            should_group = False
+            for group_box in current_group:
+                # Check vertical proximity
+                if abs(box[1] - group_box[3]) < proximity_threshold or abs(group_box[1] - box[3]) < proximity_threshold:
+                    # Check horizontal overlap or proximity
+                    if (box[0] <= group_box[2] + proximity_threshold and
+                        group_box[0] <= box[2] + proximity_threshold):
+                        should_group = True
+                        break
+
+            if should_group:
+                current_group.append(box)
+            else:
+                # Merge current group into a single box
+                if current_group:
+                    x1 = min(box[0] for box in current_group)
+                    y1 = min(box[1] for box in current_group)
+                    x2 = max(box[2] for box in current_group)
+                    y2 = max(box[3] for box in current_group)
+                    groups.append((x1, y1, x2, y2))
+
+                current_group = [box]
+
+        # Add the last group
+        if current_group:
+            x1 = min(box[0] for box in current_group)
+            y1 = min(box[1] for box in current_group)
+            x2 = max(box[2] for box in current_group)
+            y2 = max(box[3] for box in current_group)
+            groups.append((x1, y1, x2, y2))
+
+        return groups
+
+    def _extract_text_with_advanced_ocr(self, image, pattern_type):
+        """Extract text from an image using advanced OCR techniques
+
+        Args:
+            image (numpy.ndarray): Image to extract text from
+            pattern_type (str): Type of pattern (store, code, amount, etc.)
+
+        Returns:
+            str: Extracted text
+        """
+        import cv2
+        import numpy as np
+        import pytesseract
+        from PIL import Image as PILImage, ImageEnhance
+
+        # Create a copy of the image
+        img = image.copy()
+
+        # Convert to grayscale if not already
+        if len(img.shape) == 3:
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = img.copy()
+
+        # Apply different preprocessing techniques based on pattern type
+        if pattern_type == 'code':
+            # For codes, we want high contrast and clear edges
+            # Apply adaptive thresholding
+            binary = cv2.adaptiveThreshold(
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY, 11, 2
+            )
+
+            # Apply morphological operations to clean up the binary image
+            kernel = np.ones((2, 2), np.uint8)
+            binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+
+            # Convert to PIL for Tesseract
+            pil_img = PILImage.fromarray(binary)
+
+            # Use Tesseract with specific config for codes
+            config = '--oem 3 --psm 7 -l eng -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+            text = pytesseract.image_to_string(pil_img, config=config).strip()
+
+        elif pattern_type == 'amount':
+            # For amounts, we want to detect numbers and symbols
+            # Apply bilateral filter to preserve edges while removing noise
+            filtered = cv2.bilateralFilter(gray, 11, 17, 17)
+
+            # Apply adaptive thresholding
+            binary = cv2.adaptiveThreshold(
+                filtered, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                cv2.THRESH_BINARY, 15, 2
+            )
+
+            # Convert to PIL for Tesseract
+            pil_img = PILImage.fromarray(binary)
+
+            # Enhance contrast
+            enhancer = ImageEnhance.Contrast(pil_img)
+            enhanced_img = enhancer.enhance(2.0)
+
+            # Use Tesseract with specific config for amounts
+            config = '--oem 3 --psm 6 -l eng -c tessedit_char_whitelist=0123456789%.₹$ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+            text = pytesseract.image_to_string(enhanced_img, config=config).strip()
+
+        elif pattern_type == 'expiry':
+            # For expiry dates, we want to detect dates
+            # Apply Gaussian blur to reduce noise
+            blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+
+            # Apply Otsu's thresholding
+            _, binary = cv2.threshold(blurred, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+            # Convert to PIL for Tesseract
+            pil_img = PILImage.fromarray(binary)
+
+            # Use Tesseract with specific config for dates
+            config = '--oem 3 --psm 6 -l eng'
+            text = pytesseract.image_to_string(pil_img, config=config).strip()
+
+        else:
+            # For other types, use a general approach
+            # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            equalized = clahe.apply(gray)
+
+            # Apply Gaussian blur to reduce noise
+            blurred = cv2.GaussianBlur(equalized, (3, 3), 0)
+
+            # Apply adaptive thresholding
+            binary = cv2.adaptiveThreshold(
+                blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY, 11, 2
+            )
+
+            # Convert to PIL for Tesseract
+            pil_img = PILImage.fromarray(binary)
+
+            # Use Tesseract with general config
+            config = '--oem 3 --psm 6 -l eng'
+            text = pytesseract.image_to_string(pil_img, config=config).strip()
+
+        # If no text was extracted, try with the original image
+        if not text:
+            pil_img = PILImage.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB) if len(img.shape) == 3 else img)
+            text = pytesseract.image_to_string(pil_img).strip()
+
+        # If still no text, try with different PSM mode
+        if not text:
+            config = '--oem 3 --psm 4 -l eng'
+            text = pytesseract.image_to_string(pil_img, config=config).strip()
+
+        return text
+
+    def _determine_region_type(self, region_pil, box, img_height, img_width):
+        """Determine the type of a region based on its content and position
+
+        Args:
+            region_pil (PIL.Image): Region image
+            box (tuple): Region coordinates (x1, y1, x2, y2)
+            img_height (int): Full image height
+            img_width (int): Full image width
+
+        Returns:
+            str: Region type (store, code, amount, description, expiry)
+        """
+        _, y1, _, y2 = box
+
+        # Normalized position (0-1)
+        center_y = (y1 + y2) / 2 / img_height
+
+        # Try OCR to get text content
+        try:
+            import pytesseract
+            text = pytesseract.image_to_string(region_pil).lower()
+        except:
+            text = ""
+
+        # Check for keywords in the text
+        if any(keyword in text for keyword in ['off', 'discount', 'save', '%', 'rs.', '₹', '$']):
+            return 'amount'
+        elif any(keyword in text for keyword in ['code', 'coupon', 'use']):
+            return 'code'
+        elif any(keyword in text for keyword in ['valid', 'expiry', 'expires', 'till']):
+            return 'expiry'
+
+        # If no keywords found, use position
+        if center_y < 0.2:
+            return 'store'
+        elif center_y < 0.4:
+            return 'amount'
+        elif center_y < 0.6:
+            return 'code'
+        elif center_y < 0.8:
+            return 'description'
+        else:
+            return 'expiry'
+
+    def _get_default_patterns(self):
+        """Return default patterns as a fallback
+
+        Returns:
+            dict: Dictionary of default pattern types and regions
+        """
+        return {
+            'store': [{'left': 100, 'top': 100, 'right': 400, 'bottom': 200}],
+            'description': [{'left': 100, 'top': 250, 'right': 400, 'bottom': 350}],
+            'expiry': [{'left': 100, 'top': 400, 'right': 300, 'bottom': 450}],
+            'code': [{'left': 100, 'top': 500, 'right': 300, 'bottom': 550}],
+            'amount': [{'left': 100, 'top': 600, 'right': 300, 'bottom': 650}]
+        }
