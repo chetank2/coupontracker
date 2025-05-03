@@ -1,14 +1,14 @@
 {
-  "training_date": "2025-05-03T19:47:12.757865",
-  "epochs": 10,
+  "training_date": "2025-05-03T19:54:05.829152",
+  "epochs": 20,
   "batch_size": 4,
   "learning_rate": 0.001,
-  "train_samples": 3,
-  "val_samples": 0,
-  "test_samples": 2,
-  "final_train_loss": 0.23782601967822023,
-  "final_val_loss": 0.5739964534793579,
-  "test_accuracy": 0.8690532185055614,
+  "train_samples": 9,
+  "val_samples": 2,
+  "test_samples": 3,
+  "final_train_loss": 0.2777474931982158,
+  "final_val_loss": 0.46221662723094287,
+  "test_accuracy": 0.8741094092419638,
   "classes": [
     "store_name",
     "coupon_code",
@@ -16,5 +16,6 @@
     "discount_amount",
     "min_purchase"
   ],
-  "model_type": "simulated_coupon_recognizer"
+  "model_type": "india_coupon_recognizer",
+  "source": "r/CouponsIndia"
 }

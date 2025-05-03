@@ -1,0 +1,29 @@
+{
+  "model_type": "india_coupon_recognizer",
+  "version": "1.0.0",
+  "accuracy": 0.8741094092419638,
+  "created_at": "2025-05-03T19:54:05.830126",
+  "description": "This is a coupon recognition model trained on r/CouponsIndia data.",
+  "fields": {
+    "store_name": {
+      "weight": 1.0,
+      "required": true
+    },
+    "coupon_code": {
+      "weight": 1.0,
+      "required": true
+    },
+    "expiry_date": {
+      "weight": 0.8,
+      "required": false
+    },
+    "discount_amount": {
+      "weight": 0.9,
+      "required": false
+    },
+    "min_purchase": {
+      "weight": 0.7,
+      "required": false
+    }
+  }
+}
