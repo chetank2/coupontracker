@@ -25,7 +25,7 @@ fun SecureApiSelectionDialog(
 ) {
     var selectedApiType by remember {
         val savedApiType = securePreferencesManager.getString(
-            SecurePreferencesManager.KEY_SELECTED_API, 
+            SecurePreferencesManager.KEY_SELECTED_API,
             ApiType.GOOGLE_CLOUD_VISION.name
         )
         mutableStateOf(
@@ -36,7 +36,7 @@ fun SecureApiSelectionDialog(
             }
         )
     }
-    
+
     // Check if API keys are available
     val googleApiKey = securePreferencesManager.getString(
         SecurePreferencesManager.KEY_GOOGLE_CLOUD_VISION_API_KEY, ""
@@ -44,12 +44,12 @@ fun SecureApiSelectionDialog(
     val mistralApiKey = securePreferencesManager.getString(
         SecurePreferencesManager.KEY_MISTRAL_API_KEY, ""
     ) ?: ""
-    
+
     // If first launch and no keys available, pre-select ML Kit
     if (isFirstLaunch && googleApiKey.isBlank() && mistralApiKey.isBlank()) {
         selectedApiType = ApiType.ML_KIT
     }
-    
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(dismissOnBackPress = !isFirstLaunch, dismissOnClickOutside = !isFirstLaunch)
@@ -70,28 +70,28 @@ fun SecureApiSelectionDialog(
                     style = MaterialTheme.typography.headlineSmall,
                     textAlign = TextAlign.Center
                 )
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 Text(
                     text = "Please select which OCR API to use for text recognition:",
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center
                 )
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 ApiType.values().forEach { apiType ->
                     val isKeyAvailable = when (apiType) {
                         ApiType.GOOGLE_CLOUD_VISION -> googleApiKey.isNotBlank()
                         ApiType.MISTRAL -> mistralApiKey.isNotBlank()
                         ApiType.COMBINED -> googleApiKey.isNotBlank() && mistralApiKey.isNotBlank()
-                        ApiType.ML_KIT, ApiType.TESSERACT -> true // Always available
+                        ApiType.ML_KIT, ApiType.TESSERACT, ApiType.PATTERN_RECOGNIZER -> true // Always available
                         ApiType.SUPER -> googleApiKey.isNotBlank() || mistralApiKey.isNotBlank() || true // At least one API or on-device
                     }
-                    
-                    val isEnabled = isKeyAvailable || apiType == ApiType.ML_KIT || apiType == ApiType.TESSERACT
-                    
+
+                    val isEnabled = isKeyAvailable || apiType == ApiType.ML_KIT || apiType == ApiType.TESSERACT || apiType == ApiType.PATTERN_RECOGNIZER
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -116,7 +116,7 @@ fun SecureApiSelectionDialog(
                             },
                             enabled = isEnabled
                         )
-                        
+
                         Column(
                             modifier = Modifier
                                 .padding(start = 16.dp)
@@ -130,7 +130,7 @@ fun SecureApiSelectionDialog(
                                 else
                                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                             )
-                            
+
                             if (!isEnabled) {
                                 Text(
                                     text = when (apiType) {
@@ -145,9 +145,9 @@ fun SecureApiSelectionDialog(
                         }
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End
@@ -158,34 +158,34 @@ fun SecureApiSelectionDialog(
                         ) {
                             Text("Cancel")
                         }
-                        
+
                         Spacer(modifier = Modifier.width(8.dp))
                     }
-                    
+
                     Button(
                         onClick = {
                             // Save the selection securely
                             securePreferencesManager.saveString(
-                                SecurePreferencesManager.KEY_SELECTED_API, 
+                                SecurePreferencesManager.KEY_SELECTED_API,
                                 selectedApiType.name
                             )
-                            
+
                             // For backward compatibility
                             securePreferencesManager.saveBoolean(
-                                SecurePreferencesManager.KEY_USE_MISTRAL_API, 
+                                SecurePreferencesManager.KEY_USE_MISTRAL_API,
                                 selectedApiType == ApiType.MISTRAL
                             )
-                            
+
                             onDismiss()
                         }
                     ) {
                         Text("Confirm")
                     }
                 }
-                
+
                 if (isFirstLaunch) {
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     Text(
                         text = "You can change this later in Settings",
                         style = MaterialTheme.typography.bodySmall,

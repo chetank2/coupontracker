@@ -205,8 +205,7 @@ dependencies {
 
     // Image Processing Libraries
 
-    // Image Processing Libraries
-    // Use Android's built-in libraries instead of OpenCV and RenderScript
+    // Instead of using OpenCV from Maven, we'll use Android's built-in image processing capabilities
     implementation("androidx.core:core-ktx:1.12.0") // Already included above, contains some image processing utilities
     implementation("androidx.exifinterface:exifinterface:1.3.7") // For image metadata handling
 

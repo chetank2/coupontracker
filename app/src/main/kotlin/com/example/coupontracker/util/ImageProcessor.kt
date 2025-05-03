@@ -77,6 +77,9 @@ class ImageProcessor(
     private var tesseractOCRHelper: TesseractOCRHelper = TesseractOCRHelper(context)
     private var tesseractLanguageManager: TesseractLanguageManager = TesseractLanguageManager(context)
 
+    // Coupon pattern recognizer
+    private var couponPatternRecognizer: CouponPatternRecognizer = CouponPatternRecognizer(context)
+
     // Track the currently selected API
     private var selectedApiType: ApiType = ApiType.GOOGLE_CLOUD_VISION
 
@@ -467,6 +470,26 @@ class ImageProcessor(
                         tryMlKit(bitmap)
                     }
                 }
+
+                ApiType.PATTERN_RECOGNIZER -> {
+                    // Use Pattern Recognizer directly
+                    Log.d(TAG, "Using Pattern Recognizer directly as selected OCR method")
+                    val result = tryPatternRecognizer(bitmap)
+                    if (result != null) {
+                        result
+                    } else {
+                        // Fall back to Tesseract if Pattern Recognizer fails
+                        Log.d(TAG, "Pattern Recognizer failed, falling back to Tesseract")
+                        val tesseractResult = tryTesseract(bitmap)
+                        if (tesseractResult != null) {
+                            tesseractResult
+                        } else {
+                            // Fall back to ML Kit if both fail
+                            Log.d(TAG, "Tesseract OCR also failed, falling back to ML Kit")
+                            tryMlKit(bitmap)
+                        }
+                    }
+                }
             }
 
             // Return the result from the when expression
@@ -652,6 +675,38 @@ class ImageProcessor(
         val couponInfo = textExtractor.extractCouponInfo(text)
         Log.d(TAG, "Successfully extracted coupon info using ML Kit: $couponInfo")
         return couponInfo
+    }
+
+    /**
+     * Try processing with Coupon Pattern Recognizer
+     */
+    private suspend fun tryPatternRecognizer(bitmap: Bitmap): CouponInfo? {
+        return try {
+            // Initialize the pattern recognizer
+            val initialized = couponPatternRecognizer.initialize()
+
+            if (!initialized) {
+                Log.e(TAG, "Failed to initialize Coupon Pattern Recognizer")
+                return null
+            }
+
+            // Recognize elements in the image
+            val elements = couponPatternRecognizer.recognizeElements(bitmap)
+
+            if (elements.isEmpty()) {
+                Log.w(TAG, "Coupon Pattern Recognizer returned no elements")
+                return null
+            }
+
+            // Convert elements to CouponInfo
+            val couponInfo = couponPatternRecognizer.convertToCouponInfo(elements)
+
+            Log.d(TAG, "Successfully extracted coupon info using Pattern Recognizer: $couponInfo")
+            couponInfo
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing with Coupon Pattern Recognizer", e)
+            null
+        }
     }
 
     /**
@@ -1027,6 +1082,33 @@ class ImageProcessor(
                 } catch (e: Exception) {
                     Log.e(TAG, "Error using Tesseract OCR, falling back to ML Kit", e)
                     return processSingleCoupon(bitmap, origImageUri, ApiType.ML_KIT)
+                }
+            }
+
+            ApiType.PATTERN_RECOGNIZER -> {
+                try {
+                    Log.d(TAG, "Using Pattern Recognizer for single coupon")
+
+                    // Initialize the pattern recognizer
+                    val initialized = couponPatternRecognizer.initialize()
+                    if (!initialized) {
+                        Log.e(TAG, "Failed to initialize Pattern Recognizer, falling back to Tesseract")
+                        return processSingleCoupon(bitmap, origImageUri, ApiType.TESSERACT)
+                    }
+
+                    // Recognize elements in the image
+                    val elements = couponPatternRecognizer.recognizeElements(bitmap)
+
+                    if (elements.isEmpty()) {
+                        Log.w(TAG, "Pattern Recognizer returned no elements, falling back to Tesseract")
+                        return processSingleCoupon(bitmap, origImageUri, ApiType.TESSERACT)
+                    }
+
+                    // Convert elements to CouponInfo
+                    couponPatternRecognizer.convertToCouponInfo(elements)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error using Pattern Recognizer, falling back to Tesseract", e)
+                    return processSingleCoupon(bitmap, origImageUri, ApiType.TESSERACT)
                 }
             }
         }

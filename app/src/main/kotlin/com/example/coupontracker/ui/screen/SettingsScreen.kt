@@ -45,7 +45,8 @@ enum class ApiType(val displayName: String) {
     COMBINED("Combined Vision+Mistral"),
     ML_KIT("ML Kit (On-device)"),
     TESSERACT("Tesseract OCR (On-device)"),
-    SUPER("Super OCR (All Technologies)")
+    SUPER("Super OCR (All Technologies)"),
+    PATTERN_RECOGNIZER("Pattern Recognizer (On-device)")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

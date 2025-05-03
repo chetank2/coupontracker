@@ -83,9 +83,10 @@ fun ApiSelectionDialog(
                         ApiType.ML_KIT -> true // Always available
                         ApiType.TESSERACT -> true // Always available
                         ApiType.SUPER -> googleApiKey.isNotBlank() && mistralApiKey.isNotBlank()
+                        ApiType.PATTERN_RECOGNIZER -> true // Always available
                     }
 
-                    val isEnabled = isKeyAvailable || apiType == ApiType.ML_KIT || apiType == ApiType.TESSERACT
+                    val isEnabled = isKeyAvailable || apiType == ApiType.ML_KIT || apiType == ApiType.TESSERACT || apiType == ApiType.PATTERN_RECOGNIZER
 
                     Row(
                         modifier = Modifier
