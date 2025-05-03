@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Coupon Training Tool</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+        
+        /* Navigation styles */
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px 20px;
+            margin-bottom: 20px;
+        }
+        header h1 {
+            margin: 0;
+            padding: 10px 0;
+        }
+        .main-nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            background-color: #34495e;
+            border-radius: 4px;
+        }
+        .main-nav li {
+            padding: 0;
+            margin: 0;
+        }
+        .main-nav a {
+            display: block;
+            padding: 10px 20px;
+            color: white;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        .main-nav a:hover {
+            background-color: #3498db;
+        }
+        .main-nav li.active a {
+            background-color: #3498db;
+            font-weight: bold;
+        }
+        
+        /* Content styles */
+        .container {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card-title {
+            margin-top: 0;
+            color: #2c3e50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        .button-primary {
+            background-color: #2ecc71;
+        }
+        
+        .button-primary:hover {
+            background-color: #27ae60;
+        }
+        
+        .button-danger {
+            background-color: #e74c3c;
+        }
+        
+        .button-danger:hover {
+            background-color: #c0392b;
+        }
+        
+        .progress-container {
+            width: 100%;
+            height: 20px;
+            background-color: #f3f3f3;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            border-radius: 10px;
+            background-color: #3498db;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .chart-container {
+            height: 300px;
+            margin: 20px 0;
+        }
+    </style>
+    <!-- Include Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header>
+        <h1>Coupon Annotation Tool</h1>
+        <nav class="main-nav">
+            <ul>
+                <li class="{{ 'active' if active_page == 'annotation' else '' }}"><a href="/">Annotation</a></li>
+                <li class="{{ 'active' if active_page == 'training' else '' }}"><a href="/training">Training</a></li>
+                <li class="{{ 'active' if active_page == 'testing' else '' }}"><a href="/testing">Testing</a></li>
+            </ul>
+        </nav>
+    </header>
+    
+    <div class="container">
+        <div class="grid">
+            <!-- Training Configuration -->
+            <div class="card">
+                <h2 class="card-title">Training Configuration</h2>
+                <form id="training-form">
+                    <div class="form-group">
+                        <label for="model-type">Model Type</label>
+                        <select id="model-type" name="model_type">
+                            <option value="coupon_recognizer">Coupon Recognizer</option>
+                            <option value="field_detector">Field Detector</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="epochs">Epochs</label>
+                        <input type="number" id="epochs" name="epochs" value="20" min="1" max="100">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="batch-size">Batch Size</label>
+                        <input type="number" id="batch-size" name="batch_size" value="4" min="1" max="32">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="learning-rate">Learning Rate</label>
+                        <input type="number" id="learning-rate" name="learning_rate" value="0.001" step="0.0001" min="0.0001" max="0.1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Fields to Train</label>
+                        <div>
+                            <input type="checkbox" id="field-store-name" name="fields" value="store_name" checked>
+                            <label for="field-store-name" style="display: inline;">Store Name</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="field-coupon-code" name="fields" value="coupon_code" checked>
+                            <label for="field-coupon-code" style="display: inline;">Coupon Code</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="field-expiry-date" name="fields" value="expiry_date" checked>
+                            <label for="field-expiry-date" style="display: inline;">Expiry Date</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="field-discount-amount" name="fields" value="discount_amount" checked>
+                            <label for="field-discount-amount" style="display: inline;">Discount Amount</label>
+                        </div>
+                        <div>
+                            <input type="checkbox" id="field-min-purchase" name="fields" value="min_purchase" checked>
+                            <label for="field-min-purchase" style="display: inline;">Minimum Purchase</label>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="button" id="start-training-btn" class="button-primary">Start Training</button>
+                        <button type="button" id="stop-training-btn" class="button-danger" disabled>Stop Training</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Dataset Statistics -->
+            <div class="card">
+                <h2 class="card-title">Dataset Statistics</h2>
+                <div id="dataset-stats">
+                    <p><strong>Total Images:</strong> <span id="total-images">14</span></p>
+                    <p><strong>Training Set:</strong> <span id="train-images">9</span> images</p>
+                    <p><strong>Validation Set:</strong> <span id="val-images">2</span> images</p>
+                    <p><strong>Test Set:</strong> <span id="test-images">3</span> images</p>
+                    
+                    <h3>Sources</h3>
+                    <ul>
+                        <li><strong>Zomato:</strong> <span id="zomato-count">2</span> images</li>
+                        <li><strong>GPay:</strong> <span id="gpay-count">3</span> images</li>
+                        <li><strong>PhonePe:</strong> <span id="phonepe-count">1</span> images</li>
+                        <li><strong>Myntra:</strong> <span id="myntra-count">2</span> images</li>
+                        <li><strong>Other:</strong> <span id="other-count">6</span> images</li>
+                    </ul>
+                    
+                    <h3>Annotation Status</h3>
+                    <ul>
+                        <li><strong>Verified:</strong> <span id="verified-count">10</span> images</li>
+                        <li><strong>Unverified:</strong> <span id="unverified-count">4</span> images</li>
+                        <li><strong>Not Annotated:</strong> <span id="not-annotated-count">0</span> images</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Training Progress -->
+        <div class="card">
+            <h2 class="card-title">Training Progress</h2>
+            <div id="training-progress">
+                <p><strong>Status:</strong> <span id="training-status">Not Started</span></p>
+                <p><strong>Current Epoch:</strong> <span id="current-epoch">0</span>/<span id="total-epochs">20</span></p>
+                <p><strong>Time Elapsed:</strong> <span id="time-elapsed">00:00:00</span></p>
+                <p><strong>Estimated Time Remaining:</strong> <span id="time-remaining">00:00:00</span></p>
+                
+                <div class="progress-container">
+                    <div class="progress-bar" id="training-progress-bar" style="width: 0%;"></div>
+                </div>
+                
+                <div class="chart-container">
+                    <canvas id="training-chart"></canvas>
+                </div>
+                
+                <div class="form-group">
+                    <button type="button" id="export-model-btn" disabled>Export Model</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Training History -->
+        <div class="card">
+            <h2 class="card-title">Training History</h2>
+            <div id="training-history">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background-color: #f2f2f2;">
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Date</th>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Model Type</th>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Accuracy</th>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Loss</th>
+                            <th style="padding: 8px; text-align: left; border-bottom: 1px solid #ddd;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table-body">
+                        <tr>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">May 3, 2025</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">India Coupon Recognizer</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">87.41%</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">0.2777</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                <button type="button" class="view-model-btn">View</button>
+                                <button type="button" class="export-model-btn">Export</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Chart instance
+        let trainingChart = null;
+        
+        // Initialize the training chart
+        function initTrainingChart() {
+            const ctx = document.getElementById('training-chart').getContext('2d');
+            
+            trainingChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Training Loss',
+                            data: [],
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: true
+                        },
+                        {
+                            label: 'Validation Loss',
+                            data: [],
+                            borderColor: '#e74c3c',
+                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Training Progress',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Epoch'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Loss'
+                            },
+                            min: 0
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Load dataset statistics
+        function loadDatasetStats() {
+            fetch('/api/dataset-stats')
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    }
+                    return {
+                        total: 14,
+                        train: 9,
+                        val: 2,
+                        test: 3,
+                        sources: {
+                            zomato: 2,
+                            gpay: 3,
+                            phonepe: 1,
+                            myntra: 2,
+                            other: 6
+                        },
+                        annotation_status: {
+                            verified: 10,
+                            unverified: 4,
+                            not_annotated: 0
+                        }
+                    };
+                })
+                .then(data => {
+                    // Update dataset statistics
+                    document.getElementById('total-images').textContent = data.total;
+                    document.getElementById('train-images').textContent = data.train;
+                    document.getElementById('val-images').textContent = data.val;
+                    document.getElementById('test-images').textContent = data.test;
+                    
+                    // Update source counts
+                    document.getElementById('zomato-count').textContent = data.sources.zomato;
+                    document.getElementById('gpay-count').textContent = data.sources.gpay;
+                    document.getElementById('phonepe-count').textContent = data.sources.phonepe;
+                    document.getElementById('myntra-count').textContent = data.sources.myntra;
+                    document.getElementById('other-count').textContent = data.sources.other;
+                    
+                    // Update annotation status
+                    document.getElementById('verified-count').textContent = data.annotation_status.verified;
+                    document.getElementById('unverified-count').textContent = data.annotation_status.unverified;
+                    document.getElementById('not-annotated-count').textContent = data.annotation_status.not_annotated;
+                });
+        }
+        
+        // Load training history
+        function loadTrainingHistory() {
+            fetch('/api/training-history')
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    }
+                    return {
+                        history: [
+                            {
+                                date: 'May 3, 2025',
+                                model_type: 'India Coupon Recognizer',
+                                accuracy: 87.41,
+                                loss: 0.2777,
+                                id: '1'
+                            }
+                        ]
+                    };
+                })
+                .then(data => {
+                    // Update training history table
+                    const tableBody = document.getElementById('history-table-body');
+                    tableBody.innerHTML = '';
+                    
+                    data.history.forEach(entry => {
+                        const row = document.createElement('tr');
+                        
+                        row.innerHTML = `
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${entry.date}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${entry.model_type}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${entry.accuracy.toFixed(2)}%</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">${entry.loss.toFixed(4)}</td>
+                            <td style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                <button type="button" class="view-model-btn" data-id="${entry.id}">View</button>
+                                <button type="button" class="export-model-btn" data-id="${entry.id}">Export</button>
+                            </td>
+                        `;
+                        
+                        tableBody.appendChild(row);
+                    });
+                    
+                    // Add event listeners to buttons
+                    document.querySelectorAll('.view-model-btn').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            const modelId = this.getAttribute('data-id');
+                            alert(`Viewing model ${modelId}`);
+                            // Implement view model functionality
+                        });
+                    });
+                    
+                    document.querySelectorAll('.export-model-btn').forEach(btn => {
+                        btn.addEventListener('click', function() {
+                            const modelId = this.getAttribute('data-id');
+                            alert(`Exporting model ${modelId}`);
+                            // Implement export model functionality
+                        });
+                    });
+                });
+        }
+        
+        // Start training
+        function startTraining() {
+            // Get form data
+            const modelType = document.getElementById('model-type').value;
+            const epochs = document.getElementById('epochs').value;
+            const batchSize = document.getElementById('batch-size').value;
+            const learningRate = document.getElementById('learning-rate').value;
+            
+            // Get selected fields
+            const fields = Array.from(document.querySelectorAll('input[name="fields"]:checked')).map(cb => cb.value);
+            
+            // Prepare training data
+            const trainingData = {
+                model_type: modelType,
+                epochs: parseInt(epochs),
+                batch_size: parseInt(batchSize),
+                learning_rate: parseFloat(learningRate),
+                fields: fields
+            };
+            
+            // Update UI
+            document.getElementById('training-status').textContent = 'Starting...';
+            document.getElementById('start-training-btn').disabled = true;
+            document.getElementById('stop-training-btn').disabled = false;
+            document.getElementById('total-epochs').textContent = epochs;
+            
+            // Clear chart data
+            trainingChart.data.labels = [];
+            trainingChart.data.datasets[0].data = [];
+            trainingChart.data.datasets[1].data = [];
+            trainingChart.update();
+            
+            // Start training
+            fetch('/api/start-training', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(trainingData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Start polling for training progress
+                    document.getElementById('training-status').textContent = 'Training...';
+                    pollTrainingProgress();
+                } else {
+                    document.getElementById('training-status').textContent = 'Error: ' + data.message;
+                    document.getElementById('start-training-btn').disabled = false;
+                    document.getElementById('stop-training-btn').disabled = true;
+                }
+            })
+            .catch(error => {
+                console.error('Error starting training:', error);
+                document.getElementById('training-status').textContent = 'Error: ' + error.message;
+                document.getElementById('start-training-btn').disabled = false;
+                document.getElementById('stop-training-btn').disabled = true;
+            });
+        }
+        
+        // Stop training
+        function stopTraining() {
+            fetch('/api/stop-training', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('training-status').textContent = 'Stopped';
+                    document.getElementById('start-training-btn').disabled = false;
+                    document.getElementById('stop-training-btn').disabled = true;
+                } else {
+                    alert('Error stopping training: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error stopping training:', error);
+                alert('Error stopping training: ' + error.message);
+            });
+        }
+        
+        // Poll training progress
+        function pollTrainingProgress() {
+            const progressInterval = setInterval(() => {
+                fetch('/api/training-progress')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'training') {
+                            // Update progress
+                            document.getElementById('current-epoch').textContent = data.current_epoch;
+                            document.getElementById('time-elapsed').textContent = data.time_elapsed;
+                            document.getElementById('time-remaining').textContent = data.time_remaining;
+                            
+                            // Update progress bar
+                            const progress = (data.current_epoch / data.total_epochs) * 100;
+                            document.getElementById('training-progress-bar').style.width = progress + '%';
+                            
+                            // Update chart
+                            trainingChart.data.labels = Array.from({length: data.current_epoch}, (_, i) => i + 1);
+                            trainingChart.data.datasets[0].data = data.train_losses;
+                            trainingChart.data.datasets[1].data = data.val_losses;
+                            trainingChart.update();
+                        } else if (data.status === 'completed') {
+                            // Training completed
+                            clearInterval(progressInterval);
+                            
+                            document.getElementById('training-status').textContent = 'Completed';
+                            document.getElementById('start-training-btn').disabled = false;
+                            document.getElementById('stop-training-btn').disabled = true;
+                            document.getElementById('export-model-btn').disabled = false;
+                            
+                            // Update progress bar to 100%
+                            document.getElementById('training-progress-bar').style.width = '100%';
+                            
+                            // Reload training history
+                            loadTrainingHistory();
+                            
+                            // Show completion message
+                            alert('Training completed successfully!');
+                        } else if (data.status === 'error') {
+                            // Training error
+                            clearInterval(progressInterval);
+                            
+                            document.getElementById('training-status').textContent = 'Error: ' + data.message;
+                            document.getElementById('start-training-btn').disabled = false;
+                            document.getElementById('stop-training-btn').disabled = true;
+                            
+                            // Show error message
+                            alert('Training error: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error polling training progress:', error);
+                    });
+            }, 1000);
+        }
+        
+        // Export model
+        function exportModel() {
+            fetch('/api/export-model', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('Model exported successfully to: ' + data.export_path);
+                } else {
+                    alert('Error exporting model: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error exporting model:', error);
+                alert('Error exporting model: ' + error.message);
+            });
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize chart
+            initTrainingChart();
+            
+            // Load data
+            loadDatasetStats();
+            loadTrainingHistory();
+            
+            // Add event listeners
+            document.getElementById('start-training-btn').addEventListener('click', startTraining);
+            document.getElementById('stop-training-btn').addEventListener('click', stopTraining);
+            document.getElementById('export-model-btn').addEventListener('click', exportModel);
+        });
+    </script>
+</body>
+</html>

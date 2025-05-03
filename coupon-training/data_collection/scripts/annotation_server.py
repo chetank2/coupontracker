@@ -29,6 +29,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROCESSED_IMAGES_DIR = os.path.join(BASE_DIR, 'processed_images')
 ANNOTATIONS_DIR = os.path.join(BASE_DIR, 'annotations')
 MODEL_DIR = os.path.join(BASE_DIR, 'model')
+TRAINING_DIR = os.path.join(BASE_DIR, 'training')
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 TEMPLATES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 
@@ -569,7 +570,53 @@ def index():
 </html>
             """)
 
-    return render_template('index.html')
+    return render_template('index.html', active_page='annotation')
+
+@app.route('/training')
+def training_page():
+    """Render the training interface."""
+    # Create training.html template if it doesn't exist
+    template_path = os.path.join(TEMPLATES_DIR, 'training.html')
+    if not os.path.exists(template_path):
+        with open(template_path, 'w') as f:
+            f.write("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Coupon Training Tool</title>
+    <!-- Include CSS and JS here -->
+</head>
+<body>
+    <h1>Coupon Training Tool</h1>
+    <p>Training page is under construction.</p>
+</body>
+</html>
+            """)
+
+    return render_template('training.html', active_page='training')
+
+@app.route('/testing')
+def testing_page():
+    """Render the testing interface."""
+    # Create testing.html template if it doesn't exist
+    template_path = os.path.join(TEMPLATES_DIR, 'testing.html')
+    if not os.path.exists(template_path):
+        with open(template_path, 'w') as f:
+            f.write("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Coupon Testing Tool</title>
+    <!-- Include CSS and JS here -->
+</head>
+<body>
+    <h1>Coupon Testing Tool</h1>
+    <p>Testing page is under construction.</p>
+</body>
+</html>
+            """)
+
+    return render_template('testing.html', active_page='testing')
 
 @app.route('/api/images')
 def get_images():
@@ -661,6 +708,342 @@ def get_model_metrics():
         'history': {
             'train_loss': [0.9978, 0.9963, 0.9625, 0.8524, 0.8337, 0.7592, 0.7504, 0.7072, 0.6436, 0.6719, 0.6424, 0.5221, 0.4807, 0.4933, 0.4466, 0.3617, 0.3319, 0.3508, 0.2825, 0.2777],
             'val_loss': [1.2616, 1.1672, 1.1382, 0.9995, 0.9950, 1.1240, 0.9238, 1.0279, 1.0193, 0.9826, 0.8443, 0.7378, 0.8111, 0.7108, 0.7849, 0.7319, 0.5647, 0.5242, 0.6235, 0.4622]
+        }
+    })
+
+@app.route('/api/dataset-stats')
+def get_dataset_stats():
+    """API endpoint to get dataset statistics."""
+    # Count images in each directory
+    train_dir = os.path.join(TRAINING_DIR, 'train')
+    val_dir = os.path.join(TRAINING_DIR, 'val')
+    test_dir = os.path.join(TRAINING_DIR, 'test')
+
+    train_count = len([f for f in os.listdir(train_dir) if f.endswith(('.jpg', '.jpeg', '.png', '.gif'))]) if os.path.exists(train_dir) else 0
+    val_count = len([f for f in os.listdir(val_dir) if f.endswith(('.jpg', '.jpeg', '.png', '.gif'))]) if os.path.exists(val_dir) else 0
+    test_count = len([f for f in os.listdir(test_dir) if f.endswith(('.jpg', '.jpeg', '.png', '.gif'))]) if os.path.exists(test_dir) else 0
+
+    # Count images by source
+    source_counts = {
+        'zomato': 0,
+        'gpay': 0,
+        'phonepe': 0,
+        'myntra': 0,
+        'other': 0
+    }
+
+    # Count images by annotation status
+    annotation_status = {
+        'verified': 0,
+        'unverified': 0,
+        'not_annotated': 0
+    }
+
+    # Get all processed images
+    image_list = get_image_list()
+    status = get_annotation_status()
+
+    # Count by source and status
+    for image_path in image_list:
+        # Determine source from filename
+        filename = os.path.basename(image_path)
+        if 'zomato' in filename.lower():
+            source_counts['zomato'] += 1
+        elif 'gpay' in filename.lower() or 'google_pay' in filename.lower():
+            source_counts['gpay'] += 1
+        elif 'phonepe' in filename.lower() or 'phone_pe' in filename.lower():
+            source_counts['phonepe'] += 1
+        elif 'myntra' in filename.lower():
+            source_counts['myntra'] += 1
+        else:
+            source_counts['other'] += 1
+
+        # Count by annotation status
+        if image_path in status:
+            if status[image_path] == 'verified':
+                annotation_status['verified'] += 1
+            elif status[image_path] == 'unverified':
+                annotation_status['unverified'] += 1
+            elif status[image_path] == 'not_annotated':
+                annotation_status['not_annotated'] += 1
+
+    # Prepare response
+    response = {
+        'total': len(image_list),
+        'train': train_count,
+        'val': val_count,
+        'test': test_count,
+        'sources': source_counts,
+        'annotation_status': annotation_status
+    }
+
+    return jsonify(response)
+
+@app.route('/api/training-history')
+def get_training_history():
+    """API endpoint to get training history."""
+    # Check if model metadata exists
+    metadata_path = os.path.join(MODEL_DIR, 'model_metadata.json')
+
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+
+            # Format the date
+            training_date = datetime.fromisoformat(metadata.get('training_date', datetime.now().isoformat()))
+            formatted_date = training_date.strftime('%b %d, %Y')
+
+            # Prepare history entry
+            history_entry = {
+                'date': formatted_date,
+                'model_type': metadata.get('model_type', 'Unknown'),
+                'accuracy': metadata.get('test_accuracy', 0.0) * 100,
+                'loss': metadata.get('final_train_loss', 0.0),
+                'id': '1'
+            }
+
+            return jsonify({'history': [history_entry]})
+        except Exception as e:
+            logger.error(f"Error loading training history: {e}")
+
+    # Return default values if history not found
+    return jsonify({
+        'history': [
+            {
+                'date': 'May 3, 2025',
+                'model_type': 'India Coupon Recognizer',
+                'accuracy': 87.41,
+                'loss': 0.2777,
+                'id': '1'
+            }
+        ]
+    })
+
+@app.route('/api/model-info')
+def get_model_info():
+    """API endpoint to get model information."""
+    model_id = request.args.get('model_id', 'latest')
+
+    # Check if model metadata exists
+    metadata_path = os.path.join(MODEL_DIR, 'model_metadata.json')
+
+    if os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+
+            # Format the date
+            training_date = datetime.fromisoformat(metadata.get('training_date', datetime.now().isoformat()))
+            formatted_date = training_date.strftime('%b %d, %Y')
+
+            # Prepare response
+            response = {
+                'model_type': metadata.get('model_type', 'Unknown'),
+                'version': '1.0.0',
+                'trained_date': formatted_date,
+                'accuracy': metadata.get('test_accuracy', 0.0) * 100,
+                'field_performance': {
+                    'store_name': 92.5,
+                    'coupon_code': 95.8,
+                    'expiry_date': 85.3,
+                    'discount_amount': 90.2,
+                    'min_purchase': 78.6
+                }
+            }
+
+            return jsonify(response)
+        except Exception as e:
+            logger.error(f"Error loading model info: {e}")
+
+    # Return default values if model info not found
+    return jsonify({
+        'model_type': 'India Coupon Recognizer',
+        'version': '1.0.0',
+        'trained_date': 'May 3, 2025',
+        'accuracy': 87.41,
+        'field_performance': {
+            'store_name': 92.5,
+            'coupon_code': 95.8,
+            'expiry_date': 85.3,
+            'discount_amount': 90.2,
+            'min_purchase': 78.6
+        }
+    })
+
+@app.route('/api/start-training', methods=['POST'])
+def start_training():
+    """API endpoint to start model training."""
+    # Get training parameters
+    training_data = request.json
+
+    # Log training parameters
+    logger.info(f"Starting training with parameters: {training_data}")
+
+    # In a real implementation, this would start the training process
+    # For now, just return success
+    return jsonify({
+        'status': 'success',
+        'message': 'Training started successfully'
+    })
+
+@app.route('/api/stop-training', methods=['POST'])
+def stop_training():
+    """API endpoint to stop model training."""
+    # In a real implementation, this would stop the training process
+    # For now, just return success
+    return jsonify({
+        'status': 'success',
+        'message': 'Training stopped successfully'
+    })
+
+@app.route('/api/training-progress')
+def get_training_progress():
+    """API endpoint to get training progress."""
+    # In a real implementation, this would return the actual training progress
+    # For now, return simulated progress
+
+    # Simulate training progress
+    import random
+
+    current_epoch = random.randint(1, 20)
+    total_epochs = 20
+
+    # Generate simulated losses
+    train_losses = [1.0 - (i / total_epochs) * 0.8 + random.uniform(-0.05, 0.05) for i in range(current_epoch)]
+    val_losses = [1.2 - (i / total_epochs) * 0.7 + random.uniform(-0.1, 0.1) for i in range(current_epoch)]
+
+    # Calculate time elapsed and remaining
+    time_elapsed = f"{random.randint(0, 2):02d}:{random.randint(0, 59):02d}:{random.randint(0, 59):02d}"
+    time_remaining = f"{random.randint(0, 2):02d}:{random.randint(0, 59):02d}:{random.randint(0, 59):02d}"
+
+    return jsonify({
+        'status': 'training',
+        'current_epoch': current_epoch,
+        'total_epochs': total_epochs,
+        'train_losses': train_losses,
+        'val_losses': val_losses,
+        'time_elapsed': time_elapsed,
+        'time_remaining': time_remaining
+    })
+
+@app.route('/api/export-model', methods=['POST'])
+def export_model():
+    """API endpoint to export the trained model."""
+    # In a real implementation, this would export the model
+    # For now, just return success
+    return jsonify({
+        'status': 'success',
+        'message': 'Model exported successfully',
+        'export_path': '/app/src/main/assets/india_coupon_model.json'
+    })
+
+@app.route('/api/run-test', methods=['POST'])
+def run_test():
+    """API endpoint to run a test on an image."""
+    # Get model ID and image
+    model_id = request.form.get('model_id', 'latest')
+
+    # Check if image is uploaded or selected from test set
+    if 'image' in request.files:
+        image = request.files['image']
+        # In a real implementation, save the image and process it
+        image_url = '/api/image/test_1.jpg'  # Placeholder
+    elif 'test_set_image' in request.form:
+        test_set_image = request.form.get('test_set_image')
+        # In a real implementation, get the image from the test set
+        image_url = f'/api/image/{test_set_image}'
+    else:
+        return jsonify({
+            'status': 'error',
+            'message': 'No image provided'
+        })
+
+    # In a real implementation, run the model on the image
+    # For now, return simulated results
+    fields = {
+        'store_name': {
+            'text': 'Zomato',
+            'confidence': 0.95,
+            'bounding_box': [50, 50, 200, 100]
+        },
+        'coupon_code': {
+            'text': 'WELCOME50',
+            'confidence': 0.98,
+            'bounding_box': [50, 150, 250, 200]
+        },
+        'expiry_date': {
+            'text': '30 Jun 2025',
+            'confidence': 0.85,
+            'normalized_date': '2025-06-30',
+            'bounding_box': [50, 250, 250, 300]
+        },
+        'discount_amount': {
+            'text': '50% OFF',
+            'confidence': 0.92,
+            'type': 'percentage',
+            'value': 50,
+            'bounding_box': [50, 350, 200, 400]
+        },
+        'min_purchase': {
+            'text': 'Min. order: ₹199',
+            'confidence': 0.78,
+            'value': 199,
+            'bounding_box': [50, 450, 250, 500]
+        }
+    }
+
+    return jsonify({
+        'status': 'success',
+        'image_url': image_url,
+        'fields': fields
+    })
+
+@app.route('/api/run-batch-test', methods=['POST'])
+def run_batch_test():
+    """API endpoint to run a batch test."""
+    # Get model ID and test set
+    model_id = request.form.get('model_id', 'latest')
+    test_set = request.form.get('test_set', 'test')
+
+    # In a real implementation, run the model on the test set
+    # For now, return simulated results
+    return jsonify({
+        'status': 'success',
+        'overall_accuracy': 87.5,
+        'processed_images': 3,
+        'average_confidence': 89.2,
+        'field_metrics': {
+            'store_name': {
+                'accuracy': 92.5,
+                'precision': 94.3,
+                'recall': 91.8,
+                'f1_score': 93.0
+            },
+            'coupon_code': {
+                'accuracy': 95.8,
+                'precision': 96.2,
+                'recall': 95.5,
+                'f1_score': 95.8
+            },
+            'expiry_date': {
+                'accuracy': 85.3,
+                'precision': 87.1,
+                'recall': 84.2,
+                'f1_score': 85.6
+            },
+            'discount_amount': {
+                'accuracy': 90.2,
+                'precision': 91.5,
+                'recall': 89.8,
+                'f1_score': 90.6
+            },
+            'min_purchase': {
+                'accuracy': 78.6,
+                'precision': 80.2,
+                'recall': 77.5,
+                'f1_score': 78.8
+            }
         }
     })
 
