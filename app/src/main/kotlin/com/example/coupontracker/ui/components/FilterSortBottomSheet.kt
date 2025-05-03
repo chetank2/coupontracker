@@ -31,6 +31,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.coupontracker.data.SortOrder
@@ -66,11 +69,11 @@ fun FilterSortBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
-    
+
     // Local state to track selections before applying
     var selectedSortOrder by remember { mutableStateOf(currentSortOrder) }
     var selectedFilter by remember { mutableStateOf(currentFilter) }
-    
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState
@@ -87,20 +90,24 @@ fun FilterSortBottomSheet(
             ) {
                 Icon(
                     imageVector = Icons.Default.Sort,
-                    contentDescription = null
+                    contentDescription = "Sort options"
                 )
-                
+
                 Spacer(modifier = Modifier.width(8.dp))
-                
+
                 Text(
                     text = "Sort By",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics {
+                        heading()
+                        contentDescription = "Sort options section"
+                    }
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Sort options
             Column(
                 modifier = Modifier
@@ -123,9 +130,9 @@ fun FilterSortBottomSheet(
                             selected = (sortOrder == selectedSortOrder),
                             onClick = null // null because we're handling it in the Row
                         )
-                        
+
                         Spacer(modifier = Modifier.width(8.dp))
-                        
+
                         Text(
                             text = when (sortOrder) {
                                 SortOrder.NAME -> "Store Name"
@@ -137,11 +144,11 @@ fun FilterSortBottomSheet(
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
             Divider()
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Filter options section
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -149,20 +156,24 @@ fun FilterSortBottomSheet(
             ) {
                 Icon(
                     imageVector = Icons.Default.FilterList,
-                    contentDescription = null
+                    contentDescription = "Filter options"
                 )
-                
+
                 Spacer(modifier = Modifier.width(8.dp))
-                
+
                 Text(
                     text = "Filter",
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.semantics {
+                        heading()
+                        contentDescription = "Filter options section"
+                    }
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Filter options
             Column(
                 modifier = Modifier
@@ -185,16 +196,16 @@ fun FilterSortBottomSheet(
                             selected = (filterOption == selectedFilter),
                             onClick = null // null because we're handling it in the Row
                         )
-                        
+
                         Spacer(modifier = Modifier.width(8.dp))
-                        
+
                         Text(text = filterOption.displayName)
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Apply button
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -205,9 +216,9 @@ fun FilterSortBottomSheet(
                 ) {
                     Text("Cancel")
                 }
-                
+
                 Spacer(modifier = Modifier.weight(1f))
-                
+
                 TextButton(
                     onClick = {
                         onSortOrderSelected(selectedSortOrder)
@@ -223,13 +234,13 @@ fun FilterSortBottomSheet(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = null
+                        contentDescription = "Apply selected filters and sorting"
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Apply")
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
         }
     }

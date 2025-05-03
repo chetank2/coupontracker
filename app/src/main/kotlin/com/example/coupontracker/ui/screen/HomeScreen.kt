@@ -56,6 +56,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -256,6 +259,11 @@ fun HomeScreen(
                                 shape = MaterialTheme.shapes.medium
                             )
                             .padding(horizontal = 16.dp, vertical = 12.dp)
+                            .semantics {
+                                // Add semantic properties for accessibility
+                                contentDescription = "Search for coupons"
+                                onClick { true } // Make it appear clickable to screen readers
+                            }
                     )
 
                     Spacer(modifier = Modifier.width(BrandSpacing.Small))
@@ -266,14 +274,14 @@ fun HomeScreen(
                         modifier = Modifier
                             .size(48.dp)
                             .background(
-                                color = MaterialTheme.colorScheme.primaryContainer,
+                                color = MaterialTheme.colorScheme.primary, // Changed to primary for better contrast
                                 shape = CircleShape
                             )
                     ) {
                         Icon(
                             imageVector = Icons.Default.FilterList,
-                            contentDescription = "Filter and Sort",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            contentDescription = "Filter and Sort Coupons",
+                            tint = MaterialTheme.colorScheme.onPrimary // Changed to onPrimary for better contrast
                         )
                     }
                 }

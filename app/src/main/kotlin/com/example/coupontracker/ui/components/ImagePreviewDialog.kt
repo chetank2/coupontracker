@@ -3,11 +3,16 @@ package com.example.coupontracker.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -59,7 +64,7 @@ fun ImagePreviewDialog(
             var scale by remember { mutableFloatStateOf(1f) }
             var offsetX by remember { mutableFloatStateOf(0f) }
             var offsetY by remember { mutableFloatStateOf(0f) }
-            
+
             SubcomposeAsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(imageUri)
@@ -89,12 +94,12 @@ fun ImagePreviewDialog(
                     .pointerInput(Unit) {
                         detectTransformGestures { _, pan, zoom, _ ->
                             scale = (scale * zoom).coerceIn(1f, 3f)
-                            
+
                             // Only apply pan if zoomed in
                             if (scale > 1f) {
                                 val maxX = (size.width * (scale - 1)) / 2
                                 val maxY = (size.height * (scale - 1)) / 2
-                                
+
                                 offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
                                 offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
                             } else {
@@ -104,14 +109,59 @@ fun ImagePreviewDialog(
                         }
                     }
             )
-            
+
+            // Control buttons
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp)
+            ) {
+                // Zoom out button
+                IconButton(
+                    onClick = {
+                        scale = (scale * 0.8f).coerceIn(1f, 3f)
+                        if (scale <= 1f) {
+                            offsetX = 0f
+                            offsetY = 0f
+                        }
+                    },
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), shape = androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Remove,
+                        contentDescription = "Zoom out",
+                        tint = Color.White
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(16.dp))
+
+                // Zoom in button
+                IconButton(
+                    onClick = {
+                        scale = (scale * 1.2f).coerceIn(1f, 3f)
+                    },
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), shape = androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Zoom in",
+                        tint = Color.White
+                    )
+                }
+            }
+
             // Close button
             IconButton(
                 onClick = onDismiss,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(16.dp)
-                    .size(48.dp)
+                    .size(56.dp) // Increased size for better touch target
                     .background(Color.Black.copy(alpha = 0.5f), shape = androidx.compose.foundation.shape.CircleShape)
             ) {
                 Icon(
