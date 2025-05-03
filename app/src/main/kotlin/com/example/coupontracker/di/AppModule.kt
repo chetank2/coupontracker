@@ -38,17 +38,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideImageProcessor(
-        @ApplicationContext context: Context,
-        securePreferencesManager: SecurePreferencesManager
+        @ApplicationContext context: Context
     ): ImageProcessor {
-        val googleCloudVisionApiKey = securePreferencesManager.getString(
-            SecurePreferencesManager.KEY_GOOGLE_CLOUD_VISION_API_KEY
-        )
-        val mistralApiKey = securePreferencesManager.getString(
-            SecurePreferencesManager.KEY_MISTRAL_API_KEY
-        )
-
-        // Create a new ImageProcessor that listens for preference changes
-        return ImageProcessor(context, googleCloudVisionApiKey, mistralApiKey)
+        // Create a new ImageProcessor that uses the model-based approach
+        return ImageProcessor(context)
     }
 }
