@@ -46,14 +46,14 @@ Here are screenshots of the key screens in the improved UI:
 The UI improvements are based on a comprehensive design system that includes:
 
 ### Colors
-- **Primary**: #1E88E5 (Blue)
-- **Secondary**: #26A69A (Teal)
-- **Accent**: #FF6D00 (Orange)
-- **Background**: #F5F7FA (Light Gray with Blue Tint)
+- **Primary**: #000000 (Black)
+- **Secondary**: #666666 (Medium Gray)
+- **Accent**: #999999 (Light Gray)
+- **Background**: #F5F5F5 (Light Gray)
 - **Surface**: #FFFFFF (White)
 - **Error**: #E53935 (Red)
-- **Warning**: #FFA000 (Amber)
-- **Success**: #43A047 (Green)
+- **Warning**: #999999 (Light Gray)
+- **Success**: #666666 (Medium Gray)
 
 ### Typography
 - **Display**: Bold, large sizes for hero sections

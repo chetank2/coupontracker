@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     var currentScreen by remember { mutableStateOf(Screen.ONBOARDING) }
-                    
+
                     when (currentScreen) {
                         Screen.ONBOARDING -> OnboardingScreen { currentScreen = Screen.HOME }
                         Screen.HOME -> HomeScreen()
@@ -88,7 +88,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
             )
         )
     }
-    
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -115,7 +115,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                     }
                 }
             }
-            
+
             // Page content
             Box(
                 modifier = Modifier
@@ -135,7 +135,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                             .padding(bottom = 32.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    
+
                     // Title
                     Text(
                         text = pages[currentPage].title,
@@ -143,9 +143,9 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onBackground
                     )
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     // Description
                     Text(
                         text = pages[currentPage].description,
@@ -155,7 +155,7 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                     )
                 }
             }
-            
+
             // Indicators
             Row(
                 modifier = Modifier.padding(bottom = 32.dp),
@@ -168,15 +168,15 @@ fun OnboardingScreen(onComplete: () -> Unit) {
                             .size(if (currentPage == index) 12.dp else 8.dp)
                             .clip(CircleShape)
                             .background(
-                                if (currentPage == index) 
-                                    MaterialTheme.colorScheme.primary 
-                                else 
+                                if (currentPage == index)
+                                    MaterialTheme.colorScheme.primary
+                                else
                                     MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                             )
                     )
                 }
             }
-            
+
             // Navigation buttons
             Button(
                 onClick = {
@@ -205,11 +205,11 @@ data class OnboardingPage(
 fun HomeScreen() {
     var showMenu by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
-    
+
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { 
+                title = {
                     Text(
                         text = "Coupon Tracker",
                         style = MaterialTheme.typography.titleLarge
@@ -219,7 +219,7 @@ fun HomeScreen() {
                     IconButton(onClick = { /* Search */ }) {
                         Icon(Icons.Default.Search, contentDescription = "Search")
                     }
-                    
+
                     IconButton(onClick = { /* Settings */ }) {
                         Icon(Icons.Default.Settings, contentDescription = "Settings")
                     }
@@ -254,7 +254,7 @@ fun HomeScreen() {
                                 style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
-                            
+
                             // Camera option
                             Button(
                                 onClick = { /* Camera */ },
@@ -319,10 +319,10 @@ fun HomeScreen() {
                             contentDescription = null
                         )
                     },
-                    text = { 
+                    text = {
                         Text(
                             text = if (showMenu) "Close" else "Add Coupon"
-                        ) 
+                        )
                     },
                     expanded = true,
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -350,7 +350,7 @@ fun HomeScreen() {
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
-                    
+
                     Text(
                         text = "3 total",
                         style = MaterialTheme.typography.bodyMedium,
@@ -358,7 +358,7 @@ fun HomeScreen() {
                     )
                 }
             }
-            
+
             // Sample coupons
             items(getSampleCoupons()) { coupon ->
                 CouponCard(
@@ -434,14 +434,14 @@ fun CouponCard(
     // Determine expiry status
     val now = Date()
     val daysUntilExpiry = ((expiryDate.time - now.time) / (1000 * 60 * 60 * 24)).toInt()
-    
+
     val (statusColor, statusText) = when {
         expiryDate.before(now) -> Pair(Color(0xFFE53935), "Expired")
         daysUntilExpiry <= 3 -> Pair(Color(0xFFE53935), "Expires soon")
         daysUntilExpiry <= 7 -> Pair(Color(0xFFFFA000), "Expires in $daysUntilExpiry days")
         else -> Pair(Color(0xFF43A047), "Valid")
     }
-    
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -476,9 +476,9 @@ fun CouponCard(
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
-                    
+
                     Spacer(modifier = Modifier.width(8.dp))
-                    
+
                     Text(
                         text = storeName,
                         style = MaterialTheme.typography.titleMedium,
@@ -486,7 +486,7 @@ fun CouponCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                
+
                 // Status chip
                 Surface(
                     shape = RoundedCornerShape(50),
@@ -500,9 +500,9 @@ fun CouponCard(
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Description
             Text(
                 text = description,
@@ -511,9 +511,9 @@ fun CouponCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Bottom row with code, amount and expiry
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -537,7 +537,7 @@ fun CouponCard(
                             text = it,
                             style = MaterialTheme.typography.labelMedium
                         )
-                        
+
                         IconButton(
                             onClick = { onCopyCode?.invoke(it) },
                             modifier = Modifier.size(24.dp)
@@ -551,7 +551,7 @@ fun CouponCard(
                         }
                     }
                 }
-                
+
                 // Amount if > 0
                 if (amount != null && amount > 0) {
                     Surface(
@@ -566,7 +566,7 @@ fun CouponCard(
                         )
                     }
                 }
-                
+
                 // Format date
                 val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
                 Text(
@@ -582,29 +582,29 @@ fun CouponCard(
 @Composable
 fun CouponTrackerTheme(content: @Composable () -> Unit) {
     val colorScheme = lightColorScheme(
-        primary = Color(0xFF1E88E5),
+        primary = Color(0xFF000000),
         onPrimary = Color.White,
-        primaryContainer = Color(0xFFBBDEFB),
-        onPrimaryContainer = Color(0xFF004C8C),
-        secondary = Color(0xFF26A69A),
+        primaryContainer = Color(0xFFEEEEEE),
+        onPrimaryContainer = Color(0xFF333333),
+        secondary = Color(0xFF666666),
         onSecondary = Color.White,
-        secondaryContainer = Color(0xFFB2DFDB),
-        onSecondaryContainer = Color(0xFF00695C),
-        tertiary = Color(0xFFFF6D00),
+        secondaryContainer = Color(0xFFEEEEEE),
+        onSecondaryContainer = Color(0xFF444444),
+        tertiary = Color(0xFF999999),
         onTertiary = Color.White,
-        tertiaryContainer = Color(0xFFFFE0B2),
-        onTertiaryContainer = Color(0xFFE65100),
+        tertiaryContainer = Color(0xFFF5F5F5),
+        onTertiaryContainer = Color(0xFF777777),
         error = Color(0xFFE53935),
         onError = Color.White,
-        background = Color(0xFFF5F7FA),
+        background = Color(0xFFF5F5F5),
         onBackground = Color(0xFF1A1A1A),
         surface = Color.White,
         onSurface = Color(0xFF1A1A1A),
-        surfaceVariant = Color(0xFFF0F4F8),
-        onSurfaceVariant = Color(0xFF5F6368),
+        surfaceVariant = Color(0xFFEEEEEE),
+        onSurfaceVariant = Color(0xFF5F5F5F),
         outline = Color(0xFFE0E0E0)
     )
-    
+
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
