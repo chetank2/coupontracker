@@ -1,0 +1,14 @@
+{
+  "image_id": "train_7",
+  "source": "other",
+  "title": "Unknown",
+  "annotation_date": "2025-05-03T19:53:16.491268",
+  "annotator_id": "auto_processor",
+  "fields": {
+    "store_name": {
+      "text": "Unknown",
+      "confidence": 0.8
+    }
+  },
+  "verification_status": "unverified"
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "store_name": "Zomato",
+    "coupon_code": "WELCOME50",
+    "discount": "50% OFF",
+    "expiry_date": "30 Jun 2025",
+    "min_purchase": 199,
+    "source": "zomato"
+  },
+  {
+    "store_name": "GPay",
+    "coupon_code": "GPAY100",
+    "discount": "\u20b9100 OFF",
+    "expiry_date": "15 Jul 2025",
+    "min_purchase": null,
+    "source": "gpay"
+  },
+  {
+    "store_name": "PhonePe",
+    "coupon_code": "PHONEPE20",
+    "discount": "20% OFF",
+    "expiry_date": "31 Aug 2025",
+    "min_purchase": 299,
+    "source": "phonepe"
+  },
+  {
+    "store_name": "Myntra",
+    "coupon_code": "MYNTRA500",
+    "discount": "FLAT \u20b9500 OFF",
+    "expiry_date": "30 Sep 2025",
+    "min_purchase": 1999,
+    "source": "myntra"
+  },
+  {
+    "store_name": "Swiggy",
+    "coupon_code": "SWIGGY150",
+    "discount": "\u20b9150 OFF",
+    "expiry_date": "31 Oct 2025",
+    "min_purchase": 399,
+    "source": "other"
+  }
+]

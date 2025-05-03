@@ -1,0 +1,30 @@
+{
+  "image_id": "other_5",
+  "source": "sample_generator",
+  "annotation_date": "2025-05-03T19:45:36.323279",
+  "annotator_id": "sample_generator",
+  "fields": {
+    "store_name": {
+      "text": "Swiggy",
+      "confidence": 1.0
+    },
+    "coupon_code": {
+      "text": "SWIGGY150",
+      "confidence": 1.0
+    },
+    "expiry_date": {
+      "text": "31 Oct 2025",
+      "confidence": 1.0
+    },
+    "discount_amount": {
+      "text": "\u20b9150 OFF",
+      "confidence": 1.0
+    },
+    "min_purchase": {
+      "text": "Minimum Order: \u20b9399",
+      "confidence": 1.0,
+      "value": 399
+    }
+  },
+  "verification_status": "verified"
+}

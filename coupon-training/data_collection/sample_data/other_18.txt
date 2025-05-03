@@ -1,0 +1,5 @@
+
+Store: KFC
+Discount: ₹200 OFF
+Code: FIRST100
+Valid till: 21 May 2025

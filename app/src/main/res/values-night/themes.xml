@@ -3,28 +3,28 @@
     <!-- Base application theme. -->
     <style name="Theme.CouponTracker" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Primary brand colors -->
-        <item name="colorPrimary">#5C6BC0</item>
-        <item name="colorPrimaryVariant">#3949AB</item>
+        <item name="colorPrimary">#000000</item>
+        <item name="colorPrimaryVariant">#333333</item>
         <item name="colorOnPrimary">#FFFFFF</item>
-        
+
         <!-- Secondary brand colors -->
-        <item name="colorSecondary">#66BB6A</item>
-        <item name="colorSecondaryVariant">#43A047</item>
+        <item name="colorSecondary">#777777</item>
+        <item name="colorSecondaryVariant">#555555</item>
         <item name="colorOnSecondary">#FFFFFF</item>
-        
+
         <!-- Status bar color -->
         <item name="android:statusBarColor">#121212</item>
-        
+
         <!-- Background colors -->
         <item name="android:colorBackground">#121212</item>
         <item name="colorSurface">#1E1E1E</item>
         <item name="colorOnBackground">#FFFFFF</item>
         <item name="colorOnSurface">#FFFFFF</item>
-        
+
         <!-- Error colors -->
         <item name="colorError">#EF5350</item>
         <item name="colorOnError">#FFFFFF</item>
-        
+
         <!-- Typography -->
         <item name="textAppearanceHeadline1">@style/TextAppearance.CouponTracker.Headline1</item>
         <item name="textAppearanceHeadline2">@style/TextAppearance.CouponTracker.Headline2</item>
@@ -40,4 +40,4 @@
         <item name="textAppearanceButton">@style/TextAppearance.CouponTracker.Button</item>
         <item name="textAppearanceOverline">@style/TextAppearance.CouponTracker.Overline</item>
     </style>
-</resources> 
+</resources>

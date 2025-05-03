@@ -1,0 +1,236 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Coupon Annotation Schema",
+  "description": "Schema for annotating coupon images with field locations and content",
+  "type": "object",
+  "required": ["image_id", "source", "fields"],
+  "properties": {
+    "image_id": {
+      "type": "string",
+      "description": "Unique identifier for the image"
+    },
+    "source": {
+      "type": "string",
+      "description": "Source of the coupon (e.g., Reddit, website name)"
+    },
+    "annotation_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Date and time when the annotation was created"
+    },
+    "annotator_id": {
+      "type": "string",
+      "description": "Identifier for the person who created the annotation"
+    },
+    "fields": {
+      "type": "object",
+      "description": "Annotated fields in the coupon",
+      "properties": {
+        "store_name": {
+          "type": "object",
+          "description": "Store or brand name",
+          "required": ["text", "bounding_box"],
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Extracted text content"
+            },
+            "bounding_box": {
+              "type": "array",
+              "description": "Coordinates of the bounding box [x1, y1, x2, y2]",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "confidence": {
+              "type": "number",
+              "description": "Confidence score for this field (0-1)",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "coupon_code": {
+          "type": "object",
+          "description": "Coupon or promo code",
+          "required": ["text", "bounding_box"],
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Extracted text content"
+            },
+            "bounding_box": {
+              "type": "array",
+              "description": "Coordinates of the bounding box [x1, y1, x2, y2]",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "confidence": {
+              "type": "number",
+              "description": "Confidence score for this field (0-1)",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "expiry_date": {
+          "type": "object",
+          "description": "Expiration date of the coupon",
+          "required": ["text", "bounding_box"],
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Extracted text content"
+            },
+            "bounding_box": {
+              "type": "array",
+              "description": "Coordinates of the bounding box [x1, y1, x2, y2]",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "confidence": {
+              "type": "number",
+              "description": "Confidence score for this field (0-1)",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "normalized_date": {
+              "type": "string",
+              "description": "Date in ISO format (YYYY-MM-DD)",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            }
+          }
+        },
+        "discount_amount": {
+          "type": "object",
+          "description": "Discount amount or percentage",
+          "required": ["text", "bounding_box"],
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Extracted text content"
+            },
+            "bounding_box": {
+              "type": "array",
+              "description": "Coordinates of the bounding box [x1, y1, x2, y2]",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "confidence": {
+              "type": "number",
+              "description": "Confidence score for this field (0-1)",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "value": {
+              "type": "number",
+              "description": "Numerical value of the discount"
+            },
+            "type": {
+              "type": "string",
+              "description": "Type of discount",
+              "enum": ["percentage", "fixed", "free_item", "bogo", "other"]
+            }
+          }
+        },
+        "min_purchase": {
+          "type": "object",
+          "description": "Minimum purchase requirement",
+          "required": ["text", "bounding_box"],
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Extracted text content"
+            },
+            "bounding_box": {
+              "type": "array",
+              "description": "Coordinates of the bounding box [x1, y1, x2, y2]",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "confidence": {
+              "type": "number",
+              "description": "Confidence score for this field (0-1)",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "value": {
+              "type": "number",
+              "description": "Numerical value of the minimum purchase"
+            }
+          }
+        },
+        "description": {
+          "type": "object",
+          "description": "Description or terms of the coupon",
+          "required": ["text", "bounding_box"],
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Extracted text content"
+            },
+            "bounding_box": {
+              "type": "array",
+              "description": "Coordinates of the bounding box [x1, y1, x2, y2]",
+              "items": {
+                "type": "integer"
+              },
+              "minItems": 4,
+              "maxItems": 4
+            },
+            "confidence": {
+              "type": "number",
+              "description": "Confidence score for this field (0-1)",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      }
+    },
+    "is_outlier": {
+      "type": "boolean",
+      "description": "Whether this coupon is considered an outlier"
+    },
+    "outlier_type": {
+      "type": "array",
+      "description": "Types of outlier if applicable",
+      "items": {
+        "type": "string",
+        "enum": ["visual", "content", "mixed"]
+      }
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes about the annotation"
+    },
+    "verification_status": {
+      "type": "string",
+      "description": "Status of verification",
+      "enum": ["unverified", "verified", "rejected", "needs_review"]
+    },
+    "verification_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Date and time when the annotation was verified"
+    },
+    "verifier_id": {
+      "type": "string",
+      "description": "Identifier for the person who verified the annotation"
+    }
+  }
+}

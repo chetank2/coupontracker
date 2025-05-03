@@ -1,0 +1,30 @@
+{
+  "image_id": "phonepe_3",
+  "source": "sample_generator",
+  "annotation_date": "2025-05-03T19:45:36.316544",
+  "annotator_id": "sample_generator",
+  "fields": {
+    "store_name": {
+      "text": "PhonePe",
+      "confidence": 1.0
+    },
+    "coupon_code": {
+      "text": "PHONEPE20",
+      "confidence": 1.0
+    },
+    "expiry_date": {
+      "text": "31 Aug 2025",
+      "confidence": 1.0
+    },
+    "discount_amount": {
+      "text": "20% OFF",
+      "confidence": 1.0
+    },
+    "min_purchase": {
+      "text": "Minimum Order: \u20b9299",
+      "confidence": 1.0,
+      "value": 299
+    }
+  },
+  "verification_status": "verified"
+}

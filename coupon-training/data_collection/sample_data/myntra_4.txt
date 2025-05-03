@@ -1,0 +1,6 @@
+
+Store: Myntra
+Discount: FLAT ₹500 OFF
+Code: MYNTRA500
+Valid till: 30 Sep 2025
+Minimum Order: ₹1999

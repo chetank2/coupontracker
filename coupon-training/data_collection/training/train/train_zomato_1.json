@@ -1,0 +1,31 @@
+{
+  "image_id": "zomato_5",
+  "source": "sample_generator",
+  "annotation_date": "2025-05-03T19:44:17.478107",
+  "annotator_id": "sample_generator",
+  "fields": {
+    "store_name": {
+      "text": "Zomato",
+      "confidence": 1.0
+    },
+    "coupon_code": {
+      "text": "Y0YNV9NM",
+      "confidence": 1.0
+    },
+    "expiry_date": {
+      "text": "10 May 2025",
+      "confidence": 1.0,
+      "normalized_date": "2025-05-10"
+    },
+    "discount_amount": {
+      "text": "FLAT 41% OFF",
+      "confidence": 1.0
+    },
+    "min_purchase": {
+      "text": "Minimum Order: \u20b999",
+      "confidence": 1.0,
+      "value": 99
+    }
+  },
+  "verification_status": "verified"
+}

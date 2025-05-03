@@ -1,0 +1,14 @@
+{
+  "image_id": "processed_other_20250503_tl9b4gnz",
+  "source": "other",
+  "title": "Unknown",
+  "annotation_date": "2025-05-03T19:53:16.548426",
+  "annotator_id": "auto_processor",
+  "fields": {
+    "store_name": {
+      "text": "Unknown",
+      "confidence": 0.8
+    }
+  },
+  "verification_status": "unverified"
+}

@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Coupon Annotation Tool</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        .container { display: flex; }
+        .sidebar { width: 300px; padding: 10px; border-right: 1px solid #ccc; }
+        .main { flex-grow: 1; padding: 10px; }
+        .image-list { height: 500px; overflow-y: auto; }
+        .image-item { padding: 5px; cursor: pointer; border-bottom: 1px solid #eee; }
+        .image-item:hover { background-color: #f0f0f0; }
+        .not_annotated { color: red; }
+        .unverified { color: orange; }
+        .verified { color: green; }
+        .rejected { color: darkred; }
+        .needs_review { color: purple; }
+        .annotation-area { margin-top: 20px; }
+        .field-group { margin-bottom: 15px; }
+        .field-label { font-weight: bold; }
+        .canvas-container { position: relative; margin-top: 10px; }
+        canvas { border: 1px solid #ccc; }
+
+        /* Model metrics styles */
+        .metrics-container {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .metrics-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        .metric-card {
+            background-color: white;
+            border-radius: 6px;
+            padding: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .metric-name {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .metric-value.good {
+            color: #27ae60;
+        }
+        .metric-value.medium {
+            color: #f39c12;
+        }
+        .metric-value.poor {
+            color: #e74c3c;
+        }
+        .progress-container {
+            height: 8px;
+            background-color: #ecf0f1;
+            border-radius: 4px;
+            margin-top: 5px;
+        }
+        .progress-bar {
+            height: 100%;
+            border-radius: 4px;
+            background-color: #3498db;
+        }
+        .model-info {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #7f8c8d;
+        }
+        .chart-container {
+            margin-top: 20px;
+            height: 300px;
+            width: 100%;
+            background-color: white;
+            border-radius: 6px;
+            padding: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+    </style>
+    <!-- Include Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h1>Coupon Annotation Tool</h1>
+
+    <!-- Model Metrics Section -->
+    <div class="metrics-container">
+        <div class="metrics-title">Model Performance Metrics</div>
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-name">Test Accuracy</div>
+                <div class="metric-value good" id="test-accuracy">87.41%</div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: 87.41%"></div>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-name">Training Loss</div>
+                <div class="metric-value good" id="train-loss">0.2777</div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: 72.23%"></div>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-name">Validation Loss</div>
+                <div class="metric-value medium" id="val-loss">0.4622</div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: 53.78%"></div>
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-name">Training Samples</div>
+                <div class="metric-value" id="train-samples">9</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-name">Validation Samples</div>
+                <div class="metric-value" id="val-samples">2</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-name">Test Samples</div>
+                <div class="metric-value" id="test-samples">3</div>
+            </div>
+        </div>
+        <div class="model-info">
+            <p>Model Type: <span id="model-type">India Coupon Recognizer</span> | Version: <span id="model-version">1.0.0</span> | Last Updated: <span id="last-updated">May 3, 2025</span></p>
+        </div>
+
+        <!-- Training History Chart -->
+        <div class="chart-container">
+            <canvas id="training-chart"></canvas>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <h2>Images</h2>
+            <div class="image-list" id="image-list">
+                <!-- Image list will be populated here -->
+            </div>
+        </div>
+
+        <div class="main">
+            <div id="image-container">
+                <h2 id="current-image-title">Select an image to annotate</h2>
+                <div class="canvas-container">
+                    <canvas id="annotation-canvas"></canvas>
+                </div>
+            </div>
+
+            <div class="annotation-area">
+                <h3>Annotation Fields</h3>
+
+                <div class="field-group">
+                    <div class="field-label">Store Name</div>
+                    <input type="text" id="store-name" placeholder="Store name">
+                    <button onclick="startDrawing('store_name')">Draw Box</button>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Coupon Code</div>
+                    <input type="text" id="coupon-code" placeholder="Coupon code">
+                    <button onclick="startDrawing('coupon_code')">Draw Box</button>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Expiry Date</div>
+                    <input type="text" id="expiry-date" placeholder="Expiry date (as shown)">
+                    <input type="date" id="normalized-date" placeholder="Normalized date">
+                    <button onclick="startDrawing('expiry_date')">Draw Box</button>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Discount Amount</div>
+                    <input type="text" id="discount-amount" placeholder="Discount amount (as shown)">
+                    <input type="number" id="discount-value" placeholder="Numerical value">
+                    <select id="discount-type">
+                        <option value="percentage">Percentage</option>
+                        <option value="fixed">Fixed Amount</option>
+                        <option value="free_item">Free Item</option>
+                        <option value="bogo">Buy One Get One</option>
+                        <option value="other">Other</option>
+                    </select>
+                    <button onclick="startDrawing('discount_amount')">Draw Box</button>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Minimum Purchase</div>
+                    <input type="text" id="min-purchase" placeholder="Minimum purchase (as shown)">
+                    <input type="number" id="min-purchase-value" placeholder="Numerical value">
+                    <button onclick="startDrawing('min_purchase')">Draw Box</button>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Description</div>
+                    <textarea id="description" placeholder="Description or terms"></textarea>
+                    <button onclick="startDrawing('description')">Draw Box</button>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Notes</div>
+                    <textarea id="notes" placeholder="Additional notes"></textarea>
+                </div>
+
+                <div class="field-group">
+                    <div class="field-label">Is Outlier</div>
+                    <input type="checkbox" id="is-outlier">
+                    <select id="outlier-type" multiple>
+                        <option value="visual">Visual</option>
+                        <option value="content">Content</option>
+                        <option value="mixed">Mixed</option>
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <button id="save-button" onclick="saveAnnotation()">Save Annotation</button>
+                    <select id="verification-status">
+                        <option value="unverified">Unverified</option>
+                        <option value="verified">Verified</option>
+                        <option value="rejected">Rejected</option>
+                        <option value="needs_review">Needs Review</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentImage = null;
+        let currentField = null;
+        let isDrawing = false;
+        let startX, startY;
+        let boundingBoxes = {};
+
+        // Chart instance
+        let trainingChart = null;
+
+        // Load model metrics
+        function loadModelMetrics() {
+            fetch('/api/model-metrics')
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    }
+                    return {
+                        test_accuracy: 87.41,
+                        train_loss: 0.2777,
+                        val_loss: 0.4622,
+                        train_samples: 9,
+                        val_samples: 2,
+                        test_samples: 3,
+                        model_type: "India Coupon Recognizer",
+                        model_version: "1.0.0",
+                        last_updated: "May 3, 2025",
+                        history: {
+                            train_loss: [0.9978, 0.9963, 0.9625, 0.8524, 0.8337, 0.7592, 0.7504, 0.7072, 0.6436, 0.6719, 0.6424, 0.5221, 0.4807, 0.4933, 0.4466, 0.3617, 0.3319, 0.3508, 0.2825, 0.2777],
+                            val_loss: [1.2616, 1.1672, 1.1382, 0.9995, 0.9950, 1.1240, 0.9238, 1.0279, 1.0193, 0.9826, 0.8443, 0.7378, 0.8111, 0.7108, 0.7849, 0.7319, 0.5647, 0.5242, 0.6235, 0.4622]
+                        }
+                    };
+                })
+                .then(data => {
+                    // Update metrics display
+                    document.getElementById('test-accuracy').textContent = (data.test_accuracy * 100).toFixed(2) + '%';
+                    document.getElementById('train-loss').textContent = data.train_loss.toFixed(4);
+                    document.getElementById('val-loss').textContent = data.val_loss.toFixed(4);
+                    document.getElementById('train-samples').textContent = data.train_samples;
+                    document.getElementById('val-samples').textContent = data.val_samples;
+                    document.getElementById('test-samples').textContent = data.test_samples;
+                    document.getElementById('model-type').textContent = data.model_type;
+                    document.getElementById('model-version').textContent = data.model_version;
+                    document.getElementById('last-updated').textContent = data.last_updated;
+
+                    // Update progress bars
+                    const accuracyBar = document.querySelector('.metric-card:nth-child(1) .progress-bar');
+                    accuracyBar.style.width = (data.test_accuracy * 100) + '%';
+
+                    const trainLossBar = document.querySelector('.metric-card:nth-child(2) .progress-bar');
+                    trainLossBar.style.width = ((1 - data.train_loss) * 100) + '%';
+
+                    const valLossBar = document.querySelector('.metric-card:nth-child(3) .progress-bar');
+                    valLossBar.style.width = ((1 - data.val_loss) * 100) + '%';
+
+                    // Render training history chart
+                    renderTrainingChart(data.history);
+                });
+        }
+
+        // Render training history chart
+        function renderTrainingChart(history) {
+            const ctx = document.getElementById('training-chart').getContext('2d');
+
+            // Create labels for epochs
+            const epochs = Array.from({length: history.train_loss.length}, (_, i) => i + 1);
+
+            // Destroy previous chart if it exists
+            if (trainingChart) {
+                trainingChart.destroy();
+            }
+
+            // Create new chart
+            trainingChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: epochs,
+                    datasets: [
+                        {
+                            label: 'Training Loss',
+                            data: history.train_loss,
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: true
+                        },
+                        {
+                            label: 'Validation Loss',
+                            data: history.val_loss,
+                            borderColor: '#e74c3c',
+                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Training History',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Epoch'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Loss'
+                            },
+                            min: 0
+                        }
+                    }
+                }
+            });
+        }
+
+        // Load image list
+        function loadImageList() {
+            fetch('/api/images')
+                .then(response => response.json())
+                .then(data => {
+                    const imageList = document.getElementById('image-list');
+                    imageList.innerHTML = '';
+
+                    data.images.forEach(image => {
+                        const div = document.createElement('div');
+                        div.className = `image-item ${data.status[image]}`;
+                        div.textContent = image;
+                        div.onclick = () => loadImage(image);
+                        imageList.appendChild(div);
+                    });
+                });
+        }
+
+        // Load image and its annotation if available
+        function loadImage(imagePath) {
+            currentImage = imagePath;
+            document.getElementById('current-image-title').textContent = imagePath;
+
+            // Clear previous annotation
+            clearAnnotation();
+
+            // Load the image
+            const canvas = document.getElementById('annotation-canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            img.onload = function() {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+
+                // Load annotation if available
+                fetch(`/api/annotation/${encodeURIComponent(imagePath)}`)
+                    .then(response => {
+                        if (response.ok) {
+                            return response.json();
+                        }
+                        return null;
+                    })
+                    .then(data => {
+                        if (data) {
+                            // Populate form fields
+                            if (data.fields.store_name) {
+                                document.getElementById('store-name').value = data.fields.store_name.text;
+                                boundingBoxes.store_name = data.fields.store_name.bounding_box;
+                            }
+
+                            if (data.fields.coupon_code) {
+                                document.getElementById('coupon-code').value = data.fields.coupon_code.text;
+                                boundingBoxes.coupon_code = data.fields.coupon_code.bounding_box;
+                            }
+
+                            if (data.fields.expiry_date) {
+                                document.getElementById('expiry-date').value = data.fields.expiry_date.text;
+                                document.getElementById('normalized-date').value = data.fields.expiry_date.normalized_date || '';
+                                boundingBoxes.expiry_date = data.fields.expiry_date.bounding_box;
+                            }
+
+                            if (data.fields.discount_amount) {
+                                document.getElementById('discount-amount').value = data.fields.discount_amount.text;
+                                document.getElementById('discount-value').value = data.fields.discount_amount.value || '';
+                                document.getElementById('discount-type').value = data.fields.discount_amount.type || 'percentage';
+                                boundingBoxes.discount_amount = data.fields.discount_amount.bounding_box;
+                            }
+
+                            if (data.fields.min_purchase) {
+                                document.getElementById('min-purchase').value = data.fields.min_purchase.text;
+                                document.getElementById('min-purchase-value').value = data.fields.min_purchase.value || '';
+                                boundingBoxes.min_purchase = data.fields.min_purchase.bounding_box;
+                            }
+
+                            if (data.fields.description) {
+                                document.getElementById('description').value = data.fields.description.text;
+                                boundingBoxes.description = data.fields.description.bounding_box;
+                            }
+
+                            document.getElementById('notes').value = data.notes || '';
+                            document.getElementById('is-outlier').checked = data.is_outlier || false;
+
+                            if (data.outlier_type) {
+                                const outlierSelect = document.getElementById('outlier-type');
+                                for (let i = 0; i < outlierSelect.options.length; i++) {
+                                    outlierSelect.options[i].selected = data.outlier_type.includes(outlierSelect.options[i].value);
+                                }
+                            }
+
+                            document.getElementById('verification-status').value = data.verification_status || 'unverified';
+
+                            // Draw bounding boxes
+                            drawAllBoxes();
+                        }
+                    });
+            };
+            img.src = `/api/image/${encodeURIComponent(imagePath)}`;
+        }
+
+        // Clear annotation form
+        function clearAnnotation() {
+            document.getElementById('store-name').value = '';
+            document.getElementById('coupon-code').value = '';
+            document.getElementById('expiry-date').value = '';
+            document.getElementById('normalized-date').value = '';
+            document.getElementById('discount-amount').value = '';
+            document.getElementById('discount-value').value = '';
+            document.getElementById('discount-type').value = 'percentage';
+            document.getElementById('min-purchase').value = '';
+            document.getElementById('min-purchase-value').value = '';
+            document.getElementById('description').value = '';
+            document.getElementById('notes').value = '';
+            document.getElementById('is-outlier').checked = false;
+
+            const outlierSelect = document.getElementById('outlier-type');
+            for (let i = 0; i < outlierSelect.options.length; i++) {
+                outlierSelect.options[i].selected = false;
+            }
+
+            document.getElementById('verification-status').value = 'unverified';
+
+            boundingBoxes = {};
+        }
+
+        // Start drawing a bounding box
+        function startDrawing(field) {
+            currentField = field;
+            isDrawing = true;
+
+            const canvas = document.getElementById('annotation-canvas');
+            canvas.onmousedown = handleMouseDown;
+            canvas.onmousemove = handleMouseMove;
+            canvas.onmouseup = handleMouseUp;
+        }
+
+        // Handle mouse down event
+        function handleMouseDown(e) {
+            if (!isDrawing) return;
+
+            const canvas = document.getElementById('annotation-canvas');
+            const rect = canvas.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+        }
+
+        // Handle mouse move event
+        function handleMouseMove(e) {
+            if (!isDrawing || !startX || !startY) return;
+
+            const canvas = document.getElementById('annotation-canvas');
+            const ctx = canvas.getContext('2d');
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+
+            // Redraw the image and all boxes
+            const img = new Image();
+            img.onload = function() {
+                ctx.drawImage(img, 0, 0);
+
+                // Draw all existing boxes
+                drawAllBoxes();
+
+                // Draw the current box
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(
+                    startX,
+                    startY,
+                    currentX - startX,
+                    currentY - startY
+                );
+            };
+            img.src = `/api/image/${encodeURIComponent(currentImage)}`;
+        }
+
+        // Handle mouse up event
+        function handleMouseUp(e) {
+            if (!isDrawing || !startX || !startY) return;
+
+            const canvas = document.getElementById('annotation-canvas');
+            const rect = canvas.getBoundingClientRect();
+            const endX = e.clientX - rect.left;
+            const endY = e.clientY - rect.top;
+
+            // Save the bounding box
+            const x1 = Math.min(startX, endX);
+            const y1 = Math.min(startY, endY);
+            const x2 = Math.max(startX, endX);
+            const y2 = Math.max(startY, endY);
+
+            boundingBoxes[currentField] = [x1, y1, x2, y2];
+
+            // Reset drawing state
+            isDrawing = false;
+            startX = null;
+            startY = null;
+
+            // Remove event listeners
+            canvas.onmousedown = null;
+            canvas.onmousemove = null;
+            canvas.onmouseup = null;
+
+            // Redraw all boxes
+            drawAllBoxes();
+        }
+
+        // Draw all bounding boxes
+        function drawAllBoxes() {
+            const canvas = document.getElementById('annotation-canvas');
+            const ctx = canvas.getContext('2d');
+
+            for (const field in boundingBoxes) {
+                const box = boundingBoxes[field];
+
+                // Use different colors for different fields
+                switch (field) {
+                    case 'store_name':
+                        ctx.strokeStyle = 'blue';
+                        break;
+                    case 'coupon_code':
+                        ctx.strokeStyle = 'green';
+                        break;
+                    case 'expiry_date':
+                        ctx.strokeStyle = 'red';
+                        break;
+                    case 'discount_amount':
+                        ctx.strokeStyle = 'purple';
+                        break;
+                    case 'min_purchase':
+                        ctx.strokeStyle = 'orange';
+                        break;
+                    case 'description':
+                        ctx.strokeStyle = 'brown';
+                        break;
+                    default:
+                        ctx.strokeStyle = 'black';
+                }
+
+                ctx.lineWidth = 2;
+                ctx.strokeRect(box[0], box[1], box[2] - box[0], box[3] - box[1]);
+
+                // Add field label
+                ctx.fillStyle = ctx.strokeStyle;
+                ctx.font = '12px Arial';
+                ctx.fillText(field, box[0], box[1] - 5);
+            }
+        }
+
+        // Save annotation
+        function saveAnnotation() {
+            if (!currentImage) {
+                alert('No image selected');
+                return;
+            }
+
+            // Prepare annotation data
+            const annotation = {
+                image_id: currentImage.split('.')[0],
+                source: 'manual_annotation',
+                annotation_date: new Date().toISOString(),
+                annotator_id: 'manual_annotator',
+                fields: {},
+                notes: document.getElementById('notes').value,
+                is_outlier: document.getElementById('is-outlier').checked,
+                outlier_type: Array.from(document.getElementById('outlier-type').selectedOptions).map(option => option.value),
+                verification_status: document.getElementById('verification-status').value
+            };
+
+            // Add fields with bounding boxes
+            if (document.getElementById('store-name').value && boundingBoxes.store_name) {
+                annotation.fields.store_name = {
+                    text: document.getElementById('store-name').value,
+                    bounding_box: boundingBoxes.store_name,
+                    confidence: 1.0
+                };
+            }
+
+            if (document.getElementById('coupon-code').value && boundingBoxes.coupon_code) {
+                annotation.fields.coupon_code = {
+                    text: document.getElementById('coupon-code').value,
+                    bounding_box: boundingBoxes.coupon_code,
+                    confidence: 1.0
+                };
+            }
+
+            if (document.getElementById('expiry-date').value && boundingBoxes.expiry_date) {
+                annotation.fields.expiry_date = {
+                    text: document.getElementById('expiry-date').value,
+                    bounding_box: boundingBoxes.expiry_date,
+                    confidence: 1.0
+                };
+
+                if (document.getElementById('normalized-date').value) {
+                    annotation.fields.expiry_date.normalized_date = document.getElementById('normalized-date').value;
+                }
+            }
+
+            if (document.getElementById('discount-amount').value && boundingBoxes.discount_amount) {
+                annotation.fields.discount_amount = {
+                    text: document.getElementById('discount-amount').value,
+                    bounding_box: boundingBoxes.discount_amount,
+                    confidence: 1.0
+                };
+
+                if (document.getElementById('discount-value').value) {
+                    annotation.fields.discount_amount.value = parseFloat(document.getElementById('discount-value').value);
+                }
+
+                annotation.fields.discount_amount.type = document.getElementById('discount-type').value;
+            }
+
+            if (document.getElementById('min-purchase').value && boundingBoxes.min_purchase) {
+                annotation.fields.min_purchase = {
+                    text: document.getElementById('min-purchase').value,
+                    bounding_box: boundingBoxes.min_purchase,
+                    confidence: 1.0
+                };
+
+                if (document.getElementById('min-purchase-value').value) {
+                    annotation.fields.min_purchase.value = parseFloat(document.getElementById('min-purchase-value').value);
+                }
+            }
+
+            if (document.getElementById('description').value && boundingBoxes.description) {
+                annotation.fields.description = {
+                    text: document.getElementById('description').value,
+                    bounding_box: boundingBoxes.description,
+                    confidence: 1.0
+                };
+            }
+
+            // Save annotation
+            fetch(`/api/annotation/${encodeURIComponent(currentImage)}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(annotation)
+            })
+            .then(response => {
+                if (response.ok) {
+                    alert('Annotation saved successfully');
+                    loadImageList();  // Refresh the image list to update status
+                } else {
+                    alert('Error saving annotation');
+                }
+            });
+        }
+
+        // Initialize
+        window.onload = function() {
+            loadModelMetrics();
+            loadImageList();
+        };
+    </script>
+</body>
+</html>

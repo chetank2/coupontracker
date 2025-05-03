@@ -1,0 +1,6 @@
+
+Store: Swiggy
+Discount: ₹150 OFF
+Code: SWIGGY150
+Valid till: 31 Oct 2025
+Minimum Order: ₹399

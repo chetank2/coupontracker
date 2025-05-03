@@ -43,19 +43,19 @@ private val LightColors = lightColorScheme(
 )
 
 private val DarkColors = darkColorScheme(
-    primary = Color(0xFF64B5F6),  // Lighter blue for dark theme
-    onPrimary = Color(0xFF0D47A1),
-    primaryContainer = Color(0xFF1976D2),
-    onPrimaryContainer = Color(0xFFD6E4FF),
-    secondary = Color(0xFF4DB6AC),  // Lighter teal for dark theme
-    onSecondary = Color(0xFF004D40),
-    secondaryContainer = Color(0xFF00796B),
-    onSecondaryContainer = Color(0xFFB2DFDB),
-    tertiary = Color(0xFFFFB74D),  // Lighter orange for dark theme
-    onTertiary = Color(0xFF662500),
-    tertiaryContainer = Color(0xFFE65100),
-    onTertiaryContainer = Color(0xFFFFE0B2),
-    error = Color(0xFFEF5350),  // Lighter red for dark theme
+    primary = Color(0xFF333333),  // Dark gray for dark theme
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFF444444),
+    onPrimaryContainer = Color(0xFFEEEEEE),
+    secondary = Color(0xFF777777),  // Medium gray for dark theme
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFF555555),
+    onSecondaryContainer = Color(0xFFEEEEEE),
+    tertiary = Color(0xFF999999),  // Light gray for dark theme
+    onTertiary = Color(0xFF000000),
+    tertiaryContainer = Color(0xFF777777),
+    onTertiaryContainer = Color(0xFFEEEEEE),
+    error = Color(0xFFEF5350),  // Keeping red for error states
     onError = Color(0xFF000000),
     errorContainer = Color(0xFFB00020),
     onErrorContainer = Color(0xFFFFDAD6),
@@ -71,8 +71,8 @@ private val DarkColors = darkColorScheme(
 @Composable
 fun CouponTrackerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    // Dynamic color is disabled to ensure our black and grayscale theme is used
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {

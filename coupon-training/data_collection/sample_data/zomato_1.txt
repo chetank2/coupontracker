@@ -1,0 +1,6 @@
+
+Store: Zomato
+Discount: 50% OFF
+Code: WELCOME50
+Valid till: 30 Jun 2025
+Minimum Order: ₹199

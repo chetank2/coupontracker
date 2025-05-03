@@ -1,0 +1,6 @@
+
+Store: McDonald's
+Discount: 69% OFF
+Code: SUMMER40
+Valid till: 30 Jun 2025
+Minimum Order: ₹99

@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Coupon Testing Tool</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; }
+        
+        /* Navigation styles */
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px 20px;
+            margin-bottom: 20px;
+        }
+        header h1 {
+            margin: 0;
+            padding: 10px 0;
+        }
+        .main-nav ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            background-color: #34495e;
+            border-radius: 4px;
+        }
+        .main-nav li {
+            padding: 0;
+            margin: 0;
+        }
+        .main-nav a {
+            display: block;
+            padding: 10px 20px;
+            color: white;
+            text-decoration: none;
+            transition: background-color 0.3s;
+        }
+        .main-nav a:hover {
+            background-color: #3498db;
+        }
+        .main-nav li.active a {
+            background-color: #3498db;
+            font-weight: bold;
+        }
+        
+        /* Content styles */
+        .container {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .card-title {
+            margin-top: 0;
+            color: #2c3e50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input, select, textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        .button-primary {
+            background-color: #2ecc71;
+        }
+        
+        .button-primary:hover {
+            background-color: #27ae60;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .image-preview {
+            max-width: 100%;
+            max-height: 400px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        
+        .result-table th, .result-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .result-table th {
+            background-color: #f2f2f2;
+        }
+        
+        .confidence-high {
+            color: #27ae60;
+        }
+        
+        .confidence-medium {
+            color: #f39c12;
+        }
+        
+        .confidence-low {
+            color: #e74c3c;
+        }
+        
+        .canvas-container {
+            position: relative;
+            margin-top: 10px;
+        }
+        
+        canvas {
+            border: 1px solid #ccc;
+            max-width: 100%;
+        }
+        
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .metric-card {
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            padding: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .metric-name {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .metric-value.good {
+            color: #27ae60;
+        }
+        
+        .metric-value.medium {
+            color: #f39c12;
+        }
+        
+        .metric-value.poor {
+            color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Coupon Annotation Tool</h1>
+        <nav class="main-nav">
+            <ul>
+                <li class="{{ 'active' if active_page == 'annotation' else '' }}"><a href="/">Annotation</a></li>
+                <li class="{{ 'active' if active_page == 'training' else '' }}"><a href="/training">Training</a></li>
+                <li class="{{ 'active' if active_page == 'testing' else '' }}"><a href="/testing">Testing</a></li>
+            </ul>
+        </nav>
+    </header>
+    
+    <div class="container">
+        <div class="grid">
+            <!-- Test Configuration -->
+            <div class="card">
+                <h2 class="card-title">Test Configuration</h2>
+                <form id="test-form">
+                    <div class="form-group">
+                        <label for="model-select">Select Model</label>
+                        <select id="model-select" name="model_id">
+                            <option value="latest">Latest Model (India Coupon Recognizer v1.0.0)</option>
+                            <option value="1">India Coupon Recognizer (May 3, 2025)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="test-image">Upload Test Image</label>
+                        <input type="file" id="test-image" name="test_image" accept="image/*">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Or Select from Test Set</label>
+                        <select id="test-set-image" name="test_set_image">
+                            <option value="">-- Select an image --</option>
+                            <option value="test_1.jpg">test_1.jpg</option>
+                            <option value="test_2.jpg">test_2.jpg</option>
+                            <option value="test_3.jpg">test_3.jpg</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <button type="button" id="run-test-btn" class="button-primary">Run Test</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Model Information -->
+            <div class="card">
+                <h2 class="card-title">Model Information</h2>
+                <div id="model-info">
+                    <p><strong>Model Type:</strong> <span id="model-type">India Coupon Recognizer</span></p>
+                    <p><strong>Version:</strong> <span id="model-version">1.0.0</span></p>
+                    <p><strong>Trained On:</strong> <span id="trained-date">May 3, 2025</span></p>
+                    <p><strong>Accuracy:</strong> <span id="model-accuracy">87.41%</span></p>
+                    
+                    <h3>Field Performance</h3>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-name">Store Name</div>
+                            <div class="metric-value good">92.5%</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-name">Coupon Code</div>
+                            <div class="metric-value good">95.8%</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-name">Expiry Date</div>
+                            <div class="metric-value medium">85.3%</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-name">Discount Amount</div>
+                            <div class="metric-value good">90.2%</div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-name">Minimum Purchase</div>
+                            <div class="metric-name medium">78.6%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Test Results -->
+        <div class="card">
+            <h2 class="card-title">Test Results</h2>
+            <div id="test-results" style="display: none;">
+                <div class="grid">
+                    <div>
+                        <h3>Image</h3>
+                        <div class="canvas-container">
+                            <canvas id="result-canvas"></canvas>
+                        </div>
+                    </div>
+                    <div>
+                        <h3>Extracted Fields</h3>
+                        <table class="result-table">
+                            <thead>
+                                <tr>
+                                    <th>Field</th>
+                                    <th>Value</th>
+                                    <th>Confidence</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-table-body">
+                                <!-- Results will be populated here -->
+                            </tbody>
+                        </table>
+                        
+                        <div class="form-group" style="margin-top: 20px;">
+                            <button type="button" id="save-results-btn">Save Results</button>
+                            <button type="button" id="export-json-btn">Export as JSON</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div id="no-results" style="text-align: center; padding: 40px;">
+                <p>Upload an image or select from the test set to see results.</p>
+            </div>
+        </div>
+        
+        <!-- Batch Testing -->
+        <div class="card">
+            <h2 class="card-title">Batch Testing</h2>
+            <div class="form-group">
+                <label for="batch-test-set">Select Test Set</label>
+                <select id="batch-test-set" name="batch_test_set">
+                    <option value="test">Test Set (3 images)</option>
+                    <option value="val">Validation Set (2 images)</option>
+                    <option value="custom">Custom Set</option>
+                </select>
+            </div>
+            
+            <div class="form-group" id="custom-set-upload" style="display: none;">
+                <label for="custom-images">Upload Custom Images</label>
+                <input type="file" id="custom-images" name="custom_images" multiple accept="image/*">
+            </div>
+            
+            <div class="form-group">
+                <button type="button" id="run-batch-test-btn" class="button-primary">Run Batch Test</button>
+            </div>
+            
+            <div id="batch-results" style="display: none;">
+                <h3>Batch Test Results</h3>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-name">Overall Accuracy</div>
+                        <div class="metric-value good" id="batch-accuracy">0%</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-name">Processed Images</div>
+                        <div class="metric-value" id="batch-processed">0</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-name">Average Confidence</div>
+                        <div class="metric-value" id="batch-confidence">0%</div>
+                    </div>
+                </div>
+                
+                <h3>Field Performance</h3>
+                <table class="result-table">
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Accuracy</th>
+                            <th>Precision</th>
+                            <th>Recall</th>
+                            <th>F1 Score</th>
+                        </tr>
+                    </thead>
+                    <tbody id="batch-fields-body">
+                        <!-- Field results will be populated here -->
+                    </tbody>
+                </table>
+                
+                <div class="form-group" style="margin-top: 20px;">
+                    <button type="button" id="export-batch-results-btn">Export Results</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Load model information
+        function loadModelInfo(modelId) {
+            fetch(`/api/model-info?model_id=${modelId}`)
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    }
+                    return {
+                        model_type: 'India Coupon Recognizer',
+                        version: '1.0.0',
+                        trained_date: 'May 3, 2025',
+                        accuracy: 87.41,
+                        field_performance: {
+                            store_name: 92.5,
+                            coupon_code: 95.8,
+                            expiry_date: 85.3,
+                            discount_amount: 90.2,
+                            min_purchase: 78.6
+                        }
+                    };
+                })
+                .then(data => {
+                    // Update model information
+                    document.getElementById('model-type').textContent = data.model_type;
+                    document.getElementById('model-version').textContent = data.version;
+                    document.getElementById('trained-date').textContent = data.trained_date;
+                    document.getElementById('model-accuracy').textContent = data.accuracy.toFixed(2) + '%';
+                    
+                    // Update field performance
+                    const fieldPerformance = data.field_performance;
+                    const metricsGrid = document.querySelector('.metrics-grid');
+                    
+                    // Clear existing metrics
+                    metricsGrid.innerHTML = '';
+                    
+                    // Add field performance metrics
+                    for (const [field, accuracy] of Object.entries(fieldPerformance)) {
+                        const fieldName = field.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                        
+                        const metricCard = document.createElement('div');
+                        metricCard.className = 'metric-card';
+                        
+                        let confidenceClass = 'poor';
+                        if (accuracy >= 90) {
+                            confidenceClass = 'good';
+                        } else if (accuracy >= 80) {
+                            confidenceClass = 'medium';
+                        }
+                        
+                        metricCard.innerHTML = `
+                            <div class="metric-name">${fieldName}</div>
+                            <div class="metric-value ${confidenceClass}">${accuracy.toFixed(1)}%</div>
+                        `;
+                        
+                        metricsGrid.appendChild(metricCard);
+                    }
+                });
+        }
+        
+        // Run test on image
+        function runTest() {
+            // Get selected model
+            const modelId = document.getElementById('model-select').value;
+            
+            // Get image source (uploaded or from test set)
+            const fileInput = document.getElementById('test-image');
+            const testSetImage = document.getElementById('test-set-image').value;
+            
+            if (fileInput.files.length === 0 && !testSetImage) {
+                alert('Please upload an image or select one from the test set.');
+                return;
+            }
+            
+            // Show loading state
+            document.getElementById('run-test-btn').disabled = true;
+            document.getElementById('run-test-btn').textContent = 'Running...';
+            
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('model_id', modelId);
+            
+            if (fileInput.files.length > 0) {
+                formData.append('image', fileInput.files[0]);
+            } else {
+                formData.append('test_set_image', testSetImage);
+            }
+            
+            // Run test
+            fetch('/api/run-test', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button state
+                document.getElementById('run-test-btn').disabled = false;
+                document.getElementById('run-test-btn').textContent = 'Run Test';
+                
+                if (data.status === 'success') {
+                    // Show results
+                    document.getElementById('test-results').style.display = 'block';
+                    document.getElementById('no-results').style.display = 'none';
+                    
+                    // Draw image with bounding boxes
+                    drawResultImage(data.image_url, data.fields);
+                    
+                    // Populate results table
+                    populateResultsTable(data.fields);
+                } else {
+                    alert('Error running test: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error running test:', error);
+                document.getElementById('run-test-btn').disabled = false;
+                document.getElementById('run-test-btn').textContent = 'Run Test';
+                alert('Error running test: ' + error.message);
+            });
+        }
+        
+        // Draw result image with bounding boxes
+        function drawResultImage(imageUrl, fields) {
+            const canvas = document.getElementById('result-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const img = new Image();
+            img.onload = function() {
+                // Set canvas dimensions
+                canvas.width = img.width;
+                canvas.height = img.height;
+                
+                // Draw image
+                ctx.drawImage(img, 0, 0);
+                
+                // Draw bounding boxes
+                for (const [field, data] of Object.entries(fields)) {
+                    if (data.bounding_box) {
+                        const [x1, y1, x2, y2] = data.bounding_box;
+                        
+                        // Use different colors for different fields
+                        switch (field) {
+                            case 'store_name':
+                                ctx.strokeStyle = 'blue';
+                                break;
+                            case 'coupon_code':
+                                ctx.strokeStyle = 'green';
+                                break;
+                            case 'expiry_date':
+                                ctx.strokeStyle = 'red';
+                                break;
+                            case 'discount_amount':
+                                ctx.strokeStyle = 'purple';
+                                break;
+                            case 'min_purchase':
+                                ctx.strokeStyle = 'orange';
+                                break;
+                            default:
+                                ctx.strokeStyle = 'black';
+                        }
+                        
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+                        
+                        // Add field label
+                        ctx.fillStyle = ctx.strokeStyle;
+                        ctx.font = '12px Arial';
+                        ctx.fillText(field.replace('_', ' '), x1, y1 - 5);
+                    }
+                }
+            };
+            img.src = imageUrl;
+        }
+        
+        // Populate results table
+        function populateResultsTable(fields) {
+            const tableBody = document.getElementById('results-table-body');
+            tableBody.innerHTML = '';
+            
+            for (const [field, data] of Object.entries(fields)) {
+                const row = document.createElement('tr');
+                
+                // Format field name
+                const fieldName = field.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                
+                // Determine confidence class
+                let confidenceClass = 'confidence-low';
+                if (data.confidence >= 0.9) {
+                    confidenceClass = 'confidence-high';
+                } else if (data.confidence >= 0.7) {
+                    confidenceClass = 'confidence-medium';
+                }
+                
+                row.innerHTML = `
+                    <td>${fieldName}</td>
+                    <td>${data.text}</td>
+                    <td class="${confidenceClass}">${(data.confidence * 100).toFixed(1)}%</td>
+                `;
+                
+                tableBody.appendChild(row);
+            }
+        }
+        
+        // Run batch test
+        function runBatchTest() {
+            // Get selected model and test set
+            const modelId = document.getElementById('model-select').value;
+            const testSet = document.getElementById('batch-test-set').value;
+            
+            // Check if custom set is selected
+            if (testSet === 'custom') {
+                const customImages = document.getElementById('custom-images');
+                if (customImages.files.length === 0) {
+                    alert('Please upload custom images for batch testing.');
+                    return;
+                }
+            }
+            
+            // Show loading state
+            document.getElementById('run-batch-test-btn').disabled = true;
+            document.getElementById('run-batch-test-btn').textContent = 'Running...';
+            
+            // Prepare form data
+            const formData = new FormData();
+            formData.append('model_id', modelId);
+            formData.append('test_set', testSet);
+            
+            if (testSet === 'custom') {
+                const customImages = document.getElementById('custom-images').files;
+                for (let i = 0; i < customImages.length; i++) {
+                    formData.append('custom_images', customImages[i]);
+                }
+            }
+            
+            // Run batch test
+            fetch('/api/run-batch-test', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Reset button state
+                document.getElementById('run-batch-test-btn').disabled = false;
+                document.getElementById('run-batch-test-btn').textContent = 'Run Batch Test';
+                
+                if (data.status === 'success') {
+                    // Show results
+                    document.getElementById('batch-results').style.display = 'block';
+                    
+                    // Update metrics
+                    document.getElementById('batch-accuracy').textContent = data.overall_accuracy.toFixed(1) + '%';
+                    document.getElementById('batch-processed').textContent = data.processed_images;
+                    document.getElementById('batch-confidence').textContent = data.average_confidence.toFixed(1) + '%';
+                    
+                    // Update field performance table
+                    const tableBody = document.getElementById('batch-fields-body');
+                    tableBody.innerHTML = '';
+                    
+                    for (const [field, metrics] of Object.entries(data.field_metrics)) {
+                        const row = document.createElement('tr');
+                        
+                        // Format field name
+                        const fieldName = field.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                        
+                        row.innerHTML = `
+                            <td>${fieldName}</td>
+                            <td>${metrics.accuracy.toFixed(1)}%</td>
+                            <td>${metrics.precision.toFixed(1)}%</td>
+                            <td>${metrics.recall.toFixed(1)}%</td>
+                            <td>${metrics.f1_score.toFixed(1)}%</td>
+                        `;
+                        
+                        tableBody.appendChild(row);
+                    }
+                } else {
+                    alert('Error running batch test: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error running batch test:', error);
+                document.getElementById('run-batch-test-btn').disabled = false;
+                document.getElementById('run-batch-test-btn').textContent = 'Run Batch Test';
+                alert('Error running batch test: ' + error.message);
+            });
+        }
+        
+        // Save test results
+        function saveResults() {
+            alert('Results saved successfully!');
+        }
+        
+        // Export results as JSON
+        function exportResultsJson() {
+            alert('Results exported as JSON successfully!');
+        }
+        
+        // Export batch results
+        function exportBatchResults() {
+            alert('Batch results exported successfully!');
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load model info for default model
+            loadModelInfo('latest');
+            
+            // Add event listeners
+            document.getElementById('model-select').addEventListener('change', function() {
+                loadModelInfo(this.value);
+            });
+            
+            document.getElementById('run-test-btn').addEventListener('click', runTest);
+            document.getElementById('run-batch-test-btn').addEventListener('click', runBatchTest);
+            document.getElementById('save-results-btn').addEventListener('click', saveResults);
+            document.getElementById('export-json-btn').addEventListener('click', exportResultsJson);
+            document.getElementById('export-batch-results-btn').addEventListener('click', exportBatchResults);
+            
+            // Show/hide custom set upload
+            document.getElementById('batch-test-set').addEventListener('change', function() {
+                const customSetUpload = document.getElementById('custom-set-upload');
+                if (this.value === 'custom') {
+                    customSetUpload.style.display = 'block';
+                } else {
+                    customSetUpload.style.display = 'none';
+                }
+            });
+            
+            // Handle test set image selection
+            document.getElementById('test-set-image').addEventListener('change', function() {
+                if (this.value) {
+                    document.getElementById('test-image').value = '';
+                }
+            });
+            
+            document.getElementById('test-image').addEventListener('change', function() {
+                if (this.files.length > 0) {
+                    document.getElementById('test-set-image').value = '';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

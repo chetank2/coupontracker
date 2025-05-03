@@ -1,0 +1,5 @@
+
+Store: GPay
+Discount: ₹100 OFF
+Code: GPAY100
+Valid till: 15 Jul 2025

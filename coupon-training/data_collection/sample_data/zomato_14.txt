@@ -1,0 +1,6 @@
+
+Store: Zomato
+Discount: UPTO ₹200 OFF
+Code: EXTRA10
+Valid till: 14 Jul 2025
+Minimum Order: ₹299

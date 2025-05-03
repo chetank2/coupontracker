@@ -1,0 +1,6 @@
+
+Store: KFC
+Discount: FREE DELIVERY
+Code: SAVE20
+Valid till: 19 Jul 2025
+Minimum Order: ₹999

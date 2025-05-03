@@ -2,6 +2,32 @@
 
 This is a training environment for building and training a model to detect elements in coupon images using OpenCV and Tesseract OCR. It includes both command-line tools and a web interface for training and testing the model.
 
+## Recent Improvements
+
+We've made several significant improvements to address limitations in the original implementation:
+
+1. **Adaptive Pattern Recognition**
+   - Flexible pattern recognition that adapts to different coupon layouts
+   - Content-based classification using regular expressions
+   - Clustering of text regions to identify logical groups
+
+2. **Error Recovery and Retry Logic**
+   - Robust error handling with exponential backoff
+   - Multiple fallback methods for text extraction
+   - Specialized preprocessing for different element types
+
+3. **Resource Management**
+   - Proper cleanup of bitmap resources
+   - Memory monitoring and management
+   - Thread pool for parallel processing
+   - Image resizing to limit memory usage
+
+4. **Testable Code Structure**
+   - Dependency injection for easier testing
+   - Interface-based design for component isolation
+   - Unit tests for core functionality
+   - Mock-based testing for external dependencies
+
 ## Setup
 
 1. Install the required dependencies:
@@ -120,6 +146,7 @@ This is a training environment for building and training a model to detect eleme
 
 ## Scripts
 
+### Original Scripts
 - `setup_environment.py`: Set up the training environment
 - `scripts/preprocess_images.py`: Preprocess coupon images
 - `scripts/annotate_coupons.py`: Annotate coupon elements
@@ -130,6 +157,18 @@ This is a training environment for building and training a model to detect eleme
 - `scripts/data_augmentation.py`: Augment training data with variations
 - `scripts/create_validation_set.py`: Create validation dataset
 - `scripts/dataset_versioning.py`: Version control for datasets
+
+### New Improved Scripts
+- `scripts/adaptive_pattern_recognition.py`: Flexible pattern recognition system
+- `scripts/error_recovery.py`: Error handling and retry logic
+- `scripts/resource_management.py`: Resource cleanup and management
+- `scripts/testable_coupon_recognizer.py`: Testable code structure with dependency injection
+- `scripts/improved_coupon_recognizer.py`: Main integration script combining all improvements
+- `scripts/simple_cascade_model.py`: Simple cascade model for coupon recognition
+- `scripts/simple_augmentation.py`: Basic data augmentation techniques
+- `scripts/simple_evaluation.py`: Evaluation framework for model performance
+- `scripts/create_sample_coupon.py`: Generate sample coupon images for testing
+- `scripts/manual_coupon_download_guide.py`: Guide for downloading coupon images from Reddit
 
 ## Utilities
 
@@ -195,3 +234,52 @@ Each element type uses:
 2. Specialized image preprocessing
 3. Regex pattern matching
 4. Post-processing validation
+
+### Using the Improved Coupon Recognizer
+
+The new improved coupon recognizer addresses the limitations in the original implementation and provides better accuracy and robustness.
+
+#### Process a single image:
+```
+python scripts/improved_coupon_recognizer.py --image data/raw/sample_myntra_coupon.jpg --output results/myntra_result.json
+```
+
+#### Process multiple images:
+```
+python scripts/improved_coupon_recognizer.py --batch data/raw --output results
+```
+
+#### Use fixed patterns instead of adaptive recognition:
+```
+python scripts/improved_coupon_recognizer.py --image data/raw/sample_myntra_coupon.jpg --fixed-patterns
+```
+
+#### Generate sample coupon images:
+```
+python scripts/create_sample_coupon.py
+```
+
+#### Apply augmentation to an image:
+```
+python scripts/simple_augmentation.py --image data/raw/sample_myntra_coupon.jpg --output-dir data/augmented
+```
+
+#### Evaluate model performance:
+```
+python scripts/simple_evaluation.py --data-dir data --pattern-file models/simplified/coupon_patterns.txt --summary-file data/sample_coupon_summary.md
+```
+
+#### Run unit tests:
+```
+python -m unittest tests/test_coupon_recognizer.py
+```
+
+### Configuration
+
+The improved system can be configured using the `config/coupon_recognizer_config.json` file. Key configuration options include:
+
+- **Pattern Recognition**: Configure text detection parameters and element patterns
+- **Error Recovery**: Set retry attempts, delay, and fallback methods
+- **Resource Management**: Configure memory limits and thread pool size
+- **OCR Configurations**: Customize Tesseract parameters for different element types
+- **Pattern Regions**: Define fixed pattern regions for different coupon elements
