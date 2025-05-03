@@ -119,16 +119,14 @@ class AddFragment : Fragment() {
 
     private fun initializeImageProcessor() {
         val useMistralApi = sharedPreferences.getBoolean(KEY_USE_MISTRAL_API, false)
-        val mistralApiKey = if (useMistralApi) {
+        if (useMistralApi) {
             val key = sharedPreferences.getString(KEY_MISTRAL_API_KEY, null)
             Log.d(TAG, "Using Mistral API with key: ${key?.take(5) ?: "null"}...")
-            key
         } else {
             Log.d(TAG, "Mistral API disabled")
-            null
         }
 
-        imageProcessor = ImageProcessor(requireContext(), mistralApiKey)
+        imageProcessor = ImageProcessor(requireContext())
     }
 
     private fun setupMistralApiSwitch() {
@@ -155,7 +153,7 @@ class AddFragment : Fragment() {
             // If turning off, reinitialize without API key
             if (!isChecked) {
                 Log.d(TAG, "Reinitializing ImageProcessor without API key")
-                imageProcessor = ImageProcessor(requireContext(), null)
+                imageProcessor = ImageProcessor(requireContext())
 
                 // Show a message to the user
                 Snackbar.make(binding.root, "Mistral API disabled. Using default text extraction.", Snackbar.LENGTH_SHORT).show()
@@ -164,7 +162,7 @@ class AddFragment : Fragment() {
                 val savedKey = sharedPreferences.getString(KEY_MISTRAL_API_KEY, null)
                 if (!savedKey.isNullOrBlank()) {
                     Log.d(TAG, "Reinitializing ImageProcessor with saved API key: ${savedKey.take(5)}...")
-                    imageProcessor = ImageProcessor(requireContext(), savedKey)
+                    imageProcessor = ImageProcessor(requireContext())
 
                     // Show a message to the user
                     Snackbar.make(binding.root, "Mistral API enabled with saved key.", Snackbar.LENGTH_SHORT).show()
@@ -189,7 +187,7 @@ class AddFragment : Fragment() {
             sharedPreferences.edit().putString(KEY_MISTRAL_API_KEY, newApiKey).apply()
 
             // Reinitialize image processor with new key
-            imageProcessor = ImageProcessor(requireContext(), newApiKey)
+            imageProcessor = ImageProcessor(requireContext())
 
             Snackbar.make(binding.root, "API key saved and activated", Snackbar.LENGTH_SHORT).show()
 
@@ -430,10 +428,10 @@ class AddFragment : Fragment() {
                 // Ensure ImageProcessor has the latest API key
                 if (useMistralApi && !apiKey.isNullOrBlank()) {
                     Log.d(TAG, "Using Mistral API with key: ${apiKey.take(5)}...")
-                    imageProcessor = ImageProcessor(requireContext(), apiKey)
+                    imageProcessor = ImageProcessor(requireContext())
                 } else {
                     Log.d(TAG, "Using default text extraction (no Mistral API)")
-                    imageProcessor = ImageProcessor(requireContext(), null)
+                    imageProcessor = ImageProcessor(requireContext())
                 }
 
                 val couponInfo = imageProcessor.processImage(uri)
