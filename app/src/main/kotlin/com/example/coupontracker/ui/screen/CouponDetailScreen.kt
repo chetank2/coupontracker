@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -19,12 +20,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import com.example.coupontracker.ui.components.ImagePreviewDialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.ui.theme.BrandSpacing
@@ -40,15 +45,17 @@ fun CouponDetailScreen(
     couponId: Long,
     viewModel: DetailViewModel = hiltViewModel()
 ) {
+    // State for image preview
+    var showImagePreview by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val coupon by viewModel.coupon.collectAsState()
-    
+
     // Load the coupon when the screen is first displayed
     LaunchedEffect(couponId) {
         viewModel.loadCoupon(couponId)
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -82,6 +89,36 @@ fun CouponDetailScreen(
                         .verticalScroll(rememberScrollState())
                         .padding(BrandSpacing.Medium)
                 ) {
+                    // Coupon image (if available)
+                    coupon.imageUri?.let { imageUri ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .padding(bottom = BrandSpacing.Medium)
+                                .clickable { showImagePreview = true },
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(imageUri)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Coupon Image",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        // Image preview dialog
+                        if (showImagePreview) {
+                            ImagePreviewDialog(
+                                imageUri = imageUri,
+                                onDismiss = { showImagePreview = false }
+                            )
+                        }
+                    }
+
                     // Store name and icon
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -101,26 +138,26 @@ fun CouponDetailScreen(
                                 color = MaterialTheme.colorScheme.primary
                             )
                         }
-                        
+
                         Spacer(modifier = Modifier.width(BrandSpacing.Medium))
-                        
+
                         Text(
                             text = coupon.storeName,
                             style = MaterialTheme.typography.headlineSmall,
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    
+
                     Spacer(modifier = Modifier.height(BrandSpacing.Medium))
-                    
+
                     // Description
                     Text(
                         text = coupon.description,
                         style = MaterialTheme.typography.bodyLarge
                     )
-                    
+
                     Spacer(modifier = Modifier.height(BrandSpacing.Large))
-                    
+
                     // Coupon code
                     if (!coupon.redeemCode.isNullOrEmpty()) {
                         Card(
@@ -143,7 +180,7 @@ fun CouponDetailScreen(
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier.weight(1f)
                                 )
-                                
+
                                 IconButton(onClick = {
                                     clipboardManager.setText(AnnotatedString(coupon.redeemCode))
                                     Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
@@ -152,29 +189,29 @@ fun CouponDetailScreen(
                                 }
                             }
                         }
-                        
+
                         Spacer(modifier = Modifier.height(BrandSpacing.Large))
                     }
-                    
+
                     // Expiry date
                     val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
                     val now = Date()
                     val diffInMillis = coupon.expiryDate.time - now.time
                     val daysRemaining = TimeUnit.MILLISECONDS.toDays(diffInMillis)
-                    
+
                     val expiryColor = when {
                         daysRemaining < 0 -> Color(0xFFE53935) // Expired
                         daysRemaining <= 3 -> Color(0xFFE53935) // Critical
                         daysRemaining <= 7 -> Color(0xFFFFA000) // Warning
                         else -> Color(0xFF43A047) // Valid
                     }
-                    
+
                     val expiryText = when {
                         daysRemaining < 0 -> "Expired"
                         daysRemaining <= 1 -> "Expires tomorrow"
                         else -> "Expires in $daysRemaining days"
                     }
-                    
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -183,16 +220,16 @@ fun CouponDetailScreen(
                             contentDescription = null,
                             tint = expiryColor
                         )
-                        
+
                         Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                        
+
                         Text(
                             text = dateFormat.format(coupon.expiryDate),
                             style = MaterialTheme.typography.bodyLarge
                         )
-                        
+
                         Spacer(modifier = Modifier.width(BrandSpacing.Medium))
-                        
+
                         Surface(
                             shape = RoundedCornerShape(16.dp),
                             color = expiryColor.copy(alpha = 0.1f)
@@ -205,9 +242,9 @@ fun CouponDetailScreen(
                             )
                         }
                     }
-                    
+
                     Spacer(modifier = Modifier.height(BrandSpacing.Medium))
-                    
+
                     // Cashback amount
                     if (coupon.cashbackAmount > 0) {
                         Row(
@@ -217,19 +254,19 @@ fun CouponDetailScreen(
                                 imageVector = Icons.Default.CurrencyRupee,
                                 contentDescription = null
                             )
-                            
+
                             Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                            
+
                             Text(
                                 text = "₹${coupon.cashbackAmount.toInt()}",
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        
+
                         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
                     }
-                    
+
                     // Category
                     if (!coupon.category.isNullOrEmpty()) {
                         Row(
@@ -239,18 +276,18 @@ fun CouponDetailScreen(
                                 imageVector = Icons.Default.Category,
                                 contentDescription = null
                             )
-                            
+
                             Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                            
+
                             Text(
                                 text = coupon.category,
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         }
-                        
+
                         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
                     }
-                    
+
                     // Action buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -268,9 +305,9 @@ fun CouponDetailScreen(
                             Spacer(modifier = Modifier.width(BrandSpacing.Small))
                             Text("Track Usage")
                         }
-                        
+
                         Spacer(modifier = Modifier.width(BrandSpacing.Medium))
-                        
+
                         Button(
                             onClick = {
                                 // Set reminder

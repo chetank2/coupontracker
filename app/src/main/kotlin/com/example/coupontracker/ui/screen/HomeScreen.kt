@@ -7,6 +7,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,7 +18,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -26,6 +29,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -62,10 +66,13 @@ import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.ui.components.BrandCard
 import com.example.coupontracker.ui.components.EmptyState
 import com.example.coupontracker.ui.components.EnhancedCouponCard
+import com.example.coupontracker.ui.components.FilterOption
+import com.example.coupontracker.ui.components.FilterSortBottomSheet
 import com.example.coupontracker.ui.components.OutlinedBrandButton
 import com.example.coupontracker.ui.components.PrimaryButton
 import com.example.coupontracker.ui.components.SecondaryButton
 import com.example.coupontracker.ui.components.SectionHeader
+import com.example.coupontracker.ui.components.SimpleCaptureBottomSheet
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
@@ -88,6 +95,10 @@ fun HomeScreen(
     // Search state
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
+
+    // Bottom sheet states
+    var showCaptureBottomSheet by remember { mutableStateOf(false) }
+    var showFilterSortBottomSheet by remember { mutableStateOf(false) }
 
     LaunchedEffect(key1 = true) {
         val isFirstLaunchPref = sharedPreferences.getBoolean("is_first_launch", true)
@@ -140,109 +151,58 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            var showMenu by remember { mutableStateOf(false) }
+            // Main FAB
+            ExtendedFloatingActionButton(
+                onClick = { showCaptureBottomSheet = true },
+                icon = {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Add Coupon",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                },
+                expanded = true,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 6.dp,
+                    pressedElevation = 8.dp
+                ),
+                modifier = Modifier.padding(vertical = BrandSpacing.Small)
+            )
 
-            Column(
-                horizontalAlignment = Alignment.End
-            ) {
-                // Show the menu if expanded
-                AnimatedVisibility(
-                    visible = showMenu,
-                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
-                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
-                ) {
-                    BrandCard(
-                        modifier = Modifier
-                            .padding(bottom = 16.dp)
-                            .width(220.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-                        shape = BrandShapes.LargeCornerShape
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(BrandSpacing.Medium)
-                        ) {
-                            Text(
-                                text = "Add Coupon",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(bottom = BrandSpacing.Small)
-                            )
-
-                            // Camera option
-                            PrimaryButton(
-                                text = "Camera",
-                                onClick = {
-                                    navController.navigate(Screen.Scanner.route)
-                                    showMenu = false
-                                },
-                                leadingIcon = Icons.Default.CameraAlt,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(modifier = Modifier.height(BrandSpacing.Small))
-
-                            // Batch scan option
-                            SecondaryButton(
-                                text = "Batch Scan",
-                                onClick = {
-                                    navController.navigate(Screen.BatchScanner.route)
-                                    showMenu = false
-                                },
-                                leadingIcon = Icons.Default.Collections,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(modifier = Modifier.height(BrandSpacing.Small))
-
-                            // QR code option
-                            SecondaryButton(
-                                text = "QR Code",
-                                onClick = {
-                                    navController.navigate(Screen.QRScanner.route)
-                                    showMenu = false
-                                },
-                                leadingIcon = Icons.Default.QrCode,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Spacer(modifier = Modifier.height(BrandSpacing.Small))
-
-                            // Manual entry option
-                            OutlinedBrandButton(
-                                text = "Manual Entry",
-                                onClick = {
-                                    navController.navigate(Screen.ManualEntry.route)
-                                    showMenu = false
-                                },
-                                leadingIcon = Icons.Default.Edit,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
+            // Show the simple capture bottom sheet when the FAB is clicked
+            if (showCaptureBottomSheet) {
+                SimpleCaptureBottomSheet(
+                    onDismiss = { showCaptureBottomSheet = false },
+                    onCameraCapture = {
+                        navController.navigate(Screen.Scanner.route)
+                    },
+                    onBatchScan = {
+                        navController.navigate(Screen.BatchScanner.route)
+                    },
+                    onQrScan = {
+                        navController.navigate(Screen.QRScanner.route)
+                    },
+                    onManualEntry = {
+                        navController.navigate(Screen.ManualEntry.route)
                     }
-                }
+                )
+            }
 
-                // Main FAB
-                ExtendedFloatingActionButton(
-                    onClick = { showMenu = !showMenu },
-                    icon = {
-                        Icon(
-                            if (showMenu) Icons.Default.Close else Icons.Default.Add,
-                            contentDescription = null
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = if (showMenu) "Close" else "Add Coupon",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    },
-                    expanded = true,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    elevation = FloatingActionButtonDefaults.elevation(
-                        defaultElevation = 6.dp,
-                        pressedElevation = 8.dp
-                    ),
-                    modifier = Modifier.padding(vertical = BrandSpacing.Small)
+            // Show the filter and sort bottom sheet
+            if (showFilterSortBottomSheet) {
+                FilterSortBottomSheet(
+                    onDismiss = { showFilterSortBottomSheet = false },
+                    currentSortOrder = viewModel.filters.value.sortOrder,
+                    currentFilter = viewModel.filters.value.filterOption,
+                    onSortOrderSelected = { viewModel.updateSortOrder(it) },
+                    onFilterSelected = { viewModel.updateFilterOption(it) }
                 )
             }
         }
@@ -262,7 +222,7 @@ fun HomeScreen(
                     action = {
                         PrimaryButton(
                             text = "Scan Coupon",
-                            onClick = { navController.navigate(Screen.Scanner.route) },
+                            onClick = { showCaptureBottomSheet = true },
                             leadingIcon = Icons.Default.CameraAlt,
                             modifier = Modifier
                                 .fillMaxWidth(0.7f)
@@ -277,6 +237,47 @@ fun HomeScreen(
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
+                // Search and filter row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = BrandSpacing.Medium, vertical = BrandSpacing.Small),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Search bar (simplified for this example)
+                    Text(
+                        text = "Search coupons...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = MaterialTheme.shapes.medium
+                            )
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.width(BrandSpacing.Small))
+
+                    // Filter button
+                    IconButton(
+                        onClick = { showFilterSortBottomSheet = true },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = CircleShape
+                            )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FilterList,
+                            contentDescription = "Filter and Sort",
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                }
+
                 // Section header
                 SectionHeader(
                     title = "Your Coupons",
