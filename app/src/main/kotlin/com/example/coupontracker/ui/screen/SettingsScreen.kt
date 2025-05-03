@@ -10,7 +10,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -20,34 +19,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coupontracker.ui.navigation.Screen
-import com.example.coupontracker.util.ApiTester
-import com.example.coupontracker.util.DebugLoggerUtil
 import com.example.coupontracker.util.SecurePreferencesManager
 import com.example.coupontracker.util.TesseractLanguageManager
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.School
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.text.style.TextAlign
 
 // Using keys from SecurePreferencesManager
 
-// API Type enum
-enum class ApiType(val displayName: String) {
-    GOOGLE_CLOUD_VISION("Google Cloud Vision"),
-    MISTRAL("Mistral AI"),
-    COMBINED("Combined Vision+Mistral"),
-    ML_KIT("ML Kit (On-device)"),
-    TESSERACT("Tesseract OCR (On-device)"),
-    SUPER("Super OCR (All Technologies)"),
-    PATTERN_RECOGNIZER("Pattern Recognizer (On-device)")
-}
+// We've removed the API Type enum as users don't need to select the OCR technology
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,52 +46,12 @@ fun SettingsScreen(
         securePreferencesManager.initialize()
     }
 
-    // Check for security issues
-    val isDeviceRooted = remember { securePreferencesManager.isDeviceRooted() }
-    val appIntegrityOk = remember { securePreferencesManager.checkAppIntegrity() }
-    val daysUntilKeyRotation = remember { securePreferencesManager.getDaysUntilKeyRotation() }
-
-    // API keys
-    var googleCloudVisionApiKey by remember {
-        mutableStateOf(securePreferencesManager.getString(
-            SecurePreferencesManager.KEY_GOOGLE_CLOUD_VISION_API_KEY, ""
-        ) ?: "")
-    }
-    var mistralApiKey by remember {
-        mutableStateOf(securePreferencesManager.getString(
-            SecurePreferencesManager.KEY_MISTRAL_API_KEY, ""
-        ) ?: "")
-    }
-
-    // Selected API
-    val savedApiType = securePreferencesManager.getString(
-        SecurePreferencesManager.KEY_SELECTED_API,
-        ApiType.GOOGLE_CLOUD_VISION.name
-    )
-    var selectedApiType by remember {
-        mutableStateOf(
-            try {
-                ApiType.valueOf(savedApiType ?: ApiType.GOOGLE_CLOUD_VISION.name)
-            } catch (e: Exception) {
-                ApiType.GOOGLE_CLOUD_VISION
-            }
-        )
-    }
+    // We've removed the API selection as users don't need to select the OCR technology
 
     // UI states
-    var isGoogleKeyVisible by remember { mutableStateOf(false) }
-    var isMistralKeyVisible by remember { mutableStateOf(false) }
     val scrollState = rememberScrollState()
 
-    // Coroutine scope
-    val scope = rememberCoroutineScope()
-
-    // API test states
-    var isTestingGoogleApi by remember { mutableStateOf(false) }
-    var googleApiTestResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
-
-    var isTestingMistralApi by remember { mutableStateOf(false) }
-    var mistralApiTestResult by remember { mutableStateOf<Pair<Boolean, String>?>(null) }
+    // We've removed the API selection as users don't need to select the OCR technology
 
     Scaffold(
         topBar = {
@@ -130,7 +74,7 @@ fun SettingsScreen(
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.Top
         ) {
-            // API Keys Help Card
+            // About OCR Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -140,36 +84,33 @@ fun SettingsScreen(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(
-                        text = "About API Keys",
+                        text = "About Text Recognition",
                         style = MaterialTheme.typography.titleMedium
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "API keys enhance the OCR capabilities of the app. You can use the app without API keys (ML Kit mode), but adding them will improve text recognition accuracy.",
+                        text = "This app uses advanced on-device text recognition to extract information from your coupon images without requiring internet connection or API keys.",
                         style = MaterialTheme.typography.bodyMedium
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "• Google Cloud Vision: Provides high-quality cloud OCR (free tier available)\n• Mistral AI: Enhances results with AI validation (free tier available)\n• Tesseract OCR: Open-source OCR engine (no API key needed)\n• Super OCR: Uses all available technologies for best results",
+                        text = "All processing happens directly on your device, ensuring your coupon data remains private and secure.",
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
             }
 
-            // Security Status Card
+            // Model Status Card
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isDeviceRooted || !appIntegrityOk)
-                        MaterialTheme.colorScheme.errorContainer
-                    else
-                        MaterialTheme.colorScheme.secondaryContainer
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
                 )
             ) {
                 Column(
@@ -178,22 +119,8 @@ fun SettingsScreen(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = if (isDeviceRooted || !appIntegrityOk)
-                                Icons.Default.Warning
-                            else
-                                Icons.Default.Check,
-                            contentDescription = "Security Status",
-                            tint = if (isDeviceRooted || !appIntegrityOk)
-                                MaterialTheme.colorScheme.error
-                            else
-                                MaterialTheme.colorScheme.secondary
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
                         Text(
-                            text = "API Key Security Status",
+                            text = "Smart Coupon Recognition",
                             style = MaterialTheme.typography.titleMedium
                         )
                     }
@@ -201,433 +128,17 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = if (isDeviceRooted)
-                            "⚠️ Warning: Your device appears to be rooted. API keys may be at risk."
-                        else if (!appIntegrityOk)
-                            "⚠️ Warning: App integrity check failed. Your app may be tampered with."
-                        else
-                            "✅ Your API keys are stored securely using encryption.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = if (isDeviceRooted || !appIntegrityOk)
-                            MaterialTheme.colorScheme.error
-                        else
-                            MaterialTheme.colorScheme.secondary
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "API keys are stored using Android's secure encryption. They are automatically rotated every 90 days for enhanced security.",
+                        text = "This app uses a specialized model trained to recognize coupon information accurately from various sources.",
                         style = MaterialTheme.typography.bodyMedium
                     )
-
-                    if (daysUntilKeyRotation < 14) {
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "Your API keys will need rotation in $daysUntilKeyRotation days.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = if (daysUntilKeyRotation < 7)
-                                MaterialTheme.colorScheme.error
-                            else
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                 }
             }
 
-            // OCR API Selection
-            Text(
-                text = "OCR API Selection",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            // API Selection Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "Select OCR API Priority",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    ApiType.values().forEach { apiType ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = selectedApiType == apiType,
-                                onClick = {
-                                    selectedApiType = apiType
-                                    saveApiPreference(securePreferencesManager,
-                                        SecurePreferencesManager.KEY_SELECTED_API, apiType.name)
-
-                                    // For backward compatibility
-                                    if (apiType == ApiType.MISTRAL) {
-                                        saveApiPreference(securePreferencesManager,
-                                            SecurePreferencesManager.KEY_USE_MISTRAL_API, true)
-                                    } else {
-                                        saveApiPreference(securePreferencesManager,
-                                            SecurePreferencesManager.KEY_USE_MISTRAL_API, false)
-                                    }
-
-                                    Toast.makeText(context, "${apiType.displayName} selected as primary OCR API", Toast.LENGTH_SHORT).show()
-                                }
-                            )
-
-                            Text(
-                                text = apiType.displayName,
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(start = 8.dp)
-                            )
-
-                            // Show status icon for APIs that need keys
-                            if (apiType != ApiType.ML_KIT && apiType != ApiType.TESSERACT) {
-                                Spacer(modifier = Modifier.weight(1f))
-
-                                val isKeyValid = when (apiType) {
-                                    ApiType.GOOGLE_CLOUD_VISION -> googleCloudVisionApiKey.isNotBlank()
-                                    ApiType.MISTRAL -> mistralApiKey.isNotBlank()
-                                    ApiType.COMBINED -> googleCloudVisionApiKey.isNotBlank() && mistralApiKey.isNotBlank()
-                                    ApiType.SUPER -> googleCloudVisionApiKey.isNotBlank() || mistralApiKey.isNotBlank()
-                                    ApiType.ML_KIT, ApiType.TESSERACT -> true // On-device options don't need API keys
-                                    else -> false
-                                }
-
-                                Icon(
-                                    imageVector = if (isKeyValid) Icons.Default.Check else Icons.Default.Warning,
-                                    contentDescription = null,
-                                    tint = if (isKeyValid) Color.Green else Color.Red
-                                )
-                            }
-                        }
-                    }
-
-                    // API Selection Help Text
-                    Text(
-                        text = "Note: If the selected API fails, the app will try the next one in order. " +
-                              "The 'Combined' option uses Google Cloud Vision results validated by Mistral AI. " +
-                              "The 'Tesseract' option uses an open-source OCR engine that works on-device. " +
-                              "The 'Super OCR' option uses all available technologies in parallel and selects the best results.",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 16.dp)
-                    )
-                }
-            }
+            // We've removed the OCR API Selection section as users don't need to select the OCR technology
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Google Cloud Vision API Key
-            Text(
-                text = "API Keys",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            // Google Cloud Vision API Key Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Google Cloud Vision API Key",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        OutlinedButton(
-                            onClick = {
-                                val uri = Uri.parse("https://cloud.google.com/vision/docs/setup")
-                                val intent = Intent(Intent.ACTION_VIEW, uri)
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.padding(start = 8.dp)
-                        ) {
-                            Text("Get API Key")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OutlinedTextField(
-                        value = googleCloudVisionApiKey,
-                        onValueChange = { googleCloudVisionApiKey = it },
-                        label = { Text("API Key") },
-                        modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = if (isGoogleKeyVisible) VisualTransformation.None
-                                             else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            Button(
-                                onClick = { isGoogleKeyVisible = !isGoogleKeyVisible },
-                                modifier = Modifier.padding(4.dp)
-                            ) {
-                                Text(if (isGoogleKeyVisible) "Hide" else "Show")
-                            }
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        // Test API Button
-                        if (googleApiTestResult != null) {
-                            Icon(
-                                imageVector = if (googleApiTestResult!!.first) Icons.Default.Check else Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = if (googleApiTestResult!!.first) Color.Green else Color.Red,
-                                modifier = Modifier.align(Alignment.CenterVertically)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                isTestingGoogleApi = true
-                                googleApiTestResult = null
-
-                                scope.launch {
-                                    val apiTester = ApiTester(context)
-                                    googleApiTestResult = apiTester.testGoogleVisionApi(googleCloudVisionApiKey)
-                                    isTestingGoogleApi = false
-                                }
-                            },
-                            enabled = !isTestingGoogleApi && googleCloudVisionApiKey.isNotBlank()
-                        ) {
-                            if (isTestingGoogleApi) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text("Test API")
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Button(
-                            onClick = {
-                                saveApiPreference(securePreferencesManager,
-                                    SecurePreferencesManager.KEY_GOOGLE_CLOUD_VISION_API_KEY,
-                                    googleCloudVisionApiKey)
-                                Toast.makeText(context, "Google Cloud Vision API key saved securely", Toast.LENGTH_SHORT).show()
-                            }
-                        ) {
-                            Text("Save Key")
-                        }
-                    }
-
-                    // Advanced Test Section
-                    var isAdvancedTestOpen by remember { mutableStateOf(false) }
-                    var isRunningAdvancedTest by remember { mutableStateOf(false) }
-                    var advancedTestResult by remember { mutableStateOf<String?>(null) }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    OutlinedButton(
-                        onClick = { isAdvancedTestOpen = !isAdvancedTestOpen },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text(if (isAdvancedTestOpen) "Hide Advanced Test" else "Advanced Test")
-                    }
-
-                    if (isAdvancedTestOpen) {
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "Run a direct raw API test to diagnose connection issues",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedButton(
-                            onClick = {
-                                isRunningAdvancedTest = true
-                                advancedTestResult = null
-
-                                scope.launch {
-                                    val debugLogger = DebugLoggerUtil(context)
-                                    advancedTestResult = debugLogger.testVisionApiDirectly(googleCloudVisionApiKey)
-                                    isRunningAdvancedTest = false
-                                }
-                            },
-                            enabled = !isRunningAdvancedTest && googleCloudVisionApiKey.isNotBlank(),
-                            modifier = Modifier.align(Alignment.End)
-                        ) {
-                            if (isRunningAdvancedTest) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text("Run Raw API Test")
-                        }
-
-                        // Show advanced test result
-                        advancedTestResult?.let { result ->
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = result,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (result.startsWith("Success")) Color.Green else Color.Red
-                            )
-                        }
-                    }
-
-                    // Show test result message if available
-                    googleApiTestResult?.let { (success, message) ->
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = message,
-                            color = if (success) Color.Green else Color.Red,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            }
-
-            // Mistral API Key Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Mistral AI API Key",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        OutlinedButton(
-                            onClick = {
-                                val uri = Uri.parse("https://console.mistral.ai/")
-                                val intent = Intent(Intent.ACTION_VIEW, uri)
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.padding(start = 8.dp)
-                        ) {
-                            Text("Get API Key")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    OutlinedTextField(
-                        value = mistralApiKey,
-                        onValueChange = { mistralApiKey = it },
-                        label = { Text("API Key") },
-                        modifier = Modifier.fillMaxWidth(),
-                        visualTransformation = if (isMistralKeyVisible) VisualTransformation.None
-                                             else PasswordVisualTransformation(),
-                        trailingIcon = {
-                            Button(
-                                onClick = { isMistralKeyVisible = !isMistralKeyVisible },
-                                modifier = Modifier.padding(4.dp)
-                            ) {
-                                Text(if (isMistralKeyVisible) "Hide" else "Show")
-                            }
-                        }
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        // Test API Button
-                        if (mistralApiTestResult != null) {
-                            Icon(
-                                imageVector = if (mistralApiTestResult!!.first) Icons.Default.Check else Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = if (mistralApiTestResult!!.first) Color.Green else Color.Red,
-                                modifier = Modifier.align(Alignment.CenterVertically)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                isTestingMistralApi = true
-                                mistralApiTestResult = null
-
-                                scope.launch {
-                                    val apiTester = ApiTester(context)
-                                    mistralApiTestResult = apiTester.testMistralApi(mistralApiKey)
-                                    isTestingMistralApi = false
-                                }
-                            },
-                            enabled = !isTestingMistralApi && mistralApiKey.isNotBlank()
-                        ) {
-                            if (isTestingMistralApi) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                            }
-                            Text("Test API")
-                        }
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Button(
-                            onClick = {
-                                saveApiPreference(securePreferencesManager,
-                                    SecurePreferencesManager.KEY_MISTRAL_API_KEY,
-                                    mistralApiKey)
-                                Toast.makeText(context, "Mistral API key saved securely", Toast.LENGTH_SHORT).show()
-                            }
-                        ) {
-                            Text("Save Key")
-                        }
-                    }
-
-                    // Show test result message if available
-                    mistralApiTestResult?.let { (success, message) ->
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = message,
-                            color = if (success) Color.Green else Color.Red,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-            }
-
-            // ML Kit Info
+            // Model Info
             Card(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 colors = CardDefaults.cardColors(
@@ -641,7 +152,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "ML Kit (On-device OCR)",
+                            text = "Privacy-Focused Recognition",
                             style = MaterialTheme.typography.titleMedium
                         )
 
@@ -653,7 +164,7 @@ fun SettingsScreen(
                             modifier = Modifier.padding(4.dp)
                         ) {
                             Text(
-                                text = "No API Key Required",
+                                text = "100% On-Device",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -664,15 +175,15 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "ML Kit runs directly on your device and doesn't require an API key. " +
-                              "It's used as a fallback when other API methods fail and is always available even if you don't have any API keys.",
+                        text = "All coupon recognition happens directly on your device. " +
+                              "Your coupon data never leaves your phone, ensuring complete privacy and security.",
                         style = MaterialTheme.typography.bodyMedium
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "To get started without API keys, simply select ML Kit as your OCR option above.",
+                        text = "The app has been trained on thousands of coupons to provide accurate results.",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -693,7 +204,7 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Tesseract OCR (On-device)",
+                            text = "Language Settings",
                             style = MaterialTheme.typography.titleMedium
                         )
 
@@ -705,7 +216,7 @@ fun SettingsScreen(
                             modifier = Modifier.padding(4.dp)
                         ) {
                             Text(
-                                text = "No API Key Required",
+                                text = "Customizable",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
@@ -716,15 +227,14 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Tesseract is an open-source OCR engine that runs on your device. " +
-                              "It's particularly good at recognizing printed text and works without an internet connection or API keys.",
+                        text = "Select the language that matches your coupons for the best recognition results.",
                         style = MaterialTheme.typography.bodyMedium
                     )
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Tesseract complements ML Kit by using a different algorithm that may catch text ML Kit misses.",
+                        text = "The app can recognize text in multiple languages to support coupons from various sources.",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold
                     )
@@ -798,13 +308,13 @@ fun SettingsScreen(
                             contentDescription = null
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Train Custom Coupon Model")
+                        Text("Improve Recognition Accuracy")
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Create a custom-trained model specifically for coupon recognition to improve accuracy.",
+                        text = "Help the app learn from your coupons to improve recognition accuracy over time.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
