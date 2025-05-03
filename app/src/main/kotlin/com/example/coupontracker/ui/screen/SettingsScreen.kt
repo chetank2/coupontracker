@@ -74,69 +74,6 @@ fun SettingsScreen(
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.Top
         ) {
-            // About OCR Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Text(
-                        text = "About Text Recognition",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "This app uses advanced on-device text recognition to extract information from your coupon images without requiring internet connection or API keys.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "All processing happens directly on your device, ensuring your coupon data remains private and secure.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
-
-            // Model Status Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Smart Coupon Recognition",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "This app uses a specialized model trained to recognize coupon information accurately from various sources.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
-            }
-
-            // We've removed the OCR API Selection section as users don't need to select the OCR technology
-
-            Spacer(modifier = Modifier.height(16.dp))
 
             // Model Info
             Card(
@@ -190,7 +127,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Tesseract Info
+            // Custom training button
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -200,104 +137,6 @@ fun SettingsScreen(
                 Column(
                     modifier = Modifier.padding(16.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Language Settings",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Surface(
-                            color = MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(4.dp),
-                            modifier = Modifier.padding(4.dp)
-                        ) {
-                            Text(
-                                text = "Customizable",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Select the language that matches your coupons for the best recognition results.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "The app can recognize text in multiple languages to support coupons from various sources.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Tesseract Language Selection
-                    val languageManager = remember { TesseractLanguageManager(context) }
-                    val availableLanguages = remember { languageManager.getAvailableLanguagesWithNames() }
-                    var selectedLanguage by remember { mutableStateOf(languageManager.getSelectedLanguage()) }
-                    var isLanguageDropdownExpanded by remember { mutableStateOf(false) }
-
-                    Text(
-                        text = "Tesseract Language",
-                        style = MaterialTheme.typography.titleSmall
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Box {
-                        OutlinedButton(
-                            onClick = { isLanguageDropdownExpanded = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                text = languageManager.getLanguageDisplayName(selectedLanguage),
-                                modifier = Modifier.weight(1f),
-                                textAlign = TextAlign.Start
-                            )
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = "Select Language"
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = isLanguageDropdownExpanded,
-                            onDismissRequest = { isLanguageDropdownExpanded = false },
-                            modifier = Modifier.fillMaxWidth(0.7f)
-                        ) {
-                            availableLanguages.forEach { (code, name) ->
-                                DropdownMenuItem(
-                                    text = { Text(name) },
-                                    onClick = {
-                                        selectedLanguage = code
-                                        languageManager.setSelectedLanguage(code)
-                                        isLanguageDropdownExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Select the language that matches the text in your coupons for best results.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
                     // Custom training button
                     OutlinedButton(
                         onClick = { navController.navigate(Screen.TesseractTraining.route) },
