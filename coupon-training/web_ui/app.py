@@ -8,12 +8,15 @@ import uuid
 from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_from_directory, redirect, url_for
 
-# Add parent directory to path to import from scripts
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add current directory to path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.append(current_dir)
+sys.path.append(parent_dir)
 
 # Import utility modules
-from .utils.model_manager import ModelManager
-from .utils.image_processor import ImageProcessor
+from web_ui.utils.model_manager import ModelManager
+from web_ui.utils.image_processor import ImageProcessor
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -190,4 +193,4 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=8080)
