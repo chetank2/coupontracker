@@ -141,7 +141,7 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
 
-    // OCR Libraries - Remove ML Kit, use only Google Cloud Vision
+    // OCR Libraries - On-device OCR only
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
     implementation("com.google.mlkit:text-recognition:16.0.0")
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
@@ -197,11 +197,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
-    // Google Vision API
-    implementation("com.google.cloud:google-cloud-vision:3.27.0")
-    implementation("com.google.api-client:google-api-client-android:2.2.0")
-    implementation("com.google.auth:google-auth-library-oauth2-http:1.19.0")
-    implementation("com.google.guava:guava:32.1.2-android")
+    // We've removed Google Cloud Vision API dependencies as we're using on-device OCR only
 
     // Image Processing Libraries
 

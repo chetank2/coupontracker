@@ -129,24 +129,7 @@ fun ApiTestScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     // Format validation
-                    if (apiKey.isNotBlank()) {
-                        val isFormatValid = apiTester.isApiKeyFormatValid(apiKey)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isFormatValid) Icons.Default.Check else Icons.Default.Warning,
-                                contentDescription = null,
-                                tint = if (isFormatValid) Color.Green else Color.Red
-                            )
-                            Text(
-                                text = if (isFormatValid) "Key format is valid" else "Key format is invalid",
-                                color = if (isFormatValid) Color.Green else Color.Red,
-                                modifier = Modifier.padding(start = 8.dp)
-                            )
-                        }
-                    }
+                    // We've removed API-dependent OCR technologies as we're using on-device OCR only
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -167,20 +150,7 @@ fun ApiTestScreen(
                             Text("Save Key")
                         }
 
-                        Button(
-                            onClick = {
-                                isTesting = true
-                                testResult = null
-                                coroutineScope.launch {
-                                    val result = apiTester.testMistralApi(apiKey)
-                                    testResult = result
-                                    isTesting = false
-                                }
-                            },
-                            enabled = apiKey.isNotBlank() && !isTesting
-                        ) {
-                            Text("Test Connection")
-                        }
+                        // We've removed API-dependent OCR technologies as we're using on-device OCR only
 
                         Spacer(modifier = Modifier.padding(horizontal = 4.dp))
 
