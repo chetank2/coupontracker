@@ -30,6 +30,19 @@ android {
         }
     }
 
+    // Note: For actual use, replace these placeholder values with your real keystore information
+    // You'll need to create a keystore file using Android Studio or the keytool command
+    signingConfigs {
+        create("release") {
+            // You should store these values in a secure location, not in build.gradle
+            // For production, consider using environment variables or a properties file
+            storeFile = file("keystore/coupontracker.keystore") // Path relative to the app directory
+            storePassword = "your_keystore_password" // Replace with your actual password
+            keyAlias = "coupontracker"
+            keyPassword = "your_key_password" // Replace with your actual password
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -37,20 +50,21 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
         }
     }
-    
+
     buildFeatures {
         viewBinding = true
         compose = true
         dataBinding = true
     }
-    
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    
+
     kotlinOptions {
         jvmTarget = "17"
     }
@@ -58,17 +72,17 @@ android {
     kapt {
         correctErrorTypes = true
     }
-    
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
         }
     }
-    
+
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
     }
-    
+
     // Add packaging options to handle duplicate files
     packaging {
         resources {
@@ -99,57 +113,58 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-    
+
     // Navigation Component
     implementation("androidx.navigation:navigation-fragment-ktx:2.7.7")
     implementation("androidx.navigation:navigation-ui-ktx:2.7.7")
-    
+
     // Room
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     kapt("androidx.room:room-compiler:2.6.1")
-    
+
     // Hilt
     implementation("com.google.dagger:hilt-android:2.50")
     kapt("com.google.dagger:hilt-android-compiler:2.50")
-    
+
     // WorkManager with Hilt
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("androidx.hilt:hilt-work:1.1.0")
     kapt("androidx.hilt:hilt-compiler:1.1.0")
-    
+
     // Glide
     implementation("com.github.bumptech.glide:glide:4.16.0")
     kapt("com.github.bumptech.glide:compiler:4.16.0")
-    
+
     // CameraX
     implementation("androidx.camera:camera-camera2:1.3.1")
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
-    
+
     // OCR Libraries - Remove ML Kit, use only Google Cloud Vision
     implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
     implementation("com.google.mlkit:text-recognition:16.0.0")
+    implementation("com.google.mlkit:barcode-scanning:17.2.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
-    
-    
+
+
     implementation("com.google.code.gson:gson:2.10.1")
-    
+
     // OkHttp for API calls
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    
+
     // Retrofit for API calls
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-    
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.9")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("app.cash.turbine:turbine:1.0.0")
-    
+
     // Android Testing
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
@@ -160,7 +175,7 @@ dependencies {
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     androidTestImplementation("io.mockk:mockk-android:1.13.9")
     androidTestImplementation("app.cash.turbine:turbine:1.0.0")
-    
+
     // Compose
     implementation("androidx.compose.ui:ui:1.6.2")
     implementation("androidx.compose.material3:material3:1.2.0")
@@ -171,15 +186,15 @@ dependencies {
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
     implementation("androidx.compose.material:material-icons-extended:1.6.2")
     debugImplementation("androidx.compose.ui:ui-tooling:1.6.2")
-    
+
     // Coil for image loading
     implementation("io.coil-kt:coil-compose:2.5.0")
-    
+
     // Accompanist for permissions
     implementation("com.google.accompanist:accompanist-permissions:0.32.0")
 
     // Kotlin Coroutines
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3") 
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
     // Google Vision API
@@ -189,9 +204,15 @@ dependencies {
     implementation("com.google.guava:guava:32.1.2-android")
 
     // Image Processing Libraries
-    
+
     // Image Processing Libraries
     // Use Android's built-in libraries instead of OpenCV and RenderScript
     implementation("androidx.core:core-ktx:1.12.0") // Already included above, contains some image processing utilities
     implementation("androidx.exifinterface:exifinterface:1.3.7") // For image metadata handling
+
+    // Tesseract OCR
+    implementation("com.rmtheis:tess-two:9.1.0")
+
+    // Security
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }

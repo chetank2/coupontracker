@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
-import com.example.coupontracker.ui.screen.KEY_GOOGLE_CLOUD_VISION_API_KEY
+import com.example.coupontracker.util.SecurePreferencesManager.Companion.KEY_GOOGLE_CLOUD_VISION_API_KEY
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -16,20 +16,20 @@ class OCREngineImpl(private val context: Context) {
     companion object {
         private const val TAG = "OCREngineImpl"
     }
-    
-    private val sharedPreferences: SharedPreferences = 
+
+    private val sharedPreferences: SharedPreferences =
         context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
-    
+
     private val googleApiKey = sharedPreferences.getString(KEY_GOOGLE_CLOUD_VISION_API_KEY, "")
     private val googleVisionHelper = if (!googleApiKey.isNullOrBlank()) {
         GoogleVisionHelper(googleApiKey)
     } else {
         null
     }
-    
+
     private val enhancedOCRHelper = EnhancedOCRHelper()
     private val mlKitTextRecognitionHelper = MLKitTextRecognitionHelper()
-    
+
     /**
      * Process an image and extract text using the best available OCR implementation
      */
@@ -58,7 +58,7 @@ class OCREngineImpl(private val context: Context) {
             }
         }
     }
-    
+
     /**
      * Process a bitmap and extract text using the best available OCR implementation
      */
@@ -87,15 +87,15 @@ class OCREngineImpl(private val context: Context) {
             }
         }
     }
-    
+
     /**
      * Extract coupon info from recognized text
      * This extracts coupon information including amount in rupees (₹)
      */
     fun extractCouponInfo(text: String): Map<String, String> {
-        val isMyntraCoupon = text.contains("myntra", ignoreCase = true) || 
+        val isMyntraCoupon = text.contains("myntra", ignoreCase = true) ||
                            text.contains("you won a voucher", ignoreCase = true)
-        
+
         try {
             Log.d(TAG, "Extracting coupon info with Enhanced OCR")
             val enhancedResult = enhancedOCRHelper.extractCouponInfo(text)
@@ -110,35 +110,35 @@ class OCREngineImpl(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Enhanced OCR extraction failed", e)
         }
-        
+
         if (googleVisionHelper != null) {
             try {
                 val googleResult = googleVisionHelper.extractCouponInfo(text)
-                
+
                 // Handle Myntra coupons
                 val result = googleResult.toMutableMap()
                 if (isMyntraCoupon && result["storeName"] != "Myntra") {
                     result["storeName"] = "Myntra"
                 }
-                
+
                 return result
             } catch (e: Exception) {
                 Log.e(TAG, "Google Vision extraction failed", e)
             }
         }
-        
+
         // Fallback to a basic extraction if all methods fail
         val results = mutableMapOf<String, String>()
         results["storeName"] = if (isMyntraCoupon) "Myntra" else "Unknown Store"
         results["description"] = if (isMyntraCoupon) "Myntra coupon" else "Scanned coupon"
         results["amount"] = "₹0"
-        
+
         // Try to extract code from text
         results["code"] = extractBasicCode(text, isMyntraCoupon)
-        
+
         return results
     }
-    
+
     /**
      * Simple method to extract a basic code from text
      */
@@ -152,7 +152,7 @@ class OCREngineImpl(private val context: Context) {
                 }
             }
         }
-        
+
         // For other coupons look for code: prefix
         val lines = text.split("\n")
         for (line in lines) {
@@ -163,7 +163,7 @@ class OCREngineImpl(private val context: Context) {
                 }
             }
         }
-        
+
         // Fallback to looking for any alphanumeric code-like string
         val words = text.split("\\s+".toRegex())
         for (word in words) {
@@ -171,7 +171,7 @@ class OCREngineImpl(private val context: Context) {
                 return word.uppercase()
             }
         }
-        
+
         return if (isMyntraCoupon) "MYNTRA" else "COUPON"
     }
-} 
+}

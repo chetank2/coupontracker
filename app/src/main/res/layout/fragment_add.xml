@@ -101,7 +101,7 @@
                     android:text="Gallery" />
 
             </LinearLayout>
-            
+
             <!-- Error Text View -->
             <TextView
                 android:id="@+id/errorText"
@@ -113,7 +113,7 @@
                 android:background="#FFEEEE"
                 android:visibility="gone"
                 android:layout_marginBottom="16dp"/>
-            
+
             <!-- Mistral OCR API Settings -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
@@ -121,19 +121,19 @@
                 android:layout_marginBottom="16dp"
                 app:cardElevation="2dp"
                 app:cardCornerRadius="8dp">
-                
+
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="16dp">
-                    
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="horizontal"
                         android:gravity="center_vertical">
-                        
+
                         <TextView
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
@@ -141,7 +141,7 @@
                             android:text="Use Mistral OCR AI"
                             android:textAppearance="?attr/textAppearanceBodyLarge"
                             android:textColor="@color/text_primary" />
-                        
+
                         <ImageButton
                             android:id="@+id/mistralInfoButton"
                             android:layout_width="wrap_content"
@@ -150,13 +150,13 @@
                             android:background="?attr/selectableItemBackgroundBorderless"
                             android:contentDescription="Information about Mistral OCR API"
                             android:padding="8dp" />
-                        
+
                         <com.google.android.material.switchmaterial.SwitchMaterial
                             android:id="@+id/mistralApiSwitch"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content" />
                     </LinearLayout>
-                    
+
                     <LinearLayout
                         android:id="@+id/mistralApiKeyLayout"
                         android:layout_width="match_parent"
@@ -164,7 +164,7 @@
                         android:orientation="horizontal"
                         android:layout_marginTop="8dp"
                         android:visibility="gone">
-                        
+
                         <com.google.android.material.textfield.TextInputLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
@@ -172,7 +172,7 @@
                             android:layout_marginEnd="8dp"
                             android:hint="API Key"
                             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-                            
+
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/mistralApiKeyInput"
                                 android:layout_width="match_parent"
@@ -180,7 +180,7 @@
                                 android:inputType="textPassword"
                                 android:textColor="@color/black" />
                         </com.google.android.material.textfield.TextInputLayout>
-                        
+
                         <Button
                             android:id="@+id/saveApiKeyButton"
                             android:layout_width="wrap_content"
@@ -308,7 +308,7 @@
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
+                android:layout_marginBottom="16dp"
                 android:hint="Status (Optional)"
                 style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
@@ -321,6 +321,127 @@
 
             </com.google.android.material.textfield.TextInputLayout>
 
+            <!-- New fields for enhanced coupon tracking -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Enhanced Coupon Details"
+                android:textAppearance="?attr/textAppearanceTitleMedium"
+                android:textColor="@color/text_primary"
+                android:layout_marginBottom="8dp" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="Minimum Purchase (Optional)"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/minimumPurchaseInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal"
+                    android:textColor="@color/black" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="Maximum Discount (Optional)"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/maximumDiscountInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="numberDecimal"
+                    android:textColor="@color/black" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="Payment Method (Optional)"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/paymentMethodInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:textColor="@color/black" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="Platform Type (Optional)"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/platformTypeInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="text"
+                    android:textColor="@color/black" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="Usage Limit (Optional)"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/usageLimitInput"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:textColor="@color/black" />
+
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginBottom="16dp">
+
+                <CheckBox
+                    android:id="@+id/priorityCheckbox"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Mark as Priority" />
+
+                <Button
+                    android:id="@+id/setReminderButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:text="Set Reminder" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/reminderDateText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceBodyMedium"
+                android:textColor="@color/text_primary"
+                android:visibility="gone"
+                android:layout_marginBottom="16dp"
+                tools:text="Reminder set for: Oct 15, 2023 10:00"
+                tools:visibility="visible" />
+
             <Button
                 android:id="@+id/saveButton"
                 android:layout_width="match_parent"
@@ -331,4 +452,4 @@
 
     </androidx.core.widget.NestedScrollView>
 
-</androidx.coordinatorlayout.widget.CoordinatorLayout> 
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
