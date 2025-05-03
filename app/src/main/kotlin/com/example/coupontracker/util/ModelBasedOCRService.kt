@@ -25,6 +25,10 @@ class ModelBasedOCRService(private val context: Context) {
     private val tesseractOCRHelper = TesseractOCRHelper(context)
     private val couponPatternRecognizer = CouponPatternRecognizer(context)
 
+    // Model version and metadata
+    private val modelVersion = "2.0.0"
+    private val modelName = "india_coupon_recognizer"
+
     // Track service availability
     private var tesseractAvailable = AtomicBoolean(false)
     private var patternRecognizerAvailable = AtomicBoolean(false)
@@ -63,30 +67,48 @@ class ModelBasedOCRService(private val context: Context) {
      */
     suspend fun processCouponImage(bitmap: Bitmap): CouponInfo = coroutineScope {
         try {
-            Log.d(TAG, "Processing coupon image")
+            Log.d(TAG, "Processing coupon image with model $modelName v$modelVersion")
 
             // Step 1: Preprocess the image for better recognition
             val preprocessedBitmap = imagePreprocessor.preprocess(bitmap)
 
-            // Step 2: Extract text using ML Kit (always available on device)
-            val mlKitText = mlKitTextRecognition.processImageFromBitmap(preprocessedBitmap)
-
-            // Step 3: Use pattern recognition if available
+            // Step 2: Use pattern recognition as primary method (improved in v2.0.0)
             val patternResults = if (patternRecognizerAvailable.get()) {
+                Log.d(TAG, "Using pattern recognition as primary method")
                 couponPatternRecognizer.recognizeElements(preprocessedBitmap)
             } else {
+                Log.w(TAG, "Pattern recognizer not available, falling back to OCR only")
                 emptyMap()
             }
 
-            // Step 4: Use Tesseract OCR if available
+            // Step 3: Extract text using ML Kit as backup
+            val mlKitText = mlKitTextRecognition.processImageFromBitmap(preprocessedBitmap)
+
+            // Step 4: Use Tesseract OCR for specific fields that pattern recognition missed
             val tesseractText = if (tesseractAvailable.get()) {
-                tesseractOCRHelper.processImageAccurate(preprocessedBitmap, useCustomModel)
+                // Only run Tesseract if we're missing key fields from pattern recognition
+                val missingKeyFields = listOf("store", "code", "expiry").any { !patternResults.containsKey(it) }
+                if (missingKeyFields || patternResults.isEmpty()) {
+                    Log.d(TAG, "Using Tesseract OCR for missing fields")
+                    tesseractOCRHelper.processImageAccurate(preprocessedBitmap, useCustomModel)
+                } else {
+                    ""
+                }
             } else {
                 ""
             }
 
             // Step 5: Combine results to create the best possible coupon info
-            val combinedInfo = combineResults(mlKitText, tesseractText, patternResults)
+            val combinedInfo = if (patternResults.isNotEmpty()) {
+                // If pattern recognition worked well, convert directly to CouponInfo
+                val directInfo = couponPatternRecognizer.convertToCouponInfo(patternResults)
+
+                // Fill in any missing fields with OCR results
+                fillMissingFields(directInfo, mlKitText, tesseractText)
+            } else {
+                // Fall back to traditional OCR approach
+                combineResults(mlKitText, tesseractText, patternResults)
+            }
 
             Log.d(TAG, "Coupon processing complete: $combinedInfo")
             combinedInfo
@@ -101,6 +123,27 @@ class ModelBasedOCRService(private val context: Context) {
                 redeemCode = null
             )
         }
+    }
+
+    /**
+     * Fill in missing fields in CouponInfo using OCR results
+     */
+    private fun fillMissingFields(info: CouponInfo, mlKitText: String, tesseractText: String): CouponInfo {
+        val combinedText = "$mlKitText\n$tesseractText"
+
+        return info.copy(
+            storeName = if (info.storeName.isBlank()) extractStoreName(mlKitText, tesseractText) ?: "" else info.storeName,
+            description = if (info.description.isBlank()) extractDescription(mlKitText, tesseractText) ?: "" else info.description,
+            redeemCode = if (info.redeemCode.isNullOrBlank()) extractCouponCode(mlKitText, tesseractText) else info.redeemCode,
+            expiryDate = if (info.expiryDate == null) {
+                val dateStr = extractExpiryDate(mlKitText, tesseractText)
+                if (dateStr != null) DateParser.parseDate(dateStr) else null
+            } else info.expiryDate,
+            cashbackAmount = if (info.cashbackAmount == null) {
+                val amountStr = extractAmount(mlKitText, tesseractText)
+                parseAmount(amountStr)
+            } else info.cashbackAmount
+        )
     }
 
     /**

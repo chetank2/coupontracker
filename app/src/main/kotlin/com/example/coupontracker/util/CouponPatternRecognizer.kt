@@ -21,6 +21,17 @@ class CouponPatternRecognizer(private val context: Context) {
     companion object {
         private const val TAG = "CouponPatternRecognizer"
         private const val PATTERNS_FILE = "coupon_model/coupon_patterns.txt"
+        private const val MODEL_VERSION = "2.0.0"
+        private const val MODEL_METADATA_FILE = "coupon_model/model_metadata.json"
+
+        // Confidence thresholds for different fields
+        private val CONFIDENCE_THRESHOLDS = mapOf(
+            "store" to 0.85f,
+            "code" to 0.90f,
+            "expiry" to 0.80f,
+            "amount" to 0.85f,
+            "description" to 0.75f
+        )
     }
 
     // Tesseract OCR helper
@@ -168,12 +179,16 @@ class CouponPatternRecognizer(private val context: Context) {
                 }
 
                 // If we found a good result for this type, add it
-                if (bestText.isNotBlank() && bestConfidence > 0.3f) {
+                // Use the confidence threshold from the companion object
+                val threshold = CONFIDENCE_THRESHOLDS[type] ?: 0.3f
+                if (bestText.isNotBlank() && bestConfidence > threshold) {
                     // Apply post-processing to clean up the text
                     val processedText = postProcessText(bestText, type)
                     result[type] = processedText
                     confidenceScores[type] = bestConfidence
-                    Log.d(TAG, "Recognized $type: $processedText (confidence: $bestConfidence)")
+                    Log.d(TAG, "Recognized $type: $processedText (confidence: $bestConfidence, threshold: $threshold)")
+                } else if (bestText.isNotBlank()) {
+                    Log.d(TAG, "Rejected $type: $bestText (confidence: $bestConfidence below threshold: $threshold)")
                 }
             }
 
@@ -735,14 +750,68 @@ class CouponPatternRecognizer(private val context: Context) {
             "AMOUNT"
         }
 
+        // Extract minimum purchase amount if present in description
+        val minimumPurchase = extractMinimumPurchase(description)
+
+        // Extract payment method if present in description
+        val paymentMethod = extractPaymentMethod(description)
+
+        // Log the model version used for extraction
+        Log.d(TAG, "Converting elements to CouponInfo using model v$MODEL_VERSION")
+
         return CouponInfo(
             storeName = storeName,
             description = description,
             expiryDate = expiryDate,
             cashbackAmount = cashbackAmount,
             redeemCode = redeemCode,
-            discountType = discountType
+            discountType = discountType,
+            minimumPurchase = minimumPurchase,
+            paymentMethod = paymentMethod
         )
+    }
+
+    /**
+     * Extract minimum purchase amount from description
+     */
+    private fun extractMinimumPurchase(description: String): Double? {
+        if (description.isBlank()) return null
+
+        val patterns = listOf(
+            Regex("(?i)min(?:imum)?\\s+(?:order|purchase)\\s+(?:of)?\\s*(?:Rs\\.?|₹)?\\s*(\\d+(?:\\.\\d+)?)"),
+            Regex("(?i)(?:order|purchase)\\s+above\\s*(?:Rs\\.?|₹)?\\s*(\\d+(?:\\.\\d+)?)"),
+            Regex("(?i)valid\\s+on\\s+(?:orders|purchases)\\s+above\\s*(?:Rs\\.?|₹)?\\s*(\\d+(?:\\.\\d+)?)")
+        )
+
+        for (pattern in patterns) {
+            val match = pattern.find(description)
+            if (match != null) {
+                val amountStr = match.groupValues[1]
+                return amountStr.toDoubleOrNull()
+            }
+        }
+
+        return null
+    }
+
+    /**
+     * Extract payment method from description
+     */
+    private fun extractPaymentMethod(description: String): String? {
+        if (description.isBlank()) return null
+
+        val paymentMethods = listOf(
+            "UPI", "Credit Card", "Debit Card", "Net Banking", "Wallet",
+            "PhonePe", "Google Pay", "Paytm", "Amazon Pay"
+        )
+
+        for (method in paymentMethods) {
+            if (description.contains(method, ignoreCase = true)) {
+                return method
+            }
+        }
+
+        return null
     }
 
     /**
