@@ -147,7 +147,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "The app has been trained on thousands of coupons to provide accurate results, including specialized recognition for Indian coupons.",
+                        text = "The app uses advanced recognition technology to accurately identify coupon details, including specialized recognition for Indian coupons.",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold
                     )

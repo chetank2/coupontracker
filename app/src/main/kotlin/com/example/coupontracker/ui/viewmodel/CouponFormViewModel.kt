@@ -57,33 +57,17 @@ class CouponFormViewModel @Inject constructor(
     fun processImageUri(uri: Uri) {
         viewModelScope.launch {
             try {
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = true,
-                    error = null
-                )
+                updateState { it.copy(isProcessing = true, error = null) }
 
                 // Process the image
                 val coupon = couponInputManager.processCouponFromImageUri(uri)
 
                 // Convert to coupon info
-                val couponInfo = CouponInfo(
-                    storeName = coupon.storeName,
-                    description = coupon.description,
-                    cashbackAmount = coupon.cashbackAmount,
-                    redeemCode = coupon.redeemCode,
-                    expiryDate = coupon.expiryDate
-                )
+                val couponInfo = mapCouponToCouponInfo(coupon)
 
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = false,
-                    couponInfo = couponInfo
-                )
+                updateState { it.copy(isProcessing = false, couponInfo = couponInfo) }
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing image", e)
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = false,
-                    error = "Error processing image: ${e.message}"
-                )
+                handleError(e, "Error processing image")
             }
         }
     }
@@ -109,38 +93,84 @@ class CouponFormViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                _uiState.value = _uiState.value.copy(
-                    isSaving = true,
-                    error = null
-                )
+                // Validate input
+                if (storeName.isBlank()) {
+                    updateState { it.copy(error = "Store name is required") }
+                    return@launch
+                }
 
-                // Create coupon object
-                val coupon = Coupon(
-                    storeName = storeName,
-                    description = description,
-                    cashbackAmount = amount,
-                    redeemCode = code.takeIf { it.isNotBlank() },
-                    expiryDate = expiryDate,
-                    category = category.takeIf { it.isNotBlank() },
-                    imageUri = imageUri,
-                    createdAt = Date(),
-                    updatedAt = Date()
-                )
+                updateState { it.copy(isSaving = true, error = null) }
 
-                // Save to database
+                // Create and save coupon object
+                val coupon = createCoupon(
+                    storeName, description, amount, code,
+                    expiryDate, category, imageUri
+                )
                 couponRepository.insertCoupon(coupon)
 
-                _uiState.value = _uiState.value.copy(
-                    isSaving = false,
-                    isSaved = true
-                )
+                updateState { it.copy(isSaving = false, isSaved = true) }
             } catch (e: Exception) {
-                Log.e(TAG, "Error saving coupon", e)
-                _uiState.value = _uiState.value.copy(
-                    isSaving = false,
-                    error = "Error saving coupon: ${e.message}"
-                )
+                handleError(e, "Error saving coupon")
             }
+        }
+    }
+
+    /**
+     * Create a coupon object from the provided parameters
+     */
+    private fun createCoupon(
+        storeName: String,
+        description: String,
+        amount: Double,
+        code: String,
+        expiryDate: Date,
+        category: String,
+        imageUri: String?
+    ): Coupon {
+        return Coupon(
+            storeName = storeName,
+            description = description,
+            cashbackAmount = amount,
+            redeemCode = code.takeIf { it.isNotBlank() },
+            expiryDate = expiryDate,
+            category = category.takeIf { it.isNotBlank() },
+            imageUri = imageUri,
+            createdAt = Date(),
+            updatedAt = Date()
+        )
+    }
+
+    /**
+     * Map a Coupon object to CouponInfo
+     */
+    private fun mapCouponToCouponInfo(coupon: Coupon): CouponInfo {
+        return CouponInfo(
+            storeName = coupon.storeName,
+            description = coupon.description,
+            cashbackAmount = coupon.cashbackAmount,
+            redeemCode = coupon.redeemCode,
+            expiryDate = coupon.expiryDate
+        )
+    }
+
+    /**
+     * Update the UI state
+     */
+    private fun updateState(update: (CouponFormUiState) -> CouponFormUiState) {
+        _uiState.value = update(_uiState.value)
+    }
+
+    /**
+     * Handle errors in a consistent way
+     */
+    private fun handleError(e: Exception, message: String) {
+        Log.e(TAG, message, e)
+        updateState {
+            it.copy(
+                isProcessing = false,
+                isSaving = false,
+                error = "$message: ${e.message}"
+            )
         }
     }
 

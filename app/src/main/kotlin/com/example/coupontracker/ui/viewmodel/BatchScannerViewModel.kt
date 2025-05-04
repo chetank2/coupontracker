@@ -26,16 +26,16 @@ class BatchScannerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository
 ) : AndroidViewModel(application) {
-    
+
     private val _uiState = MutableStateFlow(BatchScannerUiState())
     val uiState: StateFlow<BatchScannerUiState> = _uiState.asStateFlow()
-    
+
     private val couponInputManager = CouponInputManager(context)
-    
+
     companion object {
         private const val TAG = "BatchScannerViewModel"
     }
-    
+
     /**
      * Add images to the batch
      * @param uris List of image URIs to add
@@ -45,7 +45,7 @@ class BatchScannerViewModel @Inject constructor(
         currentImages.addAll(uris)
         _uiState.value = _uiState.value.copy(selectedImages = currentImages)
     }
-    
+
     /**
      * Add a PDF to the batch
      * @param uri PDF URI to add
@@ -55,7 +55,7 @@ class BatchScannerViewModel @Inject constructor(
         currentImages.add(uri)
         _uiState.value = _uiState.value.copy(selectedImages = currentImages)
     }
-    
+
     /**
      * Remove an image from the batch
      * @param index Index of the image to remove
@@ -67,55 +67,77 @@ class BatchScannerViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(selectedImages = currentImages)
         }
     }
-    
+
     /**
      * Clear all selected images
      */
     fun clearImages() {
         _uiState.value = _uiState.value.copy(selectedImages = emptyList())
     }
-    
+
     /**
      * Process all selected images
      */
     fun processImages() {
         viewModelScope.launch {
             try {
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = true,
-                    processedCount = 0
-                )
-                
+                updateState { it.copy(isProcessing = true, processedCount = 0, error = null) }
+
                 val images = _uiState.value.selectedImages
                 val processedCoupons = mutableListOf<Coupon>()
-                
+                var failedCount = 0
+
                 for ((index, uri) in images.withIndex()) {
                     try {
+                        // Process the image
                         val coupon = couponInputManager.processCouponFromImageUri(uri)
-                        processedCoupons.add(coupon)
+
+                        // Set the image URI in the coupon object
+                        val couponWithImage = coupon.copy(imageUri = uri.toString())
+                        processedCoupons.add(couponWithImage)
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing image at index $index", e)
+                        failedCount++
                         // Continue with next image
                     }
-                    
+
                     // Update progress
-                    _uiState.value = _uiState.value.copy(processedCount = index + 1)
+                    updateState { it.copy(processedCount = index + 1) }
                 }
-                
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = false,
-                    processedCoupons = processedCoupons
-                )
+
+                // Show success or partial success message
+                val statusMessage = when {
+                    failedCount == 0 -> null
+                    failedCount < images.size -> "Processed ${images.size - failedCount} of ${images.size} images. Some images could not be processed."
+                    else -> "Failed to process any images."
+                }
+
+                updateState {
+                    it.copy(
+                        isProcessing = false,
+                        processedCoupons = processedCoupons,
+                        error = statusMessage
+                    )
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing images", e)
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = false,
-                    error = "Error processing images: ${e.message}"
-                )
+                updateState {
+                    it.copy(
+                        isProcessing = false,
+                        error = "Error processing images: ${e.message}"
+                    )
+                }
             }
         }
     }
-    
+
+    /**
+     * Update the UI state
+     */
+    private fun updateState(update: (BatchScannerUiState) -> BatchScannerUiState) {
+        _uiState.value = update(_uiState.value)
+    }
+
     /**
      * Remove a processed coupon
      * @param index Index of the coupon to remove
@@ -127,29 +149,40 @@ class BatchScannerViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(processedCoupons = currentCoupons)
         }
     }
-    
+
     /**
      * Save all processed coupons
      */
     fun saveAllCoupons() {
         viewModelScope.launch {
             try {
+                updateState { it.copy(isSaving = true, error = null) }
+
                 val coupons = _uiState.value.processedCoupons
-                for (coupon in coupons) {
-                    couponRepository.insertCoupon(coupon)
+                if (coupons.isEmpty()) {
+                    updateState { it.copy(isSaving = false, error = "No coupons to save") }
+                    return@launch
                 }
-                
-                // Reset state after saving
-                resetState()
+
+                // Save all coupons in a transaction if possible
+                try {
+                    for (coupon in coupons) {
+                        couponRepository.insertCoupon(coupon)
+                    }
+
+                    // Reset state after saving
+                    resetState()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error saving coupons", e)
+                    updateState { it.copy(isSaving = false, error = "Error saving coupons: ${e.message}") }
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Error saving coupons", e)
-                _uiState.value = _uiState.value.copy(
-                    error = "Error saving coupons: ${e.message}"
-                )
+                Log.e(TAG, "Error in saveAllCoupons", e)
+                updateState { it.copy(isSaving = false, error = "Error: ${e.message}") }
             }
         }
     }
-    
+
     /**
      * Reset processed coupons but keep selected images
      */
@@ -159,14 +192,14 @@ class BatchScannerViewModel @Inject constructor(
             error = null
         )
     }
-    
+
     /**
      * Reset the UI state
      */
     fun resetState() {
         _uiState.value = BatchScannerUiState()
     }
-    
+
     override fun onCleared() {
         super.onCleared()
         couponInputManager.cleanup()
@@ -180,6 +213,7 @@ data class BatchScannerUiState(
     val selectedImages: List<Uri> = emptyList(),
     val processedCoupons: List<Coupon> = emptyList(),
     val isProcessing: Boolean = false,
+    val isSaving: Boolean = false,
     val processedCount: Int = 0,
     val error: String? = null
 )

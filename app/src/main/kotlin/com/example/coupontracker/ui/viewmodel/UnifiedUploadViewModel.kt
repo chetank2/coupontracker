@@ -42,30 +42,7 @@ class UnifiedUploadViewModel @Inject constructor(
      * @param uri Image URI to process
      */
     fun addSingleImage(uri: Uri) {
-        viewModelScope.launch {
-            try {
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = true,
-                    error = null
-                )
-
-                val coupon = couponInputManager.processCouponFromImageUri(uri)
-
-                // Set the image URI in the coupon object
-                val couponWithImage = coupon.copy(imageUri = uri.toString())
-
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = false,
-                    processedCoupon = couponWithImage
-                )
-            } catch (e: Exception) {
-                Log.e(TAG, "Error processing image", e)
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = false,
-                    error = "Error processing image: ${e.message}"
-                )
-            }
-        }
+        processMedia(uri, "image")
     }
 
     /**
@@ -93,11 +70,7 @@ class UnifiedUploadViewModel @Inject constructor(
                     navigateToBatchScanner = true
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing multiple images", e)
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = false,
-                    error = "Error processing images: ${e.message}"
-                )
+                handleError(e, "Error processing multiple images")
             }
         }
     }
@@ -107,6 +80,15 @@ class UnifiedUploadViewModel @Inject constructor(
      * @param uri PDF URI to process
      */
     fun addPdf(uri: Uri) {
+        processMedia(uri, "pdf")
+    }
+
+    /**
+     * Process a media file (image or PDF)
+     * @param uri URI of the media to process
+     * @param mediaType Type of media ("image" or "pdf")
+     */
+    private fun processMedia(uri: Uri, mediaType: String) {
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(
@@ -114,7 +96,11 @@ class UnifiedUploadViewModel @Inject constructor(
                     error = null
                 )
 
-                val coupon = couponInputManager.processPdfUri(uri)
+                val coupon = if (mediaType == "pdf") {
+                    couponInputManager.processPdfUri(uri)
+                } else {
+                    couponInputManager.processCouponFromImageUri(uri)
+                }
 
                 // Set the image URI in the coupon object
                 val couponWithImage = coupon.copy(imageUri = uri.toString())
@@ -124,13 +110,22 @@ class UnifiedUploadViewModel @Inject constructor(
                     processedCoupon = couponWithImage
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing PDF", e)
-                _uiState.value = _uiState.value.copy(
-                    isProcessing = false,
-                    error = "Error processing PDF: ${e.message}"
-                )
+                handleError(e, "Error processing ${mediaType}")
             }
         }
+    }
+
+    /**
+     * Handle errors in a consistent way
+     * @param e The exception that occurred
+     * @param message The error message prefix
+     */
+    private fun handleError(e: Exception, message: String) {
+        Log.e(TAG, message, e)
+        _uiState.value = _uiState.value.copy(
+            isProcessing = false,
+            error = "$message: ${e.message}"
+        )
     }
 
     /**
