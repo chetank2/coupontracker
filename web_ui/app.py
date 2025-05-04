@@ -93,10 +93,69 @@ except ImportError:
                 }
             ]
 
+        def __init__(self):
+            self.url_training_tasks = {}
+
         def train_from_url(self, url, filter_images=True, augment_images=True, update_app=False):
-            return '4567-8901'
+            task_id = str(uuid.uuid4())
+            self.url_training_tasks[task_id] = {
+                'status': 'initializing',
+                'progress': 0,
+                'message': 'Initializing training process',
+                'url': url,
+                'filter_images': filter_images,
+                'augment_images': augment_images,
+                'update_app': update_app,
+                'start_time': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'end_time': None,
+                'result': None
+            }
+
+            # Simulate a completed task after a short delay
+            # In a real implementation, this would be done in a background thread
+            import threading
+            def complete_task():
+                import time
+                time.sleep(2)  # Simulate processing time
+                self.url_training_tasks[task_id]['status'] = 'running'
+                self.url_training_tasks[task_id]['progress'] = 25
+                self.url_training_tasks[task_id]['message'] = 'Downloading images from URL'
+
+                time.sleep(2)  # Simulate processing time
+                self.url_training_tasks[task_id]['progress'] = 50
+                self.url_training_tasks[task_id]['message'] = 'Processing and filtering images'
+
+                time.sleep(2)  # Simulate processing time
+                self.url_training_tasks[task_id]['progress'] = 75
+                self.url_training_tasks[task_id]['message'] = 'Training model with images'
+
+                time.sleep(2)  # Simulate processing time
+                self.url_training_tasks[task_id]['status'] = 'completed'
+                self.url_training_tasks[task_id]['progress'] = 100
+                self.url_training_tasks[task_id]['message'] = 'Training completed successfully!'
+                self.url_training_tasks[task_id]['end_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                self.url_training_tasks[task_id]['result'] = {
+                    'model_version': '1.0.1',
+                    'num_patterns': 15,
+                    'test_accuracy': 0.8912,
+                    'train_loss': 0.2345,
+                    'val_loss': 0.4123,
+                    'train_samples': 12,
+                    'val_samples': 3,
+                    'test_samples': 4
+                }
+
+            thread = threading.Thread(target=complete_task)
+            thread.daemon = True
+            thread.start()
+
+            return task_id
 
         def get_url_training_status(self, task_id):
+            if task_id in self.url_training_tasks:
+                return self.url_training_tasks[task_id]
+
+            # Fallback for unknown task IDs
             return {
                 'status': 'completed',
                 'progress': 100,
@@ -107,7 +166,9 @@ except ImportError:
                 'update_app': False,
                 'start_time': '2025-05-04 12:30:00',
                 'end_time': '2025-05-04 12:35:00',
-                'results': {
+                'result': {
+                    'model_version': '1.0.1',
+                    'num_patterns': 15,
                     'test_accuracy': 0.8912,
                     'train_loss': 0.2345,
                     'val_loss': 0.4123,
