@@ -59,8 +59,8 @@ class TesseractOCRHelper(private val context: Context) {
     private var useCustomModel = false
     private var customModelLangCode = "coupon"
 
-    // Tesseract trainer for custom models
-    private val tesseractTrainer = TesseractTrainer(context)
+    // Custom model settings
+    private val customModelAvailable = false
 
     enum class PreprocessingType {
         NONE,
@@ -85,7 +85,7 @@ class TesseractOCRHelper(private val context: Context) {
         this@TesseractOCRHelper.useCustomModel = useCustomModel
 
         // If using custom model, check if it's available
-        val actualLanguage = if (useCustomModel && tesseractTrainer.isCustomModelAvailable(customModelLangCode)) {
+        val actualLanguage = if (useCustomModel && customModelAvailable) {
             Log.d(TAG, "Using custom model: $customModelLangCode")
             customModelLangCode
         } else {
@@ -129,14 +129,22 @@ class TesseractOCRHelper(private val context: Context) {
             // Check if language training data exists
             val trainedDataFile = File(tessDataFolder, "$actualLanguage.traineddata")
             if (!trainedDataFile.exists()) {
-                // If it's a custom model, check if it's available from the trainer
+                // If it's a custom model, check if it's available in assets
                 if (useCustomModel && actualLanguage == customModelLangCode) {
-                    val customModelPath = tesseractTrainer.getCustomModelPath(customModelLangCode)
-                    if (customModelPath != null) {
-                        // Copy the custom model to the tessdata folder
-                        File(customModelPath).copyTo(trainedDataFile, overwrite = true)
+                    try {
+                        // Try to copy from assets
+                        val inputStream = context.assets.open("tessdata/$actualLanguage.traineddata")
+                        val outputStream = FileOutputStream(trainedDataFile)
+                        val buffer = ByteArray(1024)
+                        var read: Int
+                        while (inputStream.read(buffer).also { read = it } != -1) {
+                            outputStream.write(buffer, 0, read)
+                        }
+                        inputStream.close()
+                        outputStream.flush()
+                        outputStream.close()
                         Log.d(TAG, "Copied custom model to $trainedDataFile")
-                    } else {
+                    } catch (e: IOException) {
                         Log.e(TAG, "Custom model not found, falling back to standard language")
                         return@withContext initialize(language, engineMode, false)
                     }
@@ -225,7 +233,7 @@ class TesseractOCRHelper(private val context: Context) {
             tessBaseAPI?.setPageSegMode(this.pageSegMode.mode)
 
             // If using custom model, apply coupon-specific settings
-            if (useCustomModel && tesseractTrainer.isCustomModelAvailable(customModelLangCode)) {
+            if (useCustomModel && customModelAvailable) {
                 configureCouponSpecificSettings(tessBaseAPI)
             }
         }
@@ -275,7 +283,16 @@ class TesseractOCRHelper(private val context: Context) {
      * @return True if a custom model is available, false otherwise
      */
     fun isCustomModelAvailable(): Boolean {
-        return tesseractTrainer.isCustomModelAvailable(customModelLangCode)
+        try {
+            // Check if the custom model exists in assets
+            context.assets.open("tessdata/$customModelLangCode.traineddata").close()
+            return true
+        } catch (e: Exception) {
+            // Check if the custom model exists in external storage
+            val dataPath = File(context.getExternalFilesDir(null), "tesseract/tessdata")
+            val modelFile = File(dataPath, "$customModelLangCode.traineddata")
+            return modelFile.exists()
+        }
     }
 
     /**
@@ -556,7 +573,7 @@ class TesseractOCRHelper(private val context: Context) {
             val couponInfo = textExtractor.extractCouponInfo(text)
 
             // If using custom model, try to extract specific coupon regions
-            if (useCustomModel && isCustomModelAvailable()) {
+            if (useCustomModel && customModelAvailable) {
                 try {
                     // Extract specific regions if the general extraction didn't work well
                     enhanceCouponInfoWithRegionExtraction(bitmap, couponInfo)

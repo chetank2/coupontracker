@@ -23,7 +23,7 @@ import com.example.coupontracker.ui.screen.QRScannerScreen
 import com.example.coupontracker.ui.screen.ScannerScreen
 import com.example.coupontracker.ui.screen.SettingsScreen
 import com.example.coupontracker.ui.screen.SmartCaptureScreen
-import com.example.coupontracker.ui.screen.TesseractTrainingScreen
+
 import com.example.coupontracker.ui.screen.UnifiedCameraScreen
 import com.example.coupontracker.ui.screen.UnifiedUploadScreen
 import com.example.coupontracker.util.CouponInfo
@@ -51,7 +51,7 @@ sealed class Screen(val route: String) {
     }
     object ApiTest : Screen("api_test")
     object Settings : Screen("settings")
-    object TesseractTraining : Screen("tesseract_training")
+
     object Analytics : Screen("analytics")
 
     // New screens for simplified add coupon flow
@@ -151,9 +151,7 @@ fun AppNavigation(
             SettingsScreen(navController = navController)
         }
 
-        composable(Screen.TesseractTraining.route) {
-            TesseractTrainingScreen(navController = navController)
-        }
+
 
         composable(Screen.Analytics.route) {
             AnalyticsScreen(navController = navController)
