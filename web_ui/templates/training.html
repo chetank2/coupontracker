@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Training - Coupon Pattern Recognition</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        #dropArea {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #dropArea.highlight {
+            background-color: #f0f8ff;
+            border-color: #007bff;
+        }
+        #imageGallery {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .image-item {
+            position: relative;
+            width: 150px;
+            height: 200px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .image-item.selected {
+            border: 3px solid #007bff;
+        }
+        .annotation-canvas-container {
+            position: relative;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        #annotationCanvas {
+            background-color: #f8f9fa;
+            cursor: crosshair;
+        }
+        .annotation-tools {
+            margin-bottom: 10px;
+        }
+        .annotation-type {
+            margin-right: 10px;
+        }
+        .annotation-list {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .progress-container {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Coupon Pattern Recognition</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/training">Training</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/testing">Testing</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/train-from-url">Train from URL</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <h1>Training Interface</h1>
+                <p class="lead">Upload coupon images and annotate them to train the pattern recognition model.</p>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Upload Images</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="dropArea">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                            <h5>Drag & Drop Coupon Images Here</h5>
+                            <p>or</p>
+                            <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+                            <button class="btn btn-primary" id="browseBtn">Browse Files</button>
+                        </div>
+
+                        <div class="progress-container" style="display: none;">
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <p class="text-center mt-2" id="uploadStatus">Uploading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Image Gallery</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="imageGallery" class="d-flex flex-wrap gap-2">
+                            <p class="text-center w-100">No images uploaded yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-9">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Annotation</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="annotation-tools">
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-danger annotation-type" data-type="store">Store</button>
+                                <button type="button" class="btn btn-outline-primary annotation-type" data-type="description">Description</button>
+                                <button type="button" class="btn btn-outline-success annotation-type" data-type="expiry">Expiry Date</button>
+                                <button type="button" class="btn btn-outline-info annotation-type" data-type="code">Code</button>
+                                <button type="button" class="btn btn-outline-warning annotation-type" data-type="amount">Amount</button>
+                            </div>
+                            <button class="btn btn-danger ms-2" id="clearBtn">Clear</button>
+                            <button class="btn btn-success ms-2" id="saveAnnotationsBtn">Save Annotations</button>
+                        </div>
+
+                        <div class="annotation-canvas-container">
+                            <canvas id="annotationCanvas" width="800" height="600"></canvas>
+                        </div>
+
+                        <div class="annotation-list">
+                            <h6>Annotations</h6>
+                            <ul class="list-group" id="annotationsList">
+                                <li class="list-group-item text-center">No annotations yet</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4 mb-5">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Train Model</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>After uploading and annotating coupon images, click the button below to train the model.</p>
+                        <button class="btn btn-primary" id="trainModelBtn">Train Model</button>
+                        <div id="trainingResult" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Annotations Modal -->
+    <div class="modal fade" id="saveAnnotationsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Save Annotations</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="saveAnnotationsModalBody">
+                    <!-- Content will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Training Result Modal -->
+    <div class="modal fade" id="trainingResultModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Training Result</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="trainingResultModalBody">
+                    <!-- Content will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <!-- <script src="{{ url_for('static', filename='js/training.js') }}"></script> -->
+    <script>
+        // Global variables
+        let canvas;
+        let uploadedImages = [];
+        let selectedImage = null;
+        let selectedAnnotationType = 'store';
+        let annotations = [];
+
+        $(document).ready(function() {
+            // Initialize fabric.js canvas with fixed dimensions
+            const canvasElement = document.getElementById('annotationCanvas');
+
+            // Set fixed dimensions for the canvas
+            canvasElement.width = 800;
+            canvasElement.height = 600;
+
+            // Initialize the canvas
+            canvas = new fabric.Canvas('annotationCanvas');
+
+            // Add a welcome message to the canvas
+            const welcomeText = new fabric.Text('Select an image from the gallery to start annotating', {
+                left: canvas.width / 2,
+                top: canvas.height / 2,
+                originX: 'center',
+                originY: 'center',
+                fontSize: 16,
+                fill: '#666',
+                textAlign: 'center'
+            });
+            canvas.add(welcomeText);
+            canvas.renderAll();
+
+            console.log('Canvas initialized with dimensions:', canvas.width, 'x', canvas.height);
+
+            // Set up drag and drop
+            const dropArea = document.getElementById('dropArea');
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight() {
+                dropArea.classList.add('highlight');
+            }
+
+            function unhighlight() {
+                dropArea.classList.remove('highlight');
+            }
+
+            dropArea.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                handleFiles(files);
+            }
+
+            // Browse button click
+            $('#browseBtn').click(function() {
+                $('#fileInput').click();
+            });
+
+            // File input change
+            $('#fileInput').change(function() {
+                handleFiles(this.files);
+            });
+
+            // Annotation type selection
+            $('.annotation-type').click(function() {
+                $('.annotation-type').removeClass('active');
+                $(this).addClass('active');
+                selectedAnnotationType = $(this).data('type');
+                console.log('Selected annotation type:', selectedAnnotationType);
+            });
+
+            // Set default annotation type
+            $('.annotation-type[data-type="store"]').addClass('active');
+
+            // Clear button click
+            $('#clearBtn').click(function() {
+                canvas.clear();
+                updateAnnotationsList();
+            });
+
+            // Save annotations button click
+            $('#saveAnnotationsBtn').click(function() {
+                if (!selectedImage) {
+                    alert('Please select an image first');
+                    return;
+                }
+
+                saveAnnotations();
+            });
+
+            // Train model button click
+            $('#trainModelBtn').click(function() {
+                trainModel();
+            });
+
+            // Canvas mouse down event for drawing rectangles
+            canvas.on('mouse:down', function(options) {
+                if (!selectedImage) {
+                    alert('Please select an image first');
+                    return;
+                }
+
+                // Only start drawing if we're not on an existing object
+                if (options.target) return;
+
+                const pointer = canvas.getPointer(options.e);
+                const rect = new fabric.Rect({
+                    left: pointer.x,
+                    top: pointer.y,
+                    width: 0,
+                    height: 0,
+                    fill: 'rgba(' + getColorRgbForType(selectedAnnotationType) + ',0.2)',
+                    stroke: getColorForType(selectedAnnotationType),
+                    strokeWidth: 2,
+                    selectable: true,
+                    data: {
+                        type: selectedAnnotationType
+                    }
+                });
+
+                canvas.add(rect);
+                canvas.setActiveObject(rect);
+                canvas.renderAll();
+
+                canvas.isDrawing = true;
+                canvas.selection = false;
+                canvas.drawingRect = rect;
+                canvas.drawingStartPoint = pointer;
+
+                console.log('Started drawing rectangle at', pointer.x, pointer.y);
+            });
+
+            // Canvas mouse move event for drawing rectangles
+            canvas.on('mouse:move', function(options) {
+                if (!canvas.isDrawing) return;
+
+                const pointer = canvas.getPointer(options.e);
+                const rect = canvas.drawingRect;
+
+                if (pointer.x < canvas.drawingStartPoint.x) {
+                    rect.set({ left: pointer.x });
+                }
+
+                if (pointer.y < canvas.drawingStartPoint.y) {
+                    rect.set({ top: pointer.y });
+                }
+
+                rect.set({
+                    width: Math.abs(pointer.x - canvas.drawingStartPoint.x),
+                    height: Math.abs(pointer.y - canvas.drawingStartPoint.y)
+                });
+
+                canvas.renderAll();
+            });
+
+            // Canvas mouse up event for drawing rectangles
+            canvas.on('mouse:up', function() {
+                if (!canvas.isDrawing) return;
+
+                const rect = canvas.drawingRect;
+
+                // Only keep rectangles with some minimum size
+                if (rect.width < 10 || rect.height < 10) {
+                    canvas.remove(rect);
+                    console.log('Rectangle too small, removed');
+                } else {
+                    // Add a label to the rectangle
+                    const label = new fabric.Text(selectedAnnotationType, {
+                        left: rect.left,
+                        top: rect.top - 15,
+                        fontSize: 12,
+                        fill: getColorForType(selectedAnnotationType)
+                    });
+                    canvas.add(label);
+
+                    // Group the rectangle and label
+                    rect.label = label;
+
+                    console.log('Finished drawing rectangle:', {
+                        type: selectedAnnotationType,
+                        left: Math.round(rect.left),
+                        top: Math.round(rect.top),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height)
+                    });
+                }
+
+                canvas.isDrawing = false;
+                canvas.selection = true;
+                canvas.drawingRect = null;
+                canvas.drawingStartPoint = null;
+
+                updateAnnotationsList();
+            });
+        });
+
+        // Handle uploaded files
+        function handleFiles(files) {
+            if (files.length === 0) return;
+
+            // Show progress container
+            $('.progress-container').show();
+
+            // Create FormData
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files[]', files[i]);
+            }
+
+            // Upload files
+            $.ajax({
+                url: '/api/upload/training',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                xhr: function() {
+                    const xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener('progress', function(e) {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            $('.progress-bar').css('width', percent + '%');
+                            $('#uploadStatus').text('Uploading... ' + percent + '%');
+                        }
+                    }, false);
+                    return xhr;
+                },
+                success: function(response) {
+                    // Hide progress container
+                    $('.progress-container').hide();
+
+                    console.log('Upload response:', response);
+
+                    // Add uploaded images to the gallery
+                    if (response.files && response.files.length > 0) {
+                        uploadedImages = uploadedImages.concat(response.files);
+                        console.log('Updated uploadedImages:', uploadedImages);
+                        updateImageGallery();
+                    } else {
+                        console.error('No files in response or empty files array');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    // Hide progress container
+                    $('.progress-container').hide();
+
+                    // Show error
+                    alert('Error uploading files: ' + error);
+                }
+            });
+        }
+
+        // Update image gallery
+        function updateImageGallery() {
+            console.log('Updating image gallery with', uploadedImages.length, 'images');
+            const gallery = $('#imageGallery');
+
+            if (uploadedImages.length === 0) {
+                console.log('No images to display');
+                gallery.html('<p class="text-center">No images uploaded yet</p>');
+                return;
+            }
+
+            gallery.empty();
+
+            uploadedImages.forEach(function(image, index) {
+                console.log('Adding image to gallery:', image.original_name, image.url);
+
+                // Create a container for the image
+                const item = $('<div class="image-item"></div>');
+
+                // Create an image element with proper attributes
+                const img = $('<img>');
+                img.attr('src', image.url);
+                img.attr('alt', image.original_name);
+
+                // Append the image to the container
+                item.append(img);
+
+                // Add a title/tooltip
+                item.attr('title', image.original_name);
+
+                // Add click handler
+                item.click(function() {
+                    console.log('Selected image:', image.original_name);
+                    $('.image-item').removeClass('selected');
+                    $(this).addClass('selected');
+
+                    // Alert to confirm click is working
+                    alert('Loading image: ' + image.original_name);
+
+                    // Load the image
+                    loadImageForAnnotation(image);
+                });
+
+                // Append the item to the gallery
+                gallery.append(item);
+
+                // Log that the image was added
+                console.log('Added image to gallery:', image.original_name);
+            });
+
+            console.log('Image gallery updated');
+        }
+
+        // Load image for annotation
+        function loadImageForAnnotation(image) {
+            console.log('Loading image for annotation:', image);
+            selectedImage = image;
+
+            // Clear canvas
+            canvas.clear();
+
+            // Show loading message directly on canvas
+            const loadingText = new fabric.Text('Loading image...', {
+                left: canvas.width / 2,
+                top: canvas.height / 2,
+                originX: 'center',
+                originY: 'center',
+                fontSize: 20
+            });
+            canvas.add(loadingText);
+            canvas.renderAll();
+
+            // Use a simple approach with direct URL
+            const imgUrl = image.url;
+            console.log('Image URL:', imgUrl);
+
+            // Create a new image element
+            const imgElement = new Image();
+
+            imgElement.onload = function() {
+                console.log('Image loaded successfully:', imgElement.width, 'x', imgElement.height);
+
+                // Remove loading text
+                canvas.remove(loadingText);
+
+                // Create fabric image
+                const fabricImage = new fabric.Image(imgElement);
+
+                // Calculate scale to fit canvas
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const scale = Math.min(
+                    canvasWidth / imgElement.width,
+                    canvasHeight / imgElement.height
+                ) * 0.9; // 90% of max size to leave some margin
+
+                console.log('Canvas size:', canvasWidth, 'x', canvasHeight);
+                console.log('Scale factor:', scale);
+
+                // Scale and center the image
+                fabricImage.scale(scale);
+                fabricImage.set({
+                    left: (canvasWidth - imgElement.width * scale) / 2,
+                    top: (canvasHeight - imgElement.height * scale) / 2,
+                    selectable: false,
+                    evented: false
+                });
+
+                // Set as background
+                canvas.setBackgroundImage(fabricImage, function() {
+                    canvas.renderAll();
+                    console.log('Background image set and rendered');
+
+                    // Add a confirmation message
+                    alert('Image loaded successfully. You can now draw annotations.');
+                });
+            };
+
+            imgElement.onerror = function(e) {
+                console.error('Error loading image:', e);
+                canvas.remove(loadingText);
+
+                // Add error message to canvas
+                const errorText = new fabric.Text('Error loading image. Please try again.', {
+                    left: canvas.width / 2,
+                    top: canvas.height / 2,
+                    originX: 'center',
+                    originY: 'center',
+                    fontSize: 20,
+                    fill: 'red'
+                });
+                canvas.add(errorText);
+                canvas.renderAll();
+
+                alert('Failed to load the image. Error: ' + e.message);
+            };
+
+            // Set crossOrigin to anonymous to avoid CORS issues
+            imgElement.crossOrigin = 'anonymous';
+
+            // Start loading the image
+            imgElement.src = imgUrl;
+            console.log('Image loading started');
+
+            // Clear annotations list
+            updateAnnotationsList();
+        }
+
+        // Update annotations list
+        function updateAnnotationsList() {
+            const list = $('#annotationsList');
+            const objects = canvas.getObjects();
+
+            // Filter out only rectangle objects (not labels)
+            const rectangles = objects.filter(obj => obj.type === 'rect' && obj.data && obj.data.type);
+
+            if (rectangles.length === 0) {
+                list.html('<li class="list-group-item text-center">No annotations yet</li>');
+                return;
+            }
+
+            list.empty();
+
+            rectangles.forEach(function(obj, index) {
+                const type = obj.data.type;
+                const left = Math.round(obj.left);
+                const top = Math.round(obj.top);
+                const width = Math.round(obj.width);
+                const height = Math.round(obj.height);
+
+                const item = $('<li class="list-group-item"></li>');
+                item.html('<span class="badge bg-' + getBadgeColorForType(type) + ' me-2">' + type + '</span> ' +
+                          'Left: ' + left + ', Top: ' + top + ', Width: ' + width + ', Height: ' + height);
+
+                item.append('<button class="btn btn-sm btn-danger float-end">Remove</button>');
+
+                item.find('button').click(function() {
+                    // Remove both the rectangle and its label if it exists
+                    if (obj.label) {
+                        canvas.remove(obj.label);
+                    }
+                    canvas.remove(obj);
+                    updateAnnotationsList();
+                });
+
+                list.append(item);
+            });
+
+            // Update the annotations count in the UI
+            if (rectangles.length > 0) {
+                $('#annotationsList').closest('.annotation-list').find('h6').text('Annotations (' + rectangles.length + ')');
+            } else {
+                $('#annotationsList').closest('.annotation-list').find('h6').text('Annotations');
+            }
+        }
+
+        // Save annotations
+        function saveAnnotations() {
+            if (!selectedImage) {
+                alert('Please select an image first');
+                return;
+            }
+
+            // Filter out only rectangle objects (not labels)
+            const objects = canvas.getObjects().filter(obj => obj.type === 'rect' && obj.data && obj.data.type);
+            const annotationData = [];
+
+            objects.forEach(function(obj) {
+                annotationData.push({
+                    type: obj.data.type,
+                    left: Math.round(obj.left),
+                    top: Math.round(obj.top),
+                    width: Math.round(obj.width),
+                    height: Math.round(obj.height)
+                });
+            });
+
+            if (annotationData.length === 0) {
+                alert('No annotations to save. Please draw at least one annotation.');
+                return;
+            }
+
+            // Show loading indicator
+            $('#saveAnnotationsBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...');
+
+            // Save annotations
+            $.ajax({
+                url: '/api/annotate',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    image: selectedImage.path,
+                    annotations: annotationData
+                }),
+                success: function(response) {
+                    // Reset button
+                    $('#saveAnnotationsBtn').prop('disabled', false).text('Save Annotations');
+
+                    // Show success message with details
+                    let html = '<div class="alert alert-success">Annotations saved successfully</div>';
+                    html += '<p>Image: ' + selectedImage.original_name + '</p>';
+                    html += '<p>Number of annotations: ' + annotationData.length + '</p>';
+                    html += '<ul class="list-group mt-3">';
+
+                    annotationData.forEach(function(annotation) {
+                        html += '<li class="list-group-item">';
+                        html += '<span class="badge bg-' + getBadgeColorForType(annotation.type) + ' me-2">' + annotation.type + '</span> ';
+                        html += 'Left: ' + annotation.left + ', Top: ' + annotation.top + ', ';
+                        html += 'Width: ' + annotation.width + ', Height: ' + annotation.height;
+                        html += '</li>';
+                    });
+
+                    html += '</ul>';
+
+                    $('#saveAnnotationsModalBody').html(html);
+                    $('#saveAnnotationsModal').modal('show');
+                },
+                error: function(xhr, status, error) {
+                    // Reset button
+                    $('#saveAnnotationsBtn').prop('disabled', false).text('Save Annotations');
+
+                    // Show error message
+                    let errorMsg = 'Error saving annotations';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+
+                    $('#saveAnnotationsModalBody').html('<div class="alert alert-danger">' + errorMsg + '</div>');
+                    $('#saveAnnotationsModal').modal('show');
+                }
+            });
+        }
+
+        // Train model
+        function trainModel() {
+            $.ajax({
+                url: '/api/train',
+                type: 'POST',
+                contentType: 'application/json',
+                success: function(response) {
+                    let html = '<div class="alert alert-success">' + response.message + '</div>';
+                    html += '<p>Model Version: ' + response.model_info.version + '</p>';
+                    html += '<p>Number of Patterns: ' + response.model_info.num_patterns + '</p>';
+
+                    $('#trainingResultModalBody').html(html);
+                    $('#trainingResultModal').modal('show');
+                },
+                error: function(xhr, status, error) {
+                    let errorMsg = 'Error training model';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+
+                    let html = '<div class="alert alert-danger">' + errorMsg + '</div>';
+                    $('#trainingResultModalBody').html(html);
+                    $('#trainingResultModal').modal('show');
+                }
+            });
+        }
+
+        // Helper functions
+        function getColorForType(type) {
+            switch (type) {
+                case 'store': return 'red';
+                case 'description': return 'blue';
+                case 'expiry': return 'green';
+                case 'code': return 'purple';
+                case 'amount': return 'orange';
+                default: return 'black';
+            }
+        }
+
+        // Get RGB color values for annotation type (without the # prefix)
+        function getColorRgbForType(type) {
+            const color = getColorForType(type);
+            // For named colors, return RGB values
+            switch (color) {
+                case 'red': return '255,0,0';
+                case 'blue': return '0,0,255';
+                case 'green': return '0,128,0';
+                case 'purple': return '128,0,128';
+                case 'orange': return '255,165,0';
+                case 'black': return '0,0,0';
+                default: return '0,0,0';
+            }
+        }
+
+        function getBadgeColorForType(type) {
+            switch (type) {
+                case 'store': return 'danger';
+                case 'description': return 'primary';
+                case 'expiry': return 'success';
+                case 'code': return 'info';
+                case 'amount': return 'warning';
+                default: return 'secondary';
+            }
+        }
+    </script>
+</body>
+</html>

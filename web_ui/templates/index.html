@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coupon Pattern Recognition - Web UI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Coupon Pattern Recognition</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/training">Training</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/testing">Testing</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/train-from-url">Train from URL</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-md-12 text-center">
+                <h1>Coupon Pattern Recognition</h1>
+                <p class="lead">Train, test, and update the coupon pattern recognition model</p>
+            </div>
+        </div>
+
+        <!-- Model Metrics Dashboard -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Model Performance Metrics</h5>
+                        <div>
+                            <select id="sessionSelector" class="form-select form-select-sm d-inline-block me-2" style="width: auto;">
+                                <option value="latest">Latest Session</option>
+                                <!-- Training sessions will be populated here -->
+                            </select>
+                            <button id="refreshMetricsBtn" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div id="metricsLoading" class="text-center">
+                            <p>Loading metrics...</p>
+                        </div>
+                        <div id="metricsContent" style="display: none;">
+                            <div class="row mb-4">
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted">Test Accuracy</h6>
+                                            <h2 id="testAccuracy" class="text-success">87.41%</h2>
+                                            <div class="progress mt-2">
+                                                <div id="accuracyProgress" class="progress-bar bg-success" role="progressbar" style="width: 87.41%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted">Training Loss</h6>
+                                            <h2 id="trainLoss" class="text-primary">0.2777</h2>
+                                            <div class="progress mt-2">
+                                                <div id="trainLossProgress" class="progress-bar bg-primary" role="progressbar" style="width: 72.23%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted">Validation Loss</h6>
+                                            <h2 id="valLoss" class="text-warning">0.4622</h2>
+                                            <div class="progress mt-2">
+                                                <div id="valLossProgress" class="progress-bar bg-warning" role="progressbar" style="width: 53.78%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted">Training Samples</h6>
+                                            <h3 id="trainSamples" class="text-dark">9</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted">Validation Samples</h6>
+                                            <h3 id="valSamples" class="text-dark">2</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card h-100">
+                                        <div class="card-body text-center">
+                                            <h6 class="text-muted">Test Samples</h6>
+                                            <h3 id="testSamples" class="text-dark">3</h3>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-12">
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <p class="text-muted mb-0">
+                                                <small>
+                                                    Model Type: <span id="modelType">India Coupon Recognizer</span> |
+                                                    Version: <span id="modelVersion">1.0.0</span> |
+                                                    Last Updated: <span id="lastUpdated">May 3, 2025</span>
+                                                </small>
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mt-4">
+                                <div class="col-12">
+                                    <div class="card">
+                                        <div class="card-header d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-0">Training History</h6>
+                                            <div>
+                                                <button id="compareSessionsBtn" class="btn btn-sm btn-outline-secondary">
+                                                    <i class="bi bi-bar-chart-line"></i> Compare Sessions
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+                                            <canvas id="trainingChart" height="250"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-5">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Training</h5>
+                        <p class="card-text">Upload coupon images and annotate them to train the pattern recognition model.</p>
+                        <a href="/training" class="btn btn-primary">Go to Training</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Testing</h5>
+                        <p class="card-text">Upload coupon images to test the pattern recognition model and view results.</p>
+                        <a href="/testing" class="btn btn-primary">Go to Testing</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Train from URL</h5>
+                        <p class="card-text">Paste a URL containing coupon images to automatically train the model.</p>
+                        <a href="/train-from-url" class="btn btn-primary">Train from URL</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-body text-center">
+                        <h5 class="card-title">Update App</h5>
+                        <p class="card-text">Update the model in the Android app with the latest trained model.</p>
+                        <button id="updateAppBtn" class="btn btn-success">Update App Model</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-5">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Model History</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="modelHistory">
+                            <p class="text-center">Loading model history...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update App Modal -->
+    <div class="modal fade" id="updateAppModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Update App Model</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Are you sure you want to update the model in the Android app?</p>
+                    <p>This will replace the current model with the latest trained model.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-success" id="confirmUpdateBtn">Update</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Update Result Modal -->
+    <div class="modal fade" id="updateResultModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Update Result</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="updateResultContent">
+                    <!-- Result content will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compare Sessions Modal -->
+    <div class="modal fade" id="compareSessionsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Compare Training Sessions</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row mb-3">
+                        <div class="col-md-5">
+                            <select id="compareSession1" class="form-select">
+                                <option value="">Select Session 1</option>
+                                <!-- Sessions will be populated here -->
+                            </select>
+                        </div>
+                        <div class="col-md-2 text-center">
+                            <div class="mt-2">vs</div>
+                        </div>
+                        <div class="col-md-5">
+                            <select id="compareSession2" class="form-select">
+                                <option value="">Select Session 2</option>
+                                <!-- Sessions will be populated here -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="comparisonContent" style="display: none;">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Metric</th>
+                                        <th id="session1Header">Session 1</th>
+                                        <th id="session2Header">Session 2</th>
+                                        <th>Difference</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Test Accuracy</td>
+                                        <td id="accuracy1">-</td>
+                                        <td id="accuracy2">-</td>
+                                        <td id="accuracyDiff">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Training Loss</td>
+                                        <td id="trainLoss1">-</td>
+                                        <td id="trainLoss2">-</td>
+                                        <td id="trainLossDiff">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Validation Loss</td>
+                                        <td id="valLoss1">-</td>
+                                        <td id="valLoss2">-</td>
+                                        <td id="valLossDiff">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Training Samples</td>
+                                        <td id="trainSamples1">-</td>
+                                        <td id="trainSamples2">-</td>
+                                        <td id="trainSamplesDiff">-</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Pattern Count</td>
+                                        <td id="patterns1">-</td>
+                                        <td id="patterns2">-</td>
+                                        <td id="patternsDiff">-</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-4">
+                            <h6>Training History Comparison</h6>
+                            <canvas id="comparisonChart" height="250"></canvas>
+                        </div>
+                    </div>
+
+                    <div id="comparisonPlaceholder" class="text-center py-4">
+                        <p class="text-muted">Select two training sessions to compare</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-light py-3 mt-5">
+        <div class="container text-center">
+            <p>Coupon Pattern Recognition Web UI</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script>
+        // Global variables
+        let trainingChart = null;
+        let comparisonChart = null;
+        let sessionData = {}; // Cache for session metrics
+
+        $(document).ready(function() {
+            // Load model history, training sessions, and metrics
+            loadModelHistory();
+            loadTrainingSessions();
+            loadModelMetrics('latest');
+
+            // Update App button click
+            $('#updateAppBtn').click(function() {
+                $('#updateAppModal').modal('show');
+            });
+
+            // Confirm Update button click
+            $('#confirmUpdateBtn').click(function() {
+                updateAppModel();
+            });
+
+            // Refresh metrics button click
+            $('#refreshMetricsBtn').click(function() {
+                loadTrainingSessions();
+                loadModelMetrics($('#sessionSelector').val());
+            });
+
+            // Session selector change
+            $('#sessionSelector').change(function() {
+                const selectedValue = $(this).val();
+
+                if (selectedValue === 'compare') {
+                    // Reset to previous selection
+                    $(this).val($(this).data('previous-value') || 'latest');
+
+                    // Show comparison modal
+                    populateCompareSelectors();
+                    $('#compareSessionsModal').modal('show');
+                } else {
+                    // Store the current selection
+                    $(this).data('previous-value', selectedValue);
+
+                    // Load metrics for the selected version
+                    loadModelMetrics(selectedValue);
+                }
+            });
+
+            // Compare sessions button click
+            $('#compareSessionsBtn').click(function() {
+                populateCompareSelectors();
+                $('#compareSessionsModal').modal('show');
+            });
+
+            // Compare session selectors change
+            $('#compareSession1, #compareSession2').change(function() {
+                const session1 = $('#compareSession1').val();
+                const session2 = $('#compareSession2').val();
+
+                if (session1 && session2) {
+                    compareTrainingSessions(session1, session2);
+                }
+            });
+        });
+
+        function loadTrainingSessions() {
+            $.ajax({
+                url: '/api/training-sessions',
+                type: 'GET',
+                success: function(response) {
+                    updateSessionSelector(response.sessions);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error loading training sessions:', error);
+                }
+            });
+        }
+
+        function updateSessionSelector(sessions) {
+            const selector = $('#sessionSelector');
+
+            // Keep the "Latest Session" option
+            selector.find('option:not(:first)').remove();
+
+            if (sessions.length === 0) {
+                return;
+            }
+
+            // Add a header for previous sessions
+            selector.append($('<option disabled></option>').text('─────── Previous Sessions ───────'));
+
+            // Sort sessions by date (newest first)
+            sessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            // Add options for each session with trend indicators
+            for (let i = 0; i < sessions.length; i++) {
+                const session = sessions[i];
+                const accuracy = (session.test_accuracy * 100).toFixed(2);
+
+                // Add trend indicators if not the first session
+                let trendIndicator = '';
+                if (i < sessions.length - 1) {
+                    const prevSession = sessions[i + 1];
+
+                    // Compare accuracy
+                    if (session.test_accuracy > prevSession.test_accuracy) {
+                        trendIndicator = ' ↑';  // Improved
+                    } else if (session.test_accuracy < prevSession.test_accuracy) {
+                        trendIndicator = ' ↓';  // Regressed
+                    } else {
+                        trendIndicator = ' →';  // No change
+                    }
+                }
+
+                // Format date to be more readable
+                const date = new Date(session.timestamp);
+                const formattedDate = date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                const option = $('<option></option>')
+                    .attr('value', session.version)
+                    .text(`${formattedDate} - Acc: ${accuracy}%${trendIndicator} (${session.num_patterns} patterns)`);
+
+                // Add color coding based on accuracy
+                if (accuracy >= 90) {
+                    option.attr('class', 'text-success');
+                } else if (accuracy >= 80) {
+                    option.attr('class', 'text-primary');
+                } else if (accuracy >= 70) {
+                    option.attr('class', 'text-warning');
+                } else {
+                    option.attr('class', 'text-danger');
+                }
+
+                selector.append(option);
+            }
+
+            // Add a divider and option to compare sessions
+            selector.append($('<option disabled></option>').text('───────────────────────'));
+            selector.append($('<option></option>').attr('value', 'compare').text('Compare Sessions...'));
+        }
+
+        function loadModelMetrics(version) {
+            $('#metricsLoading').show();
+            $('#metricsContent').hide();
+
+            $.ajax({
+                url: '/api/model-metrics',
+                type: 'GET',
+                data: { version: version },
+                success: function(data) {
+                    updateMetricsDisplay(data);
+                    $('#metricsLoading').hide();
+                    $('#metricsContent').show();
+                },
+                error: function(xhr, status, error) {
+                    $('#metricsLoading').html('<p class="text-danger">Error loading metrics: ' + error + '</p>');
+                }
+            });
+        }
+
+        function updateMetricsDisplay(data) {
+            // Cache the data for comparison
+            sessionData[data.model_version] = data;
+
+            // Update accuracy
+            const accuracy = (data.test_accuracy * 100).toFixed(2);
+            $('#testAccuracy').text(accuracy + '%');
+            $('#accuracyProgress').css('width', accuracy + '%');
+
+            // Update training loss
+            const trainLoss = data.train_loss.toFixed(4);
+            $('#trainLoss').text(trainLoss);
+            $('#trainLossProgress').css('width', ((1 - data.train_loss) * 100) + '%');
+
+            // Update validation loss
+            const valLoss = data.val_loss.toFixed(4);
+            $('#valLoss').text(valLoss);
+            $('#valLossProgress').css('width', ((1 - data.val_loss) * 100) + '%');
+
+            // Update sample counts
+            $('#trainSamples').text(data.train_samples);
+            $('#valSamples').text(data.val_samples);
+            $('#testSamples').text(data.test_samples);
+
+            // Update model info
+            $('#modelType').text(data.model_type);
+            $('#modelVersion').text(data.model_version);
+            $('#lastUpdated').text(data.last_updated);
+
+            // Update training history chart
+            renderTrainingChart(data.history);
+        }
+
+        function populateCompareSelectors() {
+            const selector1 = $('#compareSession1');
+            const selector2 = $('#compareSession2');
+
+            // Clear existing options
+            selector1.find('option:not(:first)').remove();
+            selector2.find('option:not(:first)').remove();
+
+            // Get sessions from the main selector
+            const mainSelector = $('#sessionSelector');
+            const options = mainSelector.find('option').clone();
+
+            // Add options to comparison selectors
+            selector1.append(options);
+            selector2.append(options.clone());
+
+            // Reset comparison content
+            $('#comparisonContent').hide();
+            $('#comparisonPlaceholder').show();
+        }
+
+        function compareTrainingSessions(version1, version2) {
+            // Show loading state
+            $('#comparisonContent').hide();
+            $('#comparisonPlaceholder').html('<p class="text-center">Loading comparison data...</p>').show();
+
+            // Function to load session data
+            const loadSession = (version) => {
+                if (sessionData[version]) {
+                    return Promise.resolve(sessionData[version]);
+                } else {
+                    return new Promise((resolve, reject) => {
+                        $.ajax({
+                            url: '/api/model-metrics',
+                            type: 'GET',
+                            data: { version: version },
+                            success: (data) => {
+                                sessionData[version] = data;
+                                resolve(data);
+                            },
+                            error: (xhr, status, error) => {
+                                reject(error);
+                            }
+                        });
+                    });
+                }
+            };
+
+            // Load both sessions
+            Promise.all([loadSession(version1), loadSession(version2)])
+                .then(([data1, data2]) => {
+                    displayComparison(data1, data2);
+                })
+                .catch((error) => {
+                    $('#comparisonPlaceholder').html('<p class="text-danger">Error loading comparison data: ' + error + '</p>');
+                });
+        }
+
+        function displayComparison(data1, data2) {
+            // Update session headers
+            $('#session1Header').text(data1.model_version + ' (' + data1.last_updated + ')');
+            $('#session2Header').text(data2.model_version + ' (' + data2.last_updated + ')');
+
+            // Update metrics with percentage changes
+            const accuracy1 = (data1.test_accuracy * 100).toFixed(2);
+            const accuracy2 = (data2.test_accuracy * 100).toFixed(2);
+            const accuracyDiff = (data2.test_accuracy - data1.test_accuracy) * 100;
+            const accuracyPctChange = data1.test_accuracy > 0 ?
+                ((data2.test_accuracy - data1.test_accuracy) / data1.test_accuracy * 100).toFixed(2) : 0;
+
+            $('#accuracy1').text(accuracy1 + '%');
+            $('#accuracy2').text(accuracy2 + '%');
+
+            let accuracyDiffText = accuracyDiff.toFixed(2) + '%';
+            if (accuracyDiff !== 0) {
+                accuracyDiffText += ` (${accuracyDiff > 0 ? '+' : ''}${accuracyPctChange}%)`;
+            }
+            $('#accuracyDiff').html(accuracyDiffText);
+
+            if (accuracyDiff > 0) {
+                $('#accuracyDiff').addClass('text-success').removeClass('text-danger text-warning');
+                $('#accuracy2').addClass('fw-bold text-success').removeClass('text-danger text-warning');
+            } else if (accuracyDiff < 0) {
+                $('#accuracyDiff').addClass('text-danger').removeClass('text-success text-warning');
+                $('#accuracy2').addClass('fw-bold text-danger').removeClass('text-success text-warning');
+            } else {
+                $('#accuracyDiff').addClass('text-warning').removeClass('text-success text-danger');
+                $('#accuracy2').removeClass('fw-bold text-success text-danger text-warning');
+            }
+
+            // Training loss
+            const trainLoss1 = data1.train_loss.toFixed(4);
+            const trainLoss2 = data2.train_loss.toFixed(4);
+            const trainLossDiff = data2.train_loss - data1.train_loss;
+            const trainLossPctChange = data1.train_loss > 0 ?
+                ((data2.train_loss - data1.train_loss) / data1.train_loss * 100).toFixed(2) : 0;
+
+            $('#trainLoss1').text(trainLoss1);
+            $('#trainLoss2').text(trainLoss2);
+
+            let trainLossDiffText = trainLossDiff.toFixed(4);
+            if (trainLossDiff !== 0) {
+                trainLossDiffText += ` (${trainLossDiff > 0 ? '+' : ''}${trainLossPctChange}%)`;
+            }
+            $('#trainLossDiff').html(trainLossDiffText);
+
+            if (trainLossDiff < 0) {
+                $('#trainLossDiff').addClass('text-success').removeClass('text-danger text-warning');
+                $('#trainLoss2').addClass('fw-bold text-success').removeClass('text-danger text-warning');
+            } else if (trainLossDiff > 0) {
+                $('#trainLossDiff').addClass('text-danger').removeClass('text-success text-warning');
+                $('#trainLoss2').addClass('fw-bold text-danger').removeClass('text-success text-warning');
+            } else {
+                $('#trainLossDiff').addClass('text-warning').removeClass('text-success text-danger');
+                $('#trainLoss2').removeClass('fw-bold text-success text-danger text-warning');
+            }
+
+            // Validation loss
+            const valLoss1 = data1.val_loss.toFixed(4);
+            const valLoss2 = data2.val_loss.toFixed(4);
+            const valLossDiff = data2.val_loss - data1.val_loss;
+            const valLossPctChange = data1.val_loss > 0 ?
+                ((data2.val_loss - data1.val_loss) / data1.val_loss * 100).toFixed(2) : 0;
+
+            $('#valLoss1').text(valLoss1);
+            $('#valLoss2').text(valLoss2);
+
+            let valLossDiffText = valLossDiff.toFixed(4);
+            if (valLossDiff !== 0) {
+                valLossDiffText += ` (${valLossDiff > 0 ? '+' : ''}${valLossPctChange}%)`;
+            }
+            $('#valLossDiff').html(valLossDiffText);
+
+            if (valLossDiff < 0) {
+                $('#valLossDiff').addClass('text-success').removeClass('text-danger text-warning');
+                $('#valLoss2').addClass('fw-bold text-success').removeClass('text-danger text-warning');
+            } else if (valLossDiff > 0) {
+                $('#valLossDiff').addClass('text-danger').removeClass('text-success text-warning');
+                $('#valLoss2').addClass('fw-bold text-danger').removeClass('text-success text-warning');
+            } else {
+                $('#valLossDiff').addClass('text-warning').removeClass('text-success text-danger');
+                $('#valLoss2').removeClass('fw-bold text-success text-danger text-warning');
+            }
+
+            // Training samples
+            const trainSamples1 = data1.train_samples;
+            const trainSamples2 = data2.train_samples;
+            const trainSamplesDiff = trainSamples2 - trainSamples1;
+            const trainSamplesPctChange = trainSamples1 > 0 ?
+                ((trainSamples2 - trainSamples1) / trainSamples1 * 100).toFixed(2) : 0;
+
+            $('#trainSamples1').text(trainSamples1);
+            $('#trainSamples2').text(trainSamples2);
+
+            let trainSamplesDiffText = trainSamplesDiff;
+            if (trainSamplesDiff !== 0) {
+                trainSamplesDiffText += ` (${trainSamplesDiff > 0 ? '+' : ''}${trainSamplesPctChange}%)`;
+            }
+            $('#trainSamplesDiff').html(trainSamplesDiffText);
+
+            if (trainSamplesDiff > 0) {
+                $('#trainSamplesDiff').addClass('text-info').removeClass('text-warning');
+                $('#trainSamples2').addClass('fw-bold text-info').removeClass('text-warning');
+            } else if (trainSamplesDiff < 0) {
+                $('#trainSamplesDiff').addClass('text-warning').removeClass('text-info');
+                $('#trainSamples2').addClass('fw-bold text-warning').removeClass('text-info');
+            } else {
+                $('#trainSamplesDiff').removeClass('text-info text-warning');
+                $('#trainSamples2').removeClass('fw-bold text-info text-warning');
+            }
+
+            // Pattern count (from model info)
+            const patterns1 = data1.num_patterns || '-';
+            const patterns2 = data2.num_patterns || '-';
+            let patternsDiff = '-';
+            let patternsPctChange = '-';
+
+            if (patterns1 !== '-' && patterns2 !== '-') {
+                patternsDiff = patterns2 - patterns1;
+                patternsPctChange = patterns1 > 0 ?
+                    ((patterns2 - patterns1) / patterns1 * 100).toFixed(2) : 0;
+
+                let patternsDiffText = patternsDiff;
+                if (patternsDiff !== 0) {
+                    patternsDiffText += ` (${patternsDiff > 0 ? '+' : ''}${patternsPctChange}%)`;
+                }
+                $('#patternsDiff').html(patternsDiffText);
+
+                if (patternsDiff > 0) {
+                    $('#patternsDiff').addClass('text-info').removeClass('text-warning');
+                    $('#patterns2').addClass('fw-bold text-info').removeClass('text-warning');
+                } else if (patternsDiff < 0) {
+                    $('#patternsDiff').addClass('text-warning').removeClass('text-info');
+                    $('#patterns2').addClass('fw-bold text-warning').removeClass('text-info');
+                } else {
+                    $('#patternsDiff').removeClass('text-info text-warning');
+                    $('#patterns2').removeClass('fw-bold text-info text-warning');
+                }
+            } else {
+                $('#patternsDiff').text('-').removeClass('text-info text-warning');
+                $('#patterns2').removeClass('fw-bold text-info text-warning');
+            }
+
+            $('#patterns1').text(patterns1);
+            $('#patterns2').text(patterns2);
+
+            // Add overall improvement summary
+            let improvements = 0;
+            let regressions = 0;
+
+            if (accuracyDiff > 0) improvements++; else if (accuracyDiff < 0) regressions++;
+            if (trainLossDiff < 0) improvements++; else if (trainLossDiff > 0) regressions++;
+            if (valLossDiff < 0) improvements++; else if (valLossDiff > 0) regressions++;
+
+            const summaryClass = improvements > regressions ? 'text-success' :
+                                 improvements < regressions ? 'text-danger' : 'text-warning';
+
+            const summaryText = improvements > regressions ?
+                                `<strong>Overall Improvement:</strong> ${improvements} metrics improved, ${regressions} regressed` :
+                                improvements < regressions ?
+                                `<strong>Overall Regression:</strong> ${regressions} metrics regressed, ${improvements} improved` :
+                                `<strong>Mixed Results:</strong> ${improvements} metrics improved, ${regressions} regressed`;
+
+            // Add summary to the comparison content
+            if ($('#comparisonSummary').length === 0) {
+                $('#comparisonContent').prepend('<div id="comparisonSummary" class="alert mb-3"></div>');
+            }
+
+            $('#comparisonSummary')
+                .attr('class', `alert mb-3 ${summaryClass === 'text-success' ? 'alert-success' :
+                                            summaryClass === 'text-danger' ? 'alert-danger' : 'alert-warning'}`)
+                .html(summaryText);
+
+            // Render comparison chart
+            renderComparisonChart(data1, data2);
+
+            // Show comparison content
+            $('#comparisonPlaceholder').hide();
+            $('#comparisonContent').show();
+        }
+
+        function renderComparisonChart(data1, data2) {
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+
+            // Create labels for epochs
+            const maxEpochs = Math.max(
+                data1.history.train_loss.length,
+                data2.history.train_loss.length
+            );
+            const epochs = Array.from({length: maxEpochs}, (_, i) => i + 1);
+
+            // Destroy previous chart if it exists
+            if (comparisonChart) {
+                comparisonChart.destroy();
+            }
+
+            // Create new chart
+            comparisonChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: epochs,
+                    datasets: [
+                        {
+                            label: data1.model_version + ' Train Loss',
+                            data: data1.history.train_loss,
+                            borderColor: '#0d6efd',
+                            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: false
+                        },
+                        {
+                            label: data1.model_version + ' Val Loss',
+                            data: data1.history.val_loss,
+                            borderColor: '#0dcaf0',
+                            backgroundColor: 'rgba(13, 202, 240, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: false,
+                            borderDash: [5, 5]
+                        },
+                        {
+                            label: data2.model_version + ' Train Loss',
+                            data: data2.history.train_loss,
+                            borderColor: '#dc3545',
+                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: false
+                        },
+                        {
+                            label: data2.model_version + ' Val Loss',
+                            data: data2.history.val_loss,
+                            borderColor: '#fd7e14',
+                            backgroundColor: 'rgba(253, 126, 20, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: false,
+                            borderDash: [5, 5]
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: false
+                        },
+                        legend: {
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Epoch'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Loss'
+                            },
+                            min: 0
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderTrainingChart(history) {
+            const ctx = document.getElementById('trainingChart').getContext('2d');
+
+            // Create labels for epochs
+            const epochs = Array.from({length: history.train_loss.length}, (_, i) => i + 1);
+
+            // Destroy previous chart if it exists
+            if (trainingChart) {
+                trainingChart.destroy();
+            }
+
+            // Create new chart
+            trainingChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: epochs,
+                    datasets: [
+                        {
+                            label: 'Training Loss',
+                            data: history.train_loss,
+                            borderColor: '#0d6efd',
+                            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: true
+                        },
+                        {
+                            label: 'Validation Loss',
+                            data: history.val_loss,
+                            borderColor: '#ffc107',
+                            backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.1,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: false
+                        },
+                        legend: {
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Epoch'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Loss'
+                            },
+                            min: 0
+                        }
+                    }
+                }
+            });
+        }
+
+        function loadModelHistory() {
+            $.ajax({
+                url: '/api/models',
+                type: 'GET',
+                success: function(response) {
+                    displayModelHistory(response.models);
+                },
+                error: function(xhr, status, error) {
+                    $('#modelHistory').html('<p class="text-danger">Error loading model history: ' + error + '</p>');
+                }
+            });
+        }
+
+        function displayModelHistory(models) {
+            if (!models || models.length === 0) {
+                $('#modelHistory').html('<p class="text-center">No models available</p>');
+                return;
+            }
+
+            let html = '<table class="table table-striped">';
+            html += '<thead><tr><th>Version</th><th>Date</th><th>Patterns</th></tr></thead>';
+            html += '<tbody>';
+
+            models.forEach(function(model) {
+                const date = new Date(model.timestamp);
+                const formattedDate = date.toLocaleString();
+
+                html += '<tr>';
+                html += '<td>' + model.version + '</td>';
+                html += '<td>' + formattedDate + '</td>';
+                html += '<td>' + model.num_patterns + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            $('#modelHistory').html(html);
+        }
+
+        function updateAppModel() {
+            $('#updateAppModal').modal('hide');
+
+            $.ajax({
+                url: '/api/update-app',
+                type: 'POST',
+                contentType: 'application/json',
+                success: function(response) {
+                    let html = '<div class="alert alert-success">' + response.message + '</div>';
+                    html += '<p>Model Version: ' + response.details.model_version + '</p>';
+                    html += '<p>App Pattern File: ' + response.details.app_pattern_file + '</p>';
+
+                    $('#updateResultContent').html(html);
+                    $('#updateResultModal').modal('show');
+                },
+                error: function(xhr, status, error) {
+                    let errorMsg = 'Error updating app model';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+
+                    let html = '<div class="alert alert-danger">' + errorMsg + '</div>';
+                    $('#updateResultContent').html(html);
+                    $('#updateResultModal').modal('show');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

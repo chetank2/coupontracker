@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Testing - Coupon Pattern Recognition</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        #dropArea {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #dropArea.highlight {
+            background-color: #f0f8ff;
+            border-color: #007bff;
+        }
+        .result-image-container {
+            position: relative;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            text-align: center;
+        }
+        .result-image {
+            max-width: 100%;
+            max-height: 600px;
+        }
+        .highlight-box {
+            position: absolute;
+            border: 3px solid;
+            background-color: rgba(255, 255, 255, 0.1);
+            pointer-events: none;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s ease-in-out;
+        }
+        .highlight-box:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+        .highlight-label {
+            position: absolute;
+            padding: 3px 8px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            z-index: 10;
+        }
+        .confidence-high {
+            border-width: 4px;
+        }
+        .confidence-medium {
+            border-width: 3px;
+            border-style: dashed;
+        }
+        .confidence-low {
+            border-width: 2px;
+            border-style: dotted;
+        }
+        .progress-container {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Coupon Pattern Recognition</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/training">Training</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/testing">Testing</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/train-from-url">Train from URL</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <h1>Testing Interface</h1>
+                <p class="lead">Upload coupon images to test the pattern recognition model and view results.</p>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Upload Test Image</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="dropArea">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                            <h5>Drag & Drop a Coupon Image Here</h5>
+                            <p>or</p>
+                            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                            <button class="btn btn-primary" id="browseBtn">Browse Files</button>
+                        </div>
+
+                        <div class="progress-container" style="display: none;">
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <p class="text-center mt-2" id="uploadStatus">Uploading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4 mb-5">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Recognition Results</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="resultContainer">
+                            <p class="text-center">Upload an image to see recognition results</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Extracted Text</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="extractedTextContainer">
+                            <p class="text-center">No text extracted yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header">
+                        <h5>Detected Elements</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="detectedElementsContainer">
+                            <p class="text-center">No elements detected yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-header bg-success text-white">
+                        <h5>Coupon Summary</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="couponSummaryContainer">
+                            <p class="text-center">No coupon data yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="{{ url_for('static', filename='js/testing.js') }}"></script>
+    <script>
+        $(document).ready(function() {
+            // Set up drag and drop
+            const dropArea = document.getElementById('dropArea');
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight() {
+                dropArea.classList.add('highlight');
+            }
+
+            function unhighlight() {
+                dropArea.classList.remove('highlight');
+            }
+
+            dropArea.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            }
+
+            // Browse button click
+            $('#browseBtn').click(function() {
+                $('#fileInput').click();
+            });
+
+            // File input change
+            $('#fileInput').change(function() {
+                if (this.files.length > 0) {
+                    handleFile(this.files[0]);
+                }
+            });
+        });
+
+        // Handle uploaded file
+        function handleFile(file) {
+            if (!file) return;
+
+            // Show progress container
+            $('.progress-container').show();
+
+            // Create FormData
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Upload file
+            $.ajax({
+                url: '/api/upload/testing',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                xhr: function() {
+                    const xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener('progress', function(e) {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            $('.progress-bar').css('width', percent + '%');
+                            $('#uploadStatus').text('Uploading... ' + percent + '%');
+                        }
+                    }, false);
+                    return xhr;
+                },
+                success: function(response) {
+                    // Hide progress container
+                    $('.progress-container').hide();
+
+                    // Display results
+                    displayResults(response);
+                },
+                error: function(xhr, status, error) {
+                    // Hide progress container
+                    $('.progress-container').hide();
+
+                    // Show error
+                    alert('Error uploading file: ' + error);
+                }
+            });
+        }
+
+        // Display recognition results
+        function displayResults(response) {
+            if (!response.file || !response.results) {
+                $('#resultContainer').html('<p class="text-center text-danger">Error: Invalid response</p>');
+                return;
+            }
+
+            // Display image with highlighted regions
+            const resultContainer = $('#resultContainer');
+            resultContainer.empty();
+
+            const imageContainer = $('<div class="result-image-container"></div>');
+            const image = $('<img class="result-image" src="' + response.file.url + '" alt="' + response.file.original_name + '">');
+
+            imageContainer.append(image);
+
+            // Wait for image to load before adding highlight boxes
+            image.on('load', function() {
+                const imgWidth = this.width;
+                const imgHeight = this.height;
+
+                // Add highlight boxes for detected elements
+                if (response.results.elements && response.results.elements.length > 0) {
+                    response.results.elements.forEach(function(element) {
+                        const region = element.region;
+                        const type = element.type;
+                        const confidence = element.confidence;
+
+                        // Determine confidence class
+                        let confidenceClass = '';
+                        if (confidence >= 0.8) {
+                            confidenceClass = 'confidence-high';
+                        } else if (confidence >= 0.5) {
+                            confidenceClass = 'confidence-medium';
+                        } else {
+                            confidenceClass = 'confidence-low';
+                        }
+
+                        const box = $('<div class="highlight-box ' + confidenceClass + '"></div>');
+                        box.css({
+                            left: region.left + 'px',
+                            top: region.top + 'px',
+                            width: (region.right - region.left) + 'px',
+                            height: (region.bottom - region.top) + 'px',
+                            borderColor: getColorForType(type)
+                        });
+
+                        // Add tooltip data attributes
+                        box.attr('data-bs-toggle', 'tooltip');
+                        box.attr('data-bs-placement', 'top');
+                        box.attr('title', type + ': ' + Math.round(confidence * 100) + '% confidence');
+
+                        const label = $('<div class="highlight-label"></div>');
+                        label.text(capitalizeFirstLetter(type) + ' (' + Math.round(confidence * 100) + '%)');
+                        label.css({
+                            left: region.left + 'px',
+                            top: (region.top - 25) + 'px',
+                            backgroundColor: getColorForType(type)
+                        });
+
+                        imageContainer.append(box);
+                        imageContainer.append(label);
+                    });
+                }
+            });
+
+            resultContainer.append(imageContainer);
+
+            // Display extracted text
+            const extractedTextContainer = $('#extractedTextContainer');
+            extractedTextContainer.empty();
+
+            if (response.results.text && Object.keys(response.results.text).length > 0) {
+                const textList = $('<div class="accordion" id="extractedTextAccordion"></div>');
+
+                // Define the order we want to display the fields
+                const fieldOrder = ['store', 'amount', 'code', 'description', 'expiry'];
+
+                // Process fields in the defined order
+                fieldOrder.forEach((type, index) => {
+                    if (response.results.text[type]) {
+                        const text = response.results.text[type];
+                        const headerId = 'heading' + type;
+                        const collapseId = 'collapse' + type;
+                        const isFirst = index === 0;
+
+                        const accordionItem = $('<div class="accordion-item"></div>');
+                        const header = $('<h2 class="accordion-header" id="' + headerId + '"></h2>');
+                        const button = $('<button class="accordion-button ' + (isFirst ? '' : 'collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '" aria-expanded="' + (isFirst ? 'true' : 'false') + '" aria-controls="' + collapseId + '"></button>');
+
+                        button.html('<span class="badge bg-' + getBadgeColorForType(type) + ' me-2">' + capitalizeFirstLetter(type) + '</span>');
+
+                        header.append(button);
+                        accordionItem.append(header);
+
+                        const collapseDiv = $('<div id="' + collapseId + '" class="accordion-collapse collapse ' + (isFirst ? 'show' : '') + '" aria-labelledby="' + headerId + '" data-bs-parent="#extractedTextAccordion"></div>');
+                        const body = $('<div class="accordion-body"></div>');
+
+                        body.html('<p class="mb-0">' + text + '</p>');
+
+                        collapseDiv.append(body);
+                        accordionItem.append(collapseDiv);
+
+                        textList.append(accordionItem);
+                    }
+                });
+
+                extractedTextContainer.append(textList);
+
+                // Add a copy all button
+                const copyAllBtn = $('<button class="btn btn-sm btn-outline-primary mt-3 w-100">Copy All Text</button>');
+                copyAllBtn.click(function() {
+                    const allText = Object.entries(response.results.text)
+                        .map(([type, text]) => capitalizeFirstLetter(type) + ': ' + text)
+                        .join('\n');
+
+                    navigator.clipboard.writeText(allText).then(function() {
+                        $(this).text('Copied!');
+                        setTimeout(function() {
+                            copyAllBtn.text('Copy All Text');
+                        }, 2000);
+                    }.bind(this));
+                });
+
+                extractedTextContainer.append(copyAllBtn);
+            } else {
+                extractedTextContainer.html('<p class="text-center">No text extracted</p>');
+            }
+
+            // Display detected elements
+            const detectedElementsContainer = $('#detectedElementsContainer');
+            detectedElementsContainer.empty();
+
+            if (response.results.elements && response.results.elements.length > 0) {
+                // Group elements by type
+                const elementsByType = {};
+                response.results.elements.forEach(function(element) {
+                    if (!elementsByType[element.type]) {
+                        elementsByType[element.type] = [];
+                    }
+                    elementsByType[element.type].push(element);
+                });
+
+                // Create a table for better visualization
+                const table = $('<table class="table table-sm table-hover"></table>');
+                const thead = $('<thead class="table-light"></thead>');
+                const headerRow = $('<tr></tr>');
+                headerRow.append('<th>Type</th><th>Confidence</th><th>Position</th>');
+                thead.append(headerRow);
+                table.append(thead);
+
+                const tbody = $('<tbody></tbody>');
+
+                // Process each type in order
+                const fieldOrder = ['store', 'amount', 'code', 'description', 'expiry'];
+                fieldOrder.forEach(type => {
+                    if (elementsByType[type]) {
+                        elementsByType[type].forEach(function(element, index) {
+                            const confidence = element.confidence;
+                            const region = element.region;
+
+                            // Determine confidence class
+                            let confidenceClass = '';
+                            if (confidence >= 0.8) {
+                                confidenceClass = 'table-success';
+                            } else if (confidence >= 0.5) {
+                                confidenceClass = 'table-warning';
+                            } else {
+                                confidenceClass = 'table-danger';
+                            }
+
+                            const row = $('<tr class="' + confidenceClass + '"></tr>');
+
+                            // Only show type name for the first element of each type
+                            if (index === 0) {
+                                row.append('<td><span class="badge bg-' + getBadgeColorForType(type) + '">' +
+                                           capitalizeFirstLetter(type) + '</span></td>');
+                            } else {
+                                row.append('<td></td>');
+                            }
+
+                            // Add confidence with progress bar
+                            const confidencePercent = Math.round(confidence * 100);
+                            const confidenceCell = $('<td></td>');
+                            const progressBar = $('<div class="progress" style="height: 15px;"></div>');
+                            const progressBarInner = $('<div class="progress-bar" role="progressbar"></div>');
+                            progressBarInner.css('width', confidencePercent + '%');
+                            progressBarInner.attr('aria-valuenow', confidencePercent);
+                            progressBarInner.attr('aria-valuemin', '0');
+                            progressBarInner.attr('aria-valuemax', '100');
+                            progressBarInner.text(confidencePercent + '%');
+
+                            // Set color based on confidence
+                            if (confidence >= 0.8) {
+                                progressBarInner.addClass('bg-success');
+                            } else if (confidence >= 0.5) {
+                                progressBarInner.addClass('bg-warning');
+                            } else {
+                                progressBarInner.addClass('bg-danger');
+                            }
+
+                            progressBar.append(progressBarInner);
+                            confidenceCell.append(progressBar);
+                            row.append(confidenceCell);
+
+                            // Add position info
+                            row.append('<td>(' + region.left + ', ' + region.top + ') to (' +
+                                       region.right + ', ' + region.bottom + ')</td>');
+
+                            tbody.append(row);
+                        });
+                    }
+                });
+
+                table.append(tbody);
+                detectedElementsContainer.append(table);
+
+                // Add a note about confidence levels
+                const confidenceNote = $('<div class="mt-2 small text-muted"></div>');
+                confidenceNote.html('<strong>Confidence levels:</strong><br>' +
+                                   '<span class="badge bg-success">High</span> 80-100% | ' +
+                                   '<span class="badge bg-warning">Medium</span> 50-79% | ' +
+                                   '<span class="badge bg-danger">Low</span> 0-49%');
+                detectedElementsContainer.append(confidenceNote);
+            } else {
+                detectedElementsContainer.html('<p class="text-center">No elements detected</p>');
+            }
+
+            // Display coupon summary
+            const couponSummaryContainer = $('#couponSummaryContainer');
+            couponSummaryContainer.empty();
+
+            if (response.results.summary) {
+                // Create a styled summary card
+                const summaryCard = $('<div class="card border-success"></div>');
+                const summaryBody = $('<div class="card-body"></div>');
+
+                // Split the summary into lines and create styled elements
+                const summaryLines = response.results.summary.split('\n');
+
+                summaryLines.forEach(function(line) {
+                    if (line.trim()) {
+                        const parts = line.split(':');
+                        if (parts.length >= 2) {
+                            const label = parts[0].trim();
+                            const value = parts.slice(1).join(':').trim();
+
+                            const row = $('<div class="row mb-2"></div>');
+                            row.append('<div class="col-4 fw-bold">' + label + ':</div>');
+                            row.append('<div class="col-8">' + value + '</div>');
+
+                            summaryBody.append(row);
+                        } else {
+                            summaryBody.append('<p>' + line + '</p>');
+                        }
+                    }
+                });
+
+                // Add a "Copy to Clipboard" button
+                const copyBtn = $('<button class="btn btn-sm btn-outline-success mt-3">Copy to Clipboard</button>');
+                copyBtn.click(function() {
+                    navigator.clipboard.writeText(response.results.summary).then(function() {
+                        $(this).text('Copied!');
+                        setTimeout(function() {
+                            copyBtn.text('Copy to Clipboard');
+                        }, 2000);
+                    }.bind(this)).catch(function(err) {
+                        console.error('Could not copy text: ', err);
+                    });
+                });
+
+                summaryBody.append(copyBtn);
+                summaryCard.append(summaryBody);
+                couponSummaryContainer.append(summaryCard);
+            } else if (response.results.error) {
+                couponSummaryContainer.html('<div class="alert alert-danger">' + response.results.error + '</div>');
+            } else {
+                couponSummaryContainer.html('<p class="text-center">No coupon summary available</p>');
+            }
+        }
+
+        // Helper functions
+        function getColorForType(type) {
+            switch (type) {
+                case 'store': return 'red';
+                case 'description': return 'blue';
+                case 'expiry': return 'green';
+                case 'code': return 'purple';
+                case 'amount': return 'orange';
+                default: return 'black';
+            }
+        }
+
+        function getBadgeColorForType(type) {
+            switch (type) {
+                case 'store': return 'danger';
+                case 'description': return 'primary';
+                case 'expiry': return 'success';
+                case 'code': return 'info';
+                case 'amount': return 'warning';
+                default: return 'secondary';
+            }
+        }
+
+        function capitalizeFirstLetter(string) {
+            return string.charAt(0).toUpperCase() + string.slice(1);
+        }
+    </script>
+</body>
+</html>
