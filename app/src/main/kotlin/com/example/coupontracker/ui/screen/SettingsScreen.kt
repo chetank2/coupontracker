@@ -246,7 +246,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         Text(
-                            text = "Enter admin password to access advanced features like analytics and model training.",
+                            text = "Enter admin password to access advanced features like usage analytics.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -256,39 +256,6 @@ fun SettingsScreen(
 
             // Protected features (only shown if unlocked)
             if (protectedFeaturesUnlocked) {
-                // Custom training button
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        // Custom training button
-                        OutlinedButton(
-                            onClick = { navController.navigate(Screen.TesseractTraining.route) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.School,
-                                contentDescription = null
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Improve Recognition Accuracy")
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = "Help the app learn from your coupons to improve recognition accuracy over time.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
                 // Analytics button
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),

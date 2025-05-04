@@ -150,7 +150,7 @@ class CouponInputManager(private val context: Context) {
                     expiryDate = couponInfo.expiryDate ?: Date(),
                     cashbackAmount = couponInfo.cashbackAmount ?: 0.0,
                     redeemCode = couponInfo.redeemCode,
-                    imageUri = null,
+                    imageUri = null, // We'll set this later in the ViewModel
                     category = couponInfo.category,
                     status = couponInfo.status ?: "Active",
                     createdAt = Date(),

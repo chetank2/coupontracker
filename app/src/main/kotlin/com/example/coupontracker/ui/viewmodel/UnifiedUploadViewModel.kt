@@ -27,16 +27,16 @@ class UnifiedUploadViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository
 ) : AndroidViewModel(application) {
-    
+
     private val _uiState = MutableStateFlow(UnifiedUploadUiState())
     val uiState: StateFlow<UnifiedUploadUiState> = _uiState.asStateFlow()
-    
+
     private val couponInputManager = CouponInputManager(context)
-    
+
     companion object {
         private const val TAG = "UnifiedUploadViewModel"
     }
-    
+
     /**
      * Add a single image
      * @param uri Image URI to process
@@ -48,12 +48,15 @@ class UnifiedUploadViewModel @Inject constructor(
                     isProcessing = true,
                     error = null
                 )
-                
+
                 val coupon = couponInputManager.processCouponFromImageUri(uri)
-                
+
+                // Set the image URI in the coupon object
+                val couponWithImage = coupon.copy(imageUri = uri.toString())
+
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
-                    processedCoupon = coupon
+                    processedCoupon = couponWithImage
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing image", e)
@@ -64,7 +67,7 @@ class UnifiedUploadViewModel @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Add multiple images
      * @param uris List of image URIs to process
@@ -76,14 +79,14 @@ class UnifiedUploadViewModel @Inject constructor(
                     isProcessing = true,
                     error = null
                 )
-                
+
                 // Store the URIs for batch processing
                 val sharedPrefs = context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
                 val gson = Gson()
                 val uriStrings = uris.map { it.toString() }
                 val uriJson = gson.toJson(uriStrings)
                 sharedPrefs.edit().putString("shared_image_uris", uriJson).apply()
-                
+
                 // Navigate to batch scanner (will be handled in the UI)
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
@@ -98,7 +101,7 @@ class UnifiedUploadViewModel @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Add a PDF
      * @param uri PDF URI to process
@@ -110,12 +113,15 @@ class UnifiedUploadViewModel @Inject constructor(
                     isProcessing = true,
                     error = null
                 )
-                
+
                 val coupon = couponInputManager.processPdfUri(uri)
-                
+
+                // Set the image URI in the coupon object
+                val couponWithImage = coupon.copy(imageUri = uri.toString())
+
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
-                    processedCoupon = coupon
+                    processedCoupon = couponWithImage
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing PDF", e)
@@ -126,14 +132,14 @@ class UnifiedUploadViewModel @Inject constructor(
             }
         }
     }
-    
+
     /**
      * Reset the UI state
      */
     fun resetState() {
         _uiState.value = UnifiedUploadUiState()
     }
-    
+
     override fun onCleared() {
         super.onCleared()
         couponInputManager.cleanup()
