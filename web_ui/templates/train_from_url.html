@@ -93,7 +93,7 @@
                                 <input type="url" class="form-control" id="urlInput" placeholder="https://example.com/coupons" required>
                                 <div class="form-text">Enter a URL that contains coupon images, such as a Reddit search result or a coupon website.</div>
                             </div>
-                            
+
                             <div class="row mb-3">
                                 <div class="col-md-4">
                                     <div class="form-check">
@@ -120,7 +120,7 @@
                                     </div>
                                 </div>
                             </div>
-                            
+
                             <button type="submit" class="btn btn-primary" id="startTrainingBtn">
                                 <i class="bi bi-play-fill"></i> Start Training
                             </button>
@@ -171,34 +171,34 @@
         let currentTaskId = null;
         let statusCheckInterval = null;
         let recentTasks = [];
-        
+
         $(document).ready(function() {
             // Load recent tasks from local storage
             loadRecentTasks();
-            
+
             // URL form submission
             $('#urlForm').submit(function(e) {
                 e.preventDefault();
-                
+
                 const url = $('#urlInput').val();
                 const filterImages = $('#filterImages').prop('checked');
                 const augmentImages = $('#augmentImages').prop('checked');
                 const updateApp = $('#updateApp').prop('checked');
-                
+
                 startTraining(url, filterImages, augmentImages, updateApp);
             });
-            
+
             // Clear tasks button
             $('#clearTasksBtn').click(function() {
                 clearRecentTasks();
             });
         });
-        
+
         function startTraining(url, filterImages, augmentImages, updateApp) {
             // Disable the form
             $('#urlForm').find('input, button').prop('disabled', true);
             $('#startTrainingBtn').html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Starting...');
-            
+
             // Send the request to start training
             $.ajax({
                 url: '/api/train-from-url',
@@ -214,13 +214,13 @@
                     // Enable the form
                     $('#urlForm').find('input, button').prop('disabled', false);
                     $('#startTrainingBtn').html('<i class="bi bi-play-fill"></i> Start Training');
-                    
+
                     // Show the task container
                     $('#taskContainer').show();
-                    
+
                     // Set the current task ID
                     currentTaskId = response.task_id;
-                    
+
                     // Add the task to recent tasks
                     addRecentTask({
                         id: currentTaskId,
@@ -230,7 +230,7 @@
                         message: 'Initializing training process',
                         start_time: new Date().toISOString()
                     });
-                    
+
                     // Start checking the status
                     checkTaskStatus();
                     statusCheckInterval = setInterval(checkTaskStatus, 5000);
@@ -239,26 +239,26 @@
                     // Enable the form
                     $('#urlForm').find('input, button').prop('disabled', false);
                     $('#startTrainingBtn').html('<i class="bi bi-play-fill"></i> Start Training');
-                    
+
                     // Show error
                     alert('Error starting training: ' + (xhr.responseJSON?.error || error));
                 }
             });
         }
-        
+
         function checkTaskStatus() {
             if (!currentTaskId) return;
-            
+
             $.ajax({
                 url: '/api/train-from-url/status/' + currentTaskId,
                 type: 'GET',
                 success: function(response) {
                     // Update the current task display
                     updateTaskDisplay(response, '#currentTask');
-                    
+
                     // Update the task in recent tasks
                     updateRecentTask(response);
-                    
+
                     // If the task is completed or failed, stop checking
                     if (response.status === 'completed' || response.status === 'failed') {
                         clearInterval(statusCheckInterval);
@@ -270,11 +270,11 @@
                 }
             });
         }
-        
+
         function updateTaskDisplay(task, container) {
             // Get status class
             const statusClass = 'status-' + task.status;
-            
+
             // Create task HTML
             let html = `
                 <div class="task-card">
@@ -296,26 +296,28 @@
                     ${task.result ? renderTaskResult(task.result) : ''}
                 </div>
             `;
-            
+
             // Update the container
             $(container).html(html);
         }
-        
+
         function renderTaskResult(result) {
+            if (!result) return '';
+
             return `
                 <div class="task-result">
                     <h6>Training Results</h6>
-                    <p><strong>Model Version:</strong> ${result.model_version}</p>
-                    <p><strong>Number of Patterns:</strong> ${result.num_patterns}</p>
-                    <p><strong>Test Accuracy:</strong> ${(result.test_accuracy * 100).toFixed(2)}%</p>
-                    <p><strong>Training Samples:</strong> ${result.train_samples}</p>
-                    <p><strong>Validation Samples:</strong> ${result.val_samples}</p>
-                    <p><strong>Test Samples:</strong> ${result.test_samples}</p>
+                    <p><strong>Model Version:</strong> ${result.model_version || 'N/A'}</p>
+                    <p><strong>Number of Patterns:</strong> ${result.num_patterns || 'N/A'}</p>
+                    <p><strong>Test Accuracy:</strong> ${result.test_accuracy ? (result.test_accuracy * 100).toFixed(2) + '%' : 'N/A'}</p>
+                    <p><strong>Training Samples:</strong> ${result.train_samples || 'N/A'}</p>
+                    <p><strong>Validation Samples:</strong> ${result.val_samples || 'N/A'}</p>
+                    <p><strong>Test Samples:</strong> ${result.test_samples || 'N/A'}</p>
                     <a href="/" class="btn btn-primary">View Model Metrics</a>
                 </div>
             `;
         }
-        
+
         function loadRecentTasks() {
             try {
                 const storedTasks = localStorage.getItem('recentTrainingTasks');
@@ -327,27 +329,27 @@
                 console.error('Error loading recent tasks:', e);
             }
         }
-        
+
         function addRecentTask(task) {
             // Add the task to the beginning of the array
             recentTasks.unshift(task);
-            
+
             // Keep only the 5 most recent tasks
             if (recentTasks.length > 5) {
                 recentTasks = recentTasks.slice(0, 5);
             }
-            
+
             // Save to local storage
             saveRecentTasks();
-            
+
             // Render the tasks
             renderRecentTasks();
         }
-        
+
         function updateRecentTask(task) {
             // Find the task in the array
             const index = recentTasks.findIndex(t => t.id === task.id || t.id === task.task_id);
-            
+
             if (index !== -1) {
                 // Update the task
                 recentTasks[index] = {
@@ -358,15 +360,15 @@
                     end_time: task.end_time,
                     result: task.result
                 };
-                
+
                 // Save to local storage
                 saveRecentTasks();
-                
+
                 // Render the tasks
                 renderRecentTasks();
             }
         }
-        
+
         function saveRecentTasks() {
             try {
                 localStorage.setItem('recentTrainingTasks', JSON.stringify(recentTasks));
@@ -374,30 +376,30 @@
                 console.error('Error saving recent tasks:', e);
             }
         }
-        
+
         function clearRecentTasks() {
             recentTasks = [];
             saveRecentTasks();
             renderRecentTasks();
         }
-        
+
         function renderRecentTasks() {
             if (recentTasks.length === 0) {
                 $('#recentTasks').html('<p class="text-center text-muted">No recent training tasks</p>');
                 return;
             }
-            
+
             let html = '';
-            
+
             recentTasks.forEach(task => {
                 // Skip the current task
                 if (currentTaskId && (task.id === currentTaskId || task.task_id === currentTaskId)) {
                     return;
                 }
-                
+
                 // Get status class
                 const statusClass = 'status-' + task.status;
-                
+
                 html += `
                     <div class="task-card">
                         <div class="task-header">
@@ -419,10 +421,10 @@
                     </div>
                 `;
             });
-            
+
             $('#recentTasks').html(html);
         }
-        
+
         function getProgressBarClass(status) {
             switch (status) {
                 case 'initializing':
@@ -437,14 +439,14 @@
                     return 'bg-primary';
             }
         }
-        
+
         function capitalizeFirstLetter(string) {
             return string.charAt(0).toUpperCase() + string.slice(1);
         }
-        
+
         function formatDate(dateString) {
             if (!dateString) return '';
-            
+
             const date = new Date(dateString);
             return date.toLocaleString();
         }
