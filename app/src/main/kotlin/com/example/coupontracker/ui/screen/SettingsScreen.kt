@@ -22,11 +22,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coupontracker.ui.navigation.Screen
+import com.example.coupontracker.util.ModelMetadataReader
 import com.example.coupontracker.util.SecurePreferencesManager
 import com.example.coupontracker.util.TesseractLanguageManager
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.School
 import androidx.compose.ui.text.style.TextAlign
@@ -43,11 +45,15 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val securePreferencesManager = remember { SecurePreferencesManager(context) }
+    val modelMetadataReader = remember { ModelMetadataReader(context) }
 
     // Initialize secure preferences manager
     LaunchedEffect(Unit) {
         securePreferencesManager.initialize()
     }
+
+    // Get model version
+    val (modelVersion, numPatterns) = remember { modelMetadataReader.getModelVersion() }
 
     // UI states
     val scrollState = rememberScrollState()
@@ -145,6 +151,71 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold
                     )
+                }
+            }
+
+            // Model Version Info
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Text(
+                            text = "Model Information",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Model Version:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = modelVersion,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Number of Patterns:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = numPatterns.toString(),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             }
 
