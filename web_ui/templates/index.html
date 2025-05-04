@@ -984,13 +984,23 @@
             html += '<tbody>';
 
             models.forEach(function(model) {
-                const date = new Date(model.timestamp);
-                const formattedDate = date.toLocaleString();
+                let formattedDate = 'Invalid Date';
+
+                try {
+                    if (model.timestamp) {
+                        const date = new Date(model.timestamp);
+                        if (!isNaN(date.getTime())) {
+                            formattedDate = date.toLocaleString();
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error formatting date:', e);
+                }
 
                 html += '<tr>';
                 html += '<td>' + model.version + '</td>';
                 html += '<td>' + formattedDate + '</td>';
-                html += '<td>' + model.num_patterns + '</td>';
+                html += '<td>' + (model.num_patterns || 'undefined') + '</td>';
                 html += '</tr>';
             });
 

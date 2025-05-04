@@ -223,17 +223,20 @@ except ImportError:
                 {
                     'version': '1.0.0',
                     'accuracy': 0.8741,
-                    'date': '2025-05-01'
+                    'timestamp': '2025-05-01T10:30:00',
+                    'num_patterns': 25
                 },
                 {
                     'version': '0.9.5',
                     'accuracy': 0.8432,
-                    'date': '2025-04-27'
+                    'timestamp': '2025-04-27T14:45:00',
+                    'num_patterns': 20
                 },
                 {
                     'version': '0.9.0',
                     'accuracy': 0.8123,
-                    'date': '2025-04-20'
+                    'timestamp': '2025-04-20T09:15:00',
+                    'num_patterns': 15
                 }
             ]
 
