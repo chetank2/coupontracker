@@ -60,36 +60,39 @@ except ImportError:
             return [
                 {
                     'id': '1234-5678',
-                    'date': '2025-04-27 10:15:30',
+                    'timestamp': '2025-04-20T10:15:30',
                     'model_version': '0.9.0',
                     'test_accuracy': 0.8123,
                     'train_loss': 0.3456,
                     'val_loss': 0.5678,
                     'train_samples': 7,
                     'val_samples': 2,
-                    'test_samples': 2
+                    'test_samples': 2,
+                    'num_patterns': 15
                 },
                 {
                     'id': '2345-6789',
-                    'date': '2025-05-01 14:22:45',
+                    'timestamp': '2025-04-27T14:22:45',
                     'model_version': '0.9.5',
                     'test_accuracy': 0.8432,
                     'train_loss': 0.3123,
                     'val_loss': 0.5234,
                     'train_samples': 8,
                     'val_samples': 2,
-                    'test_samples': 3
+                    'test_samples': 3,
+                    'num_patterns': 20
                 },
                 {
                     'id': '3456-7890',
-                    'date': '2025-05-04 09:30:15',
+                    'timestamp': '2025-05-01T09:30:15',
                     'model_version': '1.0.0',
                     'test_accuracy': 0.8741,
                     'train_loss': 0.2777,
                     'val_loss': 0.4622,
                     'train_samples': 9,
                     'val_samples': 2,
-                    'test_samples': 3
+                    'test_samples': 3,
+                    'num_patterns': 25
                 }
             ]
 
