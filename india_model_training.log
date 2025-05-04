@@ -1,6 +1,0 @@
-2025-05-04 02:13:43,170 - india_model_training - INFO - Found 79 annotation files to prepare
-2025-05-04 02:13:43,170 - india_model_training - INFO - Split: 55 train, 11 val, 13 test
-2025-05-04 02:13:43,170 - india_model_training - INFO - Processing train set
-2025-05-04 02:13:43,294 - india_model_training - INFO - Processing val set
-2025-05-04 02:13:43,310 - india_model_training - INFO - Processing test set
-2025-05-04 02:13:43,329 - india_model_training - INFO - Data preparation complete.
