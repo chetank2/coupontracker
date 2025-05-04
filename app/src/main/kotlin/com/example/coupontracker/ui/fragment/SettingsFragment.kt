@@ -96,6 +96,10 @@ class SettingsFragment : Fragment() {
             }
             notificationsSwitch.isChecked = settings.notificationsEnabled
             darkModeSwitch.isChecked = settings.darkMode
+
+            // Update model information
+            modelVersionText.text = settings.modelVersion
+            numPatternsText.text = settings.numPatterns.toString()
         }
     }
 
@@ -103,4 +107,4 @@ class SettingsFragment : Fragment() {
         super.onDestroyView()
         _binding = null
     }
-} 
+}

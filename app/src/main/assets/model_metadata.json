@@ -1,0 +1,14 @@
+{
+  "model_version": "1.0.1",
+  "update_date": "2025-05-04T11:07:29.750281",
+  "num_patterns": 25,
+  "accuracy": 0.8741,
+  "supported_brands": [
+    "CRED",
+    "PhonePe",
+    "Zomato",
+    "Swiggy",
+    "Myntra",
+    "GPay"
+  ]
+}
