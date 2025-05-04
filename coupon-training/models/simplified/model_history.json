@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.1",
+    "timestamp": "2025-05-04T11:07:29.750281",
+    "pattern_file": "/Users/Personal/AndroidStudioProjects/CouponTracker3/coupon-training/models/simplified/coupon_patterns.txt",
+    "num_patterns": 25,
+    "accuracy": 0.8741,
+    "supported_brands": ["CRED", "PhonePe", "Zomato", "Swiggy", "Myntra", "GPay"]
+  },
+  {
     "version": "20250502_234156",
     "timestamp": "2025-05-02T23:41:56.158075",
     "pattern_file": "/Users/Personal/AndroidStudioProjects/CouponTracker3/coupon-training/models/simplified/coupon_patterns.txt",

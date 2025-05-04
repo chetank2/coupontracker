@@ -1,0 +1,35 @@
+[
+    {
+        "id": "7305766e-4fcd-4197-8f3b-16ff72404af9",
+        "date": "2025-04-27 12:26:25",
+        "model_version": "0.9.0",
+        "test_accuracy": 0.8123,
+        "train_loss": 0.3456,
+        "val_loss": 0.5678,
+        "train_samples": 7,
+        "val_samples": 2,
+        "test_samples": 2
+    },
+    {
+        "id": "dd8be3d2-b683-423c-b88a-09b671336fe0",
+        "date": "2025-05-01 12:26:25",
+        "model_version": "0.9.5",
+        "test_accuracy": 0.8432,
+        "train_loss": 0.3123,
+        "val_loss": 0.5234,
+        "train_samples": 8,
+        "val_samples": 2,
+        "test_samples": 3
+    },
+    {
+        "id": "4b7aad65-9e93-482d-adbb-5bdafea981a5",
+        "date": "2025-05-04 12:26:25",
+        "model_version": "1.0.1",
+        "test_accuracy": 0.8741,
+        "train_loss": 0.2777,
+        "val_loss": 0.4622,
+        "train_samples": 9,
+        "val_samples": 2,
+        "test_samples": 3
+    }
+]

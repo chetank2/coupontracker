@@ -12,6 +12,6 @@
   ],
   "confidence_threshold": 0.25,
   "iou_threshold": 0.45,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "YOLOv5s model trained on Indian coupons from r/CouponsIndia"
 }
