@@ -470,17 +470,27 @@
                 }
 
                 // Format date to be more readable
-                const date = new Date(session.timestamp);
-                const formattedDate = date.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
+                let formattedDate = 'Invalid Date';
+                try {
+                    if (session.timestamp) {
+                        const date = new Date(session.timestamp);
+                        if (!isNaN(date.getTime())) {
+                            formattedDate = date.toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error formatting date:', e);
+                }
 
+                const patterns = session.num_patterns || 'undefined';
                 const option = $('<option></option>')
-                    .attr('value', session.version)
-                    .text(`${formattedDate} - Acc: ${accuracy}%${trendIndicator} (${session.num_patterns} patterns)`);
+                    .attr('value', session.model_version)
+                    .text(`${formattedDate} - Acc: ${accuracy}%${trendIndicator} (${patterns} patterns)`);
 
                 // Add color coding based on accuracy
                 if (accuracy >= 90) {
