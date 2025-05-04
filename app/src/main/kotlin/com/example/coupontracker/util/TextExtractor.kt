@@ -30,6 +30,23 @@ data class CouponInfo(
     val platformType: String? = null,
     val usageLimit: Int? = null
 ) : Serializable {
+    /**
+     * Check if this coupon has enough valid information to be useful
+     */
+    fun isValid(): Boolean {
+        // Must have a merchant name
+        if (storeName.isBlank() || storeName == "Unknown Store") {
+            return false
+        }
+
+        // Must have either a code or an amount
+        if (redeemCode.isNullOrBlank() && (cashbackAmount == null || cashbackAmount <= 0)) {
+            return false
+        }
+
+        return true
+    }
+
     override fun toString(): String {
         return "CouponInfo(storeName='$storeName', description='$description', " +
                "expiryDate=$expiryDate, cashbackAmount=$cashbackAmount, " +

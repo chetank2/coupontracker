@@ -27,7 +27,7 @@ class ModelBasedOCRService(private val context: Context) {
 
     // Model version and metadata
     private val modelVersion = "2.0.0"
-    private val modelName = "india_coupon_recognizer"
+    private val modelName = "unified_coupon_recognizer"
 
     // Track service availability
     private var tesseractAvailable = AtomicBoolean(false)
@@ -264,4 +264,6 @@ class ModelBasedOCRService(private val context: Context) {
     fun cleanup() {
         tesseractOCRHelper.cleanup()
     }
+
+
 }

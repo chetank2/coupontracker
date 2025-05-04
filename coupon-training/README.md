@@ -2,6 +2,30 @@
 
 This is a training environment for building and training a model to detect elements in coupon images using OpenCV and Tesseract OCR. It includes both command-line tools and a web interface for training and testing the model.
 
+## Unified Model Approach
+
+We've adopted a unified model approach that combines standard and Indian coupon data into a single model. This approach:
+
+1. **Simplifies the Recognition Pipeline**
+   - Uses a single model for all coupon types
+   - Eliminates the need for model selection logic
+   - Provides a more consistent user experience
+
+2. **Improves Overall Accuracy**
+   - Learns from a more diverse dataset
+   - Better generalization to different coupon formats
+   - Handles regional variations more effectively
+
+3. **Reduces Maintenance Overhead**
+   - Single model to update and maintain
+   - Simplified deployment process
+   - Easier to add new coupon types in the future
+
+4. **Optimizes Resource Usage**
+   - Lower memory footprint with one model
+   - Reduced processing time
+   - More efficient use of device resources
+
 ## Recent Improvements
 
 We've made several significant improvements to address limitations in the original implementation:
@@ -170,6 +194,10 @@ We've made several significant improvements to address limitations in the origin
 - `scripts/create_sample_coupon.py`: Generate sample coupon images for testing
 - `scripts/manual_coupon_download_guide.py`: Guide for downloading coupon images from Reddit
 
+### Unified Model Scripts
+- `scripts/combine_training_data.py`: Combine standard and Indian coupon data
+- `scripts/train_unified_model.py`: Train a unified model on the combined dataset
+
 ## Utilities
 
 - `utils/image_utils.py`: Image processing utilities
@@ -252,6 +280,26 @@ python scripts/improved_coupon_recognizer.py --batch data/raw --output results
 #### Use fixed patterns instead of adaptive recognition:
 ```
 python scripts/improved_coupon_recognizer.py --image data/raw/sample_myntra_coupon.jpg --fixed-patterns
+```
+
+### Training the Unified Model
+
+The unified model combines standard and Indian coupon data to create a single model that works well with all coupon types.
+
+#### Step 1: Combine Training Data
+```
+python scripts/combine_training_data.py --existing-data data/standard --india-data data/india --output-dir data/combined
+```
+
+#### Step 2: Train the Unified Model
+```
+python scripts/train_unified_model.py --data-dir data/combined --output-dir models/unified --epochs 100
+```
+
+#### Step 3: Deploy the Model to the App
+```
+cp models/unified/unified_coupon_model.tflite ../app/src/main/assets/models/
+cp models/unified/unified_coupon_model_config.json ../app/src/main/assets/models/
 ```
 
 #### Generate sample coupon images:

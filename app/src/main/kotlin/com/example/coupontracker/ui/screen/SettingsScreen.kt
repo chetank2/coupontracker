@@ -25,9 +25,12 @@ import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.util.SecurePreferencesManager
 import com.example.coupontracker.util.TesseractLanguageManager
 import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.School
 import androidx.compose.ui.text.style.TextAlign
+import com.example.coupontracker.ui.components.PasswordDialog
 
 // Using keys from SecurePreferencesManager
 
@@ -46,12 +49,30 @@ fun SettingsScreen(
         securePreferencesManager.initialize()
     }
 
-    // We've removed the API selection as users don't need to select the OCR technology
-
     // UI states
     val scrollState = rememberScrollState()
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var protectedFeaturesUnlocked by remember {
+        mutableStateOf(securePreferencesManager.areProtectedFeaturesUnlocked())
+    }
 
-    // We've removed the API selection as users don't need to select the OCR technology
+    // Password dialog
+    if (showPasswordDialog) {
+        PasswordDialog(
+            onDismiss = { showPasswordDialog = false },
+            onPasswordEntered = { password ->
+                if (securePreferencesManager.checkAdminPassword(password)) {
+                    // Password correct, unlock protected features
+                    securePreferencesManager.setProtectedFeaturesUnlocked(true)
+                    protectedFeaturesUnlocked = true
+                    showPasswordDialog = false
+                } else {
+                    // Password incorrect, keep dialog open
+                    // In a real app, you might want to show an error message
+                }
+            }
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -120,44 +141,133 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "The app has been trained on thousands of coupons to provide accurate results.",
+                        text = "The app has been trained on thousands of coupons to provide accurate results, including specialized recognition for Indian coupons.",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Bold
                     )
                 }
             }
 
-            // Custom training button
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    // Custom training button
-                    OutlinedButton(
-                        onClick = { navController.navigate(Screen.TesseractTraining.route) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.School,
-                            contentDescription = null
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Improve Recognition Accuracy")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Help the app learn from your coupons to improve recognition accuracy over time.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            // Protected features button (only shown if features are not unlocked)
+            if (!protectedFeaturesUnlocked) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        // Protected features button
+                        OutlinedButton(
+                            onClick = { showPasswordDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Lock,
+                                contentDescription = null
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Access Protected Features")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Enter admin password to access advanced features like analytics and model training.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
+            }
+
+            // Protected features (only shown if unlocked)
+            if (protectedFeaturesUnlocked) {
+                // Custom training button
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        // Custom training button
+                        OutlinedButton(
+                            onClick = { navController.navigate(Screen.TesseractTraining.route) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.School,
+                                contentDescription = null
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Improve Recognition Accuracy")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Help the app learn from your coupons to improve recognition accuracy over time.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Analytics button
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        // Analytics button
+                        OutlinedButton(
+                            onClick = { navController.navigate(Screen.Analytics.route) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Analytics,
+                                contentDescription = null
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("View Usage Analytics")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "View detailed analytics about your coupon scanning patterns and app performance.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Lock protected features button
+                OutlinedButton(
+                    onClick = {
+                        securePreferencesManager.setProtectedFeaturesUnlocked(false)
+                        protectedFeaturesUnlocked = false
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Lock Protected Features")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }

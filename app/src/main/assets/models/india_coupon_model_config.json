@@ -1,0 +1,17 @@
+{
+  "model_name": "india_coupon_model",
+  "model_file": "india_coupon_model.tflite",
+  "input_size": 640,
+  "classes": [
+    "store_name",
+    "coupon_code",
+    "expiry_date",
+    "description",
+    "amount",
+    "min_purchase"
+  ],
+  "confidence_threshold": 0.25,
+  "iou_threshold": 0.45,
+  "version": "1.0.0",
+  "description": "YOLOv5s model trained on Indian coupons from r/CouponsIndia"
+}

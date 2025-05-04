@@ -208,6 +208,12 @@ dependencies {
     // Tesseract OCR
     implementation("com.rmtheis:tess-two:9.1.0")
 
+    // TensorFlow Lite for model inference
+    implementation("org.tensorflow:tensorflow-lite:2.12.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation("org.tensorflow:tensorflow-lite-metadata:0.4.4")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.12.0")
+
     // Security
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 }
