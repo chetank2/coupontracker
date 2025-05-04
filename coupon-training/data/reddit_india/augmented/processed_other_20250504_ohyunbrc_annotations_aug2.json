@@ -1,0 +1,37 @@
+{
+    "image_path": "augmented/processed_other_20250504_ohyunbrc_aug2.jpeg",
+    "image_width": 1024,
+    "image_height": 489,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            1024,
+            97
+        ],
+        "coupon_code": [
+            102,
+            195,
+            921,
+            293
+        ],
+        "expiry_date": [
+            0,
+            391,
+            1024,
+            489
+        ],
+        "description": [
+            716,
+            293,
+            921,
+            342
+        ],
+        "amount": [
+            102,
+            293,
+            921,
+            391
+        ]
+    }
+}

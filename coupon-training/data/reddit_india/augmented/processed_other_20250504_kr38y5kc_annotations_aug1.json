@@ -1,0 +1,37 @@
+{
+    "image_path": "augmented/processed_other_20250504_kr38y5kc_aug1.jpg",
+    "image_width": 768,
+    "image_height": 1024,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            768,
+            204
+        ],
+        "coupon_code": [
+            76,
+            409,
+            691,
+            614
+        ],
+        "expiry_date": [
+            0,
+            819,
+            768,
+            1024
+        ],
+        "description": [
+            537,
+            614,
+            691,
+            716
+        ],
+        "amount": [
+            76,
+            614,
+            691,
+            819
+        ]
+    }
+}

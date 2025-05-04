@@ -1,0 +1,37 @@
+{
+    "image_path": "processed/gpay/processed_gpay_20250504_fg5ggupa.jpg",
+    "image_width": 1009,
+    "image_height": 1024,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            1009,
+            204
+        ],
+        "coupon_code": [
+            100,
+            409,
+            908,
+            614
+        ],
+        "expiry_date": [
+            0,
+            819,
+            1009,
+            1024
+        ],
+        "description": [
+            706,
+            614,
+            908,
+            716
+        ],
+        "amount": [
+            100,
+            614,
+            908,
+            819
+        ]
+    }
+}

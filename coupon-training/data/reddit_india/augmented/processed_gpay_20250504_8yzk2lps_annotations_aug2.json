@@ -1,0 +1,37 @@
+{
+    "image_path": "augmented/processed_gpay_20250504_8yzk2lps_aug2.jpg",
+    "image_width": 543,
+    "image_height": 1024,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            543,
+            204
+        ],
+        "coupon_code": [
+            54,
+            409,
+            488,
+            614
+        ],
+        "expiry_date": [
+            0,
+            819,
+            543,
+            1024
+        ],
+        "description": [
+            380,
+            614,
+            488,
+            716
+        ],
+        "amount": [
+            54,
+            614,
+            488,
+            819
+        ]
+    }
+}

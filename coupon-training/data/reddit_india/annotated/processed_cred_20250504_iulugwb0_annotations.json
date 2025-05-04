@@ -1,0 +1,37 @@
+{
+    "image_path": "processed/cred/processed_cred_20250504_iulugwb0.jpeg",
+    "image_width": 460,
+    "image_height": 1024,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            460,
+            204
+        ],
+        "coupon_code": [
+            46,
+            409,
+            414,
+            614
+        ],
+        "expiry_date": [
+            0,
+            819,
+            460,
+            1024
+        ],
+        "description": [
+            322,
+            614,
+            414,
+            716
+        ],
+        "amount": [
+            46,
+            614,
+            414,
+            819
+        ]
+    }
+}

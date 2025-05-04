@@ -1,0 +1,38 @@
+{
+  "timestamp": "2025-05-03 11:21:26",
+  "pipeline_config": {
+    "base_dir": "data/improved_pipeline",
+    "input_dir": "data/raw",
+    "annotation_dir": "data/annotated",
+    "skip_balance": false,
+    "skip_augmentation": false,
+    "skip_feature_engineering": false,
+    "skip_training": false,
+    "outlier_weight": 0.5,
+    "standard_count": 5,
+    "price_specific_count": 5,
+    "dated_count": 5
+  },
+  "directories": {
+    "base": "data/improved_pipeline",
+    "raw": "data/improved_pipeline/raw",
+    "balanced": "data/improved_pipeline/balanced",
+    "augmented": "data/improved_pipeline/augmented",
+    "annotated": "data/improved_pipeline/annotated",
+    "balanced_annotated": "data/improved_pipeline/balanced_annotated",
+    "augmented_annotated": "data/improved_pipeline/augmented_annotated",
+    "features": "data/improved_pipeline/features",
+    "models": "data/improved_pipeline/models",
+    "results": "data/improved_pipeline/results",
+    "logs": "data/improved_pipeline/logs",
+    "temp": "data/improved_pipeline/temp/20250503_111933"
+  },
+  "stats": {
+    "raw_images": 4,
+    "raw_annotations": 4,
+    "balanced_images": 15,
+    "balanced_annotations": 15,
+    "augmented_images": 135,
+    "augmented_annotations": 135
+  }
+}

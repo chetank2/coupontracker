@@ -1,0 +1,37 @@
+{
+    "image_path": "processed/other/processed_other_20250504_t9byxz3g.jpg",
+    "image_width": 575,
+    "image_height": 1024,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            575,
+            204
+        ],
+        "coupon_code": [
+            57,
+            409,
+            517,
+            614
+        ],
+        "expiry_date": [
+            0,
+            819,
+            575,
+            1024
+        ],
+        "description": [
+            402,
+            614,
+            517,
+            716
+        ],
+        "amount": [
+            57,
+            614,
+            517,
+            819
+        ]
+    }
+}

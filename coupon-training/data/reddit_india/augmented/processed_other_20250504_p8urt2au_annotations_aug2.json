@@ -1,0 +1,37 @@
+{
+    "image_path": "augmented/processed_other_20250504_p8urt2au_aug2.jpeg",
+    "image_width": 739,
+    "image_height": 415,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            739,
+            83
+        ],
+        "coupon_code": [
+            73,
+            166,
+            665,
+            249
+        ],
+        "expiry_date": [
+            0,
+            332,
+            739,
+            415
+        ],
+        "description": [
+            517,
+            249,
+            665,
+            290
+        ],
+        "amount": [
+            73,
+            249,
+            665,
+            332
+        ]
+    }
+}

@@ -1,0 +1,37 @@
+{
+    "image_path": "processed/other/processed_other_20250504_tepie6ur.jpg",
+    "image_width": 472,
+    "image_height": 1024,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            472,
+            204
+        ],
+        "coupon_code": [
+            47,
+            409,
+            424,
+            614
+        ],
+        "expiry_date": [
+            0,
+            819,
+            472,
+            1024
+        ],
+        "description": [
+            330,
+            614,
+            424,
+            716
+        ],
+        "amount": [
+            47,
+            614,
+            424,
+            819
+        ]
+    }
+}

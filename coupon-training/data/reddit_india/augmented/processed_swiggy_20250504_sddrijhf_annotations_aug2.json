@@ -1,0 +1,37 @@
+{
+    "image_path": "augmented/processed_swiggy_20250504_sddrijhf_aug2.jpeg",
+    "image_width": 553,
+    "image_height": 366,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            553,
+            73
+        ],
+        "coupon_code": [
+            55,
+            146,
+            497,
+            219
+        ],
+        "expiry_date": [
+            0,
+            292,
+            553,
+            366
+        ],
+        "description": [
+            387,
+            219,
+            497,
+            256
+        ],
+        "amount": [
+            55,
+            219,
+            497,
+            292
+        ]
+    }
+}

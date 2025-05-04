@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.viewmodel.BatchScannerViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -147,9 +148,16 @@ fun BatchScannerScreen(
                             navController.popBackStack()
                         },
                         onEditCoupon = { index ->
-                            // Navigate to edit screen with the coupon
-                            // This would be implemented in a real app
-                            Toast.makeText(context, "Edit coupon functionality would be implemented here", Toast.LENGTH_SHORT).show()
+                            // Navigate to CouponFormScreen with the coupon image
+                            val coupon = uiState.processedCoupons[index]
+                            coupon.imageUri?.let { imageUri ->
+                                navController.navigate(
+                                    Screen.CouponForm.createRoute(
+                                        imageUri = imageUri,
+                                        isBatchMode = true
+                                    )
+                                )
+                            }
                         },
                         onRemoveCoupon = { index ->
                             viewModel.removeCoupon(index)
@@ -167,7 +175,7 @@ fun BatchScannerScreen(
                         },
                         onAddFromCamera = {
                             if (cameraPermissionState.status.isGranted) {
-                                navController.navigate("scanner")
+                                navController.navigate(Screen.UnifiedCamera.route)
                             } else {
                                 cameraPermissionState.launchPermissionRequest()
                             }

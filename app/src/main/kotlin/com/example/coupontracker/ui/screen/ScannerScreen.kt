@@ -81,6 +81,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.viewmodel.ScannerUiState
 import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -107,22 +108,22 @@ fun ScannerScreen(
 ) {
     val context = LocalContext.current
     // Lifecycle owner is used in camera view
-    
+
     val uiState by viewModel.uiState.collectAsState()
-    
+
     var showCamera by remember { mutableStateOf(false) }
     var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
-    
+
     // Form fields
     var code by remember { mutableStateOf("") }
     var storeName by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var expiryDateString by remember { mutableStateOf("") }
-    
+
     // Camera permission state
     val cameraPermissionState = rememberPermissionState(Manifest.permission.CAMERA)
-    
+
     // Image picker launcher
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -132,26 +133,30 @@ fun ScannerScreen(
             viewModel.scanImage(it)
         }
     }
-    
-    // Update form fields when extracted data changes
+
+    // Handle scan result and navigate to CouponFormScreen
     LaunchedEffect(uiState) {
         if (uiState is ScannerUiState.Success) {
             val coupon = (uiState as ScannerUiState.Success).coupon
-            coupon.redeemCode?.let { code = it }
-            storeName = coupon.storeName
-            description = coupon.description
-            amount = coupon.cashbackAmount.toString()
-            expiryDateString = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault()).format(coupon.expiryDate)
+            capturedImageUri?.let { uri ->
+                // Navigate to the new CouponFormScreen
+                navController.navigate(
+                    Screen.CouponForm.createRoute(
+                        imageUri = uri.toString(),
+                        isBatchMode = false
+                    )
+                )
+            }
         }
     }
-    
+
     // Reset state when leaving the screen
     DisposableEffect(Unit) {
         onDispose {
             viewModel.resetState()
         }
     }
-    
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -184,7 +189,7 @@ fun ScannerScreen(
                         },
                         viewModel = viewModel
                     )
-                    
+
                     // Camera controls
                     Box(
                         modifier = Modifier
@@ -210,7 +215,7 @@ fun ScannerScreen(
                         }
                     }
                 }
-                
+
                 uiState is ScannerUiState.Scanning -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
@@ -225,7 +230,7 @@ fun ScannerScreen(
                         }
                     }
                 }
-                
+
                 else -> {
                     Column(
                         modifier = Modifier
@@ -248,9 +253,9 @@ fun ScannerScreen(
                                     text = "Capture Coupon Image",
                                     style = MaterialTheme.typography.titleMedium
                                 )
-                                
+
                                 Spacer(modifier = Modifier.height(16.dp))
-                                
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceEvenly
@@ -268,7 +273,7 @@ fun ScannerScreen(
                                         Spacer(modifier = Modifier.size(8.dp))
                                         Text("Camera")
                                     }
-                                    
+
                                     Button(
                                         onClick = { imagePickerLauncher.launch("image/*") }
                                     ) {
@@ -277,11 +282,11 @@ fun ScannerScreen(
                                         Text("Gallery")
                                     }
                                 }
-                                
+
                                 // Show captured image
                                 capturedImageUri?.let { uri ->
                                     Spacer(modifier = Modifier.height(16.dp))
-                                    
+
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -301,7 +306,7 @@ fun ScannerScreen(
                                 }
                             }
                         }
-                        
+
                         // Form for coupon details
                         Card(
                             modifier = Modifier.fillMaxWidth()
@@ -314,7 +319,7 @@ fun ScannerScreen(
                                     style = MaterialTheme.typography.titleMedium,
                                     modifier = Modifier.padding(bottom = 16.dp)
                                 )
-                                
+
                                 OutlinedTextField(
                                     value = code,
                                     onValueChange = { code = it },
@@ -324,9 +329,9 @@ fun ScannerScreen(
                                         Icon(Icons.Default.Edit, contentDescription = null)
                                     }
                                 )
-                                
+
                                 Spacer(modifier = Modifier.height(8.dp))
-                                
+
                                 OutlinedTextField(
                                     value = storeName,
                                     onValueChange = { storeName = it },
@@ -336,9 +341,9 @@ fun ScannerScreen(
                                         Icon(Icons.Default.Edit, contentDescription = null)
                                     }
                                 )
-                                
+
                                 Spacer(modifier = Modifier.height(8.dp))
-                                
+
                                 OutlinedTextField(
                                     value = description,
                                     onValueChange = { description = it },
@@ -348,9 +353,9 @@ fun ScannerScreen(
                                         Icon(Icons.Default.Edit, contentDescription = null)
                                     }
                                 )
-                                
+
                                 Spacer(modifier = Modifier.height(8.dp))
-                                
+
                                 OutlinedTextField(
                                     value = amount,
                                     onValueChange = { amount = it },
@@ -361,9 +366,9 @@ fun ScannerScreen(
                                     },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                                 )
-                                
+
                                 Spacer(modifier = Modifier.height(8.dp))
-                                
+
                                 OutlinedTextField(
                                     value = expiryDateString,
                                     onValueChange = { expiryDateString = it },
@@ -373,9 +378,9 @@ fun ScannerScreen(
                                         Icon(Icons.Default.DateRange, contentDescription = null)
                                     }
                                 )
-                                
+
                                 Spacer(modifier = Modifier.height(24.dp))
-                                
+
                                 Button(
                                     onClick = {
                                         val parsedAmount = amount.toDoubleOrNull() ?: 0.0
@@ -384,7 +389,7 @@ fun ScannerScreen(
                                         } catch (e: Exception) {
                                             Date()
                                         }
-                                        
+
                                         val coupon = Coupon(
                                             id = 0, // Auto-generated by Room
                                             storeName = storeName,
@@ -399,7 +404,7 @@ fun ScannerScreen(
                                             createdAt = Date(),
                                             updatedAt = Date()
                                         )
-                                        
+
                                         viewModel.saveCoupon(coupon)
                                     },
                                     modifier = Modifier.fillMaxWidth(),
@@ -409,7 +414,7 @@ fun ScannerScreen(
                                     Spacer(modifier = Modifier.size(8.dp))
                                     Text("Save Coupon")
                                 }
-                                
+
                                 // Show success message
                                 if (uiState is ScannerUiState.Saved) {
                                     Spacer(modifier = Modifier.height(16.dp))
@@ -418,14 +423,14 @@ fun ScannerScreen(
                                         color = MaterialTheme.colorScheme.primary,
                                         style = MaterialTheme.typography.bodyMedium
                                     )
-                                    
+
                                     LaunchedEffect(Unit) {
                                         // Navigate back after a short delay
                                         kotlinx.coroutines.delay(1500)
                                         navController.popBackStack()
                                     }
                                 }
-                                
+
                                 // Show error message
                                 if (uiState is ScannerUiState.Error) {
                                     Spacer(modifier = Modifier.height(16.dp))
@@ -452,10 +457,10 @@ fun CameraView(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-    
+
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     val imageCapture = remember { ImageCapture.Builder().build() }
-    
+
     DisposableEffect(lifecycleOwner) {
         onDispose {
             try {
@@ -466,23 +471,23 @@ fun CameraView(
             }
         }
     }
-    
+
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             factory = { ctx ->
                 val previewView = PreviewView(ctx).apply {
                     implementationMode = PreviewView.ImplementationMode.COMPATIBLE
                 }
-                
+
                 cameraProviderFuture.addListener({
                     val cameraProvider = cameraProviderFuture.get()
-                    
+
                     val preview = Preview.Builder().build().also {
                         it.setSurfaceProvider(previewView.surfaceProvider)
                     }
-                    
+
                     val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
-                    
+
                     try {
                         cameraProvider.unbindAll()
                         cameraProvider.bindToLifecycle(
@@ -495,12 +500,12 @@ fun CameraView(
                         onError("Failed to bind camera: ${e.message}")
                     }
                 }, ContextCompat.getMainExecutor(ctx))
-                
+
                 previewView
             },
             modifier = Modifier.fillMaxSize()
         )
-        
+
         // Add a capture button
         Box(
             modifier = Modifier
@@ -516,9 +521,9 @@ fun CameraView(
                         SimpleDateFormat("yyyy-MM-dd-HH-mm-ss-SSS", Locale.US)
                             .format(System.currentTimeMillis()) + ".jpg"
                     )
-                    
+
                     val outputOptions = ImageCapture.OutputFileOptions.Builder(photoFile).build()
-                    
+
                     imageCapture.takePicture(
                         outputOptions,
                         ContextCompat.getMainExecutor(context),
@@ -528,7 +533,7 @@ fun CameraView(
                                 onImageCaptured(savedUri)
                                 viewModel.scanImage(savedUri)
                             }
-                            
+
                             override fun onError(exception: ImageCaptureException) {
                                 onError(exception.message ?: "Unknown error")
                             }
@@ -571,4 +576,4 @@ private suspend fun Context.getCameraProvider(): ProcessCameraProvider = suspend
             ContextCompat.getMainExecutor(this)
         )
     }
-} 
+}

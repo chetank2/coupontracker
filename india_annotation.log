@@ -1,0 +1,160 @@
+2025-05-04 02:13:39,033 - india_annotation_helper - INFO - Found 79 images to annotate
+2025-05-04 02:13:39,072 - india_annotation_helper - INFO - Creating annotation for image 1/79: coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_6duofmux.png
+2025-05-04 02:13:39,086 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_zomato_20250504_6duofmux_annotations.json
+2025-05-04 02:13:39,086 - india_annotation_helper - INFO - Creating annotation for image 2/79: coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_jrkyrk5i.png
+2025-05-04 02:13:39,102 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_zomato_20250504_jrkyrk5i_annotations.json
+2025-05-04 02:13:39,102 - india_annotation_helper - INFO - Creating annotation for image 3/79: coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_1n6lrten.png
+2025-05-04 02:13:39,118 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_zomato_20250504_1n6lrten_annotations.json
+2025-05-04 02:13:39,118 - india_annotation_helper - INFO - Creating annotation for image 4/79: coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_hpep2cok.png
+2025-05-04 02:13:39,132 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_zomato_20250504_hpep2cok_annotations.json
+2025-05-04 02:13:39,132 - india_annotation_helper - INFO - Creating annotation for image 5/79: coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_2cnhhza7.png
+2025-05-04 02:13:39,146 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_zomato_20250504_2cnhhza7_annotations.json
+2025-05-04 02:13:39,146 - india_annotation_helper - INFO - Creating annotation for image 6/79: coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_twlo42j0.png
+2025-05-04 02:13:39,161 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_zomato_20250504_twlo42j0_annotations.json
+2025-05-04 02:13:39,161 - india_annotation_helper - INFO - Creating annotation for image 7/79: coupon-training/data/reddit_india/processed/phonepe/processed_phonepe_20250504_jbvi2iy1.jpeg
+2025-05-04 02:13:39,171 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_phonepe_20250504_jbvi2iy1_annotations.json
+2025-05-04 02:13:39,171 - india_annotation_helper - INFO - Creating annotation for image 8/79: coupon-training/data/reddit_india/processed/phonepe/processed_phonepe_20250504_fzzx6p2v.jpeg
+2025-05-04 02:13:39,179 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_phonepe_20250504_fzzx6p2v_annotations.json
+2025-05-04 02:13:39,179 - india_annotation_helper - INFO - Creating annotation for image 9/79: coupon-training/data/reddit_india/processed/lenskart/processed_lenskart_20250504_g8qrjy0j.jpg
+2025-05-04 02:13:39,188 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_lenskart_20250504_g8qrjy0j_annotations.json
+2025-05-04 02:13:39,188 - india_annotation_helper - INFO - Creating annotation for image 10/79: coupon-training/data/reddit_india/processed/lenskart/processed_lenskart_20250504_wbe64jkj.jpg
+2025-05-04 02:13:39,199 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_lenskart_20250504_wbe64jkj_annotations.json
+2025-05-04 02:13:39,199 - india_annotation_helper - INFO - Creating annotation for image 11/79: coupon-training/data/reddit_india/processed/lenskart/processed_lenskart_20250504_58181fsm.jpg
+2025-05-04 02:13:39,208 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_lenskart_20250504_58181fsm_annotations.json
+2025-05-04 02:13:39,209 - india_annotation_helper - INFO - Creating annotation for image 12/79: coupon-training/data/reddit_india/processed/lenskart/processed_lenskart_20250504_de2viea7.jpeg
+2025-05-04 02:13:39,215 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_lenskart_20250504_de2viea7_annotations.json
+2025-05-04 02:13:39,215 - india_annotation_helper - INFO - Creating annotation for image 13/79: coupon-training/data/reddit_india/processed/lenskart/processed_lenskart_20250504_1cbju9wg.jpeg
+2025-05-04 02:13:39,222 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_lenskart_20250504_1cbju9wg_annotations.json
+2025-05-04 02:13:39,222 - india_annotation_helper - INFO - Creating annotation for image 14/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_ohyunbrc.jpeg
+2025-05-04 02:13:39,229 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_ohyunbrc_annotations.json
+2025-05-04 02:13:39,229 - india_annotation_helper - INFO - Creating annotation for image 15/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_zur280bx.jpeg
+2025-05-04 02:13:39,236 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_zur280bx_annotations.json
+2025-05-04 02:13:39,236 - india_annotation_helper - INFO - Creating annotation for image 16/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_6tiu2hsz.jpg
+2025-05-04 02:13:39,246 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_6tiu2hsz_annotations.json
+2025-05-04 02:13:39,246 - india_annotation_helper - INFO - Creating annotation for image 17/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_rjwlyptd.jpg
+2025-05-04 02:13:39,256 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_rjwlyptd_annotations.json
+2025-05-04 02:13:39,256 - india_annotation_helper - INFO - Creating annotation for image 18/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_1nbrnv7z.jpg
+2025-05-04 02:13:39,263 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_1nbrnv7z_annotations.json
+2025-05-04 02:13:39,263 - india_annotation_helper - INFO - Creating annotation for image 19/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_kb1rj7ju.jpg
+2025-05-04 02:13:39,272 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_kb1rj7ju_annotations.json
+2025-05-04 02:13:39,272 - india_annotation_helper - INFO - Creating annotation for image 20/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_f12rbn5l.jpg
+2025-05-04 02:13:39,281 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_f12rbn5l_annotations.json
+2025-05-04 02:13:39,281 - india_annotation_helper - INFO - Creating annotation for image 21/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_kr38y5kc.jpg
+2025-05-04 02:13:39,294 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_kr38y5kc_annotations.json
+2025-05-04 02:13:39,294 - india_annotation_helper - INFO - Creating annotation for image 22/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_yvzaez5f.jpeg
+2025-05-04 02:13:39,301 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_yvzaez5f_annotations.json
+2025-05-04 02:13:39,302 - india_annotation_helper - INFO - Creating annotation for image 23/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_p8urt2au.jpeg
+2025-05-04 02:13:39,308 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_p8urt2au_annotations.json
+2025-05-04 02:13:39,308 - india_annotation_helper - INFO - Creating annotation for image 24/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_wlbxdst9.jpeg
+2025-05-04 02:13:39,317 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_wlbxdst9_annotations.json
+2025-05-04 02:13:39,317 - india_annotation_helper - INFO - Creating annotation for image 25/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_uo8jt6xf.png
+2025-05-04 02:13:39,338 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_uo8jt6xf_annotations.json
+2025-05-04 02:13:39,339 - india_annotation_helper - INFO - Creating annotation for image 26/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_65wm5iqy.png
+2025-05-04 02:13:39,357 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_65wm5iqy_annotations.json
+2025-05-04 02:13:39,357 - india_annotation_helper - INFO - Creating annotation for image 27/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_e199v6lu.png
+2025-05-04 02:13:39,376 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_e199v6lu_annotations.json
+2025-05-04 02:13:39,376 - india_annotation_helper - INFO - Creating annotation for image 28/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_fshv29ao.jpg
+2025-05-04 02:13:39,383 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_fshv29ao_annotations.json
+2025-05-04 02:13:39,383 - india_annotation_helper - INFO - Creating annotation for image 29/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_5o3pouh5.png
+2025-05-04 02:13:39,401 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_5o3pouh5_annotations.json
+2025-05-04 02:13:39,401 - india_annotation_helper - INFO - Creating annotation for image 30/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_tepie6ur.jpg
+2025-05-04 02:13:39,408 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_tepie6ur_annotations.json
+2025-05-04 02:13:39,408 - india_annotation_helper - INFO - Creating annotation for image 31/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_imrshqth.png
+2025-05-04 02:13:39,424 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_imrshqth_annotations.json
+2025-05-04 02:13:39,424 - india_annotation_helper - INFO - Creating annotation for image 32/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_65nx861p.jpg
+2025-05-04 02:13:39,432 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_65nx861p_annotations.json
+2025-05-04 02:13:39,432 - india_annotation_helper - INFO - Creating annotation for image 33/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_t9byxz3g.jpg
+2025-05-04 02:13:39,443 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_t9byxz3g_annotations.json
+2025-05-04 02:13:39,443 - india_annotation_helper - INFO - Creating annotation for image 34/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_ktx1kx4q.jpeg
+2025-05-04 02:13:39,449 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_ktx1kx4q_annotations.json
+2025-05-04 02:13:39,449 - india_annotation_helper - INFO - Creating annotation for image 35/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_xxadrucc.png
+2025-05-04 02:13:39,475 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_xxadrucc_annotations.json
+2025-05-04 02:13:39,475 - india_annotation_helper - INFO - Creating annotation for image 36/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_xu81amv6.jpg
+2025-05-04 02:13:39,482 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_xu81amv6_annotations.json
+2025-05-04 02:13:39,482 - india_annotation_helper - INFO - Creating annotation for image 37/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_5mrlkbtk.jpeg
+2025-05-04 02:13:39,489 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_5mrlkbtk_annotations.json
+2025-05-04 02:13:39,489 - india_annotation_helper - INFO - Creating annotation for image 38/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_dtupb4th.png
+2025-05-04 02:13:39,506 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_dtupb4th_annotations.json
+2025-05-04 02:13:39,507 - india_annotation_helper - INFO - Creating annotation for image 39/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_cau2w9tp.jpg
+2025-05-04 02:13:39,520 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_cau2w9tp_annotations.json
+2025-05-04 02:13:39,520 - india_annotation_helper - INFO - Creating annotation for image 40/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_l1eb337w.png
+2025-05-04 02:13:39,536 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_l1eb337w_annotations.json
+2025-05-04 02:13:39,536 - india_annotation_helper - INFO - Creating annotation for image 41/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_g22a8nyg.png
+2025-05-04 02:13:39,552 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_g22a8nyg_annotations.json
+2025-05-04 02:13:39,552 - india_annotation_helper - INFO - Creating annotation for image 42/79: coupon-training/data/reddit_india/processed/other/processed_other_20250504_x9ia3pw7.png
+2025-05-04 02:13:39,577 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_other_20250504_x9ia3pw7_annotations.json
+2025-05-04 02:13:39,577 - india_annotation_helper - INFO - Creating annotation for image 43/79: coupon-training/data/reddit_india/processed/cred/processed_cred_20250504_5bgk75ze.jpeg
+2025-05-04 02:13:39,584 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_cred_20250504_5bgk75ze_annotations.json
+2025-05-04 02:13:39,584 - india_annotation_helper - INFO - Creating annotation for image 44/79: coupon-training/data/reddit_india/processed/cred/processed_cred_20250504_0b4isef5.jpeg
+2025-05-04 02:13:39,592 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_cred_20250504_0b4isef5_annotations.json
+2025-05-04 02:13:39,592 - india_annotation_helper - INFO - Creating annotation for image 45/79: coupon-training/data/reddit_india/processed/cred/processed_cred_20250504_qxf3t0iy.jpeg
+2025-05-04 02:13:39,600 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_cred_20250504_qxf3t0iy_annotations.json
+2025-05-04 02:13:39,601 - india_annotation_helper - INFO - Creating annotation for image 46/79: coupon-training/data/reddit_india/processed/cred/processed_cred_20250504_iulugwb0.jpeg
+2025-05-04 02:13:39,609 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_cred_20250504_iulugwb0_annotations.json
+2025-05-04 02:13:39,609 - india_annotation_helper - INFO - Creating annotation for image 47/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_sa8gtplk.jpg
+2025-05-04 02:13:39,623 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_sa8gtplk_annotations.json
+2025-05-04 02:13:39,623 - india_annotation_helper - INFO - Creating annotation for image 48/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_hn4qsf67.jpg
+2025-05-04 02:13:39,632 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_hn4qsf67_annotations.json
+2025-05-04 02:13:39,632 - india_annotation_helper - INFO - Creating annotation for image 49/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_2dx01m1x.jpg
+2025-05-04 02:13:39,641 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_2dx01m1x_annotations.json
+2025-05-04 02:13:39,641 - india_annotation_helper - INFO - Creating annotation for image 50/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_2pye4la9.jpg
+2025-05-04 02:13:39,654 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_2pye4la9_annotations.json
+2025-05-04 02:13:39,654 - india_annotation_helper - INFO - Creating annotation for image 51/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_caw4hb48.jpg
+2025-05-04 02:13:39,667 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_caw4hb48_annotations.json
+2025-05-04 02:13:39,667 - india_annotation_helper - INFO - Creating annotation for image 52/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_54o8b641.jpg
+2025-05-04 02:13:39,680 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_54o8b641_annotations.json
+2025-05-04 02:13:39,680 - india_annotation_helper - INFO - Creating annotation for image 53/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_1lfl2yyq.jpg
+2025-05-04 02:13:39,693 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_1lfl2yyq_annotations.json
+2025-05-04 02:13:39,693 - india_annotation_helper - INFO - Creating annotation for image 54/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_rt9puh0m.jpg
+2025-05-04 02:13:39,705 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_rt9puh0m_annotations.json
+2025-05-04 02:13:39,705 - india_annotation_helper - INFO - Creating annotation for image 55/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_fg5ggupa.jpg
+2025-05-04 02:13:39,717 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_fg5ggupa_annotations.json
+2025-05-04 02:13:39,717 - india_annotation_helper - INFO - Creating annotation for image 56/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_3820pmjz.jpg
+2025-05-04 02:13:39,729 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_3820pmjz_annotations.json
+2025-05-04 02:13:39,729 - india_annotation_helper - INFO - Creating annotation for image 57/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_kq91jrdf.jpg
+2025-05-04 02:13:39,741 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_kq91jrdf_annotations.json
+2025-05-04 02:13:39,741 - india_annotation_helper - INFO - Creating annotation for image 58/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_rnj4sx38.jpg
+2025-05-04 02:13:39,754 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_rnj4sx38_annotations.json
+2025-05-04 02:13:39,754 - india_annotation_helper - INFO - Creating annotation for image 59/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_m6tsmyxt.jpg
+2025-05-04 02:13:39,767 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_m6tsmyxt_annotations.json
+2025-05-04 02:13:39,767 - india_annotation_helper - INFO - Creating annotation for image 60/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_9fr50hf7.jpg
+2025-05-04 02:13:39,775 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_9fr50hf7_annotations.json
+2025-05-04 02:13:39,775 - india_annotation_helper - INFO - Creating annotation for image 61/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_94kmjdei.jpg
+2025-05-04 02:13:39,784 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_94kmjdei_annotations.json
+2025-05-04 02:13:39,784 - india_annotation_helper - INFO - Creating annotation for image 62/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_0f6mctc2.jpg
+2025-05-04 02:13:39,798 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_0f6mctc2_annotations.json
+2025-05-04 02:13:39,798 - india_annotation_helper - INFO - Creating annotation for image 63/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_8yzk2lps.jpg
+2025-05-04 02:13:39,808 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_8yzk2lps_annotations.json
+2025-05-04 02:13:39,809 - india_annotation_helper - INFO - Creating annotation for image 64/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_3uz9y569.jpg
+2025-05-04 02:13:39,818 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_3uz9y569_annotations.json
+2025-05-04 02:13:39,818 - india_annotation_helper - INFO - Creating annotation for image 65/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_sa7li2st.jpg
+2025-05-04 02:13:39,826 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_sa7li2st_annotations.json
+2025-05-04 02:13:39,827 - india_annotation_helper - INFO - Creating annotation for image 66/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_wl2jneh0.jpg
+2025-05-04 02:13:39,839 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_wl2jneh0_annotations.json
+2025-05-04 02:13:39,839 - india_annotation_helper - INFO - Creating annotation for image 67/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_8fq0rdk5.jpg
+2025-05-04 02:13:39,847 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_8fq0rdk5_annotations.json
+2025-05-04 02:13:39,847 - india_annotation_helper - INFO - Creating annotation for image 68/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_ra2byxut.jpg
+2025-05-04 02:13:39,858 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_ra2byxut_annotations.json
+2025-05-04 02:13:39,859 - india_annotation_helper - INFO - Creating annotation for image 69/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_xu45on3k.jpg
+2025-05-04 02:13:39,872 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_xu45on3k_annotations.json
+2025-05-04 02:13:39,872 - india_annotation_helper - INFO - Creating annotation for image 70/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_mu4e7m2f.jpg
+2025-05-04 02:13:39,885 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_mu4e7m2f_annotations.json
+2025-05-04 02:13:39,885 - india_annotation_helper - INFO - Creating annotation for image 71/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_j6eid2ue.jpg
+2025-05-04 02:13:39,894 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_j6eid2ue_annotations.json
+2025-05-04 02:13:39,894 - india_annotation_helper - INFO - Creating annotation for image 72/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_3r7xblb2.jpg
+2025-05-04 02:13:39,906 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_3r7xblb2_annotations.json
+2025-05-04 02:13:39,906 - india_annotation_helper - INFO - Creating annotation for image 73/79: coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_uxzq6r4j.jpg
+2025-05-04 02:13:39,917 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_gpay_20250504_uxzq6r4j_annotations.json
+2025-05-04 02:13:39,917 - india_annotation_helper - INFO - Creating annotation for image 74/79: coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_s2vlzm06.jpeg
+2025-05-04 02:13:39,921 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_swiggy_20250504_s2vlzm06_annotations.json
+2025-05-04 02:13:39,922 - india_annotation_helper - INFO - Creating annotation for image 75/79: coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_sddrijhf.jpeg
+2025-05-04 02:13:39,926 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_swiggy_20250504_sddrijhf_annotations.json
+2025-05-04 02:13:39,926 - india_annotation_helper - INFO - Creating annotation for image 76/79: coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_5odclpx2.jpeg
+2025-05-04 02:13:39,931 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_swiggy_20250504_5odclpx2_annotations.json
+2025-05-04 02:13:39,931 - india_annotation_helper - INFO - Creating annotation for image 77/79: coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_7y7ghahv.jpeg
+2025-05-04 02:13:39,935 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_swiggy_20250504_7y7ghahv_annotations.json
+2025-05-04 02:13:39,936 - india_annotation_helper - INFO - Creating annotation for image 78/79: coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_fjp1qzqm.jpeg
+2025-05-04 02:13:39,940 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_swiggy_20250504_fjp1qzqm_annotations.json
+2025-05-04 02:13:39,940 - india_annotation_helper - INFO - Creating annotation for image 79/79: coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_bma3x9vf.jpeg
+2025-05-04 02:13:39,944 - india_annotation_helper - INFO - Created annotation file: coupon-training/data/reddit_india/annotated/processed_swiggy_20250504_bma3x9vf_annotations.json
+2025-05-04 02:13:39,944 - india_annotation_helper - INFO - Annotation creation complete. Created 79 annotation files.

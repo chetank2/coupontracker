@@ -1,0 +1,37 @@
+{
+    "image_path": "augmented/processed_lenskart_20250504_g8qrjy0j_aug2.jpg",
+    "image_width": 576,
+    "image_height": 1024,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            576,
+            204
+        ],
+        "coupon_code": [
+            57,
+            409,
+            518,
+            614
+        ],
+        "expiry_date": [
+            0,
+            819,
+            576,
+            1024
+        ],
+        "description": [
+            403,
+            614,
+            518,
+            716
+        ],
+        "amount": [
+            57,
+            614,
+            518,
+            819
+        ]
+    }
+}

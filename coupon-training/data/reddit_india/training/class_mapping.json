@@ -1,0 +1,8 @@
+{
+    "store_name": 0,
+    "coupon_code": 1,
+    "expiry_date": 2,
+    "description": 3,
+    "amount": 4,
+    "min_purchase": 5
+}

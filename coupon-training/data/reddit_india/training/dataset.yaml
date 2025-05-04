@@ -1,0 +1,9 @@
+# YOLOv5 dataset configuration
+path: /Users/Personal/AndroidStudioProjects/CouponTracker3/coupon-training/data/reddit_india/training
+train: train/images
+val: val/images
+test: test/images
+
+# Classes
+nc: 6  # number of classes
+names: ['store_name', 'coupon_code', 'expiry_date', 'description', 'amount', 'min_purchase']  # class names

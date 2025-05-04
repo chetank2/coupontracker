@@ -40,9 +40,14 @@ class SecurePreferencesManager @Inject constructor(
         const val KEY_API_KEY_ROTATION_DATE = "api_key_rotation_date"
         const val KEY_SELECTED_TESSERACT_LANGUAGE = "selected_tesseract_language"
         const val KEY_USE_CUSTOM_TESSERACT_MODEL = "use_custom_tesseract_model"
+        const val KEY_ADMIN_PASSWORD = "admin_password"
+        const val KEY_PROTECTED_FEATURES_UNLOCKED = "protected_features_unlocked"
 
         // Key rotation period in days
         private const val KEY_ROTATION_PERIOD_DAYS = 90
+
+        // Default admin password
+        private const val DEFAULT_ADMIN_PASSWORD = "coupontracker123"
     }
 
     // Encrypted SharedPreferences instance
@@ -118,6 +123,11 @@ class SecurePreferencesManager @Inject constructor(
             if (!securePrefs.contains(KEY_API_KEY_ROTATION_DATE)) {
                 // Set initial rotation date
                 setNextKeyRotationDate()
+            }
+
+            // Set default admin password if not already set
+            if (!securePrefs.contains(KEY_ADMIN_PASSWORD)) {
+                securePrefs.edit().putString(KEY_ADMIN_PASSWORD, DEFAULT_ADMIN_PASSWORD).apply()
             }
 
             // Check if keys need rotation
@@ -348,5 +358,39 @@ class SecurePreferencesManager @Inject constructor(
      */
     fun setUseCustomTesseractModel(use: Boolean) {
         saveBoolean(KEY_USE_CUSTOM_TESSERACT_MODEL, use)
+    }
+
+    /**
+     * Check if the provided password is correct
+     * @param password The password to check
+     * @return True if the password is correct, false otherwise
+     */
+    fun checkAdminPassword(password: String): Boolean {
+        val storedPassword = getString(KEY_ADMIN_PASSWORD, DEFAULT_ADMIN_PASSWORD)
+        return password == storedPassword
+    }
+
+    /**
+     * Set the admin password
+     * @param password The new password
+     */
+    fun setAdminPassword(password: String) {
+        saveString(KEY_ADMIN_PASSWORD, password)
+    }
+
+    /**
+     * Set the protected features unlock status
+     * @param unlocked True if features should be unlocked, false otherwise
+     */
+    fun setProtectedFeaturesUnlocked(unlocked: Boolean) {
+        saveBoolean(KEY_PROTECTED_FEATURES_UNLOCKED, unlocked)
+    }
+
+    /**
+     * Check if protected features are unlocked
+     * @return True if features are unlocked, false otherwise
+     */
+    fun areProtectedFeaturesUnlocked(): Boolean {
+        return getBoolean(KEY_PROTECTED_FEATURES_UNLOCKED, false)
     }
 }

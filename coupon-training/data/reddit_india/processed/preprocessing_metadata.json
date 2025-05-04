@@ -1,0 +1,2293 @@
+[
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/zomato/zomato_20250504_6duofmux.png",
+    "output_path": "coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_6duofmux.png",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 43.0700625,
+      "contrast": 47.77457336843751,
+      "sharpness": 582.8513692100038
+    },
+    "processed_quality": {
+      "brightness": 83.0304347826087,
+      "contrast": 23.50236159462022,
+      "sharpness": 509.2179050546333
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/zomato/zomato_20250504_jrkyrk5i.png",
+    "output_path": "coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_jrkyrk5i.png",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 43.0700625,
+      "contrast": 47.77457336843751,
+      "sharpness": 582.8513692100038
+    },
+    "processed_quality": {
+      "brightness": 83.0304347826087,
+      "contrast": 23.50236159462022,
+      "sharpness": 509.2179050546333
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/zomato/zomato_20250504_1n6lrten.png",
+    "output_path": "coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_1n6lrten.png",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 43.0700625,
+      "contrast": 47.77457336843751,
+      "sharpness": 582.8513692100038
+    },
+    "processed_quality": {
+      "brightness": 83.0304347826087,
+      "contrast": 23.50236159462022,
+      "sharpness": 509.2179050546333
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/zomato/zomato_20250504_2cnhhza7.png",
+    "output_path": "coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_2cnhhza7.png",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 43.0700625,
+      "contrast": 47.77457336843751,
+      "sharpness": 582.8513692100038
+    },
+    "processed_quality": {
+      "brightness": 83.0304347826087,
+      "contrast": 23.50236159462022,
+      "sharpness": 509.2179050546333
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/zomato/zomato_20250504_hpep2cok.png",
+    "output_path": "coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_hpep2cok.png",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 43.0700625,
+      "contrast": 47.77457336843751,
+      "sharpness": 582.8513692100038
+    },
+    "processed_quality": {
+      "brightness": 83.0304347826087,
+      "contrast": 23.50236159462022,
+      "sharpness": 509.2179050546333
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/zomato/zomato_20250504_twlo42j0.png",
+    "output_path": "coupon-training/data/reddit_india/processed/zomato/processed_zomato_20250504_twlo42j0.png",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 43.0700625,
+      "contrast": 47.77457336843751,
+      "sharpness": 582.8513692100038
+    },
+    "processed_quality": {
+      "brightness": 83.0304347826087,
+      "contrast": 23.50236159462022,
+      "sharpness": 509.2179050546333
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/phonepe/phonepe_20250504_fzzx6p2v.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/phonepe/processed_phonepe_20250504_fzzx6p2v.jpeg",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 55.123305941358026,
+      "contrast": 64.68953744125831,
+      "sharpness": 1097.2879583333333
+    },
+    "processed_quality": {
+      "brightness": 86.91288425611413,
+      "contrast": 36.16523489402824,
+      "sharpness": 876.7387780230978
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/phonepe/phonepe_20250504_jbvi2iy1.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/phonepe/processed_phonepe_20250504_jbvi2iy1.jpeg",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 55.123305941358026,
+      "contrast": 64.68953744125831,
+      "sharpness": 1097.2879583333333
+    },
+    "processed_quality": {
+      "brightness": 86.91288425611413,
+      "contrast": 36.16523489402824,
+      "sharpness": 876.7387780230978
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/lenskart/lenskart_20250504_58181fsm.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/lenskart/processed_lenskart_20250504_58181fsm.jpg",
+    "original_size": [
+      4000,
+      2252
+    ],
+    "processed_size": [
+      1024,
+      576
+    ],
+    "original_quality": {
+      "brightness": 114.31788909857904,
+      "contrast": 70.80431378294143,
+      "sharpness": 62.72990930266743
+    },
+    "processed_quality": {
+      "brightness": 122.25565422905817,
+      "contrast": 39.604893830105915,
+      "sharpness": 4514.580492464893
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/lenskart/lenskart_20250504_de2viea7.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/lenskart/processed_lenskart_20250504_de2viea7.jpeg",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 226.67685686728396,
+      "contrast": 70.51594134657904,
+      "sharpness": 2353.8297986110247
+    },
+    "processed_quality": {
+      "brightness": 185.75771272078805,
+      "contrast": 41.51545728434825,
+      "sharpness": 1817.3044857708
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/lenskart/lenskart_20250504_1cbju9wg.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/lenskart/processed_lenskart_20250504_1cbju9wg.jpeg",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 226.67685686728396,
+      "contrast": 70.51594134657904,
+      "sharpness": 2353.8297986110247
+    },
+    "processed_quality": {
+      "brightness": 185.75771272078805,
+      "contrast": 41.51545728434825,
+      "sharpness": 1817.3044857708
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/lenskart/lenskart_20250504_wbe64jkj.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/lenskart/processed_lenskart_20250504_wbe64jkj.jpg",
+    "original_size": [
+      4000,
+      2252
+    ],
+    "processed_size": [
+      1024,
+      576
+    ],
+    "original_quality": {
+      "brightness": 116.13578674511545,
+      "contrast": 68.82628046358997,
+      "sharpness": 62.05251032389716
+    },
+    "processed_quality": {
+      "brightness": 122.94818793402777,
+      "contrast": 38.595853102122376,
+      "sharpness": 4648.677590261451
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/lenskart/lenskart_20250504_g8qrjy0j.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/lenskart/processed_lenskart_20250504_g8qrjy0j.jpg",
+    "original_size": [
+      4000,
+      2252
+    ],
+    "processed_size": [
+      1024,
+      576
+    ],
+    "original_quality": {
+      "brightness": 109.5453238232682,
+      "contrast": 71.77307350306305,
+      "sharpness": 72.59623800921584
+    },
+    "processed_quality": {
+      "brightness": 120.6441413031684,
+      "contrast": 39.926571638877505,
+      "sharpness": 4340.112930592828
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_zur280bx.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_zur280bx.jpeg",
+    "original_size": [
+      415,
+      739
+    ],
+    "processed_size": [
+      415,
+      739
+    ],
+    "original_quality": {
+      "brightness": 150.04199748928053,
+      "contrast": 45.530101614190116,
+      "sharpness": 1365.7870551216088
+    },
+    "processed_quality": {
+      "brightness": 133.7916396302395,
+      "contrast": 34.32201612554718,
+      "sharpness": 2255.280519832627
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_ohyunbrc.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_ohyunbrc.jpeg",
+    "original_size": [
+      518,
+      1083
+    ],
+    "processed_size": [
+      489,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 183.0122407726286,
+      "contrast": 67.56847900178391,
+      "sharpness": 500.601650166132
+    },
+    "processed_quality": {
+      "brightness": 145.79814313330778,
+      "contrast": 55.375014856927436,
+      "sharpness": 767.1698410959006
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_rjwlyptd.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_rjwlyptd.jpg",
+    "original_size": [
+      1334,
+      750
+    ],
+    "processed_size": [
+      1024,
+      575
+    ],
+    "original_quality": {
+      "brightness": 172.01116341829086,
+      "contrast": 96.83552730605363,
+      "sharpness": 666.8848745625495
+    },
+    "processed_quality": {
+      "brightness": 154.97324558423912,
+      "contrast": 57.522628840296576,
+      "sharpness": 1561.2581413374728
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_6tiu2hsz.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_6tiu2hsz.jpg",
+    "original_size": [
+      1334,
+      750
+    ],
+    "processed_size": [
+      1024,
+      575
+    ],
+    "original_quality": {
+      "brightness": 172.01116341829086,
+      "contrast": 96.83552730605363,
+      "sharpness": 666.8848745625495
+    },
+    "processed_quality": {
+      "brightness": 154.97324558423912,
+      "contrast": 57.522628840296576,
+      "sharpness": 1561.2581413374728
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_kb1rj7ju.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_kb1rj7ju.jpg",
+    "original_size": [
+      1334,
+      750
+    ],
+    "processed_size": [
+      1024,
+      575
+    ],
+    "original_quality": {
+      "brightness": 171.72002898550724,
+      "contrast": 96.85781719439753,
+      "sharpness": 673.6561329333642
+    },
+    "processed_quality": {
+      "brightness": 154.77745754076088,
+      "contrast": 57.58558886706235,
+      "sharpness": 1567.5672956417893
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_f12rbn5l.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_f12rbn5l.jpg",
+    "original_size": [
+      1334,
+      750
+    ],
+    "processed_size": [
+      1024,
+      575
+    ],
+    "original_quality": {
+      "brightness": 172.01116341829086,
+      "contrast": 96.83552730605363,
+      "sharpness": 666.8848745625495
+    },
+    "processed_quality": {
+      "brightness": 154.97324558423912,
+      "contrast": 57.522628840296576,
+      "sharpness": 1561.2581413374728
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_kr38y5kc.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_kr38y5kc.jpg",
+    "original_size": [
+      4032,
+      3024
+    ],
+    "processed_size": [
+      1024,
+      768
+    ],
+    "original_quality": {
+      "brightness": 98.45569685242924,
+      "contrast": 73.26785706920884,
+      "sharpness": 132.05017105200383
+    },
+    "processed_quality": {
+      "brightness": 114.80520884195964,
+      "contrast": 46.62714449838428,
+      "sharpness": 4013.7384235594
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_1nbrnv7z.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_1nbrnv7z.jpg",
+    "original_size": [
+      2436,
+      1125
+    ],
+    "processed_size": [
+      1024,
+      472
+    ],
+    "original_quality": {
+      "brightness": 216.6507312534209,
+      "contrast": 66.69865045882477,
+      "sharpness": 1003.8490691455033
+    },
+    "processed_quality": {
+      "brightness": 177.35047835010593,
+      "contrast": 41.1157084599056,
+      "sharpness": 1271.5138373934512
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_65wm5iqy.png",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_65wm5iqy.png",
+    "original_size": [
+      1452,
+      720
+    ],
+    "processed_size": [
+      1024,
+      507
+    ],
+    "original_quality": {
+      "brightness": 54.90955004591368,
+      "contrast": 64.62187720249023,
+      "sharpness": 906.1078721355796
+    },
+    "processed_quality": {
+      "brightness": 88.7858708549063,
+      "contrast": 35.524384567205715,
+      "sharpness": 867.0304239888156
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_e199v6lu.png",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_e199v6lu.png",
+    "original_size": [
+      1452,
+      720
+    ],
+    "processed_size": [
+      1024,
+      507
+    ],
+    "original_quality": {
+      "brightness": 54.90955004591368,
+      "contrast": 64.62187720249023,
+      "sharpness": 906.1078721355796
+    },
+    "processed_quality": {
+      "brightness": 88.7858708549063,
+      "contrast": 35.524384567205715,
+      "sharpness": 867.0304239888156
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_fshv29ao.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_fshv29ao.jpg",
+    "original_size": [
+      2436,
+      1125
+    ],
+    "processed_size": [
+      1024,
+      472
+    ],
+    "original_quality": {
+      "brightness": 222.5102525086663,
+      "contrast": 59.00434030443863,
+      "sharpness": 1053.954266739646
+    },
+    "processed_quality": {
+      "brightness": 180.18763034626588,
+      "contrast": 38.054176697913114,
+      "sharpness": 1369.65770242982
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_yvzaez5f.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_yvzaez5f.jpeg",
+    "original_size": [
+      2556,
+      1179
+    ],
+    "processed_size": [
+      1024,
+      472
+    ],
+    "original_quality": {
+      "brightness": 207.9489942671769,
+      "contrast": 78.06390627332833,
+      "sharpness": 907.1626220467853
+    },
+    "processed_quality": {
+      "brightness": 170.90865830243644,
+      "contrast": 53.81389333044699,
+      "sharpness": 996.9525386133016
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_wlbxdst9.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_wlbxdst9.jpeg",
+    "original_size": [
+      518,
+      1083
+    ],
+    "processed_size": [
+      489,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 183.0122407726286,
+      "contrast": 67.56847900178391,
+      "sharpness": 500.601650166132
+    },
+    "processed_quality": {
+      "brightness": 145.79814313330778,
+      "contrast": 55.375014856927436,
+      "sharpness": 767.1698410959006
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_p8urt2au.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_p8urt2au.jpeg",
+    "original_size": [
+      415,
+      739
+    ],
+    "processed_size": [
+      415,
+      739
+    ],
+    "original_quality": {
+      "brightness": 150.04199748928053,
+      "contrast": 45.530101614190116,
+      "sharpness": 1365.7870551216088
+    },
+    "processed_quality": {
+      "brightness": 133.7916396302395,
+      "contrast": 34.32201612554718,
+      "sharpness": 2255.280519832627
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_uo8jt6xf.png",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_uo8jt6xf.png",
+    "original_size": [
+      2259,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      489
+    ],
+    "original_quality": {
+      "brightness": 197.3358295214205,
+      "contrast": 91.17324256880133,
+      "sharpness": 453.09796779958356
+    },
+    "processed_quality": {
+      "brightness": 169.82574849821063,
+      "contrast": 55.34968760799997,
+      "sharpness": 1055.1872363880368
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_5o3pouh5.png",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_5o3pouh5.png",
+    "original_size": [
+      2259,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      489
+    ],
+    "original_quality": {
+      "brightness": 197.3358295214205,
+      "contrast": 91.17324256880133,
+      "sharpness": 453.09796779958356
+    },
+    "processed_quality": {
+      "brightness": 169.82574849821063,
+      "contrast": 55.34968760799997,
+      "sharpness": 1055.1872363880368
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_t9byxz3g.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_t9byxz3g.jpg",
+    "original_size": [
+      1334,
+      750
+    ],
+    "processed_size": [
+      1024,
+      575
+    ],
+    "original_quality": {
+      "brightness": 171.72002898550724,
+      "contrast": 96.85781719439753,
+      "sharpness": 673.6561329333642
+    },
+    "processed_quality": {
+      "brightness": 154.77745754076088,
+      "contrast": 57.58558886706235,
+      "sharpness": 1567.5672956417893
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_tepie6ur.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_tepie6ur.jpg",
+    "original_size": [
+      2436,
+      1125
+    ],
+    "processed_size": [
+      1024,
+      472
+    ],
+    "original_quality": {
+      "brightness": 216.6507312534209,
+      "contrast": 66.69865045882477,
+      "sharpness": 1003.8490691455033
+    },
+    "processed_quality": {
+      "brightness": 177.35047835010593,
+      "contrast": 41.1157084599056,
+      "sharpness": 1271.5138373934512
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_imrshqth.png",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_imrshqth.png",
+    "original_size": [
+      1452,
+      720
+    ],
+    "processed_size": [
+      1024,
+      507
+    ],
+    "original_quality": {
+      "brightness": 54.90955004591368,
+      "contrast": 64.62187720249023,
+      "sharpness": 906.1078721355796
+    },
+    "processed_quality": {
+      "brightness": 88.7858708549063,
+      "contrast": 35.524384567205715,
+      "sharpness": 867.0304239888156
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_65nx861p.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_65nx861p.jpg",
+    "original_size": [
+      1334,
+      750
+    ],
+    "processed_size": [
+      1024,
+      575
+    ],
+    "original_quality": {
+      "brightness": 171.72002898550724,
+      "contrast": 96.85781719439753,
+      "sharpness": 673.6561329333642
+    },
+    "processed_quality": {
+      "brightness": 154.77745754076088,
+      "contrast": 57.58558886706235,
+      "sharpness": 1567.5672956417893
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_dtupb4th.png",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_dtupb4th.png",
+    "original_size": [
+      2259,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      489
+    ],
+    "original_quality": {
+      "brightness": 197.3358295214205,
+      "contrast": 91.17324256880133,
+      "sharpness": 453.09796779958356
+    },
+    "processed_quality": {
+      "brightness": 169.82574849821063,
+      "contrast": 55.34968760799997,
+      "sharpness": 1055.1872363880368
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_xxadrucc.png",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_xxadrucc.png",
+    "original_size": [
+      1080,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 239.95568672839505,
+      "contrast": 45.339424637098375,
+      "sharpness": 168.96238502133832
+    },
+    "processed_quality": {
+      "brightness": 194.20940017700195,
+      "contrast": 26.819895786199833,
+      "sharpness": 213.6264594683001
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_ktx1kx4q.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_ktx1kx4q.jpeg",
+    "original_size": [
+      2556,
+      1179
+    ],
+    "processed_size": [
+      1024,
+      472
+    ],
+    "original_quality": {
+      "brightness": 207.9489942671769,
+      "contrast": 78.06390627332833,
+      "sharpness": 907.1626220467853
+    },
+    "processed_quality": {
+      "brightness": 170.90865830243644,
+      "contrast": 53.81389333044699,
+      "sharpness": 996.9525386133016
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_xu81amv6.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_xu81amv6.jpg",
+    "original_size": [
+      2436,
+      1125
+    ],
+    "processed_size": [
+      1024,
+      472
+    ],
+    "original_quality": {
+      "brightness": 222.5102525086663,
+      "contrast": 59.00434030443863,
+      "sharpness": 1053.954266739646
+    },
+    "processed_quality": {
+      "brightness": 180.18763034626588,
+      "contrast": 38.054176697913114,
+      "sharpness": 1369.65770242982
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_5mrlkbtk.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_5mrlkbtk.jpeg",
+    "original_size": [
+      518,
+      1083
+    ],
+    "processed_size": [
+      489,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 183.0122407726286,
+      "contrast": 67.56847900178391,
+      "sharpness": 500.601650166132
+    },
+    "processed_quality": {
+      "brightness": 145.79814313330778,
+      "contrast": 55.375014856927436,
+      "sharpness": 767.1698410959006
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_g22a8nyg.png",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_g22a8nyg.png",
+    "original_size": [
+      2259,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      489
+    ],
+    "original_quality": {
+      "brightness": 197.3358295214205,
+      "contrast": 91.17324256880133,
+      "sharpness": 453.09796779958356
+    },
+    "processed_quality": {
+      "brightness": 169.82574849821063,
+      "contrast": 55.34968760799997,
+      "sharpness": 1055.1872363880368
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_x9ia3pw7.png",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_x9ia3pw7.png",
+    "original_size": [
+      1080,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 239.95568672839505,
+      "contrast": 45.339424637098375,
+      "sharpness": 168.96238502133832
+    },
+    "processed_quality": {
+      "brightness": 194.20940017700195,
+      "contrast": 26.819895786199833,
+      "sharpness": 213.6264594683001
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_cau2w9tp.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_cau2w9tp.jpg",
+    "original_size": [
+      4032,
+      3024
+    ],
+    "processed_size": [
+      1024,
+      768
+    ],
+    "original_quality": {
+      "brightness": 98.45569685242924,
+      "contrast": 73.26785706920884,
+      "sharpness": 132.05017105200383
+    },
+    "processed_quality": {
+      "brightness": 114.80520884195964,
+      "contrast": 46.62714449838428,
+      "sharpness": 4013.7384235594
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/other/other_20250504_l1eb337w.png",
+    "output_path": "coupon-training/data/reddit_india/processed/other/processed_other_20250504_l1eb337w.png",
+    "original_size": [
+      1452,
+      720
+    ],
+    "processed_size": [
+      1024,
+      507
+    ],
+    "original_quality": {
+      "brightness": 54.90955004591368,
+      "contrast": 64.62187720249023,
+      "sharpness": 906.1078721355796
+    },
+    "processed_quality": {
+      "brightness": 88.7858708549063,
+      "contrast": 35.524384567205715,
+      "sharpness": 867.0304239888156
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/cred/cred_20250504_5bgk75ze.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/cred/processed_cred_20250504_5bgk75ze.jpeg",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 141.64501581790122,
+      "contrast": 109.16727966556299,
+      "sharpness": 918.1041396604197
+    },
+    "processed_quality": {
+      "brightness": 138.94599609375,
+      "contrast": 58.65525978425125,
+      "sharpness": 975.5042140527617
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/cred/cred_20250504_0b4isef5.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/cred/processed_cred_20250504_0b4isef5.jpeg",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 141.64501581790122,
+      "contrast": 109.16727966556299,
+      "sharpness": 918.1041396604197
+    },
+    "processed_quality": {
+      "brightness": 138.94599609375,
+      "contrast": 58.65525978425125,
+      "sharpness": 975.5042140527617
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/cred/cred_20250504_iulugwb0.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/cred/processed_cred_20250504_iulugwb0.jpeg",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 141.64501581790122,
+      "contrast": 109.16727966556299,
+      "sharpness": 918.1041396604197
+    },
+    "processed_quality": {
+      "brightness": 138.94599609375,
+      "contrast": 58.65525978425125,
+      "sharpness": 975.5042140527617
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/cred/cred_20250504_qxf3t0iy.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/cred/processed_cred_20250504_qxf3t0iy.jpeg",
+    "original_size": [
+      2400,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      460
+    ],
+    "original_quality": {
+      "brightness": 141.64501581790122,
+      "contrast": 109.16727966556299,
+      "sharpness": 918.1041396604197
+    },
+    "processed_quality": {
+      "brightness": 138.94599609375,
+      "contrast": 58.65525978425125,
+      "sharpness": 975.5042140527617
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_2pye4la9.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_2pye4la9.jpg",
+    "original_size": [
+      1096,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      1009
+    ],
+    "original_quality": {
+      "brightness": 214.41119897269533,
+      "contrast": 70.84073843708947,
+      "sharpness": 951.0940127399289
+    },
+    "processed_quality": {
+      "brightness": 176.42985397051535,
+      "contrast": 45.53656487535081,
+      "sharpness": 1299.5319913744715
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_caw4hb48.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_caw4hb48.jpg",
+    "original_size": [
+      1096,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      1009
+    ],
+    "original_quality": {
+      "brightness": 214.41119897269533,
+      "contrast": 70.84073843708947,
+      "sharpness": 951.0940127399289
+    },
+    "processed_quality": {
+      "brightness": 176.42985397051535,
+      "contrast": 45.53656487535081,
+      "sharpness": 1299.5319913744715
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_1lfl2yyq.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_1lfl2yyq.jpg",
+    "original_size": [
+      1067,
+      1080
+    ],
+    "processed_size": [
+      1011,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 212.50944583289944,
+      "contrast": 61.71078753499988,
+      "sharpness": 1107.5320281856364
+    },
+    "processed_quality": {
+      "brightness": 169.7091862558729,
+      "contrast": 48.013898407589544,
+      "sharpness": 1486.8306287091943
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_54o8b641.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_54o8b641.jpg",
+    "original_size": [
+      1096,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      1009
+    ],
+    "original_quality": {
+      "brightness": 214.41119897269533,
+      "contrast": 70.84073843708947,
+      "sharpness": 951.0940127399289
+    },
+    "processed_quality": {
+      "brightness": 176.42985397051535,
+      "contrast": 45.53656487535081,
+      "sharpness": 1299.5319913744715
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_3820pmjz.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_3820pmjz.jpg",
+    "original_size": [
+      1067,
+      1080
+    ],
+    "processed_size": [
+      1011,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 212.50944583289944,
+      "contrast": 61.71078753499988,
+      "sharpness": 1107.5320281856364
+    },
+    "processed_quality": {
+      "brightness": 169.7091862558729,
+      "contrast": 48.013898407589544,
+      "sharpness": 1486.8306287091943
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_rt9puh0m.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_rt9puh0m.jpg",
+    "original_size": [
+      1096,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      1009
+    ],
+    "original_quality": {
+      "brightness": 214.41119897269533,
+      "contrast": 70.84073843708947,
+      "sharpness": 951.0940127399289
+    },
+    "processed_quality": {
+      "brightness": 176.42985397051535,
+      "contrast": 45.53656487535081,
+      "sharpness": 1299.5319913744715
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_fg5ggupa.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_fg5ggupa.jpg",
+    "original_size": [
+      1096,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      1009
+    ],
+    "original_quality": {
+      "brightness": 214.41119897269533,
+      "contrast": 70.84073843708947,
+      "sharpness": 951.0940127399289
+    },
+    "processed_quality": {
+      "brightness": 176.42985397051535,
+      "contrast": 45.53656487535081,
+      "sharpness": 1299.5319913744715
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_2dx01m1x.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_2dx01m1x.jpg",
+    "original_size": [
+      2033,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      543
+    ],
+    "original_quality": {
+      "brightness": 202.81440354520777,
+      "contrast": 83.69925434680596,
+      "sharpness": 2192.5822557429
+    },
+    "processed_quality": {
+      "brightness": 172.78442967311233,
+      "contrast": 47.133178673321964,
+      "sharpness": 1475.2347058965279
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_sa8gtplk.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_sa8gtplk.jpg",
+    "original_size": [
+      1067,
+      1080
+    ],
+    "processed_size": [
+      1011,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 212.50944583289944,
+      "contrast": 61.71078753499988,
+      "sharpness": 1107.5320281856364
+    },
+    "processed_quality": {
+      "brightness": 169.7091862558729,
+      "contrast": 48.013898407589544,
+      "sharpness": 1486.8306287091943
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_hn4qsf67.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_hn4qsf67.jpg",
+    "original_size": [
+      2033,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      543
+    ],
+    "original_quality": {
+      "brightness": 202.81440354520777,
+      "contrast": 83.69925434680596,
+      "sharpness": 2192.5822557429
+    },
+    "processed_quality": {
+      "brightness": 172.78442967311233,
+      "contrast": 47.133178673321964,
+      "sharpness": 1475.2347058965279
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_sa7li2st.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_sa7li2st.jpg",
+    "original_size": [
+      2033,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      543
+    ],
+    "original_quality": {
+      "brightness": 202.81440354520777,
+      "contrast": 83.69925434680596,
+      "sharpness": 2192.5822557429
+    },
+    "processed_quality": {
+      "brightness": 172.78442967311233,
+      "contrast": 47.133178673321964,
+      "sharpness": 1475.2347058965279
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_wl2jneh0.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_wl2jneh0.jpg",
+    "original_size": [
+      1096,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      1009
+    ],
+    "original_quality": {
+      "brightness": 214.41119897269533,
+      "contrast": 70.84073843708947,
+      "sharpness": 951.0940127399289
+    },
+    "processed_quality": {
+      "brightness": 176.42985397051535,
+      "contrast": 45.53656487535081,
+      "sharpness": 1299.5319913744715
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_8fq0rdk5.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_8fq0rdk5.jpg",
+    "original_size": [
+      2033,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      543
+    ],
+    "original_quality": {
+      "brightness": 202.81440354520777,
+      "contrast": 83.69925434680596,
+      "sharpness": 2192.5822557429
+    },
+    "processed_quality": {
+      "brightness": 172.78442967311233,
+      "contrast": 47.133178673321964,
+      "sharpness": 1475.2347058965279
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_xu45on3k.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_xu45on3k.jpg",
+    "original_size": [
+      1067,
+      1080
+    ],
+    "processed_size": [
+      1011,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 212.50944583289944,
+      "contrast": 61.71078753499988,
+      "sharpness": 1107.5320281856364
+    },
+    "processed_quality": {
+      "brightness": 169.7091862558729,
+      "contrast": 48.013898407589544,
+      "sharpness": 1486.8306287091943
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_mu4e7m2f.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_mu4e7m2f.jpg",
+    "original_size": [
+      1067,
+      1080
+    ],
+    "processed_size": [
+      1011,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 212.50944583289944,
+      "contrast": 61.71078753499988,
+      "sharpness": 1107.5320281856364
+    },
+    "processed_quality": {
+      "brightness": 169.7091862558729,
+      "contrast": 48.013898407589544,
+      "sharpness": 1486.8306287091943
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_ra2byxut.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_ra2byxut.jpg",
+    "original_size": [
+      1096,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      1009
+    ],
+    "original_quality": {
+      "brightness": 214.41119897269533,
+      "contrast": 70.84073843708947,
+      "sharpness": 951.0940127399289
+    },
+    "processed_quality": {
+      "brightness": 176.42985397051535,
+      "contrast": 45.53656487535081,
+      "sharpness": 1299.5319913744715
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_3r7xblb2.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_3r7xblb2.jpg",
+    "original_size": [
+      1067,
+      1080
+    ],
+    "processed_size": [
+      1011,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 212.50944583289944,
+      "contrast": 61.71078753499988,
+      "sharpness": 1107.5320281856364
+    },
+    "processed_quality": {
+      "brightness": 169.7091862558729,
+      "contrast": 48.013898407589544,
+      "sharpness": 1486.8306287091943
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_uxzq6r4j.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_uxzq6r4j.jpg",
+    "original_size": [
+      1067,
+      1080
+    ],
+    "processed_size": [
+      1011,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 212.50944583289944,
+      "contrast": 61.71078753499988,
+      "sharpness": 1107.5320281856364
+    },
+    "processed_quality": {
+      "brightness": 169.7091862558729,
+      "contrast": 48.013898407589544,
+      "sharpness": 1486.8306287091943
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_j6eid2ue.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_j6eid2ue.jpg",
+    "original_size": [
+      2033,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      543
+    ],
+    "original_quality": {
+      "brightness": 202.81440354520777,
+      "contrast": 83.69925434680596,
+      "sharpness": 2192.5822557429
+    },
+    "processed_quality": {
+      "brightness": 172.78442967311233,
+      "contrast": 47.133178673321964,
+      "sharpness": 1475.2347058965279
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_9fr50hf7.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_9fr50hf7.jpg",
+    "original_size": [
+      2033,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      543
+    ],
+    "original_quality": {
+      "brightness": 202.81440354520777,
+      "contrast": 83.69925434680596,
+      "sharpness": 2192.5822557429
+    },
+    "processed_quality": {
+      "brightness": 172.78442967311233,
+      "contrast": 47.133178673321964,
+      "sharpness": 1475.2347058965279
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_kq91jrdf.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_kq91jrdf.jpg",
+    "original_size": [
+      1096,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      1009
+    ],
+    "original_quality": {
+      "brightness": 214.41119897269533,
+      "contrast": 70.84073843708947,
+      "sharpness": 951.0940127399289
+    },
+    "processed_quality": {
+      "brightness": 176.42985397051535,
+      "contrast": 45.53656487535081,
+      "sharpness": 1299.5319913744715
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_rnj4sx38.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_rnj4sx38.jpg",
+    "original_size": [
+      1096,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      1009
+    ],
+    "original_quality": {
+      "brightness": 214.41119897269533,
+      "contrast": 70.84073843708947,
+      "sharpness": 951.0940127399289
+    },
+    "processed_quality": {
+      "brightness": 176.42985397051535,
+      "contrast": 45.53656487535081,
+      "sharpness": 1299.5319913744715
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_m6tsmyxt.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_m6tsmyxt.jpg",
+    "original_size": [
+      1067,
+      1080
+    ],
+    "processed_size": [
+      1011,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 212.50944583289944,
+      "contrast": 61.71078753499988,
+      "sharpness": 1107.5320281856364
+    },
+    "processed_quality": {
+      "brightness": 169.7091862558729,
+      "contrast": 48.013898407589544,
+      "sharpness": 1486.8306287091943
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_94kmjdei.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_94kmjdei.jpg",
+    "original_size": [
+      2033,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      543
+    ],
+    "original_quality": {
+      "brightness": 202.81440354520777,
+      "contrast": 83.69925434680596,
+      "sharpness": 2192.5822557429
+    },
+    "processed_quality": {
+      "brightness": 172.78442967311233,
+      "contrast": 47.133178673321964,
+      "sharpness": 1475.2347058965279
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_8yzk2lps.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_8yzk2lps.jpg",
+    "original_size": [
+      2033,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      543
+    ],
+    "original_quality": {
+      "brightness": 202.81440354520777,
+      "contrast": 83.69925434680596,
+      "sharpness": 2192.5822557429
+    },
+    "processed_quality": {
+      "brightness": 172.78442967311233,
+      "contrast": 47.133178673321964,
+      "sharpness": 1475.2347058965279
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_3uz9y569.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_3uz9y569.jpg",
+    "original_size": [
+      2033,
+      1080
+    ],
+    "processed_size": [
+      1024,
+      543
+    ],
+    "original_quality": {
+      "brightness": 202.81440354520777,
+      "contrast": 83.69925434680596,
+      "sharpness": 2192.5822557429
+    },
+    "processed_quality": {
+      "brightness": 172.78442967311233,
+      "contrast": 47.133178673321964,
+      "sharpness": 1475.2347058965279
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/gpay/gpay_20250504_0f6mctc2.jpg",
+    "output_path": "coupon-training/data/reddit_india/processed/gpay/processed_gpay_20250504_0f6mctc2.jpg",
+    "original_size": [
+      1067,
+      1080
+    ],
+    "processed_size": [
+      1011,
+      1024
+    ],
+    "original_quality": {
+      "brightness": 212.50944583289944,
+      "contrast": 61.71078753499988,
+      "sharpness": 1107.5320281856364
+    },
+    "processed_quality": {
+      "brightness": 169.7091862558729,
+      "contrast": 48.013898407589544,
+      "sharpness": 1486.8306287091943
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/swiggy/swiggy_20250504_bma3x9vf.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_bma3x9vf.jpeg",
+    "original_size": [
+      1847,
+      1079
+    ],
+    "processed_size": [
+      366,
+      553
+    ],
+    "original_quality": {
+      "brightness": 167.93503931180138,
+      "contrast": 110.00885827279521,
+      "sharpness": 673.1162131414998
+    },
+    "processed_quality": {
+      "brightness": 86.38910957618158,
+      "contrast": 40.73752092966405,
+      "sharpness": 465.4120648380267
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/swiggy/swiggy_20250504_fjp1qzqm.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_fjp1qzqm.jpeg",
+    "original_size": [
+      1847,
+      1079
+    ],
+    "processed_size": [
+      366,
+      553
+    ],
+    "original_quality": {
+      "brightness": 167.93503931180138,
+      "contrast": 110.00885827279521,
+      "sharpness": 673.1162131414998
+    },
+    "processed_quality": {
+      "brightness": 86.38910957618158,
+      "contrast": 40.73752092966405,
+      "sharpness": 465.4120648380267
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/swiggy/swiggy_20250504_7y7ghahv.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_7y7ghahv.jpeg",
+    "original_size": [
+      1847,
+      1079
+    ],
+    "processed_size": [
+      366,
+      553
+    ],
+    "original_quality": {
+      "brightness": 167.93503931180138,
+      "contrast": 110.00885827279521,
+      "sharpness": 673.1162131414998
+    },
+    "processed_quality": {
+      "brightness": 86.38910957618158,
+      "contrast": 40.73752092966405,
+      "sharpness": 465.4120648380267
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/swiggy/swiggy_20250504_sddrijhf.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_sddrijhf.jpeg",
+    "original_size": [
+      1847,
+      1079
+    ],
+    "processed_size": [
+      366,
+      553
+    ],
+    "original_quality": {
+      "brightness": 167.93503931180138,
+      "contrast": 110.00885827279521,
+      "sharpness": 673.1162131414998
+    },
+    "processed_quality": {
+      "brightness": 86.38910957618158,
+      "contrast": 40.73752092966405,
+      "sharpness": 465.4120648380267
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/swiggy/swiggy_20250504_s2vlzm06.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_s2vlzm06.jpeg",
+    "original_size": [
+      1847,
+      1079
+    ],
+    "processed_size": [
+      366,
+      553
+    ],
+    "original_quality": {
+      "brightness": 167.93503931180138,
+      "contrast": 110.00885827279521,
+      "sharpness": 673.1162131414998
+    },
+    "processed_quality": {
+      "brightness": 86.38910957618158,
+      "contrast": 40.73752092966405,
+      "sharpness": 465.4120648380267
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  },
+  {
+    "input_path": "coupon-training/data/reddit_india/raw/swiggy/swiggy_20250504_5odclpx2.jpeg",
+    "output_path": "coupon-training/data/reddit_india/processed/swiggy/processed_swiggy_20250504_5odclpx2.jpeg",
+    "original_size": [
+      1847,
+      1079
+    ],
+    "processed_size": [
+      366,
+      553
+    ],
+    "original_quality": {
+      "brightness": 167.93503931180138,
+      "contrast": 110.00885827279521,
+      "sharpness": 673.1162131414998
+    },
+    "processed_quality": {
+      "brightness": 86.38910957618158,
+      "contrast": 40.73752092966405,
+      "sharpness": 465.4120648380267
+    },
+    "preprocessing_steps": [
+      "resize",
+      "crop_boundaries",
+      "enhance_contrast",
+      "enhance_text",
+      "enhance_currency"
+    ]
+  }
+]

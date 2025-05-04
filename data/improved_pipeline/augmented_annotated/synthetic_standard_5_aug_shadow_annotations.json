@@ -1,0 +1,42 @@
+{
+  "store": [
+    {
+      "left": 200,
+      "top": 70,
+      "right": 600,
+      "bottom": 130
+    }
+  ],
+  "code": [
+    {
+      "left": 200,
+      "top": 370,
+      "right": 600,
+      "bottom": 430
+    }
+  ],
+  "amount": [
+    {
+      "left": 200,
+      "top": 220,
+      "right": 600,
+      "bottom": 280
+    }
+  ],
+  "expiry": [
+    {
+      "left": 200,
+      "top": 970,
+      "right": 600,
+      "bottom": 1030
+    }
+  ],
+  "description": [
+    {
+      "left": 200,
+      "top": 470,
+      "right": 600,
+      "bottom": 530
+    }
+  ]
+}

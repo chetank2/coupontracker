@@ -1,0 +1,37 @@
+{
+    "image_path": "augmented/processed_gpay_20250504_0f6mctc2_aug1.jpg",
+    "image_width": 1024,
+    "image_height": 1011,
+    "regions": {
+        "store_name": [
+            0,
+            0,
+            1024,
+            202
+        ],
+        "coupon_code": [
+            102,
+            404,
+            921,
+            606
+        ],
+        "expiry_date": [
+            0,
+            808,
+            1024,
+            1011
+        ],
+        "description": [
+            716,
+            606,
+            921,
+            707
+        ],
+        "amount": [
+            102,
+            606,
+            921,
+            808
+        ]
+    }
+}
