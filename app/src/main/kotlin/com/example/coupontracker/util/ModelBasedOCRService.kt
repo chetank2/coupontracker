@@ -22,7 +22,6 @@ class ModelBasedOCRService(private val context: Context) {
     private val mlKitTextRecognition = MLKitRealTextRecognition()
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor()
-    private val tesseractOCRHelper = TesseractOCRHelper(context)
     private val couponPatternRecognizer = CouponPatternRecognizer(context)
 
     // Model version and metadata
@@ -30,11 +29,7 @@ class ModelBasedOCRService(private val context: Context) {
     private val modelName = "unified_coupon_recognizer"
 
     // Track service availability
-    private var tesseractAvailable = AtomicBoolean(false)
     private var patternRecognizerAvailable = AtomicBoolean(false)
-
-    // Flag to use custom Tesseract model if available
-    private var useCustomModel = tesseractOCRHelper.isCustomModelAvailable()
 
     /**
      * Initialize the service
@@ -42,21 +37,12 @@ class ModelBasedOCRService(private val context: Context) {
     suspend fun initialize() {
         withContext(Dispatchers.IO) {
             try {
-                // Initialize Tesseract with custom model if available
-                tesseractAvailable.set(tesseractOCRHelper.initialize(
-                    language = if (useCustomModel) "coupon" else "eng",
-                    useCustomModel = useCustomModel
-                ))
-
                 // Initialize pattern recognizer
                 patternRecognizerAvailable.set(couponPatternRecognizer.initialize())
 
-                Log.d(TAG, "Service initialized. Tesseract available: ${tesseractAvailable.get()}, " +
-                        "Pattern recognizer available: ${patternRecognizerAvailable.get()}, " +
-                        "Using custom model: $useCustomModel")
+                Log.d(TAG, "Service initialized. Pattern recognizer available: ${patternRecognizerAvailable.get()}")
             } catch (e: Exception) {
                 Log.e(TAG, "Error initializing service", e)
-                tesseractAvailable.set(false)
                 patternRecognizerAvailable.set(false)
             }
         }
@@ -84,30 +70,16 @@ class ModelBasedOCRService(private val context: Context) {
             // Step 3: Extract text using ML Kit as backup
             val mlKitText = mlKitTextRecognition.processImageFromBitmap(preprocessedBitmap)
 
-            // Step 4: Use Tesseract OCR for specific fields that pattern recognition missed
-            val tesseractText = if (tesseractAvailable.get()) {
-                // Only run Tesseract if we're missing key fields from pattern recognition
-                val missingKeyFields = listOf("store", "code", "expiry").any { !patternResults.containsKey(it) }
-                if (missingKeyFields || patternResults.isEmpty()) {
-                    Log.d(TAG, "Using Tesseract OCR for missing fields")
-                    tesseractOCRHelper.processImageAccurate(preprocessedBitmap, useCustomModel)
-                } else {
-                    ""
-                }
-            } else {
-                ""
-            }
-
-            // Step 5: Combine results to create the best possible coupon info
+            // Step 4: Combine results to create the best possible coupon info
             val combinedInfo = if (patternResults.isNotEmpty()) {
                 // If pattern recognition worked well, convert directly to CouponInfo
                 val directInfo = couponPatternRecognizer.convertToCouponInfo(patternResults)
 
                 // Fill in any missing fields with OCR results
-                fillMissingFields(directInfo, mlKitText, tesseractText)
+                fillMissingFields(directInfo, mlKitText)
             } else {
                 // Fall back to traditional OCR approach
-                combineResults(mlKitText, tesseractText, patternResults)
+                combineResults(mlKitText, patternResults)
             }
 
             Log.d(TAG, "Coupon processing complete: $combinedInfo")
@@ -128,19 +100,17 @@ class ModelBasedOCRService(private val context: Context) {
     /**
      * Fill in missing fields in CouponInfo using OCR results
      */
-    private fun fillMissingFields(info: CouponInfo, mlKitText: String, tesseractText: String): CouponInfo {
-        val combinedText = "$mlKitText\n$tesseractText"
-
+    private fun fillMissingFields(info: CouponInfo, mlKitText: String): CouponInfo {
         return info.copy(
-            storeName = if (info.storeName.isBlank()) extractStoreName(mlKitText, tesseractText) ?: "" else info.storeName,
-            description = if (info.description.isBlank()) extractDescription(mlKitText, tesseractText) ?: "" else info.description,
-            redeemCode = if (info.redeemCode.isNullOrBlank()) extractCouponCode(mlKitText, tesseractText) else info.redeemCode,
+            storeName = if (info.storeName.isBlank()) extractStoreName(mlKitText) ?: "" else info.storeName,
+            description = if (info.description.isBlank()) extractDescription(mlKitText) ?: "" else info.description,
+            redeemCode = if (info.redeemCode.isNullOrBlank()) extractCouponCode(mlKitText) else info.redeemCode,
             expiryDate = if (info.expiryDate == null) {
-                val dateStr = extractExpiryDate(mlKitText, tesseractText)
+                val dateStr = extractExpiryDate(mlKitText)
                 if (dateStr != null) DateParser.parseDate(dateStr) else null
             } else info.expiryDate,
             cashbackAmount = if (info.cashbackAmount == null) {
-                val amountStr = extractAmount(mlKitText, tesseractText)
+                val amountStr = extractAmount(mlKitText)
                 parseAmount(amountStr)
             } else info.cashbackAmount
         )
@@ -151,17 +121,16 @@ class ModelBasedOCRService(private val context: Context) {
      */
     private fun combineResults(
         mlKitText: String,
-        tesseractText: String,
         patternResults: Map<String, String>
     ): CouponInfo {
         // Start with pattern results as they're most reliable
-        val storeName = patternResults["store"] ?: extractStoreName(mlKitText, tesseractText)
-        val code = patternResults["code"] ?: extractCouponCode(mlKitText, tesseractText)
-        val expiryDateStr = patternResults["expiry"] ?: extractExpiryDate(mlKitText, tesseractText)
-        val amountStr = patternResults["amount"] ?: extractAmount(mlKitText, tesseractText)
+        val storeName = patternResults["store"] ?: extractStoreName(mlKitText)
+        val code = patternResults["code"] ?: extractCouponCode(mlKitText)
+        val expiryDateStr = patternResults["expiry"] ?: extractExpiryDate(mlKitText)
+        val amountStr = patternResults["amount"] ?: extractAmount(mlKitText)
 
         // Extract description from the full text
-        val description = extractDescription(mlKitText, tesseractText)
+        val description = extractDescription(mlKitText)
 
         // Parse amount to Double if possible
         val amount = parseAmount(amountStr)
@@ -181,34 +150,25 @@ class ModelBasedOCRService(private val context: Context) {
     /**
      * Extract store name from text
      */
-    private fun extractStoreName(mlKitText: String, tesseractText: String): String? {
-        // Combine texts for better extraction
-        val combinedText = "$mlKitText\n$tesseractText"
-
+    private fun extractStoreName(mlKitText: String): String? {
         // Use TextExtractor to get store name
-        return textExtractor.extractStoreName(combinedText)
+        return textExtractor.extractStoreName(mlKitText)
     }
 
     /**
      * Extract coupon code from text
      */
-    private fun extractCouponCode(mlKitText: String, tesseractText: String): String? {
-        // Combine texts for better extraction
-        val combinedText = "$mlKitText\n$tesseractText"
-
+    private fun extractCouponCode(mlKitText: String): String? {
         // Use TextExtractor to get coupon code
-        return textExtractor.extractRedeemCode(combinedText)
+        return textExtractor.extractRedeemCode(mlKitText)
     }
 
     /**
      * Extract expiry date from text
      */
-    private fun extractExpiryDate(mlKitText: String, tesseractText: String): String? {
-        // Combine texts for better extraction
-        val combinedText = "$mlKitText\n$tesseractText"
-
+    private fun extractExpiryDate(mlKitText: String): String? {
         // Use TextExtractor to get expiry date
-        val date = textExtractor.extractExpiryDate(combinedText)
+        val date = textExtractor.extractExpiryDate(mlKitText)
         return if (date != null) {
             val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
             sdf.format(date)
@@ -220,24 +180,18 @@ class ModelBasedOCRService(private val context: Context) {
     /**
      * Extract amount from text
      */
-    private fun extractAmount(mlKitText: String, tesseractText: String): String? {
-        // Combine texts for better extraction
-        val combinedText = "$mlKitText\n$tesseractText"
-
+    private fun extractAmount(mlKitText: String): String? {
         // Use TextExtractor to get amount
-        val amount = textExtractor.extractCashbackAmount(combinedText)
+        val amount = textExtractor.extractCashbackAmount(mlKitText)
         return amount?.toString()
     }
 
     /**
      * Extract description from text
      */
-    private fun extractDescription(mlKitText: String, tesseractText: String): String? {
-        // Combine texts for better extraction
-        val combinedText = "$mlKitText\n$tesseractText"
-
+    private fun extractDescription(mlKitText: String): String? {
         // Use TextExtractor to get description
-        return textExtractor.extractDescription(combinedText)
+        return textExtractor.extractDescription(mlKitText)
     }
 
     /**
@@ -262,7 +216,7 @@ class ModelBasedOCRService(private val context: Context) {
      * Clean up resources
      */
     fun cleanup() {
-        tesseractOCRHelper.cleanup()
+        // No resources to clean up
     }
 
 

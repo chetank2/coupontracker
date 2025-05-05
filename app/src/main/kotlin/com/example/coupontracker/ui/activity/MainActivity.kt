@@ -9,13 +9,18 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.coupontracker.ui.navigation.AppNavigation
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.CouponTrackerTheme
+import com.example.coupontracker.util.ThemeManager
+import com.example.coupontracker.util.ThemeMode
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -25,12 +30,18 @@ class MainActivity : ComponentActivity() {
     // Reference to the NavController for navigation from non-composable functions
     private var navControllerRef: NavController? = null
 
+    @Inject
+    lateinit var themeManager: ThemeManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d(TAG, "MainActivity onCreate started")
 
         setContent {
-            CouponTrackerTheme {
+            // Collect the current theme mode
+            val themeMode by themeManager.themeMode.collectAsState(initial = ThemeMode.SYSTEM)
+
+            CouponTrackerTheme(themeMode = themeMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background

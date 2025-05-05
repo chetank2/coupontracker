@@ -34,8 +34,8 @@ class CouponPatternRecognizer(private val context: Context) {
         )
     }
 
-    // Tesseract OCR helper
-    private val tesseractOCRHelper = TesseractOCRHelper(context)
+    // ML Kit text recognition
+    private val mlKitTextRecognition = MLKitRealTextRecognition()
 
     // Patterns for different coupon elements
     private val patterns: Map<String, List<Rect>> by lazy { loadPatterns() }
@@ -52,17 +52,17 @@ class CouponPatternRecognizer(private val context: Context) {
         }
 
         try {
-            // Initialize Tesseract
-            val success = tesseractOCRHelper.initialize()
+            // Load patterns
+            val patternsLoaded = patterns.isNotEmpty()
 
-            if (success) {
+            if (patternsLoaded) {
                 Log.d(TAG, "CouponPatternRecognizer initialized successfully")
                 isInitialized.set(true)
             } else {
                 Log.e(TAG, "Failed to initialize CouponPatternRecognizer")
             }
 
-            return@withContext success
+            return@withContext patternsLoaded
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing CouponPatternRecognizer", e)
             return@withContext false
@@ -410,64 +410,51 @@ class CouponPatternRecognizer(private val context: Context) {
     }
 
     /**
-     * Process image with specialized Tesseract configuration based on element type
+     * Process image with ML Kit text recognition
      */
     private suspend fun processWithSpecializedConfig(bitmap: Bitmap, type: String): String {
-        return when (type) {
-            "store" -> {
-                // For store names, use single line mode
-                tesseractOCRHelper.configure(
-                    segMode = TesseractOCRHelper.PageSegMode.SINGLE_LINE,
-                    enablePreprocessing = false,  // We've already preprocessed
-                    charWhitelist = "0123456789 &-."
-                )
-                tesseractOCRHelper.processImageFromBitmap(bitmap)
-            }
+        return try {
+            // Use ML Kit for text recognition
+            val text = mlKitTextRecognition.processImageFromBitmap(bitmap)
 
-            "code" -> {
-                // For coupon codes, optimize for alphanumeric characters
-                tesseractOCRHelper.configure(
-                    segMode = TesseractOCRHelper.PageSegMode.SINGLE_WORD,
-                    enablePreprocessing = false,
-                    charWhitelist = "0123456789"
-                )
-                tesseractOCRHelper.processImageFromBitmap(bitmap).uppercase()
-            }
+            // Post-process based on type
+            when (type) {
+                "store" -> {
+                    // Extract store name from text
+                    text.lines().firstOrNull { it.isNotBlank() } ?: text
+                }
 
-            "amount" -> {
-                // For amounts, optimize for currency and percentage symbols
-                tesseractOCRHelper.configure(
-                    segMode = TesseractOCRHelper.PageSegMode.SINGLE_LINE,
-                    enablePreprocessing = false,
-                    charWhitelist = "0123456789.,%₹$"
-                )
-                tesseractOCRHelper.processImageFromBitmap(bitmap)
-            }
+                "code" -> {
+                    // Extract coupon code (usually all caps with numbers)
+                    val codeRegex = Regex("[A-Z0-9]{4,12}")
+                    val match = codeRegex.find(text)
+                    match?.value?.uppercase() ?: text.uppercase()
+                }
 
-            "expiry" -> {
-                // For expiry dates, optimize for date formats
-                tesseractOCRHelper.configure(
-                    segMode = TesseractOCRHelper.PageSegMode.SINGLE_LINE,
-                    enablePreprocessing = false,
-                    charWhitelist = "0123456789/-."
-                )
-                tesseractOCRHelper.processImageFromBitmap(bitmap)
-            }
+                "amount" -> {
+                    // Extract amount (numbers with currency symbols)
+                    val amountRegex = Regex("[₹$]?\\s*\\d+(\\.\\d+)?%?")
+                    val match = amountRegex.find(text)
+                    match?.value ?: text
+                }
 
-            "description" -> {
-                // For descriptions, use auto segmentation
-                tesseractOCRHelper.configure(
-                    segMode = TesseractOCRHelper.PageSegMode.AUTO,
-                    enablePreprocessing = false,
-                    charWhitelist = "0123456789 .,;:!?%₹$()-_"
-                )
-                tesseractOCRHelper.processImageFromBitmap(bitmap)
-            }
+                "expiry" -> {
+                    // Extract date in various formats
+                    val dateRegex = Regex("\\d{1,2}[/.-]\\d{1,2}[/.-]\\d{2,4}")
+                    val match = dateRegex.find(text)
+                    match?.value ?: text
+                }
 
-            else -> {
-                // Default configuration
-                tesseractOCRHelper.processImageFromBitmap(bitmap)
+                "description" -> {
+                    // Use the full text for description
+                    text
+                }
+
+                else -> text
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing with ML Kit for $type", e)
+            ""
         }
     }
 

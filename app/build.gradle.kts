@@ -28,29 +28,49 @@ android {
                 )
             }
         }
+
+        // Enable split APKs for different languages and densities
+        bundle {
+            language {
+                enableSplit = true
+            }
+            density {
+                enableSplit = true
+            }
+            abi {
+                enableSplit = true
+            }
+        }
     }
 
-    // Note: For actual use, replace these placeholder values with your real keystore information
-    // You'll need to create a keystore file using Android Studio or the keytool command
+    // Using debug signing config for testing
     signingConfigs {
-        create("release") {
-            // You should store these values in a secure location, not in build.gradle
-            // For production, consider using environment variables or a properties file
-            storeFile = file("keystore/coupontracker.keystore") // Path relative to the app directory
-            storePassword = "your_keystore_password" // Replace with your actual password
-            keyAlias = "coupontracker"
-            keyPassword = "your_key_password" // Replace with your actual password
+        getByName("debug") {
+            // Using the debug keystore for release builds during testing
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("debug")
+        }
+        debug {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 
@@ -77,7 +97,16 @@ android {
         unitTests {
             isIncludeAndroidResources = true
         }
+
+        // Configure ProGuard for tests
+        packaging {
+            jniLibs {
+                useLegacyPackaging = true
+            }
+        }
     }
+
+    // We'll use the main proguard-rules.pro file for tests as well
 
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"
@@ -100,6 +129,19 @@ android {
             excludes.add("META-INF/INDEX.LIST")
             excludes.add("META-INF/io.netty.versions.properties")
             pickFirsts.add("META-INF/INDEX.LIST")
+        }
+        jniLibs {
+            useLegacyPackaging = false
+        }
+    }
+
+    // Configure splits for APK size reduction
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true
         }
     }
 
@@ -205,15 +247,33 @@ dependencies {
     implementation("androidx.core:core-ktx:1.12.0") // Already included above, contains some image processing utilities
     implementation("androidx.exifinterface:exifinterface:1.3.7") // For image metadata handling
 
-    // Tesseract OCR
-    implementation("com.rmtheis:tess-two:9.1.0")
+    // Tesseract OCR removed to reduce APK size
+    // implementation("com.rmtheis:tess-two:9.1.0")
 
     // TensorFlow Lite for model inference
     implementation("org.tensorflow:tensorflow-lite:2.12.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
     implementation("org.tensorflow:tensorflow-lite-metadata:0.4.4")
-    implementation("org.tensorflow:tensorflow-lite-gpu:2.12.0")
+    // GPU support is optional, only include if needed
+    // implementation("org.tensorflow:tensorflow-lite-gpu:2.12.0")
 
     // Security
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // Image Processing & ML
+    implementation("com.google.mlkit:image-labeling:17.0.7")
+    implementation("com.google.mlkit:text-recognition:16.0.0")
+    implementation("org.tensorflow:tensorflow-lite:2.12.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+
+    // Reddit API
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // Enhanced CameraX for scanning
+    implementation("androidx.camera:camera-core:1.3.1")
+    implementation("androidx.camera:camera-camera2:1.3.1")
+    implementation("androidx.camera:camera-lifecycle:1.3.1")
+    implementation("androidx.camera:camera-view:1.3.1")
 }

@@ -24,7 +24,6 @@ import androidx.navigation.NavController
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.util.ModelMetadataReader
 import com.example.coupontracker.util.SecurePreferencesManager
-import com.example.coupontracker.util.TesseractLanguageManager
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -32,7 +31,10 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.School
 import androidx.compose.ui.text.style.TextAlign
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.coupontracker.ui.components.PasswordDialog
+import com.example.coupontracker.ui.components.ThemeSelector
+import com.example.coupontracker.ui.viewmodel.SettingsViewModel
 
 // Using keys from SecurePreferencesManager
 
@@ -41,7 +43,8 @@ import com.example.coupontracker.ui.components.PasswordDialog
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    navController: NavController
+    navController: NavController,
+    viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val securePreferencesManager = remember { SecurePreferencesManager(context) }
@@ -54,6 +57,9 @@ fun SettingsScreen(
 
     // Get model version
     val (modelVersion, numPatterns) = remember { modelMetadataReader.getModelVersion() }
+
+    // Get theme mode
+    val themeMode by viewModel.themeMode.collectAsState()
 
     // UI states
     val scrollState = rememberScrollState()
@@ -101,6 +107,21 @@ fun SettingsScreen(
             horizontalAlignment = Alignment.Start,
             verticalArrangement = Arrangement.Top
         ) {
+
+            // Theme Selector
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                ThemeSelector(
+                    selectedThemeMode = themeMode,
+                    onThemeModeSelected = { newThemeMode ->
+                        viewModel.setThemeMode(newThemeMode)
+                    }
+                )
+            }
 
             // Model Info
             Card(

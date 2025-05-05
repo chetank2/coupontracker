@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.example.coupontracker.util.ImageProcessor
 import com.example.coupontracker.util.SecurePreferencesManager
+import com.example.coupontracker.util.ThemeManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -48,5 +49,13 @@ object AppModule {
     ): ImageProcessor {
         // Create a new ImageProcessor that uses the model-based approach
         return ImageProcessor(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideThemeManager(
+        sharedPreferences: SharedPreferences
+    ): ThemeManager {
+        return ThemeManager(sharedPreferences)
     }
 }

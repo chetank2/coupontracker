@@ -33,10 +33,6 @@ class ImageProcessor(
     private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private val textExtractor = TextExtractor()
 
-    // Tesseract OCR helper
-    private var tesseractOCRHelper: TesseractOCRHelper = TesseractOCRHelper(context)
-    private var tesseractLanguageManager: TesseractLanguageManager = TesseractLanguageManager(context)
-
     // Coupon pattern recognizer
     private var couponPatternRecognizer: CouponPatternRecognizer = CouponPatternRecognizer(context)
 
@@ -114,16 +110,9 @@ class ImageProcessor(
                 if (result != null) {
                     result
                 } else {
-                    // Fall back to Tesseract if Pattern Recognizer fails
-                    Log.d(TAG, "Pattern Recognizer failed, falling back to Tesseract")
-                    val tesseractResult = tryTesseract(bitmap)
-                    if (tesseractResult != null) {
-                        tesseractResult
-                    } else {
-                        // Fall back to ML Kit if both fail
-                        Log.d(TAG, "Tesseract OCR also failed, falling back to ML Kit")
-                        tryMlKit(bitmap)
-                    }
+                    // Fall back to ML Kit if Pattern Recognizer fails
+                    Log.d(TAG, "Pattern Recognizer failed, falling back to ML Kit")
+                    tryMlKit(bitmap)
                 }
             }
 
@@ -170,31 +159,7 @@ class ImageProcessor(
         }
     }
 
-    /**
-     * Try processing with Tesseract OCR
-     * @param bitmap The bitmap to process
-     * @return The extracted coupon information or null if processing failed
-     */
-    private suspend fun tryTesseract(bitmap: Bitmap): CouponInfo? = withContext(Dispatchers.IO) {
-        try {
-            Log.d(TAG, "Trying Tesseract OCR")
 
-            // Initialize Tesseract if needed
-            if (!tesseractOCRHelper.initialize()) {
-                Log.e(TAG, "Failed to initialize Tesseract")
-                return@withContext null
-            }
-
-            // Extract coupon info using Tesseract
-            val couponInfo = tesseractOCRHelper.extractCouponInfo(bitmap, useAccurateMode = true)
-
-            Log.d(TAG, "Tesseract OCR result: $couponInfo")
-            return@withContext couponInfo
-        } catch (e: Exception) {
-            Log.e(TAG, "Error processing with Tesseract", e)
-            return@withContext null
-        }
-    }
 
     /**
      * Try processing with Pattern Recognizer
@@ -253,7 +218,7 @@ class ImageProcessor(
      * Clean up resources
      */
     fun cleanup() {
-        tesseractOCRHelper.cleanup()
+        // No resources to clean up
     }
 
 
