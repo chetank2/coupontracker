@@ -505,112 +505,23 @@ class ModelManager:
                     'history': history
                 }
 
-            # If no model metadata exists, generate simulated metrics based on the model info
+            # If no model metadata exists, return None instead of generating mock data
             if model_info:
-                # Create a simulated history based on the number of patterns
-                num_patterns = model_info.get('num_patterns', 20)
-                epochs = 20
-
-                # Generate simulated training history
-                train_loss = [1.0 - (i / epochs) * 0.8 + (0.05 * (num_patterns % 5) / 5) for i in range(epochs)]
-                val_loss = [1.2 - (i / epochs) * 0.7 + (0.1 * (num_patterns % 7) / 7) for i in range(epochs)]
-
-                # Format the date
+                # Format the date from the model info
                 timestamp = model_info.get('timestamp', datetime.datetime.now().isoformat())
                 training_date = datetime.datetime.fromisoformat(timestamp)
                 formatted_date = training_date.strftime('%b %d, %Y')
 
-                # Generate more varied metrics based on the version and timestamp
-                # Extract date components from version (assuming format like "20250503_001956")
-                try:
-                    year = int(version[0:4])
-                    month = int(version[4:6])
-                    day = int(version[6:8])
-                    hour = int(version[9:11])
-                    minute = int(version[11:13])
-                    second = int(version[13:15]) if len(version) >= 15 else 0
+                # Log that we don't have actual metrics for this model
+                print(f"No metrics data found for model version {version}")
 
-                    # Use these components to create varied metrics
-                    date_factor = (day + month * 30) / 1000  # Increases throughout the month
-                    time_factor = (hour * 60 + minute) / (24 * 60)  # Varies throughout the day
-
-                    # Base accuracy that improves over time with some variation
-                    base_accuracy = 0.75 + (date_factor * 0.2) + (time_factor * 0.05)
-
-                    # Add some randomness based on the version string
-                    version_sum = sum(ord(c) for c in version)
-                    random_factor = (version_sum % 100) / 1000  # Small random variation
-
-                    # Calculate accuracy with improvement over time
-                    accuracy = min(0.98, base_accuracy + random_factor)
-
-                    # Calculate losses that decrease over time
-                    base_train_loss = 0.5 - (date_factor * 0.3) - (time_factor * 0.1) + (random_factor * 2)
-                    train_loss_final = max(0.05, base_train_loss)
-
-                    val_loss_factor = 1.0 + (random_factor * 10)  # Validation loss is higher than training loss
-                    val_loss_final = max(0.1, train_loss_final * val_loss_factor)
-
-                    # Generate more realistic training history
-                    epochs = 20
-                    train_loss = []
-                    val_loss = []
-
-                    # Starting losses
-                    train_start = 1.0 + (random_factor * 5)
-                    val_start = train_start * 1.2
-
-                    # Generate decreasing loss curves with some fluctuations
-                    for i in range(epochs):
-                        progress = i / (epochs - 1)
-                        # Add some fluctuations
-                        train_fluctuation = ((i % 3) - 1) * 0.03 * (1 - progress)
-                        val_fluctuation = ((i % 4) - 1.5) * 0.05 * (1 - progress)
-
-                        # Calculate losses
-                        current_train = train_start - (train_start - train_loss_final) * progress + train_fluctuation
-                        current_val = val_start - (val_start - val_loss_final) * progress + val_fluctuation
-
-                        train_loss.append(max(0.01, current_train))
-                        val_loss.append(max(0.05, current_val))
-
-                    # Samples increase over time
-                    base_samples = 20 + int(date_factor * 100)
-
-                    return {
-                        'test_accuracy': accuracy,
-                        'train_loss': train_loss[-1],
-                        'val_loss': val_loss[-1],
-                        'train_samples': base_samples * 3,
-                        'val_samples': base_samples,
-                        'test_samples': base_samples // 2,
-                        'model_type': 'Coupon Pattern Recognizer',
-                        'model_version': version,
-                        'last_updated': formatted_date,
-                        'num_patterns': num_patterns,
-                        'history': {
-                            'train_loss': train_loss,
-                            'val_loss': val_loss
-                        }
-                    }
-                except (ValueError, IndexError):
-                    # Fallback if version format is unexpected
-                    return {
-                        'test_accuracy': 0.85 + (version_sum % 10) / 100,
-                        'train_loss': train_loss[-1],
-                        'val_loss': val_loss[-1],
-                        'train_samples': num_patterns * 3,
-                        'val_samples': num_patterns,
-                        'test_samples': num_patterns // 2,
-                        'model_type': 'Coupon Pattern Recognizer',
-                        'model_version': version,
-                        'last_updated': formatted_date,
-                        'num_patterns': num_patterns,
-                        'history': {
-                            'train_loss': train_loss,
-                            'val_loss': val_loss
-                        }
-                    }
+                # Return minimal information without mock data
+                return {
+                    'model_version': version,
+                    'last_updated': formatted_date,
+                    'num_patterns': model_info.get('num_patterns', 0),
+                    'message': 'No training metrics available for this model version'
+                }
 
             return None
         except Exception as e:

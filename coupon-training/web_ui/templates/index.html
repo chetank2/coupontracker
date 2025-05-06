@@ -361,6 +361,54 @@
         let comparisonChart = null;
         let sessionData = {}; // Cache for session metrics
 
+        /**
+         * Detect if the data appears to be simulated rather than from actual training
+         * @param {Object} data - The metrics data
+         * @return {boolean} - True if the data appears to be simulated
+         */
+        function detectSimulatedData(data) {
+            // Check for future dates (beyond current year)
+            const currentYear = new Date().getFullYear();
+            if (data.last_updated && data.last_updated.includes(String(currentYear + 1))) {
+                return true;
+            }
+
+            // Check for suspiciously perfect training history
+            if (data.history && data.history.train_loss && data.history.val_loss) {
+                // Check if loss values decrease too perfectly (common in simulated data)
+                const trainLoss = data.history.train_loss;
+                const valLoss = data.history.val_loss;
+
+                if (trainLoss.length > 5) {
+                    // Check if the loss decreases too consistently
+                    let perfectDecreaseCount = 0;
+                    for (let i = 1; i < trainLoss.length; i++) {
+                        if (trainLoss[i] < trainLoss[i-1]) {
+                            perfectDecreaseCount++;
+                        }
+                    }
+
+                    // If more than 90% of steps show perfect decrease, likely simulated
+                    if (perfectDecreaseCount > trainLoss.length * 0.9) {
+                        return true;
+                    }
+                }
+            }
+
+            // Check for suspiciously round accuracy values
+            if (data.test_accuracy) {
+                // Convert to string and check decimal places
+                const accuracyStr = data.test_accuracy.toString();
+                // If accuracy has only 1 or 0 decimal places, it might be manually set
+                if (accuracyStr.indexOf('.') === -1 ||
+                    accuracyStr.split('.')[1].length <= 1) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         $(document).ready(function() {
             // Load model history, training sessions, and metrics
             loadModelHistory();
@@ -452,20 +500,26 @@
             // Add options for each session with trend indicators
             for (let i = 0; i < sessions.length; i++) {
                 const session = sessions[i];
-                const accuracy = (session.test_accuracy * 100).toFixed(2);
 
-                // Add trend indicators if not the first session
+                // Check if the session has metrics data
+                const hasMetrics = typeof session.test_accuracy === 'number';
+                const accuracy = hasMetrics ? (session.test_accuracy * 100).toFixed(2) : 'N/A';
+
+                // Add trend indicators if not the first session and both sessions have metrics
                 let trendIndicator = '';
-                if (i < sessions.length - 1) {
+                if (i < sessions.length - 1 && hasMetrics) {
                     const prevSession = sessions[i + 1];
 
-                    // Compare accuracy
-                    if (session.test_accuracy > prevSession.test_accuracy) {
-                        trendIndicator = ' ↑';  // Improved
-                    } else if (session.test_accuracy < prevSession.test_accuracy) {
-                        trendIndicator = ' ↓';  // Regressed
-                    } else {
-                        trendIndicator = ' →';  // No change
+                    // Only compare if previous session also has metrics
+                    if (typeof prevSession.test_accuracy === 'number') {
+                        // Compare accuracy
+                        if (session.test_accuracy > prevSession.test_accuracy) {
+                            trendIndicator = ' ↑';  // Improved
+                        } else if (session.test_accuracy < prevSession.test_accuracy) {
+                            trendIndicator = ' ↓';  // Regressed
+                        } else {
+                            trendIndicator = ' →';  // No change
+                        }
                     }
                 }
 
@@ -478,12 +532,22 @@
                     minute: '2-digit'
                 });
 
+                // Create option text based on whether metrics are available
+                let optionText;
+                if (hasMetrics) {
+                    optionText = `${formattedDate} - Acc: ${accuracy}%${trendIndicator} (${session.num_patterns} patterns)`;
+                } else {
+                    optionText = `${formattedDate} - No metrics (${session.num_patterns} patterns)`;
+                }
+
                 const option = $('<option></option>')
                     .attr('value', session.version)
-                    .text(`${formattedDate} - Acc: ${accuracy}%${trendIndicator} (${session.num_patterns} patterns)`);
+                    .text(optionText);
 
-                // Add color coding based on accuracy
-                if (accuracy >= 90) {
+                // Add color coding based on accuracy or metrics availability
+                if (!hasMetrics) {
+                    option.attr('class', 'text-secondary');
+                } else if (accuracy >= 90) {
                     option.attr('class', 'text-success');
                 } else if (accuracy >= 80) {
                     option.attr('class', 'text-primary');
@@ -524,33 +588,161 @@
             // Cache the data for comparison
             sessionData[data.model_version] = data;
 
-            // Update accuracy
-            const accuracy = (data.test_accuracy * 100).toFixed(2);
-            $('#testAccuracy').text(accuracy + '%');
-            $('#accuracyProgress').css('width', accuracy + '%');
+            // Check if we have actual metrics data or just a message
+            if (data.no_data || data.message) {
+                // Display a message that no metrics are available
+                $('#metricsContent').html(`
+                    <div class="alert alert-info">
+                        <h5>No Metrics Available</h5>
+                        <p>${data.message || 'No training metrics are available for this model version.'}</p>
+                        <p>Model Version: ${data.model_version}</p>
+                        <p>Last Updated: ${data.last_updated || 'Unknown'}</p>
+                        <p>Number of Patterns: ${data.num_patterns || 'Unknown'}</p>
+                    </div>
+                `);
+                return;
+            }
 
-            // Update training loss
-            const trainLoss = data.train_loss.toFixed(4);
-            $('#trainLoss').text(trainLoss);
-            $('#trainLossProgress').css('width', ((1 - data.train_loss) * 100) + '%');
+            // Check if the data appears to be simulated
+            const isSimulated = detectSimulatedData(data);
 
-            // Update validation loss
-            const valLoss = data.val_loss.toFixed(4);
-            $('#valLoss').text(valLoss);
-            $('#valLossProgress').css('width', ((1 - data.val_loss) * 100) + '%');
+            // Store the original content
+            const originalContent = $('#metricsContent').html();
 
-            // Update sample counts
-            $('#trainSamples').text(data.train_samples);
-            $('#valSamples').text(data.val_samples);
-            $('#testSamples').text(data.test_samples);
+            if (isSimulated) {
+                // Add a warning banner at the top of the metrics content
+                $('#metricsContent').html(`
+                    <div class="alert alert-warning mb-4">
+                        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Simulated Data Warning</h5>
+                        <p>The metrics shown below appear to be simulated data rather than actual training results.</p>
+                        <p>To see real metrics, please run a complete training session with actual data.</p>
+                    </div>
+                    <div id="metricsContentInner"></div>
+                `);
+            }
 
-            // Update model info
-            $('#modelType').text(data.model_type);
-            $('#modelVersion').text(data.model_version);
-            $('#lastUpdated').text(data.last_updated);
+            // Prepare the metrics HTML
+            let metricsHTML = `
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Test Accuracy</h6>
+                                <h2 class="text-success">${(data.test_accuracy * 100).toFixed(2)}%</h2>
+                                <div class="progress mt-2">
+                                    <div class="progress-bar bg-success" role="progressbar" style="width: ${(data.test_accuracy * 100).toFixed(2)}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Training Loss</h6>
+                                <h2 class="text-primary">${data.train_loss.toFixed(4)}</h2>
+                                <div class="progress mt-2">
+                                    <div class="progress-bar bg-primary" role="progressbar" style="width: ${((1 - data.train_loss) * 100)}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Validation Loss</h6>
+                                <h2 class="text-warning">${data.val_loss.toFixed(4)}</h2>
+                                <div class="progress mt-2">
+                                    <div class="progress-bar bg-warning" role="progressbar" style="width: ${((1 - data.val_loss) * 100)}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Training Samples</h6>
+                                <h3 class="text-dark">${data.train_samples}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Validation Samples</h6>
+                                <h3 class="text-dark">${data.val_samples}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Test Samples</h6>
+                                <h3 class="text-dark">${data.test_samples}</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <p class="text-muted mb-0">
+                                    <small>
+                                        Model Type: <span>${data.model_type || 'Unknown'}</span> |
+                                        Version: <span>${data.model_version}</span> |
+                                        Last Updated: <span>${data.last_updated}</span>
+                                    </small>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">Training History</h6>
+                                <div>
+                                    <button id="compareSessionsBtn" class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-bar-chart-line"></i> Compare Sessions
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <canvas id="trainingChart" height="250"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
 
-            // Update training history chart
-            renderTrainingChart(data.history);
+            // Display the metrics
+            if (isSimulated) {
+                // If simulated, put the metrics in the inner container
+                $('#metricsContentInner').html(metricsHTML);
+
+                // Re-attach the compare sessions button click handler
+                $('#compareSessionsBtn').click(function() {
+                    populateCompareSelectors();
+                    $('#compareSessionsModal').modal('show');
+                });
+            } else {
+                // If not simulated, display directly
+                $('#metricsContent').html(metricsHTML);
+
+                // Re-attach the compare sessions button click handler
+                $('#compareSessionsBtn').click(function() {
+                    populateCompareSelectors();
+                    $('#compareSessionsModal').modal('show');
+                });
+            }
+
+            // Update training history chart if history data is available
+            if (data.history) {
+                renderTrainingChart(data.history);
+            }
         }
 
         function populateCompareSelectors() {
@@ -613,8 +805,36 @@
 
         function displayComparison(data1, data2) {
             // Update session headers
-            $('#session1Header').text(data1.model_version + ' (' + data1.last_updated + ')');
-            $('#session2Header').text(data2.model_version + ' (' + data2.last_updated + ')');
+            $('#session1Header').text(data1.model_version + ' (' + (data1.last_updated || 'Unknown') + ')');
+            $('#session2Header').text(data2.model_version + ' (' + (data2.last_updated || 'Unknown') + ')');
+
+            // Check if either session has no metrics data
+            if ((data1.no_data || data1.message) || (data2.no_data || data2.message)) {
+                $('#comparisonContent').hide();
+                $('#comparisonPlaceholder').html(`
+                    <div class="alert alert-warning">
+                        <h5>Cannot Compare Sessions</h5>
+                        <p>One or both of the selected sessions do not have metrics data available.</p>
+                        <p>Please select different sessions to compare.</p>
+                    </div>
+                `).show();
+                return;
+            }
+
+            // Check if either session has simulated data
+            const isData1Simulated = detectSimulatedData(data1);
+            const isData2Simulated = detectSimulatedData(data2);
+
+            if (isData1Simulated || isData2Simulated) {
+                // Add a warning banner at the top of the comparison content
+                $('#comparisonContent').prepend(`
+                    <div class="alert alert-warning mb-4">
+                        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Simulated Data Warning</h5>
+                        <p>One or both of the selected sessions appear to contain simulated data rather than actual training results.</p>
+                        <p>The comparison may not reflect real performance differences.</p>
+                    </div>
+                `);
+            }
 
             // Update metrics with percentage changes
             const accuracy1 = (data1.test_accuracy * 100).toFixed(2);
@@ -797,17 +1017,35 @@
         function renderComparisonChart(data1, data2) {
             const ctx = document.getElementById('comparisonChart').getContext('2d');
 
+            // Destroy previous chart if it exists
+            if (comparisonChart) {
+                comparisonChart.destroy();
+            }
+
+            // Check if both sessions have valid history data
+            if (!data1.history || !data2.history ||
+                !data1.history.train_loss || !data2.history.train_loss ||
+                !data1.history.val_loss || !data2.history.val_loss ||
+                !Array.isArray(data1.history.train_loss) || !Array.isArray(data2.history.train_loss) ||
+                !Array.isArray(data1.history.val_loss) || !Array.isArray(data2.history.val_loss) ||
+                data1.history.train_loss.length === 0 || data2.history.train_loss.length === 0) {
+
+                // Display a message in the chart area
+                const chartContainer = document.getElementById('comparisonChart').parentNode;
+                chartContainer.innerHTML = `
+                    <div class="alert alert-info text-center">
+                        <p>Training history data is not available for one or both of the selected model versions.</p>
+                    </div>
+                `;
+                return;
+            }
+
             // Create labels for epochs
             const maxEpochs = Math.max(
                 data1.history.train_loss.length,
                 data2.history.train_loss.length
             );
             const epochs = Array.from({length: maxEpochs}, (_, i) => i + 1);
-
-            // Destroy previous chart if it exists
-            if (comparisonChart) {
-                comparisonChart.destroy();
-            }
 
             // Create new chart
             comparisonChart = new Chart(ctx, {
@@ -892,13 +1130,28 @@
         function renderTrainingChart(history) {
             const ctx = document.getElementById('trainingChart').getContext('2d');
 
-            // Create labels for epochs
-            const epochs = Array.from({length: history.train_loss.length}, (_, i) => i + 1);
-
             // Destroy previous chart if it exists
             if (trainingChart) {
                 trainingChart.destroy();
             }
+
+            // Check if history data is available and valid
+            if (!history || !history.train_loss || !history.val_loss ||
+                !Array.isArray(history.train_loss) || !Array.isArray(history.val_loss) ||
+                history.train_loss.length === 0 || history.val_loss.length === 0) {
+
+                // Display a message in the chart area
+                const chartContainer = document.getElementById('trainingChart').parentNode;
+                chartContainer.innerHTML = `
+                    <div class="alert alert-info text-center">
+                        <p>No training history data available for this model version.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Create labels for epochs
+            const epochs = Array.from({length: history.train_loss.length}, (_, i) => i + 1);
 
             // Create new chart
             trainingChart = new Chart(ctx, {
@@ -979,18 +1232,44 @@
                 return;
             }
 
-            let html = '<table class="table table-striped">';
-            html += '<thead><tr><th>Version</th><th>Date</th><th>Patterns</th></tr></thead>';
+            // Check if any models have future dates (simulated data)
+            const currentYear = new Date().getFullYear();
+            const hasFutureDates = models.some(model => {
+                const date = new Date(model.timestamp);
+                return date.getFullYear() > currentYear;
+            });
+
+            let html = '';
+
+            // Add warning if simulated data is detected
+            if (hasFutureDates) {
+                html += `
+                    <div class="alert alert-warning mb-4">
+                        <h5><i class="bi bi-exclamation-triangle-fill me-2"></i>Simulated Data Warning</h5>
+                        <p>Some models in this history appear to contain simulated data with future dates.</p>
+                        <p>These models may not represent actual training results.</p>
+                    </div>
+                `;
+            }
+
+            html += '<table class="table table-striped">';
+            html += '<thead><tr><th>Version</th><th>Date</th><th>Patterns</th><th>Data Type</th></tr></thead>';
             html += '<tbody>';
 
             models.forEach(function(model) {
                 const date = new Date(model.timestamp);
                 const formattedDate = date.toLocaleString();
 
+                // Check if this model has a future date
+                const isFutureDate = date.getFullYear() > currentYear;
+
                 html += '<tr>';
                 html += '<td>' + model.version + '</td>';
                 html += '<td>' + formattedDate + '</td>';
                 html += '<td>' + model.num_patterns + '</td>';
+                html += '<td>' + (isFutureDate ?
+                    '<span class="badge bg-warning text-dark">Simulated</span>' :
+                    '<span class="badge bg-success">Real</span>') + '</td>';
                 html += '</tr>';
             });
 

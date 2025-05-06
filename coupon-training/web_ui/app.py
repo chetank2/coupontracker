@@ -205,21 +205,11 @@ def get_model_metrics():
         if metrics:
             return jsonify(metrics)
 
-        # Return default values if no metrics are available
+        # Return a message indicating no metrics are available
         return jsonify({
-            'test_accuracy': 0.8741,
-            'train_loss': 0.2777,
-            'val_loss': 0.4622,
-            'train_samples': 9,
-            'val_samples': 2,
-            'test_samples': 3,
-            'model_type': 'India Coupon Recognizer',
-            'model_version': '1.0.0',
-            'last_updated': 'May 3, 2025',
-            'history': {
-                'train_loss': [0.9978, 0.9963, 0.9625, 0.8524, 0.8337, 0.7592, 0.7504, 0.7072, 0.6436, 0.6719, 0.6424, 0.5221, 0.4807, 0.4933, 0.4466, 0.3617, 0.3319, 0.3508, 0.2825, 0.2777],
-                'val_loss': [1.2616, 1.1672, 1.1382, 0.9995, 0.9950, 1.1240, 0.9238, 1.0279, 1.0193, 0.9826, 0.8443, 0.7378, 0.8111, 0.7108, 0.7849, 0.7319, 0.5647, 0.5242, 0.6235, 0.4622]
-            }
+            'model_version': version,
+            'message': 'No metrics data available for this model version',
+            'no_data': True
         })
     except Exception as e:
         print(f"Error getting model metrics: {e}")
