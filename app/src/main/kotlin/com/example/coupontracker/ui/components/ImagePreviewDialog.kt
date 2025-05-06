@@ -1,22 +1,38 @@
 package com.example.coupontracker.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -45,8 +61,11 @@ import coil.request.ImageRequest
 @Composable
 fun ImagePreviewDialog(
     imageUri: String,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onShare: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -58,15 +77,16 @@ fun ImagePreviewDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.9f))
+                .background(Color.Black.copy(alpha = 0.95f))
         ) {
             // Image with zoom and pan
             var scale by remember { mutableFloatStateOf(1f) }
             var offsetX by remember { mutableFloatStateOf(0f) }
             var offsetY by remember { mutableFloatStateOf(0f) }
+            var doubleTapScale by remember { mutableStateOf(false) }
 
             SubcomposeAsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
+                model = ImageRequest.Builder(context)
                     .data(imageUri)
                     .crossfade(true)
                     .build(),
@@ -93,7 +113,7 @@ fun ImagePreviewDialog(
                     )
                     .pointerInput(Unit) {
                         detectTransformGestures { _, pan, zoom, _ ->
-                            scale = (scale * zoom).coerceIn(1f, 3f)
+                            scale = (scale * zoom).coerceIn(1f, 5f)
 
                             // Only apply pan if zoomed in
                             if (scale > 1f) {
@@ -108,66 +128,169 @@ fun ImagePreviewDialog(
                             }
                         }
                     }
+                    // Add double tap to zoom
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onDoubleTap = { tapOffset ->
+                                doubleTapScale = !doubleTapScale
+                                if (doubleTapScale) {
+                                    // Zoom in to 2.5x
+                                    scale = 2.5f
+                                    // Center the zoom on the tap location
+                                    offsetX = (size.width / 2 - tapOffset.x) * scale / 2
+                                    offsetY = (size.height / 2 - tapOffset.y) * scale / 2
+                                } else {
+                                    // Reset to normal
+                                    scale = 1f
+                                    offsetX = 0f
+                                    offsetY = 0f
+                                }
+                            }
+                        )
+                    }
             )
 
-            // Control buttons
+            // Top action bar
             Row(
                 modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp)
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Zoom out button
+                // Close button
                 IconButton(
-                    onClick = {
-                        scale = (scale * 0.8f).coerceIn(1f, 3f)
-                        if (scale <= 1f) {
-                            offsetX = 0f
-                            offsetY = 0f
-                        }
-                    },
+                    onClick = onDismiss,
                     modifier = Modifier
-                        .size(56.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), shape = androidx.compose.foundation.shape.CircleShape)
+                        .size(48.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Remove,
-                        contentDescription = "Zoom out",
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close",
                         tint = Color.White
                     )
                 }
 
-                Spacer(modifier = Modifier.width(16.dp))
-
-                // Zoom in button
-                IconButton(
-                    onClick = {
-                        scale = (scale * 1.2f).coerceIn(1f, 3f)
-                    },
-                    modifier = Modifier
-                        .size(56.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), shape = androidx.compose.foundation.shape.CircleShape)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Zoom in",
-                        tint = Color.White
-                    )
+                // Share button (if provided)
+                if (onShare != null) {
+                    IconButton(
+                        onClick = onShare,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Share",
+                            tint = Color.White
+                        )
+                    }
                 }
             }
 
-            // Close button
-            IconButton(
-                onClick = onDismiss,
+            // Bottom control bar
+            Column(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-                    .size(56.dp) // Increased size for better touch target
-                    .background(Color.Black.copy(alpha = 0.5f), shape = androidx.compose.foundation.shape.CircleShape)
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
-                    tint = Color.White
+                // Zoom indicator
+                LinearProgressIndicator(
+                    progress = (scale - 1f) / 4f, // Scale range is 1f to 5f
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp, vertical = 8.dp)
+                        .height(2.dp),
+                    color = Color.White,
+                    trackColor = Color.White.copy(alpha = 0.3f)
+                )
+
+                // Control buttons
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    // Zoom out button
+                    IconButton(
+                        onClick = {
+                            scale = (scale * 0.8f).coerceIn(1f, 5f)
+                            if (scale <= 1f) {
+                                offsetX = 0f
+                                offsetY = 0f
+                                doubleTapScale = false
+                            }
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Remove,
+                            contentDescription = "Zoom out",
+                            tint = Color.White
+                        )
+                    }
+
+                    // Reset zoom button
+                    IconButton(
+                        onClick = {
+                            scale = 1f
+                            offsetX = 0f
+                            offsetY = 0f
+                            doubleTapScale = false
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Reset zoom",
+                            tint = Color.White
+                        )
+                    }
+
+                    // Zoom in button
+                    IconButton(
+                        onClick = {
+                            scale = (scale * 1.2f).coerceIn(1f, 5f)
+                            if (scale > 1f) {
+                                doubleTapScale = true
+                            }
+                        },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .background(Color.Black.copy(alpha = 0.5f), shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Zoom in",
+                            tint = Color.White
+                        )
+                    }
+                }
+            }
+
+            // Hint text for double tap
+            AnimatedVisibility(
+                visible = !doubleTapScale && scale == 1f,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                Text(
+                    text = "Double-tap to zoom",
+                    color = Color.White.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier
+                        .background(Color.Black.copy(alpha = 0.5f), shape = RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 )
             }
         }

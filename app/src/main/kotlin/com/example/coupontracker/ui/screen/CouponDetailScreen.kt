@@ -114,7 +114,17 @@ fun CouponDetailScreen(
                         if (showImagePreview) {
                             ImagePreviewDialog(
                                 imageUri = imageUri,
-                                onDismiss = { showImagePreview = false }
+                                onDismiss = { showImagePreview = false },
+                                onShare = {
+                                    // Share the image
+                                    val shareIntent = Intent().apply {
+                                        action = Intent.ACTION_SEND
+                                        putExtra(Intent.EXTRA_STREAM, Uri.parse(imageUri))
+                                        type = "image/*"
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Share Coupon Image"))
+                                }
                             )
                         }
                     }
