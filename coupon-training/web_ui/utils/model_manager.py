@@ -505,7 +505,7 @@ class ModelManager:
                     'history': history
                 }
 
-            # If no model metadata exists, return None instead of generating mock data
+            # If no model metadata exists, return minimal information without mock data
             if model_info:
                 # Format the date from the model info
                 timestamp = model_info.get('timestamp', datetime.datetime.now().isoformat())
@@ -520,7 +520,8 @@ class ModelManager:
                     'model_version': version,
                     'last_updated': formatted_date,
                     'num_patterns': model_info.get('num_patterns', 0),
-                    'message': 'No training metrics available for this model version'
+                    'message': 'No training metrics available for this model version',
+                    'no_data': True
                 }
 
             return None
