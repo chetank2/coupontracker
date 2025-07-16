@@ -120,14 +120,14 @@ fun HomeScreen(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "No Coupons Yet",
+                                text = "Welcome to Coupon Tracker!",
                                 style = MaterialTheme.typography.headlineSmall
                             )
                             
                             Spacer(modifier = Modifier.height(16.dp))
                             
                             Text(
-                                text = "Scan a coupon to get started or test the API connection",
+                                text = "Start by scanning your first coupon or configure your preferred OCR settings",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             

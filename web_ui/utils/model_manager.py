@@ -374,16 +374,17 @@ class ModelManager:
         Returns:
             str: Default text for the pattern type
         """
+        # Return empty or descriptive placeholders instead of fake data
         if pattern_type == 'store':
-            return 'Sample Store'
+            return '[Store name not detected]'
         elif pattern_type == 'description':
-            return 'Sample coupon description'
+            return '[Description not detected]'
         elif pattern_type == 'expiry':
-            return '2023-12-31'
+            return '[Expiry date not detected]'
         elif pattern_type == 'code':
-            return 'SAMPLE123'
+            return '[Coupon code not detected]'
         elif pattern_type == 'amount':
-            return '₹100 OFF'
+            return '[Amount not detected]'
         else:
             return '[No text detected]'
 
