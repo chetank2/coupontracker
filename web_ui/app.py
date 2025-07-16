@@ -37,64 +37,29 @@ try:
     from utils.model_manager import ModelManager
     from utils.image_processor import ImageProcessor
 except ImportError:
-    # Create mock classes for testing
+    # Create fallback classes when utils are not available
     class ModelManager:
         def get_model_metrics(self, version='latest'):
+            # Return empty state - no dummy data
             return {
-                'test_accuracy': 0.8741,
-                'train_loss': 0.2777,
-                'val_loss': 0.4622,
-                'train_samples': 9,
-                'val_samples': 2,
-                'test_samples': 3,
-                'model_type': 'India Coupon Recognizer',
-                'model_version': '1.0.0',
-                'last_updated': 'May 4, 2025',
+                'test_accuracy': 0.0,
+                'train_loss': 0.0,
+                'val_loss': 0.0,
+                'train_samples': 0,
+                'val_samples': 0,
+                'test_samples': 0,
+                'model_type': 'No Model Trained',
+                'model_version': '0.0.0',
+                'last_updated': 'Never',
                 'history': {
-                    'train_loss': [0.9978, 0.9963, 0.9625, 0.8524, 0.8337, 0.7592, 0.7504, 0.7072, 0.6436, 0.6719, 0.6424, 0.5221, 0.4807, 0.4933, 0.4466, 0.3617, 0.3319, 0.3508, 0.2825, 0.2777],
-                    'val_loss': [1.2616, 1.1672, 1.1382, 0.9995, 0.9950, 1.1240, 0.9238, 1.0279, 1.0193, 0.9826, 0.8443, 0.7378, 0.8111, 0.7108, 0.7849, 0.7319, 0.5647, 0.5242, 0.6235, 0.4622]
+                    'train_loss': [],
+                    'val_loss': []
                 }
             }
 
         def get_training_sessions(self):
-            return [
-                {
-                    'id': '1234-5678',
-                    'timestamp': '2025-04-20T10:15:30',
-                    'model_version': '0.9.0',
-                    'test_accuracy': 0.8123,
-                    'train_loss': 0.3456,
-                    'val_loss': 0.5678,
-                    'train_samples': 7,
-                    'val_samples': 2,
-                    'test_samples': 2,
-                    'num_patterns': 15
-                },
-                {
-                    'id': '2345-6789',
-                    'timestamp': '2025-04-27T14:22:45',
-                    'model_version': '0.9.5',
-                    'test_accuracy': 0.8432,
-                    'train_loss': 0.3123,
-                    'val_loss': 0.5234,
-                    'train_samples': 8,
-                    'val_samples': 2,
-                    'test_samples': 3,
-                    'num_patterns': 20
-                },
-                {
-                    'id': '3456-7890',
-                    'timestamp': '2025-05-01T09:30:15',
-                    'model_version': '1.0.0',
-                    'test_accuracy': 0.8741,
-                    'train_loss': 0.2777,
-                    'val_loss': 0.4622,
-                    'train_samples': 9,
-                    'val_samples': 2,
-                    'test_samples': 3,
-                    'num_patterns': 25
-                }
-            ]
+            # Return empty list - no fake sessions
+            return []
 
         def __init__(self):
             self.url_training_tasks = {}
