@@ -1400,7 +1400,9 @@ class ModelManager:
         try:
             import pytesseract
             text = pytesseract.image_to_string(region_pil).lower()
-        except:
+        except (ImportError, Exception) as e:
+            # Handle import errors or pytesseract execution errors
+            logger.warning(f"OCR failed: {e}")
             text = ""
 
         # Check for keywords in the text
