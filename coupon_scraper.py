@@ -94,7 +94,8 @@ class CouponScraper:
             # Get the page content
             response = requests.get(
                 url,
-                headers={"User-Agent": self.user_agent}
+                headers={"User-Agent": self.user_agent},
+                timeout=30  # 30 second timeout to prevent hanging
             )
             
             if response.status_code != 200:
@@ -283,7 +284,8 @@ class CouponScraper:
             # Get the page content
             response = requests.get(
                 url,
-                headers={"User-Agent": self.user_agent}
+                headers={"User-Agent": self.user_agent},
+                timeout=30  # 30 second timeout to prevent hanging
             )
             
             if response.status_code != 200:
@@ -378,7 +380,7 @@ class CouponScraper:
             filepath = os.path.join(self.output_dir, filename)
             
             # Download the image
-            response = requests.get(url, headers={"User-Agent": self.user_agent}, stream=True)
+            response = requests.get(url, headers={"User-Agent": self.user_agent}, stream=True, timeout=30)
             
             if response.status_code == 200:
                 with open(filepath, 'wb') as f:
