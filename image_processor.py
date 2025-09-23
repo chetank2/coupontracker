@@ -181,22 +181,21 @@ class CouponImageProcessor:
             output_path = os.path.join(self.output_dir, f"{base_name}_processed{ext}")
             
             # Load the image with PIL for enhancement
-            pil_img = Image.open(image_path)
-            
-            # Resize if too large
-            max_size = 1200
-            if pil_img.width > max_size or pil_img.height > max_size:
-                pil_img.thumbnail((max_size, max_size), Image.LANCZOS)
-            
-            # Convert to RGB if needed
-            if pil_img.mode != 'RGB':
-                pil_img = pil_img.convert('RGB')
-            
-            # Enhance the image
-            pil_img = self._enhance_image(pil_img)
-            
-            # Load with OpenCV for further processing
-            pil_img.save(output_path)
+            with Image.open(image_path) as pil_img:
+                # Resize if too large
+                max_size = 1200
+                if pil_img.width > max_size or pil_img.height > max_size:
+                    pil_img.thumbnail((max_size, max_size), Image.LANCZOS)
+                
+                # Convert to RGB if needed
+                if pil_img.mode != 'RGB':
+                    pil_img = pil_img.convert('RGB')
+                
+                # Enhance the image
+                enhanced_img = self._enhance_image(pil_img)
+                
+                # Save the enhanced image
+                enhanced_img.save(output_path)
             img = cv2.imread(output_path)
             
             # Detect and crop to coupon boundaries
