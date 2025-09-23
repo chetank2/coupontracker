@@ -69,3 +69,16 @@ parts/
 sdist/
 var/
 wheels/
+
+# IDE files
+.idea/
+.vscode/
+
+# Logs and databases
+logs/
+*.log
+mlruns.db
+
+# Large data directories
+coupon-training/data_collection/
+
