@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="CouponTrainer">
+    
+    <title>Coupon Trainer Mobile</title>
+    <meta name="description" content="Mobile coupon annotation and training app - works offline">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16x16.png">
+    <link rel="apple-touch-icon" href="/icons/icon-152x152.png">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/mobile.css">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="/js/main.js" as="script">
+    <link rel="preload" href="/js/storage.js" as="script">
+</head>
+<body>
+    <!-- Install PWA Banner -->
+    <div id="install-banner" class="install-banner hidden">
+        <div class="install-content">
+            <span class="install-icon">📱</span>
+            <div class="install-text">
+                <strong>Install Coupon Trainer</strong>
+                <small>Add to home screen for offline use</small>
+            </div>
+            <button id="install-button" class="install-btn">Install</button>
+            <button id="dismiss-install" class="dismiss-btn">✕</button>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <h1 class="app-title">
+                <span class="app-icon">🎫</span>
+                Coupon Trainer
+            </h1>
+            <div class="connection-status" id="connection-status">
+                <span class="status-indicator online" id="status-indicator"></span>
+                <span class="status-text" id="status-text">Online</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Stats Overview -->
+        <section class="stats-section">
+            <h2>Training Progress</h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="total-coupons">0</div>
+                    <div class="stat-label">Total Coupons</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="annotated-count">0</div>
+                    <div class="stat-label">Annotated</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="pending-upload">0</div>
+                    <div class="stat-label">Pending Upload</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="model-accuracy">--</div>
+                    <div class="stat-label">Model Accuracy</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quick Actions -->
+        <section class="actions-section">
+            <h2>Quick Actions</h2>
+            <div class="action-grid">
+                <a href="/upload.html" class="action-card primary">
+                    <div class="action-icon">📤</div>
+                    <div class="action-content">
+                        <h3>Upload Coupon</h3>
+                        <p>Add new coupon images for annotation</p>
+                    </div>
+                    <div class="action-arrow">→</div>
+                </a>
+                
+                <a href="/data.html" class="action-card">
+                    <div class="action-icon">📊</div>
+                    <div class="action-content">
+                        <h3>View Data</h3>
+                        <p>Browse annotated training data</p>
+                    </div>
+                    <div class="action-arrow">→</div>
+                </a>
+                
+                <button class="action-card" id="train-model-btn">
+                    <div class="action-icon">🧠</div>
+                    <div class="action-content">
+                        <h3>Train Model</h3>
+                        <p>Start training with current data</p>
+                    </div>
+                    <div class="action-arrow">→</div>
+                </button>
+                
+                <button class="action-card" id="export-data-btn">
+                    <div class="action-icon">💾</div>
+                    <div class="action-content">
+                        <h3>Export Data</h3>
+                        <p>Download training data & models</p>
+                    </div>
+                    <div class="action-arrow">→</div>
+                </button>
+            </div>
+        </section>
+
+        <!-- Recent Activity -->
+        <section class="activity-section">
+            <h2>Recent Activity</h2>
+            <div class="activity-list" id="activity-list">
+                <div class="activity-item">
+                    <div class="activity-icon">📱</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Welcome to Coupon Trainer!</div>
+                        <div class="activity-time">Start by uploading your first coupon</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="storage-info">
+                <span id="storage-used">0 MB</span> used of 
+                <span id="storage-quota">-- MB</span> available
+            </div>
+            <div class="app-version">v1.0.0</div>
+        </div>
+    </footer>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text" id="loading-text">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="/js/storage.js"></script>
+    <script src="/js/main.js"></script>
+    
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('SW registered: ', registration);
+                    })
+                    .catch(registrationError => {
+                        console.log('SW registration failed: ', registrationError);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
