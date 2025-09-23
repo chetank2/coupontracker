@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    
+    <title>Training Data - Coupon Trainer</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32x32.png">
+    <link rel="apple-touch-icon" href="/icons/icon-152x152.png">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/mobile.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <a href="/" class="back-button">← Back</a>
+            <h1 class="page-title">Training Data</h1>
+            <button class="filter-toggle" id="filter-toggle">Filter</button>
+        </div>
+    </header>
+
+    <!-- Filter Panel -->
+    <div class="filter-panel hidden" id="filter-panel">
+        <div class="filter-content">
+            <div class="filter-group">
+                <label>Field Type:</label>
+                <select id="field-filter">
+                    <option value="">All Fields</option>
+                    <option value="code_region">Coupon Code</option>
+                    <option value="benefit_region">Benefit</option>
+                    <option value="expiry_region">Expiry Date</option>
+                    <option value="app_region">App Name</option>
+                    <option value="terms_region">Terms</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Status:</label>
+                <select id="status-filter">
+                    <option value="">All Status</option>
+                    <option value="annotated">Annotated</option>
+                    <option value="pending">Pending Upload</option>
+                    <option value="uploaded">Uploaded</option>
+                </select>
+            </div>
+            <div class="filter-actions">
+                <button class="filter-btn" id="apply-filters">Apply</button>
+                <button class="filter-btn secondary" id="clear-filters">Clear</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Stats Overview -->
+        <section class="data-stats">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-number" id="total-images">0</div>
+                    <div class="stat-label">Total Images</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="total-annotations">0</div>
+                    <div class="stat-label">Annotations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="pending-sync">0</div>
+                    <div class="stat-label">Pending Sync</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Data List -->
+        <section class="data-list-section">
+            <div class="list-header">
+                <h2>Annotated Images</h2>
+                <div class="list-controls">
+                    <button class="control-btn" id="select-all">Select All</button>
+                    <button class="control-btn" id="delete-selected" disabled>Delete</button>
+                    <button class="control-btn primary" id="export-selected" disabled>Export</button>
+                </div>
+            </div>
+
+            <!-- Data Items -->
+            <div class="data-list" id="data-list">
+                <!-- Items will be dynamically added here -->
+            </div>
+
+            <!-- Empty State -->
+            <div class="empty-state hidden" id="empty-state">
+                <div class="empty-icon">📂</div>
+                <h3>No Training Data</h3>
+                <p>Upload and annotate some coupons to see them here</p>
+                <a href="/upload.html" class="empty-action">Upload Coupons</a>
+            </div>
+        </section>
+    </main>
+
+    <!-- Image Preview Modal -->
+    <div class="modal hidden" id="preview-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Image Preview</h3>
+                <button class="modal-close" id="modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="preview-container">
+                    <canvas id="preview-canvas" class="preview-canvas"></canvas>
+                </div>
+                <div class="annotation-info" id="annotation-info">
+                    <!-- Annotation details will be shown here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn" id="edit-annotations">Edit</button>
+                <button class="modal-btn primary" id="close-preview">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Actions Modal -->
+    <div class="modal hidden" id="bulk-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Bulk Actions</h3>
+                <button class="modal-close" id="bulk-modal-close">✕</button>
+            </div>
+            <div class="modal-body">
+                <p>Selected <span id="selected-count">0</span> items</p>
+                <div class="bulk-actions">
+                    <button class="bulk-btn" id="bulk-export">
+                        <span class="bulk-icon">💾</span>
+                        Export Selected
+                    </button>
+                    <button class="bulk-btn danger" id="bulk-delete">
+                        <span class="bulk-icon">🗑️</span>
+                        Delete Selected
+                    </button>
+                    <button class="bulk-btn" id="bulk-sync">
+                        <span class="bulk-icon">🔄</span>
+                        Sync to Server
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text" id="loading-text">Loading data...</div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/js/storage.js"></script>
+    <script src="/js/annotation.js"></script>
+    <script src="/js/data.js"></script>
+</body>
+</html>
