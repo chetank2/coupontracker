@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Train from URL - Coupon Pattern Recognition</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .progress-container {
+            margin-top: 20px;
+            margin-bottom: 20px;
+        }
+        .task-card {
+            margin-bottom: 20px;
+        }
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .task-status {
+            font-weight: bold;
+        }
+        .status-initializing {
+            color: #6c757d;
+        }
+        .status-running {
+            color: #0d6efd;
+        }
+        .status-completed {
+            color: #198754;
+        }
+        .status-failed {
+            color: #dc3545;
+        }
+        .task-details {
+            margin-top: 10px;
+        }
+        .task-result {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">Coupon Pattern Recognition</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/training">Training</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/testing">Testing</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/train-from-url">Train from URL</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <div class="row">
+            <div class="col-md-12 text-center">
+                <h1>Train Model from URL</h1>
+                <p class="lead">Paste a URL containing coupon images to train the model</p>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">URL Input</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="urlForm">
+                            <div class="mb-3">
+                                <label for="urlInput" class="form-label">URL containing coupon images</label>
+                                <input type="url" class="form-control" id="urlInput" placeholder="https://example.com/coupons" required>
+                                <div class="form-text">Enter a URL that contains coupon images, such as a Reddit search result or a coupon website.</div>
+                            </div>
+                            
+                            <div class="row mb-3">
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="filterImages" checked>
+                                        <label class="form-check-label" for="filterImages">
+                                            Filter out non-coupon images
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="augmentImages" checked>
+                                        <label class="form-check-label" for="augmentImages">
+                                            Generate augmented images
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="updateApp">
+                                        <label class="form-check-label" for="updateApp">
+                                            Update app with trained model
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary" id="startTrainingBtn">
+                                <i class="bi bi-play-fill"></i> Start Training
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4" id="taskContainer" style="display: none;">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Training Progress</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="currentTask">
+                            <!-- Current task will be displayed here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Recent Training Tasks</h5>
+                        <button id="clearTasksBtn" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-trash"></i> Clear
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="recentTasks">
+                            <p class="text-center text-muted">No recent training tasks</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        // Global variables
+        let currentTaskId = null;
+        let statusCheckInterval = null;
+        let recentTasks = [];
+        
+        $(document).ready(function() {
+            // Load recent tasks from local storage
+            loadRecentTasks();
+            
+            // URL form submission
+            $('#urlForm').submit(function(e) {
+                e.preventDefault();
+                
+                const url = $('#urlInput').val();
+                const filterImages = $('#filterImages').prop('checked');
+                const augmentImages = $('#augmentImages').prop('checked');
+                const updateApp = $('#updateApp').prop('checked');
+                
+                startTraining(url, filterImages, augmentImages, updateApp);
+            });
+            
+            // Clear tasks button
+            $('#clearTasksBtn').click(function() {
+                clearRecentTasks();
+            });
+        });
+        
+        function startTraining(url, filterImages, augmentImages, updateApp) {
+            // Disable the form
+            $('#urlForm').find('input, button').prop('disabled', true);
+            $('#startTrainingBtn').html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Starting...');
+            
+            // Send the request to start training
+            $.ajax({
+                url: '/api/train-from-url',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    url: url,
+                    filter: filterImages,
+                    augment: augmentImages,
+                    update_app: updateApp
+                }),
+                success: function(response) {
+                    // Enable the form
+                    $('#urlForm').find('input, button').prop('disabled', false);
+                    $('#startTrainingBtn').html('<i class="bi bi-play-fill"></i> Start Training');
+                    
+                    // Show the task container
+                    $('#taskContainer').show();
+                    
+                    // Set the current task ID
+                    currentTaskId = response.task_id;
+                    
+                    // Add the task to recent tasks
+                    addRecentTask({
+                        id: currentTaskId,
+                        url: url,
+                        status: 'initializing',
+                        progress: 0,
+                        message: 'Initializing training process',
+                        start_time: new Date().toISOString()
+                    });
+                    
+                    // Start checking the status
+                    checkTaskStatus();
+                    statusCheckInterval = setInterval(checkTaskStatus, 5000);
+                },
+                error: function(xhr, status, error) {
+                    // Enable the form
+                    $('#urlForm').find('input, button').prop('disabled', false);
+                    $('#startTrainingBtn').html('<i class="bi bi-play-fill"></i> Start Training');
+                    
+                    // Show error
+                    alert('Error starting training: ' + (xhr.responseJSON?.error || error));
+                }
+            });
+        }
+        
+        function checkTaskStatus() {
+            if (!currentTaskId) return;
+            
+            $.ajax({
+                url: '/api/train-from-url/status/' + currentTaskId,
+                type: 'GET',
+                success: function(response) {
+                    // Update the current task display
+                    updateTaskDisplay(response, '#currentTask');
+                    
+                    // Update the task in recent tasks
+                    updateRecentTask(response);
+                    
+                    // If the task is completed or failed, stop checking
+                    if (response.status === 'completed' || response.status === 'failed') {
+                        clearInterval(statusCheckInterval);
+                        currentTaskId = null;
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error checking task status:', error);
+                }
+            });
+        }
+        
+        function updateTaskDisplay(task, container) {
+            // Get status class
+            const statusClass = 'status-' + task.status;
+            
+            // Create task HTML
+            let html = `
+                <div class="task-card">
+                    <div class="task-header">
+                        <h6>Task ID: ${task.id || task.task_id}</h6>
+                        <span class="task-status ${statusClass}">${capitalizeFirstLetter(task.status)}</span>
+                    </div>
+                    <div class="task-details">
+                        <p><strong>URL:</strong> ${task.url}</p>
+                        <p><strong>Message:</strong> ${task.message}</p>
+                        <div class="progress-container">
+                            <div class="progress" style="height: 20px;">
+                                <div class="progress-bar ${getProgressBarClass(task.status)}" role="progressbar" style="width: ${task.progress}%;" aria-valuenow="${task.progress}" aria-valuemin="0" aria-valuemax="100">${task.progress}%</div>
+                            </div>
+                        </div>
+                        <p><small>Started: ${formatDate(task.start_time)}</small></p>
+                        ${task.end_time ? `<p><small>Ended: ${formatDate(task.end_time)}</small></p>` : ''}
+                    </div>
+                    ${task.result ? renderTaskResult(task.result) : ''}
+                </div>
+            `;
+            
+            // Update the container
+            $(container).html(html);
+        }
+        
+        function renderTaskResult(result) {
+            return `
+                <div class="task-result">
+                    <h6>Training Results</h6>
+                    <p><strong>Model Version:</strong> ${result.model_version}</p>
+                    <p><strong>Number of Patterns:</strong> ${result.num_patterns}</p>
+                    <p><strong>Test Accuracy:</strong> ${(result.test_accuracy * 100).toFixed(2)}%</p>
+                    <p><strong>Training Samples:</strong> ${result.train_samples}</p>
+                    <p><strong>Validation Samples:</strong> ${result.val_samples}</p>
+                    <p><strong>Test Samples:</strong> ${result.test_samples}</p>
+                    <a href="/" class="btn btn-primary">View Model Metrics</a>
+                </div>
+            `;
+        }
+        
+        function loadRecentTasks() {
+            try {
+                const storedTasks = localStorage.getItem('recentTrainingTasks');
+                if (storedTasks) {
+                    recentTasks = JSON.parse(storedTasks);
+                    renderRecentTasks();
+                }
+            } catch (e) {
+                console.error('Error loading recent tasks:', e);
+            }
+        }
+        
+        function addRecentTask(task) {
+            // Add the task to the beginning of the array
+            recentTasks.unshift(task);
+            
+            // Keep only the 5 most recent tasks
+            if (recentTasks.length > 5) {
+                recentTasks = recentTasks.slice(0, 5);
+            }
+            
+            // Save to local storage
+            saveRecentTasks();
+            
+            // Render the tasks
+            renderRecentTasks();
+        }
+        
+        function updateRecentTask(task) {
+            // Find the task in the array
+            const index = recentTasks.findIndex(t => t.id === task.id || t.id === task.task_id);
+            
+            if (index !== -1) {
+                // Update the task
+                recentTasks[index] = {
+                    ...recentTasks[index],
+                    status: task.status,
+                    progress: task.progress,
+                    message: task.message,
+                    end_time: task.end_time,
+                    result: task.result
+                };
+                
+                // Save to local storage
+                saveRecentTasks();
+                
+                // Render the tasks
+                renderRecentTasks();
+            }
+        }
+        
+        function saveRecentTasks() {
+            try {
+                localStorage.setItem('recentTrainingTasks', JSON.stringify(recentTasks));
+            } catch (e) {
+                console.error('Error saving recent tasks:', e);
+            }
+        }
+        
+        function clearRecentTasks() {
+            recentTasks = [];
+            saveRecentTasks();
+            renderRecentTasks();
+        }
+        
+        function renderRecentTasks() {
+            if (recentTasks.length === 0) {
+                $('#recentTasks').html('<p class="text-center text-muted">No recent training tasks</p>');
+                return;
+            }
+            
+            let html = '';
+            
+            recentTasks.forEach(task => {
+                // Skip the current task
+                if (currentTaskId && (task.id === currentTaskId || task.task_id === currentTaskId)) {
+                    return;
+                }
+                
+                // Get status class
+                const statusClass = 'status-' + task.status;
+                
+                html += `
+                    <div class="task-card">
+                        <div class="task-header">
+                            <h6>Task ID: ${task.id || task.task_id}</h6>
+                            <span class="task-status ${statusClass}">${capitalizeFirstLetter(task.status)}</span>
+                        </div>
+                        <div class="task-details">
+                            <p><strong>URL:</strong> ${task.url}</p>
+                            <p><strong>Message:</strong> ${task.message}</p>
+                            <div class="progress-container">
+                                <div class="progress" style="height: 20px;">
+                                    <div class="progress-bar ${getProgressBarClass(task.status)}" role="progressbar" style="width: ${task.progress}%;" aria-valuenow="${task.progress}" aria-valuemin="0" aria-valuemax="100">${task.progress}%</div>
+                                </div>
+                            </div>
+                            <p><small>Started: ${formatDate(task.start_time)}</small></p>
+                            ${task.end_time ? `<p><small>Ended: ${formatDate(task.end_time)}</small></p>` : ''}
+                        </div>
+                        ${task.result ? renderTaskResult(task.result) : ''}
+                    </div>
+                `;
+            });
+            
+            $('#recentTasks').html(html);
+        }
+        
+        function getProgressBarClass(status) {
+            switch (status) {
+                case 'initializing':
+                    return 'bg-secondary';
+                case 'running':
+                    return 'bg-primary progress-bar-striped progress-bar-animated';
+                case 'completed':
+                    return 'bg-success';
+                case 'failed':
+                    return 'bg-danger';
+                default:
+                    return 'bg-primary';
+            }
+        }
+        
+        function capitalizeFirstLetter(string) {
+            return string.charAt(0).toUpperCase() + string.slice(1);
+        }
+        
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+manifest: data/manifests/full_manifest.json
+output_dir: artifacts
+experiment: coupon_unified_model
+augmentation_profile: default
+use_mlflow: true
+
+detector:
+  enabled: true
+  model: yolov8n.pt
+  epochs: 50
+  batch: 16
+  imgsz: 1024
+
+recognizer:
+  enabled: false

@@ -1,0 +1,10 @@
+{
+  "model_type": "PatternRecognizer:52",
+  "training_date": "2025-09-20T12:00:44.972066",
+  "train_samples": 68,
+  "val_samples": 17,
+  "test_samples": 22,
+  "test_accuracy": 0.18939393939393936,
+  "final_train_loss": 0.8305555555555559,
+  "final_val_loss": 0.8333333333333333
+}

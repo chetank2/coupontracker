@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Training - Coupon Pattern Recognition</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        #dropArea {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #dropArea.highlight {
+            background-color: #f0f8ff;
+            border-color: #007bff;
+        }
+        #imageGallery {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .image-item {
+            position: relative;
+            width: 150px;
+            height: 200px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+            cursor: pointer;
+        }
+        .image-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .image-item.selected {
+            border: 3px solid #007bff;
+        }
+        .annotation-canvas-container {
+            position: relative;
+            margin-top: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        #annotationCanvas {
+            background-color: #f8f9fa;
+            cursor: crosshair;
+        }
+        .annotation-tools {
+            margin-bottom: 10px;
+        }
+        .annotation-type {
+            margin-right: 10px;
+        }
+        .annotation-list {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .progress-container {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">Coupon Pattern Recognition</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/training">Training</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/testing">Testing</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/train-from-url">Train from URL</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <h1>Training Interface</h1>
+                <p class="lead">Upload coupon images and annotate them to train the pattern recognition model.</p>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Upload Images</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="dropArea">
+                            <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
+                            <h5>Drag & Drop Coupon Images Here</h5>
+                            <p>or</p>
+                            <input type="file" id="fileInput" multiple accept="image/*" style="display: none;">
+                            <button class="btn btn-primary" id="browseBtn">Browse Files</button>
+                        </div>
+
+                        <div class="progress-container" style="display: none;">
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <p class="text-center mt-2" id="uploadStatus">Uploading...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Image Gallery</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="imageGallery" class="d-flex flex-wrap gap-2">
+                            <p class="text-center w-100">No images uploaded yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-9">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Annotation</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3 align-items-end">
+                            <div class="col-md-4">
+                                <label for="metadataSourceType" class="form-label">Source Type</label>
+                                <select id="metadataSourceType" class="form-select">
+                                    <option value="">Select...</option>
+                                    <option value="android_screenshot">Android Screenshot</option>
+                                    <option value="web_capture">Web Capture</option>
+                                    <option value="marketing_asset">Marketing Asset</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="metadataTheme" class="form-label">Theme</label>
+                                <select id="metadataTheme" class="form-select">
+                                    <option value="">Select...</option>
+                                    <option value="light">Light</option>
+                                    <option value="dark">Dark</option>
+                                    <option value="seasonal">Seasonal</option>
+                                    <option value="flash_sale">Flash Sale</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="metadataLanguage" class="form-label">Language</label>
+                                <select id="metadataLanguage" class="form-select">
+                                    <option value="">Select...</option>
+                                    <option value="en">English</option>
+                                    <option value="hi">Hindi</option>
+                                    <option value="mr">Marathi</option>
+                                    <option value="ta">Tamil</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="annotation-tools">
+                            <div class="btn-group" role="group">
+                                <button type="button" class="btn btn-outline-dark annotation-type" data-type="app_region">App Header</button>
+                                <button type="button" class="btn btn-outline-danger annotation-type" data-type="store_region">Store</button>
+                                <button type="button" class="btn btn-outline-primary annotation-type" data-type="code_region">Code</button>
+                                <button type="button" class="btn btn-outline-success annotation-type" data-type="benefit_region">Benefit</button>
+                                <button type="button" class="btn btn-outline-info annotation-type" data-type="expiry_region">Expiry</button>
+                                <button type="button" class="btn btn-outline-warning annotation-type" data-type="terms_region">Terms</button>
+                            </div>
+                            <button class="btn btn-outline-secondary ms-2" id="guidelinesBtn"><i class="fas fa-book-open me-1"></i>Guidelines</button>
+                            <button class="btn btn-danger ms-2" id="clearBtn">Clear</button>
+                            <button class="btn btn-success ms-2" id="saveAnnotationsBtn">Save Annotations</button>
+                        </div>
+
+                        <div class="annotation-canvas-container">
+                            <canvas id="annotationCanvas" width="800" height="600"></canvas>
+                        </div>
+
+                        <div class="annotation-list">
+                            <h6>Annotations</h6>
+                            <ul class="list-group" id="annotationsList">
+                                <li class="list-group-item text-center">No annotations yet</li>
+                            </ul>
+                        </div>
+                        <div class="mt-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">Suggestions</h6>
+                                <button class="btn btn-sm btn-outline-secondary" id="refreshSuggestionsBtn"><i class="fas fa-sync-alt me-1"></i>Refresh</button>
+                            </div>
+                            <div id="suggestionsList" class="list-group small">
+                                <div class="list-group-item text-center text-muted">Load an image to view suggestions</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4 mb-5">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Train Model</h5>
+                    </div>
+                    <div class="card-body">
+                        <p>After uploading and annotating coupon images, click the button below to train the model.</p>
+                        <button class="btn btn-primary" id="trainModelBtn">Train Model</button>
+                        <div id="trainingResult" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4 mb-5">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Dataset Versions</h5>
+                        <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#createDatasetModal"><i class="fas fa-plus me-1"></i>New Version</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-sm table-striped align-middle" id="datasetsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Version</th>
+                                        <th>Created</th>
+                                        <th>Records</th>
+                                        <th>Splits (train/val/test)</th>
+                                        <th>Tags</th>
+                                        <th>Description</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="7" class="text-center text-muted">No datasets yet</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Annotations Modal -->
+    <div class="modal fade" id="saveAnnotationsModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Save Annotations</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="saveAnnotationsModalBody">
+                    <!-- Content will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Annotation Guidelines Modal -->
+    <div class="modal fade" id="guidelinesModal" tabindex="-1" aria-labelledby="guidelinesModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="guidelinesModalLabel">Annotation Guidelines</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="guidelinesModalBody">
+                    <div class="text-center text-muted">Loading guidelines...</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Dataset Modal -->
+    <div class="modal fade" id="createDatasetModal" tabindex="-1" aria-labelledby="createDatasetModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form id="createDatasetForm">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="createDatasetModalLabel">Create Dataset Version</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label" for="datasetDescription">Description</label>
+                            <textarea class="form-control" id="datasetDescription" rows="2" placeholder="Optional summary"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="datasetTags">Tags</label>
+                            <input type="text" class="form-control" id="datasetTags" placeholder="Comma separated tags">
+                        </div>
+                        <div class="row g-2">
+                            <div class="col">
+                                <label class="form-label" for="datasetTrainRatio">Train Ratio</label>
+                                <input type="number" step="0.01" min="0" max="1" class="form-control" id="datasetTrainRatio" value="0.7">
+                            </div>
+                            <div class="col">
+                                <label class="form-label" for="datasetValRatio">Val Ratio</label>
+                                <input type="number" step="0.01" min="0" max="1" class="form-control" id="datasetValRatio" value="0.15">
+                            </div>
+                            <div class="col">
+                                <label class="form-label" for="datasetSeed">Seed</label>
+                                <input type="number" class="form-control" id="datasetSeed" value="42">
+                            </div>
+                        </div>
+                        <div class="alert alert-warning mt-3" id="createDatasetAlert" style="display:none;"></div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Training Result Modal -->
+    <div class="modal fade" id="trainingResultModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Training Result</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="trainingResultModalBody">
+                    <!-- Content will be inserted here -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+    <!-- <script src="{{ url_for('static', filename='js/training.js') }}"></script> -->
+    <script>
+        // Global variables
+        let canvas;
+        let uploadedImages = [];
+        let selectedImage = null;
+        let selectedAnnotationType = 'code_region';  // Default annotation category
+        let annotations = [];
+        let guidelinesCache = null;
+        let metadataOptions = null;
+        let currentSuggestions = [];
+        let currentImageScale = 1;
+        let currentImageOffsetX = 0;
+        let currentImageOffsetY = 0;
+        let currentImageOriginalWidth = 0;
+        let currentImageOriginalHeight = 0;
+
+        $(document).ready(function() {
+            // Initialize fabric.js canvas with fixed dimensions
+            const canvasElement = document.getElementById('annotationCanvas');
+
+            // Set fixed dimensions for the canvas
+            canvasElement.width = 800;
+            canvasElement.height = 600;
+
+            // Initialize the canvas
+            canvas = new fabric.Canvas('annotationCanvas');
+
+            // Add a welcome message to the canvas
+            const welcomeText = new fabric.Text('Select an image from the gallery to start annotating', {
+                left: canvas.width / 2,
+                top: canvas.height / 2,
+                originX: 'center',
+                originY: 'center',
+                fontSize: 16,
+                fill: '#666',
+                textAlign: 'center'
+            });
+            canvas.add(welcomeText);
+            canvas.renderAll();
+
+            console.log('Canvas initialized with dimensions:', canvas.width, 'x', canvas.height);
+
+            loadDatasets();
+            fetchGuidelinesConfig();
+
+            // Set up drag and drop
+            const dropArea = document.getElementById('dropArea');
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropArea.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropArea.addEventListener(eventName, unhighlight, false);
+            });
+
+            function highlight() {
+                dropArea.classList.add('highlight');
+            }
+
+            function unhighlight() {
+                dropArea.classList.remove('highlight');
+            }
+
+            dropArea.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                handleFiles(files);
+            }
+
+            // Browse button click
+            $('#browseBtn').click(function() {
+                $('#fileInput').click();
+            });
+
+            // File input change
+            $('#fileInput').change(function() {
+                handleFiles(this.files);
+            });
+
+            // Annotation type selection
+            $('.annotation-type').click(function() {
+                $('.annotation-type').removeClass('active');
+                $(this).addClass('active');
+                selectedAnnotationType = $(this).data('type');
+                console.log('Selected annotation type:', selectedAnnotationType);
+            });
+
+            // Set default annotation type
+            $('.annotation-type[data-type="code_region"]').addClass('active');
+
+            // Clear button click
+            $('#clearBtn').click(function() {
+                canvas.clear();
+                updateAnnotationsList();
+            });
+
+            // Save annotations button click
+            $('#saveAnnotationsBtn').click(function() {
+                if (!selectedImage) {
+                    alert('Please select an image first');
+                    return;
+                }
+
+                saveAnnotations();
+            });
+
+            // Train model button click
+            $('#trainModelBtn').click(function() {
+                trainModel();
+            });
+            $('#guidelinesBtn').click(showGuidelines);
+            $('#refreshSuggestionsBtn').click(fetchPreannotationSuggestions);
+            $('#suggestionsList').on('click', '.apply-suggestion', function() {
+                const index = $(this).data('index');
+                applySuggestion(index);
+            });
+            $('#createDatasetForm').on('submit', function(event) {
+                event.preventDefault();
+                createDatasetVersion();
+            });
+            $('#createDatasetModal').on('show.bs.modal', function() {
+                $('#createDatasetAlert').hide();
+            });
+
+            // Canvas mouse down event for drawing rectangles
+            canvas.on('mouse:down', function(options) {
+                if (!selectedImage) {
+                    alert('Please select an image first');
+                    return;
+                }
+
+                // Only start drawing if we're not on an existing object
+                if (options.target) return;
+
+                const pointer = canvas.getPointer(options.e);
+                const rect = new fabric.Rect({
+                    left: pointer.x,
+                    top: pointer.y,
+                    width: 0,
+                    height: 0,
+                    fill: 'rgba(' + getColorRgbForType(selectedAnnotationType) + ',0.2)',
+                    stroke: getColorForType(selectedAnnotationType),
+                    strokeWidth: 2,
+                    selectable: true,
+                    data: {
+                        type: selectedAnnotationType
+                    }
+                });
+
+                canvas.add(rect);
+                canvas.setActiveObject(rect);
+                canvas.renderAll();
+
+                canvas.isDrawing = true;
+                canvas.selection = false;
+                canvas.drawingRect = rect;
+                canvas.drawingStartPoint = pointer;
+
+                console.log('Started drawing rectangle at', pointer.x, pointer.y);
+            });
+
+            // Canvas mouse move event for drawing rectangles
+            canvas.on('mouse:move', function(options) {
+                if (!canvas.isDrawing) return;
+
+                const pointer = canvas.getPointer(options.e);
+                const rect = canvas.drawingRect;
+
+                if (pointer.x < canvas.drawingStartPoint.x) {
+                    rect.set({ left: pointer.x });
+                }
+
+                if (pointer.y < canvas.drawingStartPoint.y) {
+                    rect.set({ top: pointer.y });
+                }
+
+                rect.set({
+                    width: Math.abs(pointer.x - canvas.drawingStartPoint.x),
+                    height: Math.abs(pointer.y - canvas.drawingStartPoint.y)
+                });
+
+                canvas.renderAll();
+            });
+
+            // Canvas mouse up event for drawing rectangles
+            canvas.on('mouse:up', function() {
+                if (!canvas.isDrawing) return;
+
+                const rect = canvas.drawingRect;
+
+                // Only keep rectangles with some minimum size
+                if (rect.width < 10 || rect.height < 10) {
+                    canvas.remove(rect);
+                    console.log('Rectangle too small, removed');
+                } else {
+                    // Add a label to the rectangle
+                    const label = new fabric.Text(selectedAnnotationType, {
+                        left: rect.left,
+                        top: rect.top - 15,
+                        fontSize: 12,
+                        fill: getColorForType(selectedAnnotationType)
+                    });
+                    canvas.add(label);
+
+                    // Group the rectangle and label
+                    rect.label = label;
+
+                    console.log('Finished drawing rectangle:', {
+                        type: selectedAnnotationType,
+                        left: Math.round(rect.left),
+                        top: Math.round(rect.top),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height)
+                    });
+                }
+
+                canvas.isDrawing = false;
+                canvas.selection = true;
+                canvas.drawingRect = null;
+                canvas.drawingStartPoint = null;
+
+                updateAnnotationsList();
+            });
+        });
+
+        // Handle uploaded files
+        function handleFiles(files) {
+            if (files.length === 0) return;
+
+            // Show progress container
+            $('.progress-container').show();
+
+            // Create FormData
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files[]', files[i]);
+            }
+
+            // Upload files
+            $.ajax({
+                url: '/api/upload/training',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                xhr: function() {
+                    const xhr = new window.XMLHttpRequest();
+                    xhr.upload.addEventListener('progress', function(e) {
+                        if (e.lengthComputable) {
+                            const percent = Math.round((e.loaded / e.total) * 100);
+                            $('.progress-bar').css('width', percent + '%');
+                            $('#uploadStatus').text('Uploading... ' + percent + '%');
+                        }
+                    }, false);
+                    return xhr;
+                },
+                success: function(response) {
+                    // Hide progress container
+                    $('.progress-container').hide();
+
+                    console.log('Upload response:', response);
+
+                    // Add uploaded images to the gallery
+                    if (response.files && response.files.length > 0) {
+                        uploadedImages = uploadedImages.concat(response.files);
+                        console.log('Updated uploadedImages:', uploadedImages);
+                        updateImageGallery();
+                    } else {
+                        console.error('No files in response or empty files array');
+                    }
+                },
+                error: function(xhr, status, error) {
+                    // Hide progress container
+                    $('.progress-container').hide();
+
+                    // Show error
+                    alert('Error uploading files: ' + error);
+                }
+            });
+        }
+
+        // Update image gallery
+        function updateImageGallery() {
+            console.log('Updating image gallery with', uploadedImages.length, 'images');
+            const gallery = $('#imageGallery');
+
+            if (uploadedImages.length === 0) {
+                console.log('No images to display');
+                gallery.html('<p class="text-center">No images uploaded yet</p>');
+                return;
+            }
+
+            gallery.empty();
+
+            uploadedImages.forEach(function(image, index) {
+                console.log('Adding image to gallery:', image.original_name, image.url);
+
+                // Create a container for the image
+                const item = $('<div class="image-item"></div>');
+
+                // Create an image element with proper attributes
+                const img = $('<img>');
+                img.attr('src', image.url);
+                img.attr('alt', image.original_name);
+
+                // Append the image to the container
+                item.append(img);
+
+                // Add a title/tooltip
+                item.attr('title', image.original_name);
+
+                // Add click handler
+                item.click(function() {
+                    console.log('Selected image:', image.original_name);
+                    $('.image-item').removeClass('selected');
+                    $(this).addClass('selected');
+                    // Load the image
+                    loadImageForAnnotation(image);
+                });
+
+                // Append the item to the gallery
+                gallery.append(item);
+
+                // Log that the image was added
+                console.log('Added image to gallery:', image.original_name);
+            });
+
+            console.log('Image gallery updated');
+        }
+
+        // Load image for annotation
+        function loadImageForAnnotation(image) {
+            console.log('Loading image for annotation:', image);
+            selectedImage = image;
+
+            // Clear canvas
+            canvas.clear();
+
+            // Show loading message directly on canvas
+            const loadingText = new fabric.Text('Loading image...', {
+                left: canvas.width / 2,
+                top: canvas.height / 2,
+                originX: 'center',
+                originY: 'center',
+                fontSize: 20
+            });
+            canvas.add(loadingText);
+            canvas.renderAll();
+
+            // Use a simple approach with direct URL
+            const imgUrl = image.url;
+            console.log('Image URL:', imgUrl);
+
+            // Create a new image element
+            const imgElement = new Image();
+
+            imgElement.onload = function() {
+                console.log('Image loaded successfully:', imgElement.width, 'x', imgElement.height);
+
+                // Remove loading text
+                canvas.remove(loadingText);
+
+                // Create fabric image
+                const fabricImage = new fabric.Image(imgElement);
+
+                // Calculate scale to fit canvas
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const scale = Math.min(
+                    canvasWidth / imgElement.width,
+                    canvasHeight / imgElement.height
+                ) * 0.9; // 90% of max size to leave some margin
+
+                console.log('Canvas size:', canvasWidth, 'x', canvasHeight);
+                console.log('Scale factor:', scale);
+
+                currentImageScale = scale;
+                currentImageOffsetX = (canvasWidth - imgElement.width * scale) / 2;
+                currentImageOffsetY = (canvasHeight - imgElement.height * scale) / 2;
+                currentImageOriginalWidth = imgElement.width;
+                currentImageOriginalHeight = imgElement.height;
+
+                // Scale and center the image
+                fabricImage.scale(scale);
+                fabricImage.set({
+                    left: currentImageOffsetX,
+                    top: currentImageOffsetY,
+                    selectable: false,
+                    evented: false
+                });
+
+                // Set as background
+                canvas.setBackgroundImage(fabricImage, function() {
+                    canvas.renderAll();
+                    console.log('Background image set and rendered');
+                    resetMetadataFields(selectedImage.metadata || {});
+                    currentSuggestions = [];
+                    renderSuggestions();
+                    fetchPreannotationSuggestions();
+                    fetchExistingAnnotation();
+                });
+            };
+
+            imgElement.onerror = function(e) {
+                console.error('Error loading image:', e);
+                canvas.remove(loadingText);
+
+                // Add error message to canvas
+                const errorText = new fabric.Text('Error loading image. Please try again.', {
+                    left: canvas.width / 2,
+                    top: canvas.height / 2,
+                    originX: 'center',
+                    originY: 'center',
+                    fontSize: 20,
+                    fill: 'red'
+                });
+                canvas.add(errorText);
+                canvas.renderAll();
+
+                alert('Failed to load the image. Error: ' + e.message);
+            };
+
+            // Set crossOrigin to anonymous to avoid CORS issues
+            imgElement.crossOrigin = 'anonymous';
+
+            // Start loading the image
+            imgElement.src = imgUrl;
+            console.log('Image loading started');
+
+            // Clear annotations list
+            updateAnnotationsList();
+        }
+
+        // Update annotations list
+        function updateAnnotationsList() {
+            const list = $('#annotationsList');
+            const objects = canvas.getObjects();
+
+            // Filter out only rectangle objects (not labels)
+            const rectangles = objects.filter(obj => obj.type === 'rect' && obj.data && obj.data.type);
+
+            if (rectangles.length === 0) {
+                list.html('<li class="list-group-item text-center">No annotations yet</li>');
+                return;
+            }
+
+            list.empty();
+
+            rectangles.forEach(function(obj, index) {
+                const type = obj.data.type;
+                const originalRect = toOriginalRect(obj);
+                const left = Math.round(obj.left);
+                const top = Math.round(obj.top);
+                const width = Math.round(obj.width);
+                const height = Math.round(obj.height);
+
+                const item = $('<li class="list-group-item"></li>');
+                item.html('<span class="badge bg-' + getBadgeColorForType(type) + ' me-2">' + type + '</span>' +
+                          'Image: ' + originalRect.left + ', ' + originalRect.top + ', ' + originalRect.width + '×' + originalRect.height +
+                          ' <span class="text-muted">(Canvas: ' + left + ', ' + top + ', ' + width + '×' + height + ')</span>');
+
+                item.append('<button class="btn btn-sm btn-danger float-end">Remove</button>');
+
+                item.find('button').click(function() {
+                    // Remove both the rectangle and its label if it exists
+                    if (obj.label) {
+                        canvas.remove(obj.label);
+                    }
+                    canvas.remove(obj);
+                    updateAnnotationsList();
+                });
+
+                list.append(item);
+            });
+
+            // Update the annotations count in the UI
+            if (rectangles.length > 0) {
+                $('#annotationsList').closest('.annotation-list').find('h6').text('Annotations (' + rectangles.length + ')');
+            } else {
+                $('#annotationsList').closest('.annotation-list').find('h6').text('Annotations');
+            }
+        }
+
+        // Save annotations
+        function saveAnnotations() {
+            if (!selectedImage) {
+                alert('Please select an image first');
+                return;
+            }
+
+            // Filter out only rectangle objects (not labels)
+            const objects = canvas.getObjects().filter(obj => obj.type === 'rect' && obj.data && obj.data.type);
+            const annotationData = [];
+
+            objects.forEach(function(obj) {
+                const original = toOriginalRect(obj);
+                annotationData.push({
+                    type: obj.data.type,
+                    left: original.left,
+                    top: original.top,
+                    width: original.width,
+                    height: original.height,
+                    canvas_left: Math.round(obj.left),
+                    canvas_top: Math.round(obj.top),
+                    canvas_width: Math.round(obj.width),
+                    canvas_height: Math.round(obj.height)
+                });
+            });
+
+            if (annotationData.length === 0) {
+                alert('No annotations to save. Please draw at least one annotation.');
+                return;
+            }
+
+            // Show loading indicator
+            $('#saveAnnotationsBtn').prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...');
+
+            // Save annotations
+            const metadata = {
+                source_type: $('#metadataSourceType').val() || null,
+                theme: $('#metadataTheme').val() || null,
+                language: $('#metadataLanguage').val() || null
+            };
+
+            $.ajax({
+                url: '/api/annotate',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    image: selectedImage.path,
+                    annotations: annotationData,
+                    metadata: metadata
+                }),
+                success: function(response) {
+                    // Reset button
+                    $('#saveAnnotationsBtn').prop('disabled', false).text('Save Annotations');
+
+                    selectedImage.metadata = metadata;
+
+                    const metaSummary = Object.entries(metadata)
+                        .filter(function(entry) { return entry[1]; })
+                        .map(function(entry) { return entry[0] + ': ' + entry[1]; })
+                        .join(', ');
+
+                    // Show success message with details
+                    let html = '<div class="alert alert-success">Annotations saved successfully</div>';
+                    html += '<p>Image: ' + selectedImage.original_name + '</p>';
+                    html += '<p>Number of annotations: ' + annotationData.length + '</p>';
+                    html += '<p>Metadata: ' + escapeHtml(metaSummary || 'None') + '</p>';
+                    html += '<ul class="list-group mt-3">';
+
+                    annotationData.forEach(function(annotation) {
+                        html += '<li class="list-group-item">';
+                        html += '<span class="badge bg-' + getBadgeColorForType(annotation.type) + ' me-2">' + annotation.type + '</span> ';
+                        html += 'Left: ' + annotation.left + ', Top: ' + annotation.top + ', ';
+                        html += 'Width: ' + annotation.width + ', Height: ' + annotation.height;
+                        html += '</li>';
+                    });
+
+                    html += '</ul>';
+
+                    $('#saveAnnotationsModalBody').html(html);
+                    $('#saveAnnotationsModal').modal('show');
+                },
+                error: function(xhr, status, error) {
+                    // Reset button
+                    $('#saveAnnotationsBtn').prop('disabled', false).text('Save Annotations');
+
+                    // Show error message
+                    let errorMsg = 'Error saving annotations';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+
+                    $('#saveAnnotationsModalBody').html('<div class="alert alert-danger">' + errorMsg + '</div>');
+                    $('#saveAnnotationsModal').modal('show');
+                }
+            });
+        }
+
+        // Train model
+        function trainModel() {
+            $.ajax({
+                url: '/api/train',
+                type: 'POST',
+                contentType: 'application/json',
+                success: function(response) {
+                    let html = '<div class="alert alert-success">' + response.message + '</div>';
+                    html += '<p>Model Version: ' + response.model_info.version + '</p>';
+                    html += '<p>Number of Patterns: ' + response.model_info.num_patterns + '</p>';
+
+                    $('#trainingResultModalBody').html(html);
+                    $('#trainingResultModal').modal('show');
+                },
+                error: function(xhr, status, error) {
+                    let errorMsg = 'Error training model';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        errorMsg = xhr.responseJSON.message;
+                    }
+
+                    let html = '<div class="alert alert-danger">' + errorMsg + '</div>';
+                    $('#trainingResultModalBody').html(html);
+                    $('#trainingResultModal').modal('show');
+                }
+            });
+        }
+
+        // Helper functions
+        function fetchGuidelinesConfig() {
+            $.getJSON('/api/annotation-guidelines')
+                .done(function(data) {
+                    guidelinesCache = data;
+                    if (!metadataOptions && data.config && data.config.metadata_fields) {
+                        metadataOptions = data.config.metadata_fields;
+                        populateMetadataFields(metadataOptions);
+                    }
+                })
+                .fail(function(xhr) {
+                    console.warn('Failed to preload guidelines', xhr.responseText);
+                });
+        }
+
+        function populateMetadataFields(fields) {
+            const mapping = {
+                'source_type': '#metadataSourceType',
+                'theme': '#metadataTheme',
+                'language': '#metadataLanguage'
+            };
+
+            fields.forEach(function(field) {
+                const selector = mapping[field.name];
+                if (!selector) return;
+                const select = $(selector);
+                const existingValue = select.val();
+                select.empty();
+                select.append('<option value="">Select...</option>');
+                (field.options || []).forEach(function(option) {
+                    select.append('<option value="' + option + '">' + option.replace(/_/g, ' ') + '</option>');
+                });
+                if (field.options && field.options.includes(existingValue)) {
+                    select.val(existingValue);
+                }
+            });
+        }
+
+        function resetMetadataFields(metadata) {
+            $('#metadataSourceType').val(metadata && metadata.source_type ? metadata.source_type : '');
+            $('#metadataTheme').val(metadata && metadata.theme ? metadata.theme : '');
+            $('#metadataLanguage').val(metadata && metadata.language ? metadata.language : '');
+        }
+
+        function fetchPreannotationSuggestions() {
+            if (!selectedImage || !selectedImage.path) {
+                return;
+            }
+            $('#suggestionsList').html('<div class="list-group-item text-center text-muted">Loading suggestions...</div>');
+            $.ajax({
+                url: '/api/preannotation',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ image_path: selectedImage.path })
+            })
+            .done(function(response) {
+                currentSuggestions = response.candidates || [];
+                renderSuggestions();
+            })
+            .fail(function(xhr) {
+                const message = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'Failed to load suggestions';
+                $('#suggestionsList').html('<div class="list-group-item text-center text-danger">' + escapeHtml(message) + '</div>');
+            });
+        }
+
+        function renderSuggestions() {
+            const container = $('#suggestionsList');
+            if (!currentSuggestions.length) {
+                container.html('<div class="list-group-item text-center text-muted">No suggestions available</div>');
+                return;
+            }
+            container.empty();
+            currentSuggestions.forEach(function(candidate, index) {
+                const item = $('<div class="list-group-item d-flex justify-content-between align-items-start"></div>');
+                const info = $('<div></div>');
+                info.append('<div><strong>' + escapeHtml(candidate.category) + '</strong> (' + Math.round((candidate.confidence || 0) * 100) + '%)</div>');
+                if (candidate.text) {
+                    info.append('<div class="text-muted">' + escapeHtml(candidate.text) + '</div>');
+                }
+                const btn = $('<button class="btn btn-sm btn-outline-primary apply-suggestion">Add</button>');
+                btn.attr('data-index', index);
+                item.append(info);
+                item.append(btn);
+                container.append(item);
+            });
+        }
+
+        function fetchExistingAnnotation() {
+            if (!selectedImage || !selectedImage.path) {
+                return;
+            }
+            $.getJSON('/api/annotation', { image_path: selectedImage.path })
+                .done(function(response) {
+                    if (!response.annotation || !response.annotation.annotations) {
+                        updateAnnotationsList();
+                        return;
+                    }
+                    const annotationPayload = response.annotation;
+                    resetMetadataFields(annotationPayload.metadata || {});
+                    selectedImage.metadata = annotationPayload.metadata || {};
+                    // Remove existing rectangles before re-adding
+                    const toRemove = canvas.getObjects().filter(obj => obj.type === 'rect' || (obj.type === 'text' && obj.text));
+                    toRemove.forEach(function(obj) { canvas.remove(obj); });
+                    canvas.renderAll();
+                    (annotationPayload.annotations || []).forEach(function(ann) {
+                        addAnnotationFromData(ann);
+                    });
+                    updateAnnotationsList();
+                })
+                .fail(function(xhr) {
+                    console.warn('Annotation load failed', xhr.responseText);
+                });
+        }
+
+        function addAnnotationFromData(annotation) {
+            const category = annotation.type || annotation.category || selectedAnnotationType;
+            const left = typeof annotation.canvas_left === 'number' ? annotation.canvas_left : currentImageOffsetX + (annotation.left || 0) * currentImageScale;
+            const top = typeof annotation.canvas_top === 'number' ? annotation.canvas_top : currentImageOffsetY + (annotation.top || 0) * currentImageScale;
+            const width = typeof annotation.canvas_width === 'number' ? annotation.canvas_width : (annotation.width || 0) * currentImageScale;
+            const height = typeof annotation.canvas_height === 'number' ? annotation.canvas_height : (annotation.height || 0) * currentImageScale;
+
+            if (width <= 0 || height <= 0) return;
+
+            const rect = new fabric.Rect({
+                left: left,
+                top: top,
+                width: width,
+                height: height,
+                fill: 'rgba(' + getColorRgbForType(category) + ',0.2)',
+                stroke: getColorForType(category),
+                strokeWidth: 2,
+                selectable: true,
+                data: {
+                    type: category
+                }
+            });
+            const label = new fabric.Text(category, {
+                left: left,
+                top: top - 15,
+                fontSize: 12,
+                fill: getColorForType(category)
+            });
+            rect.label = label;
+            canvas.add(rect);
+            canvas.add(label);
+        }
+
+        function toOriginalRect(rect) {
+            const scale = currentImageScale || 1;
+            const offsetX = currentImageOffsetX || 0;
+            const offsetY = currentImageOffsetY || 0;
+            const width = Math.max(1, Math.round(rect.width / scale));
+            const height = Math.max(1, Math.round(rect.height / scale));
+            const left = Math.max(0, Math.round((rect.left - offsetX) / scale));
+            const top = Math.max(0, Math.round((rect.top - offsetY) / scale));
+            return {
+                left: left,
+                top: top,
+                width: width,
+                height: height
+            };
+        }
+
+        function applySuggestion(index) {
+            if (!selectedImage || !currentSuggestions[index]) {
+                return;
+            }
+            const suggestion = currentSuggestions[index];
+            const box = suggestion.bbox || [];
+            if (box.length !== 4) {
+                return;
+            }
+
+            const left = currentImageOffsetX + box[0] * currentImageScale;
+            const top = currentImageOffsetY + box[1] * currentImageScale;
+            const width = (box[2] - box[0]) * currentImageScale;
+            const height = (box[3] - box[1]) * currentImageScale;
+
+            if (width <= 0 || height <= 0) {
+                return;
+            }
+
+            const rect = new fabric.Rect({
+                left: left,
+                top: top,
+                width: width,
+                height: height,
+                fill: 'rgba(' + getColorRgbForType(suggestion.category) + ',0.2)',
+                stroke: getColorForType(suggestion.category),
+                strokeWidth: 2,
+                selectable: true,
+                data: {
+                    type: suggestion.category
+                }
+            });
+            canvas.add(rect);
+            const label = new fabric.Text(suggestion.category, {
+                left: left,
+                top: top - 15,
+                fontSize: 12,
+                fill: getColorForType(suggestion.category)
+            });
+            rect.label = label;
+            canvas.add(label);
+            canvas.renderAll();
+            updateAnnotationsList();
+            currentSuggestions.splice(index, 1);
+            renderSuggestions();
+        }
+
+        function loadDatasets() {
+            $.getJSON('/api/datasets')
+                .done(function(data) {
+                    const datasets = data.datasets || [];
+                    const tbody = $('#datasetsTable tbody');
+                    if (!datasets.length) {
+                        tbody.html('<tr><td colspan="7" class="text-center text-muted">No datasets yet</td></tr>');
+                        return;
+                    }
+                    tbody.empty();
+                    datasets.reverse().forEach(function(dataset) {
+                        const splitCounts = dataset.split_counts || {};
+                        const row = $('<tr></tr>');
+                        row.append('<td><code>' + escapeHtml(dataset.version) + '</code></td>');
+                        row.append('<td>' + escapeHtml(dataset.created_at || '') + '</td>');
+                        row.append('<td>' + (dataset.num_records || 0) + '</td>');
+                        row.append('<td>' + [splitCounts.train || 0, splitCounts.val || 0, splitCounts.test || 0].join(' / ') + '</td>');
+                        row.append('<td>' + escapeHtml((dataset.tags || []).join(', ')) + '</td>');
+                        row.append('<td>' + escapeHtml(dataset.description || '') + '</td>');
+                        row.append('<td><a class="btn btn-sm btn-outline-secondary" href="/api/datasets/' + encodeURIComponent(dataset.version) + '/manifest" target="_blank"><i class="fas fa-download me-1"></i>Manifest</a></td>');
+                        tbody.append(row);
+                    });
+                })
+                .fail(function() {
+                    const tbody = $('#datasetsTable tbody');
+                    tbody.html('<tr><td colspan="7" class="text-center text-danger">Failed to load datasets</td></tr>');
+                });
+        }
+
+        function createDatasetVersion() {
+            const payload = {
+                description: $('#datasetDescription').val(),
+                tags: ($('#datasetTags').val() || '').split(',').map(tag => tag.trim()).filter(Boolean),
+                train_ratio: parseFloat($('#datasetTrainRatio').val() || '0.7'),
+                val_ratio: parseFloat($('#datasetValRatio').val() || '0.15'),
+                seed: parseInt($('#datasetSeed').val() || '42', 10)
+            };
+            $('#createDatasetAlert').hide();
+            $.ajax({
+                url: '/api/datasets',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify(payload)
+            })
+            .done(function(response) {
+                $('#createDatasetModal').modal('hide');
+                $('#createDatasetForm')[0].reset();
+                loadDatasets();
+            })
+            .fail(function(xhr) {
+                const message = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'Failed to create dataset';
+                $('#createDatasetAlert').text(message).show();
+            });
+        }
+
+        function showGuidelines() {
+            if (guidelinesCache) {
+                renderGuidelines(guidelinesCache);
+                return;
+            }
+
+            $('#guidelinesModalBody').html('<div class="text-center text-muted">Loading guidelines...</div>');
+            $('#guidelinesModal').modal('show');
+
+            $.getJSON('/api/annotation-guidelines')
+                .done(function(data) {
+                    guidelinesCache = data;
+                    renderGuidelines(data);
+                })
+                .fail(function(xhr) {
+                    const message = xhr.responseJSON && xhr.responseJSON.error ? xhr.responseJSON.error : 'Failed to load guidelines';
+                    $('#guidelinesModalBody').html('<div class="alert alert-danger">' + escapeHtml(message) + '</div>');
+                });
+        }
+
+        function renderGuidelines(data) {
+            let html = '';
+            if (data.config && data.config.categories && data.config.categories.length) {
+                html += '<h6>Categories</h6>';
+                html += '<div class="table-responsive">';
+                html += '<table class="table table-sm table-striped">';
+                html += '<thead><tr><th>Category</th><th>Description</th></tr></thead><tbody>';
+                data.config.categories.forEach(function(cat) {
+                    html += '<tr><td><code>' + escapeHtml(cat.id) + '</code></td><td>' + escapeHtml(cat.description || '') + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+
+            if (data.config && data.config.metadata_fields && data.config.metadata_fields.length) {
+                html += '<h6 class="mt-4">Metadata Fields</h6><ul class="list-group">';
+                data.config.metadata_fields.forEach(function(field) {
+                    html += '<li class="list-group-item"><strong>' + escapeHtml(field.name) + '</strong>: ' + escapeHtml((field.options || []).join(', ')) + '</li>';
+                });
+                html += '</ul>';
+            }
+
+            if (data.markdown) {
+                html += '<h6 class="mt-4">Full Guidelines</h6>';
+                html += '<pre class="bg-light p-3 border rounded" style="white-space: pre-wrap;">' + escapeHtml(data.markdown) + '</pre>';
+            }
+
+            if (!html) {
+                html = '<div class="alert alert-warning">No guidelines available.</div>';
+            }
+
+            $('#guidelinesModalBody').html(html);
+            $('#guidelinesModal').modal('show');
+        }
+
+        function escapeHtml(string) {
+            return String(string || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function getColorForType(type) {
+            switch (type) {
+                case 'app_region': return 'black';
+                case 'store_region': return 'red';
+                case 'code_region': return 'purple';
+                case 'benefit_region': return 'green';
+                case 'expiry_region': return 'blue';
+                case 'terms_region': return 'orange';
+                default: return 'gray';
+            }
+        }
+
+        // Get RGB color values for annotation type (without the # prefix)
+        function getColorRgbForType(type) {
+            const color = getColorForType(type);
+            // For named colors, return RGB values
+            switch (color) {
+                case 'black': return '0,0,0';
+                case 'red': return '255,0,0';
+                case 'blue': return '0,0,255';
+                case 'green': return '0,128,0';
+                case 'purple': return '128,0,128';
+                case 'orange': return '255,165,0';
+                case 'gray': return '128,128,128';
+                default: return '0,0,0';
+            }
+        }
+
+        function getBadgeColorForType(type) {
+            switch (type) {
+                case 'app_region': return 'dark';
+                case 'store_region': return 'danger';
+                case 'code_region': return 'info';
+                case 'benefit_region': return 'success';
+                case 'expiry_region': return 'primary';
+                case 'terms_region': return 'warning';
+                default: return 'secondary';
+            }
+        }
+    </script>
+</body>
+</html>

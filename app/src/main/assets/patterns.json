@@ -1,0 +1,1052 @@
+[
+  {
+    "name": "CRED 1 Coupon",
+    "description": "Pattern for CRED 1 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "40% OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 1"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b91000"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 19 May 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDMYNTRA40"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "1",
+      "discount": "40% OFF",
+      "code": "CREDMYNTRA40",
+      "min_order": "\u20b91000",
+      "expiry_date": "19 May 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 11 Coupon",
+    "description": "Pattern for CRED 11 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "\u20b9200 OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 11"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b9500"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 11 May 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDZOMATO200"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "11",
+      "discount": "\u20b9200 OFF",
+      "code": "CREDZOMATO200",
+      "min_order": "\u20b9500",
+      "expiry_date": "11 May 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 8 Coupon",
+    "description": "Pattern for CRED 8 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "40% OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 8"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b91000"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 19 May 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDMYNTRA40"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "8",
+      "discount": "40% OFF",
+      "code": "CREDMYNTRA40",
+      "min_order": "\u20b91000",
+      "expiry_date": "19 May 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 9 Coupon",
+    "description": "Pattern for CRED 9 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "40% OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 9"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b91000"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 19 May 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDMYNTRA40"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "9",
+      "discount": "40% OFF",
+      "code": "CREDMYNTRA40",
+      "min_order": "\u20b91000",
+      "expiry_date": "19 May 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 17 Coupon",
+    "description": "Pattern for CRED 17 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "\u20b9100 OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 17"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b9250"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 14 May 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDZEPTO100"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "17",
+      "discount": "\u20b9100 OFF",
+      "code": "CREDZEPTO100",
+      "min_order": "\u20b9250",
+      "expiry_date": "14 May 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 3 Coupon",
+    "description": "Pattern for CRED 3 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "40% OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 3"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b95000"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 18 Jun 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDCITIZEN40"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "3",
+      "discount": "40% OFF",
+      "code": "CREDCITIZEN40",
+      "min_order": "\u20b95000",
+      "expiry_date": "18 Jun 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 12 Coupon",
+    "description": "Pattern for CRED 12 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "\u20b9200 OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 12"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b9500"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 11 May 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDZOMATO200"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "12",
+      "discount": "\u20b9200 OFF",
+      "code": "CREDZOMATO200",
+      "min_order": "\u20b9500",
+      "expiry_date": "11 May 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 10 Coupon",
+    "description": "Pattern for CRED 10 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "40% OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 10"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b91000"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 19 May 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDMYNTRA40"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "10",
+      "discount": "40% OFF",
+      "code": "CREDMYNTRA40",
+      "min_order": "\u20b91000",
+      "expiry_date": "19 May 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 0 Coupon",
+    "description": "Pattern for CRED 0 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "\u20b9150 OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 0"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b9300"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 03 Jun 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDSWIGGY150"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "0",
+      "discount": "\u20b9150 OFF",
+      "code": "CREDSWIGGY150",
+      "min_order": "\u20b9300",
+      "expiry_date": "03 Jun 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 18 Coupon",
+    "description": "Pattern for CRED 18 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "\u20b9100 OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 18"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b9250"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 14 May 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDZEPTO100"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "18",
+      "discount": "\u20b9100 OFF",
+      "code": "CREDZEPTO100",
+      "min_order": "\u20b9250",
+      "expiry_date": "14 May 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 13 Coupon",
+    "description": "Pattern for CRED 13 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "\u20b9200 OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 13"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b9500"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 11 May 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDZOMATO200"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "13",
+      "discount": "\u20b9200 OFF",
+      "code": "CREDZOMATO200",
+      "min_order": "\u20b9500",
+      "expiry_date": "11 May 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 2 Coupon",
+    "description": "Pattern for CRED 2 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "\u20b9200 OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 2"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b9500"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 11 May 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDZOMATO200"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "2",
+      "discount": "\u20b9200 OFF",
+      "code": "CREDZOMATO200",
+      "min_order": "\u20b9500",
+      "expiry_date": "11 May 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 5 Coupon",
+    "description": "Pattern for CRED 5 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "\u20b9150 OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 5"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b9300"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 03 Jun 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDSWIGGY150"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "5",
+      "discount": "\u20b9150 OFF",
+      "code": "CREDSWIGGY150",
+      "min_order": "\u20b9300",
+      "expiry_date": "03 Jun 2025",
+      "source": "CRED App"
+    }
+  },
+  {
+    "name": "CRED 15 Coupon",
+    "description": "Pattern for CRED 15 coupons",
+    "regions": [
+      {
+        "type": "brand",
+        "box": [
+          40,
+          40,
+          160,
+          80
+        ],
+        "text": "CRED"
+      },
+      {
+        "type": "discount",
+        "box": [
+          40,
+          100,
+          300,
+          140
+        ],
+        "text": "40% OFF"
+      },
+      {
+        "type": "partner",
+        "box": [
+          40,
+          150,
+          400,
+          180
+        ],
+        "text": "on 15"
+      },
+      {
+        "type": "min_order",
+        "box": [
+          40,
+          190,
+          300,
+          220
+        ],
+        "text": "Min order: \u20b95000"
+      },
+      {
+        "type": "expiry",
+        "box": [
+          40,
+          230,
+          400,
+          260
+        ],
+        "text": "Valid till: 18 Jun 2025"
+      },
+      {
+        "type": "code",
+        "box": [
+          50,
+          290,
+          750,
+          330
+        ],
+        "text": "CODE: CREDCITIZEN40"
+      }
+    ],
+    "fields": {
+      "store": "CRED",
+      "partner": "15",
+      "discount": "40% OFF",
+      "code": "CREDCITIZEN40",
+      "min_order": "\u20b95000",
+      "expiry_date": "18 Jun 2025",
+      "source": "CRED App"
+    }
+  }
+]

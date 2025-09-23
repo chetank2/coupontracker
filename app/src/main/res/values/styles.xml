@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material Typography styles -->
+    <style name="TextAppearance.CouponTracker.Headline1" parent="TextAppearance.MaterialComponents.Headline1">
+        <item name="android:textSize">72sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">-0.015625</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Headline2" parent="TextAppearance.MaterialComponents.Headline2">
+        <item name="android:textSize">56sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">-0.00833333333</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Headline3" parent="TextAppearance.MaterialComponents.Headline3">
+        <item name="android:textSize">45sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Headline4" parent="TextAppearance.MaterialComponents.Headline4">
+        <item name="android:textSize">32sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">0.00735294118</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Headline5" parent="TextAppearance.MaterialComponents.Headline5">
+        <item name="android:textSize">24sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">0</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Headline6" parent="TextAppearance.MaterialComponents.Headline6">
+        <item name="android:textSize">18sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">0.0125</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Subtitle1" parent="TextAppearance.MaterialComponents.Subtitle1">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">0.009375</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Subtitle2" parent="TextAppearance.MaterialComponents.Subtitle2">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">0.00714285714</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Body1" parent="TextAppearance.MaterialComponents.Body1">
+        <item name="android:textSize">16sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">0.03125</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Body2" parent="TextAppearance.MaterialComponents.Body2">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">0.0178571429</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Caption" parent="TextAppearance.MaterialComponents.Caption">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">0.0333333333</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Button" parent="TextAppearance.MaterialComponents.Button">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">?attr/colorOnPrimary</item>
+        <item name="android:letterSpacing">0.0892857143</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+
+    <style name="TextAppearance.CouponTracker.Overline" parent="TextAppearance.MaterialComponents.Overline">
+        <item name="android:textSize">10sp</item>
+        <item name="android:textColor">?attr/colorOnBackground</item>
+        <item name="android:letterSpacing">0.15</item>
+        <item name="android:textAllCaps">true</item>
+    </style>
+</resources> 

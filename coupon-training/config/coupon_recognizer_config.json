@@ -1,0 +1,99 @@
+{
+  "pattern_recognition": {
+    "min_text_height": 20,
+    "min_text_width": 50,
+    "text_padding": 10,
+    "clustering_eps": 50,
+    "clustering_min_samples": 2,
+    "element_patterns": {
+      "store": [
+        "(?i)myntra",
+        "(?i)swiggy",
+        "(?i)phonepe",
+        "(?i)amazon",
+        "(?i)flipkart",
+        "(?i)citizen"
+      ],
+      "code": [
+        "(?i)code[:\\s]*([A-Z0-9]{4,})",
+        "(?i)use[:\\s]*([A-Z0-9]{4,})",
+        "(?i)^[A-Z0-9]{5,}$"
+      ],
+      "amount": [
+        "(?i)(\\d+)%\\s*off",
+        "(?i)₹\\s*(\\d+)",
+        "(?i)flat\\s*(\\d+)",
+        "(?i)save\\s*(\\d+)"
+      ],
+      "expiry": [
+        "(?i)valid\\s*(?:till|until)[:\\s]*(\\d{1,2}[/.-]\\d{1,2}[/.-]\\d{2,4})",
+        "(?i)expires?\\s*(?:on)?[:\\s]*(\\d{1,2}[/.-]\\d{1,2}[/.-]\\d{2,4})"
+      ],
+      "description": [
+        "(?i)on\\s*(?:all|select|orders)",
+        "(?i)minimum\\s*(?:order|purchase)"
+      ]
+    }
+  },
+  "error_recovery": {
+    "max_retry_attempts": 3,
+    "retry_delay": 1,
+    "retry_backoff": 2,
+    "fallback_methods": [
+      "adaptive_threshold",
+      "gaussian_blur",
+      "sharpen",
+      "histogram_equalization"
+    ]
+  },
+  "resource_management": {
+    "max_workers": 4,
+    "memory_limit_mb": 1024,
+    "image_size_limit": [1920, 1080],
+    "cleanup_interval": 10
+  },
+  "ocr_configs": {
+    "default": "--oem 3 --psm 6",
+    "store": "--oem 3 --psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&-. ",
+    "code": "--oem 3 --psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+    "amount": "--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789.,%₹$ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ",
+    "expiry": "--oem 3 --psm 7 -c tessedit_char_whitelist=0123456789/-.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz ",
+    "description": "--oem 3 --psm 6 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,;:!?%₹$()-_"
+  },
+  "pattern_regions": {
+    "store": [
+      {"left": 0, "top": 0, "right": 720, "bottom": 320},
+      {"left": 72, "top": 50, "right": 648, "bottom": 200},
+      {"left": 200, "top": 50, "right": 520, "bottom": 150},
+      {"left": 150, "top": 100, "right": 570, "bottom": 250}
+    ],
+    "code": [
+      {"left": 72, "top": 640, "right": 648, "bottom": 960},
+      {"left": 150, "top": 700, "right": 570, "bottom": 850},
+      {"left": 200, "top": 750, "right": 520, "bottom": 850},
+      {"left": 100, "top": 600, "right": 620, "bottom": 750},
+      {"left": 100, "top": 800, "right": 620, "bottom": 900}
+    ],
+    "amount": [
+      {"left": 72, "top": 960, "right": 648, "bottom": 1280},
+      {"left": 150, "top": 1000, "right": 570, "bottom": 1200},
+      {"left": 200, "top": 1050, "right": 520, "bottom": 1150},
+      {"left": 100, "top": 900, "right": 620, "bottom": 1000},
+      {"left": 100, "top": 1100, "right": 620, "bottom": 1250},
+      {"left": 250, "top": 500, "right": 470, "bottom": 600},
+      {"left": 300, "top": 200, "right": 500, "bottom": 300}
+    ],
+    "expiry": [
+      {"left": 0, "top": 1280, "right": 720, "bottom": 1600},
+      {"left": 72, "top": 1300, "right": 648, "bottom": 1500},
+      {"left": 150, "top": 1400, "right": 570, "bottom": 1500},
+      {"left": 200, "top": 1350, "right": 520, "bottom": 1450}
+    ],
+    "description": [
+      {"left": 72, "top": 320, "right": 648, "bottom": 640},
+      {"left": 100, "top": 350, "right": 620, "bottom": 550},
+      {"left": 150, "top": 400, "right": 570, "bottom": 600},
+      {"left": 200, "top": 350, "right": 520, "bottom": 500}
+    ]
+  }
+}

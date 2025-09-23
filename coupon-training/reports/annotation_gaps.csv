@@ -1,0 +1,108 @@
+annotation,image_path,missing_fields
+04b36b60-b33d-4cde-a6c6-1a66238e86b3.json,data/processed/04b36b60-b33d-4cde-a6c6-1a66238e86b3.png,store;discount;code;expiry_date;min_order
+0d17d15b-1378-45d8-9d55-47d5a34546b4.json,data/processed/0d17d15b-1378-45d8-9d55-47d5a34546b4.png,store;discount;code;expiry_date;min_order
+14009f73-9d1b-40f2-a9c9-d6c1c0e44e82.json,data/processed/14009f73-9d1b-40f2-a9c9-d6c1c0e44e82.png,store;partner;discount;code;expiry_date;min_order
+1e25b37a-8c06-49dc-8a45-5ed73271714f.json,data/processed/1e25b37a-8c06-49dc-8a45-5ed73271714f.png,store;partner;discount;code;expiry_date;min_order
+28646d22-bfea-4ed0-a3c3-bef362a15af9.json,data/processed/28646d22-bfea-4ed0-a3c3-bef362a15af9.png,discount;code;expiry_date;min_order
+3bd1adfa-c3b2-4a5f-bf52-2e80adbc8117.json,data/processed/3bd1adfa-c3b2-4a5f-bf52-2e80adbc8117.jpeg,discount;code;expiry_date;min_order
+4b8935b2-28fc-48ca-bf67-c34ed0bb5797.json,data/processed/4b8935b2-28fc-48ca-bf67-c34ed0bb5797.png,store;partner;discount;code;expiry_date;min_order
+IMG-20250502-WA0014_processed.json,data/processed/IMG-20250502-WA0014_processed.jpg,store;partner;discount;code;min_order
+IMG-20250502-WA0014_processed_annotations.json,data/processed/IMG-20250502-WA0014_processed.jpg,store;partner;discount;code;min_order
+IMG-20250502-WA0015_processed.json,data/processed/IMG-20250502-WA0015_processed.jpg,partner;discount;expiry_date;min_order
+IMG-20250502-WA0015_processed_annotations.json,data/processed/IMG-20250502-WA0015_processed.jpg,store;discount;expiry_date;min_order
+Screenshot_20250502-192634_processed.json,data/processed/Screenshot_20250502-192634_processed.png,partner;discount;expiry_date;min_order
+Screenshot_20250502-192634_processed_annotations.json,data/processed/Screenshot_20250502-192634_processed.png,store;discount;code;expiry_date;min_order
+Screenshot_20250502-192647_processed.json,data/processed/Screenshot_20250502-192647_processed.png,store;partner;discount;expiry_date;min_order
+Screenshot_20250502-192647_processed_annotations.json,data/processed/Screenshot_20250502-192647_processed.png,store;discount;code;expiry_date;min_order
+Screenshot_20250502-192658_processed.json,data/processed/Screenshot_20250502-192658_processed.png,partner;discount;expiry_date;min_order
+Screenshot_20250502-192658_processed_annotations.json,data/processed/Screenshot_20250502-192658_processed.png,store;partner;discount;expiry_date;min_order
+Screenshot_20250502-192711_processed.json,data/processed/Screenshot_20250502-192711_processed.png,partner;discount;expiry_date;min_order
+Screenshot_20250502-192711_processed_annotations.json,data/processed/Screenshot_20250502-192711_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-192723_processed.json,data/processed/Screenshot_20250502-192723_processed.png,store;partner;discount;min_order
+Screenshot_20250502-192723_processed_annotations.json,data/processed/Screenshot_20250502-192723_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-192731_processed.json,data/processed/Screenshot_20250502-192731_processed.png,store;partner;discount;expiry_date;min_order
+Screenshot_20250502-192731_processed_annotations.json,data/processed/Screenshot_20250502-192731_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-192749_processed.json,data/processed/Screenshot_20250502-192749_processed.png,store;partner;discount;min_order
+Screenshot_20250502-192749_processed_annotations.json,data/processed/Screenshot_20250502-192749_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-192756_processed.json,data/processed/Screenshot_20250502-192756_processed.png,partner;discount;expiry_date;min_order
+Screenshot_20250502-192756_processed_annotations.json,data/processed/Screenshot_20250502-192756_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-192804_processed.json,data/processed/Screenshot_20250502-192804_processed.png,partner;discount;expiry_date;min_order
+Screenshot_20250502-192804_processed_annotations.json,data/processed/Screenshot_20250502-192804_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-200507_processed.json,data/processed/Screenshot_20250502-200507_processed.png,store;partner;discount;min_order
+Screenshot_20250502-200507_processed_annotations.json,data/processed/Screenshot_20250502-200507_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-200524_processed.json,data/processed/Screenshot_20250502-200524_processed.png,store;partner;discount;min_order
+Screenshot_20250502-200524_processed_annotations.json,data/processed/Screenshot_20250502-200524_processed.png,store;partner;discount;expiry_date;min_order
+Screenshot_20250502-200536_processed.json,data/processed/Screenshot_20250502-200536_processed.png,partner;discount;expiry_date;min_order
+Screenshot_20250502-200536_processed_annotations.json,data/processed/Screenshot_20250502-200536_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-200547_processed.json,data/processed/Screenshot_20250502-200547_processed.png,store;partner;discount;expiry_date;min_order
+Screenshot_20250502-200547_processed_annotations.json,data/processed/Screenshot_20250502-200547_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-200554_processed.json,data/processed/Screenshot_20250502-200554_processed.png,partner;discount;expiry_date;min_order
+Screenshot_20250502-200554_processed_annotations.json,data/processed/Screenshot_20250502-200554_processed.png,store;partner;discount;expiry_date;min_order
+Screenshot_20250502-200601_processed.json,data/processed/Screenshot_20250502-200601_processed.png,partner;discount;expiry_date;min_order
+Screenshot_20250502-200601_processed_annotations.json,data/processed/Screenshot_20250502-200601_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-200609_processed.json,data/processed/Screenshot_20250502-200609_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-200609_processed_annotations.json,data/processed/Screenshot_20250502-200609_processed.png,partner;discount;code;expiry_date;min_order
+Screenshot_20250502-200616_processed.json,data/processed/Screenshot_20250502-200616_processed.png,partner;discount;expiry_date;min_order
+Screenshot_20250502-200616_processed_annotations.json,data/processed/Screenshot_20250502-200616_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-200623_processed.json,data/processed/Screenshot_20250502-200623_processed.png,store;discount;expiry_date;min_order
+Screenshot_20250502-200623_processed_annotations.json,data/processed/Screenshot_20250502-200623_processed.png,store;partner;discount;expiry_date;min_order
+Screenshot_20250502-200639_processed.json,data/processed/Screenshot_20250502-200639_processed.png,store;partner;discount;min_order
+Screenshot_20250502-200639_processed_annotations.json,data/processed/Screenshot_20250502-200639_processed.png,store;partner;discount;expiry_date;min_order
+Screenshot_20250502-200654_processed.json,data/processed/Screenshot_20250502-200654_processed.png,partner;discount;expiry_date;min_order
+Screenshot_20250502-200654_processed_annotations.json,data/processed/Screenshot_20250502-200654_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201806_processed.json,data/processed/Screenshot_20250502-201806_processed.png,partner;discount;min_order
+Screenshot_20250502-201806_processed_annotations.json,data/processed/Screenshot_20250502-201806_processed.png,partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201815_processed.json,data/processed/Screenshot_20250502-201815_processed.png,store;discount;code;expiry_date;min_order
+Screenshot_20250502-201815_processed_annotations.json,data/processed/Screenshot_20250502-201815_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201823_processed.json,data/processed/Screenshot_20250502-201823_processed.png,discount;code;expiry_date;min_order
+Screenshot_20250502-201823_processed_annotations.json,data/processed/Screenshot_20250502-201823_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201835_processed.json,data/processed/Screenshot_20250502-201835_processed.png,store;discount;expiry_date;min_order
+Screenshot_20250502-201835_processed_annotations.json,data/processed/Screenshot_20250502-201835_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201845_processed.json,data/processed/Screenshot_20250502-201845_processed.png,store;discount;code;expiry_date;min_order
+Screenshot_20250502-201845_processed_annotations.json,data/processed/Screenshot_20250502-201845_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201854_processed.json,data/processed/Screenshot_20250502-201854_processed.png,store;discount;code;expiry_date;min_order
+Screenshot_20250502-201854_processed_annotations.json,data/processed/Screenshot_20250502-201854_processed.png,store;partner;discount;expiry_date;min_order
+Screenshot_20250502-201902_processed.json,data/processed/Screenshot_20250502-201902_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201902_processed_annotations.json,data/processed/Screenshot_20250502-201902_processed.png,store;partner;discount;expiry_date;min_order
+Screenshot_20250502-201908_processed.json,data/processed/Screenshot_20250502-201908_processed.png,store;discount;code;expiry_date;min_order
+Screenshot_20250502-201908_processed_annotations.json,data/processed/Screenshot_20250502-201908_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201916_processed.json,data/processed/Screenshot_20250502-201916_processed.png,store;discount;expiry_date;min_order
+Screenshot_20250502-201916_processed_annotations.json,data/processed/Screenshot_20250502-201916_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201924_processed.json,data/processed/Screenshot_20250502-201924_processed.png,store;partner;discount;expiry_date;min_order
+Screenshot_20250502-201924_processed_annotations.json,data/processed/Screenshot_20250502-201924_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201933_processed.json,data/processed/Screenshot_20250502-201933_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201933_processed_annotations.json,data/processed/Screenshot_20250502-201933_processed.png,partner;discount;min_order
+Screenshot_20250502-201942_processed.json,data/processed/Screenshot_20250502-201942_processed.png,partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201942_processed_annotations.json,data/processed/Screenshot_20250502-201942_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-201954_processed.json,data/processed/Screenshot_20250502-201954_processed.png,store;discount;code;expiry_date;min_order
+Screenshot_20250502-201954_processed_annotations.json,data/processed/Screenshot_20250502-201954_processed.png,store;partner;discount;code;min_order
+Screenshot_20250502-202004_processed.json,data/processed/Screenshot_20250502-202004_processed.png,store;discount;code;expiry_date;min_order
+Screenshot_20250502-202004_processed_annotations.json,data/processed/Screenshot_20250502-202004_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-202013_processed.json,data/processed/Screenshot_20250502-202013_processed.png,store;discount;expiry_date;min_order
+Screenshot_20250502-202013_processed_annotations.json,data/processed/Screenshot_20250502-202013_processed.png,partner;discount;code;expiry_date;min_order
+Screenshot_20250502-202021_processed.json,data/processed/Screenshot_20250502-202021_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-202021_processed_annotations.json,data/processed/Screenshot_20250502-202021_processed.png,partner;discount;min_order
+Screenshot_20250502-202029_processed.json,data/processed/Screenshot_20250502-202029_processed.png,store;discount;code;expiry_date;min_order
+Screenshot_20250502-202029_processed_annotations.json,data/processed/Screenshot_20250502-202029_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-202039_processed.json,data/processed/Screenshot_20250502-202039_processed.png,store;discount;code;expiry_date;min_order
+Screenshot_20250502-202039_processed_annotations.json,data/processed/Screenshot_20250502-202039_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-202303_processed.json,data/processed/Screenshot_20250502-202303_processed.png,discount;expiry_date;min_order
+Screenshot_20250502-202303_processed_annotations.json,data/processed/Screenshot_20250502-202303_processed.png,store;partner;discount;code;expiry_date;min_order
+Screenshot_20250502-202318_processed.json,data/processed/Screenshot_20250502-202318_processed.png,discount;expiry_date;min_order
+Screenshot_20250502-202318_processed_annotations.json,data/processed/Screenshot_20250502-202318_processed.png,store;partner;discount;code;expiry_date;min_order
+WhatsApp Image 2025-05-04 at 6.24.48 PM_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.48 PM_processed.jpeg,store;partner;discount;expiry_date;min_order
+WhatsApp Image 2025-05-04 at 6.24.49 PM (1)_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.49 PM (1)_processed.jpeg,partner;discount;expiry_date;min_order
+WhatsApp Image 2025-05-04 at 6.24.49 PM (2)_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.49 PM (2)_processed.jpeg,partner;discount;expiry_date;min_order
+WhatsApp Image 2025-05-04 at 6.24.49 PM_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.49 PM_processed.jpeg,partner;discount;expiry_date;min_order
+WhatsApp Image 2025-05-04 at 6.24.50 PM (1)_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.50 PM (1)_processed.jpeg,partner;discount;expiry_date;min_order
+WhatsApp Image 2025-05-04 at 6.24.50 PM_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.50 PM_processed.jpeg,partner;discount;expiry_date;min_order
+WhatsApp Image 2025-05-04 at 6.24.51 PM (1)_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.51 PM (1)_processed.jpeg,store;partner;discount;code;expiry_date;min_order
+WhatsApp Image 2025-05-04 at 6.24.51 PM (2)_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.51 PM (2)_processed.jpeg,store;partner;discount;code;expiry_date;min_order
+WhatsApp Image 2025-05-04 at 6.24.51 PM_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.51 PM_processed.jpeg,partner;discount;code;expiry_date;min_order
+WhatsApp Image 2025-05-04 at 6.24.52 PM (1)_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.52 PM (1)_processed.jpeg,discount;expiry_date;min_order
+WhatsApp Image 2025-05-04 at 6.24.52 PM (2)_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.52 PM (2)_processed.jpeg,partner;discount;min_order
+WhatsApp Image 2025-05-04 at 6.24.52 PM_processed.json,data/processed/WhatsApp Image 2025-05-04 at 6.24.52 PM_processed.jpeg,discount;expiry_date;min_order
+af64b0e1-d269-44b8-b253-a1b7bae39057.json,data/processed/af64b0e1-d269-44b8-b253-a1b7bae39057.png,store;partner;discount;code;expiry_date;min_order
+c9a879fb-eeaa-408c-895f-30b0033ce527.json,data/processed/c9a879fb-eeaa-408c-895f-30b0033ce527.png,store;partner;discount;code;expiry_date;min_order
+cf8130f3-4cf6-4d20-a08e-08f078a3c56b.json,data/processed/cf8130f3-4cf6-4d20-a08e-08f078a3c56b.jpeg,store;partner;discount;code;expiry_date;min_order
+edf237a2-16d6-4646-a7a9-c59ad97f4585.json,data/processed/edf237a2-16d6-4646-a7a9-c59ad97f4585.jpeg,store;partner;discount;code;expiry_date;min_order

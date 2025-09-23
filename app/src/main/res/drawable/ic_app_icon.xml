@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    
+    <!-- Background -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M100,0L412,0A100,100 0,0 1,512 100L512,412A100,100 0,0 1,412 512L100,512A100,100 0,0 1,0 412L0,100A100,100 0,0 1,100 0z" />
+    
+    <!-- Main coupon shape -->
+    <path
+        android:fillColor="#276EF1"
+        android:pathData="M124,144L388,144A24,24 0,0 1,412 168L412,344A24,24 0,0 1,388 368L124,368A24,24 0,0 1,100 344L100,168A24,24 0,0 1,124 144z" />
+    
+    <!-- Perforation line through center (now solid) -->
+    <path
+        android:pathData="M100,256L412,256"
+        android:strokeWidth="4"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round" />
+    
+    <!-- Percentage Symbol - First circle -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M166,200m-25,0a25,25 0,1 1,50 0a25,25 0,1 1,-50 0" />
+    
+    <!-- Percentage Symbol - Second circle -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M246,312m-25,0a25,25 0,1 1,50 0a25,25 0,1 1,-50 0" />
+    
+    <!-- Connecting line between percentage circles -->
+    <path
+        android:pathData="M150,320L262,192"
+        android:strokeWidth="12"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round" />
+    
+    <!-- Scissors icon -->
+    <path
+        android:pathData="M310,236L370,276M310,276L370,236"
+        android:strokeWidth="10"
+        android:strokeColor="#000000"
+        android:strokeLineCap="round" />
+    
+    <!-- Corner cuts -->
+    <path
+        android:fillColor="#276EF1"
+        android:strokeWidth="3"
+        android:strokeColor="#000000"
+        android:pathData="M100,200L115,200L115,185" />
+    
+    <path
+        android:fillColor="#276EF1"
+        android:strokeWidth="3"
+        android:strokeColor="#000000"
+        android:pathData="M100,312L115,312L115,327" />
+    
+    <path
+        android:fillColor="#276EF1"
+        android:strokeWidth="3"
+        android:strokeColor="#000000"
+        android:pathData="M412,200L397,200L397,185" />
+    
+    <path
+        android:fillColor="#276EF1"
+        android:strokeWidth="3"
+        android:strokeColor="#000000"
+        android:pathData="M412,312L397,312L397,327" />
+</vector> 

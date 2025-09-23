@@ -1,0 +1,26 @@
+{
+  "detector_checkpoint": "artifacts/detector/yolo2/weights/best.pt",
+  "categories": [
+    "amount",
+    "code",
+    "coupon",
+    "coupon_code",
+    "description",
+    "expiry",
+    "expiry_date",
+    "partner",
+    "store",
+    "store_name"
+  ],
+  "ocr_metrics": {
+    "coupon_code": 0.0,
+    "expiry_date": 1.0,
+    "code": 0.06167358493175529,
+    "store": 0.21607281607281606,
+    "partner": 0.07142857142857142,
+    "coupon": 0.7142857142857143,
+    "description": 1.0,
+    "expiry": 1.0,
+    "amount": 1.0
+  }
+}

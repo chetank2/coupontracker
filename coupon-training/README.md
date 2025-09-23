@@ -1,0 +1,391 @@
+# Coupon Element Detection Training Environment
+
+This is a training environment for building and training a model to detect elements in coupon images using OpenCV and Tesseract OCR. It includes both command-line tools and a web interface for training and testing the model.
+
+## Unified Model Approach
+
+We've adopted a unified model approach that combines standard and Indian coupon data into a single model. This approach:
+
+1. **Simplifies the Recognition Pipeline**
+   - Uses a single model for all coupon types
+   - Eliminates the need for model selection logic
+   - Provides a more consistent user experience
+
+2. **Improves Overall Accuracy**
+   - Learns from a more diverse dataset
+   - Better generalization to different coupon formats
+   - Handles regional variations more effectively
+
+3. **Reduces Maintenance Overhead**
+   - Single model to update and maintain
+   - Simplified deployment process
+   - Easier to add new coupon types in the future
+
+4. **Optimizes Resource Usage**
+   - Lower memory footprint with one model
+   - Reduced processing time
+   - More efficient use of device resources
+
+## Recent Improvements
+
+We've made several significant improvements to address limitations in the original implementation:
+
+1. **Adaptive Pattern Recognition**
+   - Flexible pattern recognition that adapts to different coupon layouts
+   - Content-based classification using regular expressions
+   - Clustering of text regions to identify logical groups
+
+2. **Error Recovery and Retry Logic**
+   - Robust error handling with exponential backoff
+   - Multiple fallback methods for text extraction
+   - Specialized preprocessing for different element types
+
+3. **Resource Management**
+   - Proper cleanup of bitmap resources
+   - Memory monitoring and management
+   - Thread pool for parallel processing
+   - Image resizing to limit memory usage
+
+4. **Testable Code Structure**
+   - Dependency injection for easier testing
+   - Interface-based design for component isolation
+   - Unit tests for core functionality
+   - Mock-based testing for external dependencies
+
+## Setup
+
+1. Install the required dependencies:
+   ```
+   python setup_environment.py
+   ```
+
+   For the web UI:
+   ```
+   pip install -r web_ui/requirements.txt
+   ```
+
+   For the background training orchestrator (optional):
+    ```
+    pip install -r requirements-orchestrator.txt
+    ```
+
+2. Make sure Tesseract OCR is installed on your system:
+   - macOS: `brew install tesseract`
+   - Ubuntu/Debian: `sudo apt-get install tesseract-ocr`
+   - Windows: Download installer from https://github.com/UB-Mannheim/tesseract/wiki
+
+## Directory Structure
+
+- `data/raw`: Raw coupon images
+- `data/processed`: Preprocessed images
+- `data/annotated`: Annotated coupon images
+- `data/train`: Training dataset
+- `data/validation`: Validation dataset
+- `data/augmented`: Augmented images for training
+- `data/box-files`: Box files for Tesseract training
+- `data/snapshots`: Dataset version snapshots
+- `models`: Output directory for trained models
+- `scripts`: Training scripts
+- `utils`: Utility functions
+- `logs`: Evaluation logs and history
+
+## Training Workflow
+
+### Using the Web Interface (Recommended)
+
+1. Start the web UI:
+   ```
+   python run_web_ui.py
+   ```
+
+2. Open your browser and navigate to:
+   ```
+   http://localhost:5001
+   ```
+
+3. Go to the Training page and upload coupon images.
+
+4. Select an image and annotate it by drawing rectangles around:
+   - Store name
+   - Description
+   - Expiry date
+   - Coupon code
+   - Amount/discount
+
+5. Save the annotations.
+
+6. Train the model using the "Train Model" button.
+
+7. Go to the Home page and click "Update App Model" to update the model in the Android app.
+
+8. (Optional) Use the *Training Jobs* card on the Home page to queue background runs via the orchestrator service. Ensure the orchestrator API is running before submitting jobs.
+
+### Using Command-Line Tools
+
+1. Collect coupon images and place them in the `data/raw` directory.
+
+2. Preprocess the images:
+   ```
+   cd scripts
+   python preprocess_images.py
+   ```
+
+3. Annotate the coupon elements:
+   ```
+   cd scripts
+   python annotate_coupons.py
+   ```
+
+4. Generate box files for Tesseract training:
+   ```
+   cd scripts
+   python generate_box_files.py
+   ```
+
+5. Train the Tesseract model:
+   ```
+   cd scripts
+   python train_tesseract.py
+   ```
+
+6. Evaluate the trained model:
+   ```
+   cd scripts
+   python evaluate_model.py
+   ```
+
+7. Prepare the model for Android integration:
+   ```
+   cd scripts
+   python prepare_android_model.py pattern --pattern-file ../models/simplified/coupon_patterns.txt --app-assets-dir ../../app/src/main/assets/coupon_model
+   ```
+
+### Training Orchestrator (Background Jobs)
+
+For asynchronous runs of `ml/train.py`:
+
+```
+pip install -r requirements-orchestrator.txt
+python scripts/run_orchestrator.py  # serves http://127.0.0.1:8001
+
+# Submit a job
+curl -X POST http://127.0.0.1:8001/jobs \
+  -H 'Content-Type: application/json' \
+  -d '{"config_path": "ml/config/training.example.yaml", "notes": "baseline"}'
+```
+
+Job metadata and logs are stored under `runs/orchestrator/`. The web dashboard polls `/api/orchestrator/jobs` to display recent runs.
+
+Each orchestrated run writes `metadata.json` and `evaluation.json` under the configured `output_dir` (default `artifacts/`). These files include YOLO detector metrics (mAP, precision/recall, per-class scores) and OCR field accuracy. The Home dashboard surfaces this history in the *Evaluation History* card.
+
+### Packaging & Bundles
+
+To export detector weights for deployment:
+
+```
+python scripts/package_model.py --weights artifacts/detector/yolo/weights/best.pt --output-dir artifacts/packages/latest --formats onnx tflite
+```
+
+The packager uses Ultralytics' export API to produce ONNX/TFLite files (additional dependencies may be required for certain formats). Every run generates `packaging_manifest.json` with SHA-256 checksums and file sizes. On-device consumption should copy the desired artifact(s) from the output directory into the Android assets folder.
+
+Packaging runs are also recorded in `artifacts/packages/index.json` with compliance status (`passed`/`failed`). The dashboard reads this registry via `/api/packages` and lists download links for each format.
+
+The packager copies the canonical labels definition from `registry/labels/coupons-detection/v1/labels.json`, embeds `labels_name`, `labels_version`, and `labels_sha256` into `manifest.json`, and refuses to register bundles when order/sha mismatches are detected. Android should mirror the same check before loading a bundle.
+
+Use `scripts/packaging_registry.py` to inspect or promote bundles:
+
+```bash
+# List
+python scripts/packaging_registry.py list
+
+# Promote to release candidate
+python scripts/packaging_registry.py promote 20250920_153000 --notes "RC for v1.3.0"
+
+# Mark released / rollback
+python scripts/packaging_registry.py release 20250920_153000
+python scripts/packaging_registry.py rollback 20250920_153000 --notes "Failed QA"
+```
+
+Release state shows up in the dashboard next to each package; only compliant bundles should be promoted.
+
+## Android Integration
+
+1. Copy the trained model to the Android app's assets directory:
+   ```
+   cp android_model/coupon.traineddata /path/to/CouponTracker3/app/src/main/assets/tessdata/
+   ```
+
+2. Update the Android app to use the custom model:
+   ```kotlin
+   tesseractOCRHelper.initialize(
+       language = "coupon",
+       useCustomModel = true
+   )
+   ```
+
+## Scripts
+
+### Original Scripts
+- `setup_environment.py`: Set up the training environment
+- `scripts/preprocess_images.py`: Preprocess coupon images
+- `scripts/annotate_coupons.py`: Annotate coupon elements
+- `scripts/generate_box_files.py`: Generate box files for Tesseract training
+- `scripts/train_tesseract.py`: Train the Tesseract model
+- `scripts/evaluate_model.py`: Evaluate the trained model
+- `scripts/prepare_android_model.py`: Prepare the model for Android integration
+- `scripts/run_orchestrator.py`: Launch the training orchestrator API
+- `scripts/migrate_annotations.py`: Normalize existing annotation JSON files
+- `scripts/package_model.py`: Export YOLO weights to ONNX/TFLite bundles
+- `scripts/data_augmentation.py`: Augment training data with variations
+- `scripts/create_validation_set.py`: Create validation dataset
+- `scripts/dataset_versioning.py`: Version control for datasets
+
+### New Improved Scripts
+- `scripts/adaptive_pattern_recognition.py`: Flexible pattern recognition system
+- `scripts/error_recovery.py`: Error handling and retry logic
+- `scripts/resource_management.py`: Resource cleanup and management
+- `scripts/testable_coupon_recognizer.py`: Testable code structure with dependency injection
+- `scripts/improved_coupon_recognizer.py`: Main integration script combining all improvements
+- `scripts/simple_cascade_model.py`: Simple cascade model for coupon recognition
+- `scripts/simple_augmentation.py`: Basic data augmentation techniques
+- `scripts/simple_evaluation.py`: Evaluation framework for model performance
+- `scripts/create_sample_coupon.py`: Generate sample coupon images for testing
+- `scripts/manual_coupon_download_guide.py`: Guide for downloading coupon images from Reddit
+
+### Unified Model Scripts
+- `scripts/combine_training_data.py`: Combine standard and Indian coupon data
+- `scripts/train_unified_model.py`: Train a unified model on the combined dataset
+
+## Utilities
+
+- `utils/image_utils.py`: Image processing utilities
+- `utils/text_utils.py`: Text extraction and post-processing utilities
+
+## Advanced Features
+
+### Data Augmentation
+
+Enhance your training dataset with augmented variations:
+
+```
+cd scripts
+python data_augmentation.py --input ../data/raw --output ../data/augmented --count 5
+```
+
+This creates multiple variations of each image with different transformations:
+- Noise addition (gaussian, salt & pepper, speckle)
+- Brightness and contrast adjustments
+- Blur effects
+- Rotation and perspective transformations
+- Random cropping
+
+### Dataset Validation
+
+Create a validation set to properly evaluate model performance:
+
+```
+cd scripts
+python create_validation_set.py --data-dir ../data --ratio 0.2
+```
+
+This splits your annotated data into training and validation sets.
+
+### Dataset Versioning
+
+Track different versions of your dataset:
+
+```
+cd scripts
+# Create a snapshot
+python dataset_versioning.py create --data-dir ../data --description "Initial dataset"
+
+# List available snapshots
+python dataset_versioning.py list --data-dir ../data
+
+# Restore a snapshot
+python dataset_versioning.py restore --snapshot-dir ../data/snapshots/20230615_120000 --data-dir ../data
+```
+
+### Enhanced OCR with Regex Post-Processing
+
+The system now includes advanced text extraction with specialized processing for different coupon elements:
+
+- Coupon codes: Optimized for alphanumeric characters
+- Amounts/discounts: Specialized for currency and percentage detection
+- Expiry dates: Pattern matching for various date formats
+- Store names: Improved detection of brand names
+
+Each element type uses:
+1. Custom Tesseract configurations
+2. Specialized image preprocessing
+3. Regex pattern matching
+4. Post-processing validation
+
+### Using the Improved Coupon Recognizer
+
+The new improved coupon recognizer addresses the limitations in the original implementation and provides better accuracy and robustness.
+
+#### Process a single image:
+```
+python scripts/improved_coupon_recognizer.py --image data/raw/sample_myntra_coupon.jpg --output results/myntra_result.json
+```
+
+#### Process multiple images:
+```
+python scripts/improved_coupon_recognizer.py --batch data/raw --output results
+```
+
+#### Use fixed patterns instead of adaptive recognition:
+```
+python scripts/improved_coupon_recognizer.py --image data/raw/sample_myntra_coupon.jpg --fixed-patterns
+```
+
+### Training the Unified Model
+
+The unified model combines standard and Indian coupon data to create a single model that works well with all coupon types.
+
+#### Step 1: Combine Training Data
+```
+python scripts/combine_training_data.py --existing-data data/standard --india-data data/india --output-dir data/combined
+```
+
+#### Step 2: Train the Unified Model
+```
+python scripts/train_unified_model.py --data-dir data/combined --output-dir models/unified --epochs 100
+```
+
+#### Step 3: Deploy the Model to the App
+```
+cp models/unified/unified_coupon_model.tflite ../app/src/main/assets/models/
+cp models/unified/unified_coupon_model_config.json ../app/src/main/assets/models/
+```
+
+#### Generate sample coupon images:
+```
+python scripts/create_sample_coupon.py
+```
+
+#### Apply augmentation to an image:
+```
+python scripts/simple_augmentation.py --image data/raw/sample_myntra_coupon.jpg --output-dir data/augmented
+```
+
+#### Evaluate model performance:
+```
+python scripts/simple_evaluation.py --data-dir data --pattern-file models/simplified/coupon_patterns.txt --summary-file data/sample_coupon_summary.md
+```
+
+#### Run unit tests:
+```
+python -m unittest tests/test_coupon_recognizer.py
+```
+
+### Configuration
+
+The improved system can be configured using the `config/coupon_recognizer_config.json` file. Key configuration options include:
+
+- **Pattern Recognition**: Configure text detection parameters and element patterns
+- **Error Recovery**: Set retry attempts, delay, and fallback methods
+- **Resource Management**: Configure memory limits and thread pool size
+- **OCR Configurations**: Customize Tesseract parameters for different element types
+- **Pattern Regions**: Define fixed pattern regions for different coupon elements

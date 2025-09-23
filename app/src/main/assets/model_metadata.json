@@ -1,0 +1,16 @@
+{
+  "model_version": "3.0.0",
+  "update_date": "2023-06-15T10:30:45.123456",
+  "num_patterns": 35,
+  "accuracy": 0.9125,
+  "supported_brands": [
+    "CRED",
+    "PhonePe",
+    "Zomato",
+    "Swiggy",
+    "Myntra",
+    "GPay",
+    "Amazon",
+    "Flipkart"
+  ]
+}

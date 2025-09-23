@@ -1,0 +1,14 @@
+# Coupon recognition patterns
+
+# Store name patterns
+
+# Description patterns
+description:346,263,499,302
+
+# Coupon code patterns
+
+# Expiry date patterns
+expiry:416,129,509,146
+
+# Amount patterns
+amount:385,262,408,280

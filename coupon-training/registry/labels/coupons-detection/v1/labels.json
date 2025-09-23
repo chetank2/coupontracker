@@ -1,0 +1,11 @@
+{
+  "name": "coupons-detection",
+  "version": "1",
+  "labels": [
+    "app_region",
+    "code_region",
+    "benefit_region",
+    "expiry_region",
+    "terms_region"
+  ]
+}

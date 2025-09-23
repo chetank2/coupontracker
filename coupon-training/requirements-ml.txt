@@ -1,0 +1,8 @@
+# Optional ML stack for neural training
+ultralytics==8.3.30
+albumentations==1.4.10
+pytorch-lightning==2.4.0
+torch==2.3.1
+torchvision==0.18.1
+transformers==4.44.2
+mlflow==2.16.2

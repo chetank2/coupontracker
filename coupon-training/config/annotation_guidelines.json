@@ -1,0 +1,42 @@
+{
+  "categories": [
+    {
+      "id": "app_region",
+      "display_name": "App Header",
+      "description": "App branding strip or header graphics"
+    },
+    {
+      "id": "store_region",
+      "display_name": "Store / Merchant",
+      "description": "Merchant or store name branding"
+    },
+    {
+      "id": "code_region",
+      "display_name": "Coupon Code",
+      "description": "Redeemable alphanumeric code"
+    },
+    {
+      "id": "benefit_region",
+      "display_name": "Benefit / Discount",
+      "description": "Discount amount or cashback information"
+    },
+    {
+      "id": "expiry_region",
+      "display_name": "Expiry",
+      "description": "Text that indicates validity or expiry dates"
+    },
+    {
+      "id": "terms_region",
+      "display_name": "Terms",
+      "description": "Fine print, terms & conditions"
+    }
+  ],
+  "metadata_fields": [
+    {"name": "source_type", "type": "string", "options": ["android_screenshot", "web_capture", "marketing_asset"]},
+    {"name": "theme", "type": "string", "options": ["light", "dark", "seasonal", "flash_sale"]},
+    {"name": "language", "type": "string", "options": ["en", "hi", "mr", "ta", "other"]}
+  ],
+  "resources": {
+    "documentation": "docs/annotation_guidelines.md"
+  }
+}

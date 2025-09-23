@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginHorizontal="16dp"
+    android:layout_marginVertical="8dp"
+    app:cardBackgroundColor="@color/card_background"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="4dp"
+    app:strokeColor="@color/card_stroke"
+    app:strokeWidth="1dp">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <ImageView
+            android:id="@+id/storeIcon"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:contentDescription="Store icon"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:src="@drawable/ic_image_placeholder" />
+
+        <TextView
+            android:id="@+id/couponCode"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:textAppearance="@style/TextAppearance.CouponTracker.Headline6"
+            android:textColor="?attr/colorOnSurface"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toStartOf="@+id/couponValue"
+            app:layout_constraintStart_toEndOf="@+id/storeIcon"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="DTXJ" />
+
+        <TextView
+            android:id="@+id/couponDescription"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="4dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textAppearance="@style/TextAppearance.CouponTracker.Body2"
+            android:textColor="?attr/colorOnSurface"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@+id/storeIcon"
+            app:layout_constraintTop_toBottomOf="@+id/couponCode"
+            tools:text="1:24 M\naudible..." />
+
+        <TextView
+            android:id="@+id/couponValue"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAppearance="@style/TextAppearance.CouponTracker.Subtitle1"
+            android:textColor="?attr/colorPrimary"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:text="₹90" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/copyCodeButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minHeight="36dp"
+            android:paddingVertical="8dp"
+            android:text="Copy Code"
+            android:textColor="?attr/colorPrimary"
+            android:textSize="12sp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/couponDescription"
+            app:strokeColor="?attr/colorPrimary" />
+
+        <TextView
+            android:id="@+id/expiryText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_expiry_pill"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp"
+            android:textAppearance="@style/TextAppearance.CouponTracker.Caption"
+            android:textColor="@color/white"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/storeIcon"
+            tools:text="Expires in 0 days" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView> 

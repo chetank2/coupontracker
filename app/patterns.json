@@ -1,0 +1,571 @@
+[
+  {
+    "name": "Unknown Coupon",
+    "description": "Pattern for Unknown coupons",
+    "regions": [
+      {
+        "type": "store",
+        "box": [
+          292,
+          353,
+          348,
+          373
+        ],
+        "text": "Snew",
+        "confidence": 11.0
+      },
+      {
+        "type": "code",
+        "box": [
+          213,
+          708,
+          385,
+          819
+        ],
+        "text": "@ <ar Y 1056 saves =, t",
+        "confidence": 49.57142857142857
+      }
+    ],
+    "fields": {
+      "code": "saves",
+      "expiry_date": "56 saves",
+      "store": null,
+      "partner": null,
+      "discount": null,
+      "min_order": null
+    }
+  },
+  {
+    "name": "Unknown Coupon",
+    "description": "Pattern for Unknown coupons",
+    "regions": [
+      {
+        "type": "code",
+        "box": [
+          24,
+          455,
+          540,
+          555
+        ],
+        "text": "U6 GXOLPELOIOMS",
+        "confidence": 1.5
+      },
+      {
+        "type": "store",
+        "box": [
+          527,
+          494,
+          540,
+          526
+        ],
+        "text": "Mid",
+        "confidence": 43.0
+      },
+      {
+        "type": "store",
+        "box": [
+          528,
+          678,
+          540,
+          705
+        ],
+        "text": "BU",
+        "confidence": 31.0
+      },
+      {
+        "type": "code",
+        "box": [
+          180,
+          444,
+          514,
+          530
+        ],
+        "text": "WAI a) %0L0\u00a5dn 3ZNYSI aa",
+        "confidence": 11.2
+      },
+      {
+        "type": "code",
+        "box": [
+          155,
+          706,
+          470,
+          761
+        ],
+        "text": "sents 2]",
+        "confidence": 38.0
+      },
+      {
+        "type": "partner",
+        "box": [
+          63,
+          433,
+          351,
+          463
+        ],
+        "text": "MON MON",
+        "confidence": 76.5
+      },
+      {
+        "type": "code",
+        "box": [
+          63,
+          468,
+          351,
+          509
+        ],
+        "text": "WIDID WIDID",
+        "confidence": 51.0
+      },
+      {
+        "type": "partner",
+        "box": [
+          42,
+          693,
+          351,
+          823
+        ],
+        "text": "MON SLBLZEOSLSNESIOS. MON",
+        "confidence": 46.333333333333336
+      },
+      {
+        "type": "code",
+        "box": [
+          41,
+          727,
+          351,
+          769
+        ],
+        "text": "WID|D OS WIDID",
+        "confidence": 51.333333333333336
+      },
+      {
+        "type": "code",
+        "box": [
+          291,
+          480,
+          318,
+          563
+        ],
+        "text": "ASOOLAOMS",
+        "confidence": 40.0
+      },
+      {
+        "type": "code",
+        "box": [
+          251,
+          656,
+          269,
+          806
+        ],
+        "text": "67E2O103S}0HOIr",
+        "confidence": 0.0
+      },
+      {
+        "type": "code",
+        "box": [
+          226,
+          664,
+          238,
+          723
+        ],
+        "text": "lvdaud",
+        "confidence": 10.0
+      },
+      {
+        "type": "code",
+        "box": [
+          226,
+          752,
+          238,
+          799
+        ],
+        "text": "TALLY",
+        "confidence": 0.0
+      },
+      {
+        "type": "code",
+        "box": [
+          3,
+          733,
+          14,
+          823
+        ],
+        "text": "WOOUIDLOLY",
+        "confidence": 34.0
+      }
+    ],
+    "fields": {
+      "code": "GXOLPELOIOMS",
+      "partner": "MON",
+      "store": null,
+      "discount": null,
+      "min_order": null,
+      "expiry_date": null
+    }
+  },
+  {
+    "name": "Unknown Coupon",
+    "description": "Pattern for Unknown coupons",
+    "regions": [
+      {
+        "type": "partner",
+        "box": [
+          502,
+          99,
+          540,
+          579
+        ],
+        "text": "MON dOHS",
+        "confidence": 60.0
+      },
+      {
+        "type": "code",
+        "box": [
+          0,
+          175,
+          350,
+          676
+        ],
+        "text": "OIOUIA",
+        "confidence": 64.0
+      }
+    ],
+    "fields": {
+      "partner": "dOHS",
+      "code": "OIOUIA",
+      "store": null,
+      "discount": null,
+      "min_order": null,
+      "expiry_date": null
+    }
+  },
+  {
+    "name": "Unknown Coupon",
+    "description": "Pattern for Unknown coupons",
+    "regions": [
+      {
+        "type": "partner",
+        "box": [
+          302,
+          361,
+          363,
+          841
+        ],
+        "text": "( MON TIVAV ,",
+        "confidence": 47.25
+      }
+    ],
+    "fields": {
+      "partner": "TIVAV",
+      "code": "TIVAV",
+      "store": null,
+      "discount": null,
+      "min_order": null,
+      "expiry_date": null
+    }
+  },
+  {
+    "name": "Unknown Coupon",
+    "description": "Pattern for Unknown coupons",
+    "regions": [
+      {
+        "type": "store",
+        "box": [
+          292,
+          353,
+          348,
+          374
+        ],
+        "text": "Snew",
+        "confidence": 89.0
+      },
+      {
+        "type": "code",
+        "box": [
+          213,
+          708,
+          385,
+          819
+        ],
+        "text": "4 >\u00bb 1056 saves Kay",
+        "confidence": 47.6
+      }
+    ],
+    "fields": {
+      "code": "saves",
+      "expiry_date": "56 saves",
+      "store": null,
+      "partner": null,
+      "discount": null,
+      "min_order": null
+    }
+  },
+  {
+    "name": "Unknown Coupon",
+    "description": "Pattern for Unknown coupons",
+    "regions": [
+      {
+        "type": "partner",
+        "box": [
+          325,
+          361,
+          387,
+          841
+        ],
+        "text": "a> MON TIVAV ,",
+        "confidence": 43.0
+      }
+    ],
+    "fields": {
+      "partner": "TIVAV",
+      "code": "TIVAV",
+      "store": null,
+      "discount": null,
+      "min_order": null,
+      "expiry_date": null
+    }
+  },
+  {
+    "name": "Unknown Coupon",
+    "description": "Pattern for Unknown coupons",
+    "regions": [
+      {
+        "type": "code",
+        "box": [
+          41,
+          362,
+          75,
+          549
+        ],
+        "text": "SAVG 71 NIS3UIdx3 \u00a9",
+        "confidence": 58.75
+      }
+    ],
+    "fields": {
+      "code": "NIS3UIdx3",
+      "expiry_date": "71 NIS",
+      "store": null,
+      "partner": null,
+      "discount": null,
+      "min_order": null
+    }
+  },
+  {
+    "name": "Unknown Coupon",
+    "description": "Pattern for Unknown coupons",
+    "regions": [
+      {
+        "type": "code",
+        "box": [
+          1,
+          362,
+          35,
+          562
+        ],
+        "text": "\u2018SUNOH \u00a31 NI SIuldxX3 \u00a9",
+        "confidence": 47.0
+      }
+    ],
+    "fields": {
+      "code": "SUNOH",
+      "expiry_date": "1 NI",
+      "store": null,
+      "partner": null,
+      "discount": null,
+      "min_order": null
+    }
+  },
+  {
+    "name": "Unknown Coupon",
+    "description": "Pattern for Unknown coupons",
+    "regions": [
+      {
+        "type": "code",
+        "box": [
+          24,
+          455,
+          540,
+          563
+        ],
+        "text": "Ove AXOAPELONOMS",
+        "confidence": 18.5
+      },
+      {
+        "type": "store",
+        "box": [
+          528,
+          678,
+          540,
+          705
+        ],
+        "text": "BO",
+        "confidence": 69.0
+      },
+      {
+        "type": "store",
+        "box": [
+          503,
+          710,
+          540,
+          783
+        ],
+        "text": "AVES REIN]",
+        "confidence": 33.0
+      },
+      {
+        "type": "code",
+        "box": [
+          6,
+          443,
+          515,
+          530
+        ],
+        "text": "Ald Funct] %0LO\u00a5dN BZzN4O! = oo",
+        "confidence": 6.333333333333333
+      },
+      {
+        "type": "store",
+        "box": [
+          63,
+          432,
+          352,
+          463
+        ],
+        "text": "\u2018MON \u2018MON",
+        "confidence": 64.5
+      },
+      {
+        "type": "code",
+        "box": [
+          63,
+          468,
+          352,
+          509
+        ],
+        "text": "WID[D, WIDID,",
+        "confidence": 41.0
+      },
+      {
+        "type": "partner",
+        "box": [
+          42,
+          692,
+          352,
+          823
+        ],
+        "text": "\u2018MON GLBLZEOSLOVEIIOS: \u2018MON",
+        "confidence": 40.666666666666664
+      },
+      {
+        "type": "code",
+        "box": [
+          41,
+          727,
+          352,
+          769
+        ],
+        "text": "WIDID, OS WID|D",
+        "confidence": 31.333333333333332
+      },
+      {
+        "type": "code",
+        "box": [
+          292,
+          480,
+          319,
+          563
+        ],
+        "text": "ASOOLAOMS",
+        "confidence": 8.0
+      },
+      {
+        "type": "code",
+        "box": [
+          251,
+          656,
+          269,
+          806
+        ],
+        "text": "67E2Oi0}S}0H",
+        "confidence": 0.0
+      },
+      {
+        "type": "store",
+        "box": [
+          243,
+          779,
+          273,
+          810
+        ],
+        "text": "OIC",
+        "confidence": 0.0
+      },
+      {
+        "type": "code",
+        "box": [
+          226,
+          663,
+          238,
+          722
+        ],
+        "text": "divdaud",
+        "confidence": 0.0
+      },
+      {
+        "type": "code",
+        "box": [
+          226,
+          751,
+          238,
+          799
+        ],
+        "text": "TALUIY",
+        "confidence": 0.0
+      },
+      {
+        "type": "code",
+        "box": [
+          3,
+          733,
+          14,
+          822
+        ],
+        "text": "WOOUIDIDIY",
+        "confidence": 10.0
+      }
+    ],
+    "fields": {
+      "code": "AXOAPELONOMS",
+      "partner": "GLBLZEOSLOVEIIOS",
+      "store": null,
+      "discount": null,
+      "min_order": null,
+      "expiry_date": null
+    }
+  },
+  {
+    "name": "Unknown Coupon",
+    "description": "Pattern for Unknown coupons",
+    "regions": [
+      {
+        "type": "partner",
+        "box": [
+          0,
+          375,
+          45,
+          628
+        ],
+        "text": "4\u2014 MON Waapay",
+        "confidence": 60.0
+      }
+    ],
+    "fields": {
+      "partner": "Waapay",
+      "code": "Waapay",
+      "store": null,
+      "discount": null,
+      "min_order": null,
+      "expiry_date": null
+    }
+  }
+]
