@@ -176,6 +176,126 @@
   margin-bottom: var(--spacing-lg);
 }
 
+/* Mobile-optimized annotation layout */
+@media (max-width: 768px) {
+  .annotation-section {
+    margin: 0;
+    padding: 0;
+  }
+  
+  .canvas-container {
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    position: relative;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    height: 70vh;
+    max-height: 600px;
+  }
+  
+  .zoom-container {
+    transform-origin: 0 0;
+    transition: transform 0.2s ease;
+    position: relative;
+    min-width: 100%;
+    min-height: 100%;
+  }
+  
+  .annotation-canvas,
+  .current-image {
+    max-width: none !important;
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+  }
+  
+  .annotation-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    pointer-events: auto;
+  }
+  
+  .current-image {
+    position: relative;
+    z-index: 1;
+  }
+  
+  /* Mobile zoom controls */
+  .zoom-controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 10;
+    display: flex;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 8px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  
+  .zoom-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 6px;
+    background: var(--primary-color);
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+  
+  .zoom-btn:hover {
+    background: var(--primary-dark);
+    transform: scale(1.05);
+  }
+  
+  .zoom-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    transform: none;
+  }
+  
+  .zoom-btn.reset {
+    font-size: 12px;
+    font-weight: normal;
+    width: 50px;
+  }
+  
+  /* Mobile field type selector - make sticky */
+  .annotation-tools {
+    position: sticky;
+    bottom: 0;
+    background: white;
+    border-top: 2px solid #ddd;
+    padding: 15px;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+    z-index: 5;
+  }
+  
+  .field-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 15px;
+  }
+  
+  .field-btn {
+    padding: 12px 8px;
+    font-size: 14px;
+    min-height: 50px;
+  }
+}
+
 .annotation-header {
   display: flex;
   align-items: center;

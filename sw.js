@@ -14,6 +14,7 @@ const STATIC_FILES = [
   './js/main.js',
   './js/upload.js',
   './js/annotation.js',
+  './js/mobile-zoom.js',
   './js/storage.js',
   './js/training.js',
   './manifest.json'

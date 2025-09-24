@@ -37,10 +37,29 @@ class AnnotationCanvas {
     }
 
     setupTouchHandling() {
-        // Touch events for mobile
+        // Enhanced touch handling for better precision
+        let touchStartTime = 0;
+        let touchMoved = false;
+        let longPressTimer = null;
+        
         this.canvas.addEventListener('touchstart', (e) => {
+            // Only handle single touch for annotation (avoid conflicts with zoom gestures)
+            if (e.touches.length !== 1) return;
+            
             e.preventDefault();
+            touchStartTime = Date.now();
+            touchMoved = false;
+            
             const touch = e.touches[0];
+            
+            // Show touch indicator for better feedback
+            this.showTouchIndicator(touch.clientX, touch.clientY);
+            
+            // Start long press timer for precision mode
+            longPressTimer = setTimeout(() => {
+                this.enterPrecisionMode(touch);
+            }, 300);
+            
             const mouseEvent = new MouseEvent('mousedown', {
                 clientX: touch.clientX,
                 clientY: touch.clientY
@@ -49,8 +68,23 @@ class AnnotationCanvas {
         });
 
         this.canvas.addEventListener('touchmove', (e) => {
+            // Only handle single touch for annotation
+            if (e.touches.length !== 1) return;
+            
             e.preventDefault();
+            touchMoved = true;
+            
+            // Clear long press timer if user moves
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            
             const touch = e.touches[0];
+            
+            // Update touch indicator
+            this.updateTouchIndicator(touch.clientX, touch.clientY);
+            
             const mouseEvent = new MouseEvent('mousemove', {
                 clientX: touch.clientX,
                 clientY: touch.clientY
@@ -60,23 +94,126 @@ class AnnotationCanvas {
 
         this.canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
+            
+            // Clear long press timer
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            
+            // Hide touch indicator
+            this.hideTouchIndicator();
+            
+            // Exit precision mode
+            this.exitPrecisionMode();
+            
+            const touchDuration = Date.now() - touchStartTime;
+            
+            // Handle tap vs drag
+            if (!touchMoved && touchDuration < 200) {
+                // Quick tap - could be used for point annotations in future
+                console.log('Quick tap detected');
+            }
+            
             const mouseEvent = new MouseEvent('mouseup', {});
             this.canvas.dispatchEvent(mouseEvent);
         });
 
-        // Prevent scrolling while drawing
-        this.canvas.style.touchAction = 'none';
+        // Prevent default touch behaviors but allow zoom gestures to pass through
+        this.canvas.style.touchAction = 'pan-x pan-y';
+    }
+    
+    showTouchIndicator(x, y) {
+        // Create or update touch indicator
+        let indicator = document.getElementById('touch-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'touch-indicator';
+            indicator.style.cssText = `
+                position: fixed;
+                width: 20px;
+                height: 20px;
+                border: 2px solid #007bff;
+                border-radius: 50%;
+                background: rgba(0, 123, 255, 0.2);
+                pointer-events: none;
+                z-index: 1000;
+                transform: translate(-50%, -50%);
+                transition: all 0.1s ease;
+            `;
+            document.body.appendChild(indicator);
+        }
+        
+        indicator.style.left = x + 'px';
+        indicator.style.top = y + 'px';
+        indicator.style.display = 'block';
+    }
+    
+    updateTouchIndicator(x, y) {
+        const indicator = document.getElementById('touch-indicator');
+        if (indicator) {
+            indicator.style.left = x + 'px';
+            indicator.style.top = y + 'px';
+        }
+    }
+    
+    hideTouchIndicator() {
+        const indicator = document.getElementById('touch-indicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+    }
+    
+    enterPrecisionMode(touch) {
+        // Visual feedback for precision mode
+        const indicator = document.getElementById('touch-indicator');
+        if (indicator) {
+            indicator.style.width = '30px';
+            indicator.style.height = '30px';
+            indicator.style.borderColor = '#28a745';
+            indicator.style.background = 'rgba(40, 167, 69, 0.3)';
+        }
+        
+        // Could add magnifying glass or crosshair here
+        console.log('Precision mode activated');
+    }
+    
+    exitPrecisionMode() {
+        const indicator = document.getElementById('touch-indicator');
+        if (indicator) {
+            indicator.style.width = '20px';
+            indicator.style.height = '20px';
+            indicator.style.borderColor = '#007bff';
+            indicator.style.background = 'rgba(0, 123, 255, 0.2)';
+        }
     }
 
     getCanvasCoordinates(event) {
         const rect = this.canvas.getBoundingClientRect();
-        const scaleX = this.canvas.width / rect.width;
-        const scaleY = this.canvas.height / rect.height;
+        let scaleX = this.canvas.width / rect.width;
+        let scaleY = this.canvas.height / rect.height;
         
-        return {
-            x: (event.clientX - rect.left) * scaleX,
-            y: (event.clientY - rect.top) * scaleY
-        };
+        // Get zoom information if mobile zoom handler is available
+        let zoomScale = 1;
+        let panOffset = { x: 0, y: 0 };
+        
+        if (window.mobileZoomHandler) {
+            const zoomInfo = window.mobileZoomHandler.getZoomInfo();
+            zoomScale = zoomInfo.scale;
+            panOffset = zoomInfo.panOffset;
+        }
+        
+        // Adjust coordinates for zoom and pan
+        let x = (event.clientX - rect.left) * scaleX;
+        let y = (event.clientY - rect.top) * scaleY;
+        
+        // Account for zoom and pan
+        if (zoomScale !== 1) {
+            x = (x / zoomScale) - (panOffset.x / zoomScale);
+            y = (y / zoomScale) - (panOffset.y / zoomScale);
+        }
+        
+        return { x, y };
     }
 
     startDrawing(event) {
@@ -365,6 +502,16 @@ class AnnotationManager {
         this.annotationCanvas = new AnnotationCanvas(canvasId, imageId);
         this.isInitialized = true;
         this.setupUI();
+    }
+    
+    // Method called by mobile zoom handler to update zoom state
+    updateZoom(scale, panOffset) {
+        // This method is called by the zoom handler to notify about zoom changes
+        // The actual coordinate transformation is handled in getCanvasCoordinates
+        if (this.annotationCanvas) {
+            // Force redraw to ensure annotations are properly positioned
+            this.annotationCanvas.redrawAnnotations();
+        }
     }
 
     setupUI() {

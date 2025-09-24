@@ -77,8 +77,19 @@
 
             <!-- Image Canvas -->
             <div class="canvas-container">
-                <canvas id="annotation-canvas" class="annotation-canvas"></canvas>
-                <img id="current-image" class="current-image" style="display: none;">
+                <!-- Zoom Controls (Mobile) -->
+                <div class="zoom-controls">
+                    <button class="zoom-btn" id="zoom-out-btn" title="Zoom Out">−</button>
+                    <button class="zoom-btn reset" id="zoom-reset-btn" title="Reset Zoom">Reset</button>
+                    <button class="zoom-btn" id="zoom-in-btn" title="Zoom In">+</button>
+                    <button class="zoom-btn reset" id="fit-screen-btn" title="Fit to Screen">Fit</button>
+                </div>
+                
+                <!-- Zoomable Content -->
+                <div class="zoom-container" id="zoom-container">
+                    <canvas id="annotation-canvas" class="annotation-canvas"></canvas>
+                    <img id="current-image" class="current-image" style="display: none;">
+                </div>
             </div>
 
             <!-- Annotation Tools -->
@@ -168,8 +179,9 @@
     </div>
 
     <!-- Scripts -->
-    <script src="./js/storage.js"></script>
-    <script src="./js/annotation.js"></script>
-    <script src="./js/upload.js"></script>
+        <script src="./js/storage.js"></script>
+        <script src="./js/annotation.js"></script>
+        <script src="./js/mobile-zoom.js"></script>
+        <script src="./js/upload.js"></script>
 </body>
 </html>
