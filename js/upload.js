@@ -301,7 +301,12 @@ class UploadManager {
         console.log('Annotation summary:', summary);
         
         if (summary.totalAnnotations === 0) {
-            showToast('No annotations to save. Please annotate at least one region first.', 'warning');
+            // Show toast with fallback
+            if (typeof showToast === 'function') {
+                showToast('No annotations to save. Please annotate at least one region first.', 'warning');
+            } else {
+                console.warn('No annotations to save. Please annotate at least one region first.');
+            }
             return;
         }
         
@@ -333,10 +338,20 @@ class UploadManager {
             }
             
             if (failureCount === 0) {
-                showToast(`All ${successCount} images saved successfully!`, 'success');
+                // Show success toast with fallback
+                if (typeof showToast === 'function') {
+                    showToast(`All ${successCount} images saved successfully!`, 'success');
+                } else {
+                    console.log(`✅ All ${successCount} images saved successfully!`);
+                }
                 this.showResults(successCount, window.annotationManager.getAnnotationSummary().totalAnnotations);
             } else {
-                showToast(`${successCount} saved, ${failureCount} failed`, 'warning');
+                // Show warning toast with fallback
+                if (typeof showToast === 'function') {
+                    showToast(`${successCount} saved, ${failureCount} failed`, 'warning');
+                } else {
+                    console.warn(`⚠️ ${successCount} saved, ${failureCount} failed`);
+                }
                 this.showResults(successCount, window.annotationManager.getAnnotationSummary().totalAnnotations);
             }
             
@@ -347,7 +362,12 @@ class UploadManager {
             } else {
                 console.log('Loading complete (error)');
             }
-            showToast('Failed to save annotations: ' + error.message, 'error');
+            // Show error toast with fallback
+            if (typeof showToast === 'function') {
+                showToast('Failed to save annotations: ' + error.message, 'error');
+            } else {
+                console.error('❌ Failed to save annotations: ' + error.message);
+            }
             console.error('Save failed:', error);
         }
     }
