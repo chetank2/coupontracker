@@ -280,16 +280,37 @@ class UploadManager {
     async saveAnnotations() {
         console.log('saveAnnotations called');
         
+        // Wait for annotation manager to be available
+        let retryCount = 0;
+        while (!window.annotationManager && retryCount < 10) {
+            console.log(`Waiting for annotation manager... (${retryCount + 1}/10)`);
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retryCount++;
+        }
+        
         if (!window.annotationManager) {
-            console.error('Annotation manager not available');
-            showToast('Annotation manager not available', 'error');
+            console.error('Annotation manager not available after waiting');
+            showToast('Annotation system not ready. Please try again.', 'error');
             return;
         }
 
         console.log('Annotation manager available, starting save...');
+        
+        // Check if there are any annotations to save
+        const summary = window.annotationManager.getAnnotationSummary();
+        console.log('Annotation summary:', summary);
+        
+        if (summary.totalAnnotations === 0) {
+            showToast('No annotations to save. Please annotate at least one region first.', 'warning');
+            return;
+        }
+        
         showLoading('Saving annotations...');
         
         try {
+            // Save current annotations first
+            window.annotationManager.saveCurrentAnnotations();
+            
             // Save all annotations to storage
             console.log('Calling saveAllToStorage...');
             const results = await window.annotationManager.saveAllToStorage();

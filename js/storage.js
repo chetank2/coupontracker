@@ -76,6 +76,7 @@ class CouponStorage {
 
     // Save coupon image data
     async saveCoupon(imageData, filename) {
+        console.log('saveCoupon called with filename:', filename);
         await this.init();
 
         const couponData = {
@@ -89,6 +90,8 @@ class CouponStorage {
                 type: 'image'
             }
         };
+        
+        console.log('Saving coupon data for:', filename);
 
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['coupons'], 'readwrite');
@@ -173,6 +176,7 @@ class CouponStorage {
 
     // Save annotation
     async saveAnnotation(couponId, annotation) {
+        console.log('saveAnnotation called with:', { couponId, annotation });
         await this.init();
 
         const annotationData = {
@@ -183,6 +187,8 @@ class CouponStorage {
             createdAt: new Date().toISOString(),
             status: 'pending_upload'
         };
+        
+        console.log('Saving annotation data:', annotationData);
 
         return new Promise((resolve, reject) => {
             const transaction = this.db.transaction(['annotations'], 'readwrite');
