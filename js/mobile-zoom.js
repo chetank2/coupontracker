@@ -35,6 +35,7 @@ class MobileZoomHandler {
         this.zoomContainer = document.getElementById('zoom-container');
         this.canvas = document.getElementById('annotation-canvas');
         this.image = document.getElementById('current-image');
+        this.scrollIndicator = document.getElementById('scroll-indicator');
         
         if (!this.container || !this.zoomContainer) {
             console.log('Zoom elements not found, skipping mobile zoom setup');
@@ -42,6 +43,7 @@ class MobileZoomHandler {
         }
         
         this.setupZoomControls();
+        this.setupScrollHandler();
         // Remove complex touch gestures and mouse events
         // this.setupTouchGestures();
         // this.setupMouseEvents();
@@ -55,6 +57,39 @@ class MobileZoomHandler {
         if (zoomResetBtn) zoomResetBtn.addEventListener('click', () => this.resetScroll());
         
         console.log('Full-width scroll controls setup complete');
+    }
+    
+    setupScrollHandler() {
+        if (!this.container) return;
+        
+        // Show/hide scroll indicator based on content height
+        this.container.addEventListener('scroll', () => {
+            this.updateScrollIndicator();
+        });
+        
+        // Initial check when image loads
+        if (this.image) {
+            this.image.addEventListener('load', () => {
+                setTimeout(() => this.updateScrollIndicator(), 100);
+            });
+        }
+        
+        console.log('Scroll handler setup complete');
+    }
+    
+    updateScrollIndicator() {
+        if (!this.container || !this.scrollIndicator) return;
+        
+        const { scrollTop, scrollHeight, clientHeight } = this.container;
+        const isScrollable = scrollHeight > clientHeight;
+        const isAtBottom = scrollTop + clientHeight >= scrollHeight - 10;
+        
+        // Show indicator if content is scrollable and not at bottom
+        if (isScrollable && !isAtBottom && scrollTop < 50) {
+            this.scrollIndicator.classList.add('show');
+        } else {
+            this.scrollIndicator.classList.remove('show');
+        }
     }
     
     // Removed complex touch gestures and mouse events for simplicity
