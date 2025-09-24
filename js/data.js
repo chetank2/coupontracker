@@ -240,8 +240,16 @@ class DataManager {
         }
 
         const statusBadgeClass = this.getStatusBadgeClass(coupon.status);
-        const uploadDate = CouponTrainerApp.formatDate(coupon.uploadDate);
-        const fileSize = CouponTrainerApp.formatFileSize(coupon.metadata?.size || 0);
+        
+        // Format date with fallback
+        const uploadDate = (window.CouponTrainerApp && window.CouponTrainerApp.formatDate) 
+            ? window.CouponTrainerApp.formatDate(coupon.uploadDate)
+            : new Date(coupon.uploadDate).toLocaleDateString();
+            
+        // Format file size with fallback
+        const fileSize = (window.CouponTrainerApp && window.CouponTrainerApp.formatFileSize)
+            ? window.CouponTrainerApp.formatFileSize(coupon.metadata?.size || 0)
+            : this.formatFileSize(coupon.metadata?.size || 0);
         
         item.innerHTML = `
             <input type="checkbox" class="data-checkbox" ${this.selectedItems.has(coupon.id) ? 'checked' : ''}>
@@ -282,6 +290,14 @@ class DataManager {
             'pending_upload': 'pending'
         };
         return classes[status] || 'pending';
+    }
+    
+    formatFileSize(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
     toggleFilterPanel() {
