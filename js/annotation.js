@@ -333,22 +333,26 @@ class AnnotationCanvas {
         console.log(`Total annotations: ${this.annotations.length}`);
     }
     
-    updateCanvasSize() {
-        if (!this.image || !this.image.complete || this.image.naturalWidth === 0) return;
-        
-        // Get the displayed image size
-        const imageRect = this.image.getBoundingClientRect();
-        
-        // Set canvas size to match the displayed image
-        this.canvas.width = imageRect.width;
-        this.canvas.height = imageRect.height;
-        
-        // Ensure canvas covers the image exactly
-        this.canvas.style.width = imageRect.width + 'px';
-        this.canvas.style.height = imageRect.height + 'px';
-        
-        console.log(`Canvas sized to: ${this.canvas.width}x${this.canvas.height}`);
-    }
+        updateCanvasSize() {
+            if (!this.image || !this.image.complete || this.image.naturalWidth === 0) return;
+            
+            // Always use full viewport width
+            const viewportWidth = window.innerWidth;
+            
+            // Calculate height maintaining aspect ratio
+            const aspectRatio = this.image.naturalHeight / this.image.naturalWidth;
+            const canvasHeight = viewportWidth * aspectRatio;
+            
+            // Set canvas size to full width with proper aspect ratio
+            this.canvas.width = viewportWidth;
+            this.canvas.height = canvasHeight;
+            
+            // Ensure canvas covers the full width
+            this.canvas.style.width = viewportWidth + 'px';
+            this.canvas.style.height = canvasHeight + 'px';
+            
+            console.log(`Canvas sized to full width: ${this.canvas.width}x${this.canvas.height}`);
+        }
 
     drawAnnotation(annotation, isTemporary = false) {
         const { startX, startY, endX, endY, color, fieldType } = annotation;

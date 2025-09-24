@@ -51,39 +51,27 @@ class MobileZoomHandler {
     
     setupZoomControls() {
         const zoomResetBtn = document.getElementById('zoom-reset-btn');
-        const fitScreenBtn = document.getElementById('fit-screen-btn');
         
-        if (zoomResetBtn) zoomResetBtn.addEventListener('click', () => this.resetZoom());
-        if (fitScreenBtn) fitScreenBtn.addEventListener('click', () => this.fitToScreen());
+        if (zoomResetBtn) zoomResetBtn.addEventListener('click', () => this.resetScroll());
         
-        console.log('Simple image controls setup complete');
+        console.log('Full-width scroll controls setup complete');
     }
     
     // Removed complex touch gestures and mouse events for simplicity
     
-    resetZoom() {
+    resetScroll() {
+        // Reset scroll position to top
+        if (this.container) {
+            this.container.scrollTop = 0;
+            this.container.scrollLeft = 0;
+            console.log('Scroll position reset to top');
+        }
+        
+        // Also reset any transform if present
         this.scale = 1;
         this.panOffset = { x: 0, y: 0 };
         this.updateTransform();
-        console.log('Zoom reset to 1x');
-    }
-    
-    fitToScreen() {
-        if (!this.image || !this.container) return;
-        
-        const containerRect = this.container.getBoundingClientRect();
-        const imageRect = this.image.getBoundingClientRect();
-        
-        if (imageRect.width === 0 || imageRect.height === 0) return;
-        
-        const scaleX = containerRect.width / imageRect.width;
-        const scaleY = containerRect.height / imageRect.height;
-        const fitScale = Math.min(scaleX, scaleY, 1); // Don't scale up beyond 100%
-        
-        this.scale = fitScale;
-        this.panOffset = { x: 0, y: 0 };
-        this.updateTransform();
-        console.log('Fit to screen:', fitScale);
+        console.log('Image reset to full width');
     }
     
     updateTransform() {

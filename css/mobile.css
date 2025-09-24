@@ -189,10 +189,11 @@
     position: relative;
     background: #f8f9fa;
     border: 1px solid #ddd;
-    overflow: auto;
+    overflow-y: auto;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
-    height: 70vh;
-    max-height: 600px;
+    height: 65vh;
+    max-height: none;
   }
   
   .zoom-container {
@@ -205,10 +206,11 @@
   
   .annotation-canvas,
   .current-image {
-    max-width: none !important;
-    width: 100% !important;
+    width: 100vw !important;
     height: auto !important;
     display: block !important;
+    max-width: none !important;
+    object-fit: none !important;
   }
   
   .annotation-canvas {
@@ -291,7 +293,7 @@
   /* COMPACT LAYOUT - Maximize image space */
   .canvas-container {
     height: 65vh !important; /* Increase from ~40% to 65% */
-    max-height: 500px;
+    max-height: none !important; /* Remove height constraint for full scrolling */
     margin-bottom: 10px;
   }
   
