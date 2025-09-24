@@ -224,7 +224,7 @@
     z-index: 1;
   }
   
-  /* Mobile zoom controls */
+  /* Mobile image controls */
   .zoom-controls {
     position: absolute;
     top: 10px;
@@ -232,43 +232,36 @@
     z-index: 10;
     display: flex;
     gap: 8px;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.95);
     padding: 8px;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   }
   
   .zoom-btn {
-    width: 40px;
-    height: 40px;
+    height: 36px;
     border: none;
     border-radius: 6px;
     background: var(--primary-color);
     color: white;
-    font-size: 18px;
-    font-weight: bold;
+    font-size: 12px;
+    font-weight: 500;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
+    padding: 0 12px;
+    min-width: 50px;
   }
   
   .zoom-btn:hover {
     background: var(--primary-dark);
-    transform: scale(1.05);
+    transform: scale(1.02);
   }
   
-  .zoom-btn:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-    transform: none;
-  }
-  
-  .zoom-btn.reset {
-    font-size: 12px;
-    font-weight: normal;
-    width: 50px;
+  .zoom-btn:active {
+    transform: scale(0.98);
   }
   
   /* Mobile field type selector - make sticky */

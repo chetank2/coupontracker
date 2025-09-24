@@ -1,28 +1,21 @@
 /**
- * Mobile Zoom Handler for Coupon Annotation
- * Handles zoom controls, pinch-to-zoom, and canvas scaling
+ * Mobile Image Handler for Coupon Annotation
+ * Handles simple image controls: Reset and Fit to Screen
  */
 
 class MobileZoomHandler {
     constructor() {
         this.scale = 1;
-        this.maxScale = 3;
+        this.maxScale = 2;
         this.minScale = 0.5;
-        this.scaleStep = 0.2;
+        this.scaleStep = 0.5;
         
         this.container = null;
         this.zoomContainer = null;
         this.canvas = null;
         this.image = null;
         
-        // Touch gesture variables
-        this.initialDistance = 0;
-        this.initialScale = 1;
-        this.isZooming = false;
-        
-        // Pan variables
-        this.isPanning = false;
-        this.lastPanPoint = { x: 0, y: 0 };
+        // Simple pan variables (for reset/fit functionality)
         this.panOffset = { x: 0, y: 0 };
         
         this.init();
@@ -49,168 +42,30 @@ class MobileZoomHandler {
         }
         
         this.setupZoomControls();
-        this.setupTouchGestures();
-        this.setupMouseEvents();
+        // Remove complex touch gestures and mouse events
+        // this.setupTouchGestures();
+        // this.setupMouseEvents();
         
-        console.log('Mobile zoom handler initialized');
+        console.log('Mobile image handler initialized (simple mode)');
     }
     
     setupZoomControls() {
-        const zoomInBtn = document.getElementById('zoom-in-btn');
-        const zoomOutBtn = document.getElementById('zoom-out-btn');
         const zoomResetBtn = document.getElementById('zoom-reset-btn');
         const fitScreenBtn = document.getElementById('fit-screen-btn');
         
-        if (zoomInBtn) zoomInBtn.addEventListener('click', () => this.zoomIn());
-        if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => this.zoomOut());
         if (zoomResetBtn) zoomResetBtn.addEventListener('click', () => this.resetZoom());
         if (fitScreenBtn) fitScreenBtn.addEventListener('click', () => this.fitToScreen());
         
-        this.updateZoomButtons();
+        console.log('Simple image controls setup complete');
     }
     
-    setupTouchGestures() {
-        if (!this.container) return;
-        
-        // Listen on the container (not zoom-container) to avoid conflicts with canvas
-        this.container.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
-        this.container.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
-        this.container.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
-    }
-    
-    setupMouseEvents() {
-        if (!this.zoomContainer) return;
-        
-        // Mouse wheel zoom
-        this.zoomContainer.addEventListener('wheel', (e) => this.handleWheel(e), { passive: false });
-        
-        // Mouse pan
-        this.zoomContainer.addEventListener('mousedown', (e) => this.handleMouseDown(e));
-        this.zoomContainer.addEventListener('mousemove', (e) => this.handleMouseMove(e));
-        this.zoomContainer.addEventListener('mouseup', (e) => this.handleMouseUp(e));
-        this.zoomContainer.addEventListener('mouseleave', (e) => this.handleMouseUp(e));
-    }
-    
-    handleTouchStart(e) {
-        // Check if touch is on canvas - if so, let annotation system handle it
-        const target = e.target;
-        if (target && target.tagName === 'CANVAS') {
-            return; // Let annotation system handle canvas touches
-        }
-        
-        if (e.touches.length === 2) {
-            // Two-finger pinch start
-            e.preventDefault();
-            this.isZooming = true;
-            this.initialDistance = this.getDistance(e.touches[0], e.touches[1]);
-            this.initialScale = this.scale;
-        } else if (e.touches.length === 1 && this.scale > 1) {
-            // Single finger pan start (only when zoomed and not on canvas)
-            this.isPanning = true;
-            this.lastPanPoint = {
-                x: e.touches[0].clientX,
-                y: e.touches[0].clientY
-            };
-        }
-    }
-    
-    handleTouchMove(e) {
-        // Check if touch is on canvas - if so, let annotation system handle it
-        const target = e.target;
-        if (target && target.tagName === 'CANVAS' && e.touches.length === 1) {
-            return; // Let annotation system handle single-touch canvas moves
-        }
-        
-        if (e.touches.length === 2 && this.isZooming) {
-            // Two-finger pinch zoom
-            e.preventDefault();
-            const currentDistance = this.getDistance(e.touches[0], e.touches[1]);
-            const scaleChange = currentDistance / this.initialDistance;
-            const newScale = this.initialScale * scaleChange;
-            
-            this.setZoom(newScale);
-        } else if (e.touches.length === 1 && this.isPanning && this.scale > 1) {
-            // Single finger pan (only when not on canvas)
-            e.preventDefault();
-            const currentPoint = {
-                x: e.touches[0].clientX,
-                y: e.touches[0].clientY
-            };
-            
-            const deltaX = currentPoint.x - this.lastPanPoint.x;
-            const deltaY = currentPoint.y - this.lastPanPoint.y;
-            
-            this.panOffset.x += deltaX;
-            this.panOffset.y += deltaY;
-            
-            this.updateTransform();
-            
-            this.lastPanPoint = currentPoint;
-        }
-    }
-    
-    handleTouchEnd(e) {
-        if (e.touches.length < 2) {
-            this.isZooming = false;
-        }
-        if (e.touches.length === 0) {
-            this.isPanning = false;
-        }
-    }
-    
-    handleWheel(e) {
-        e.preventDefault();
-        const delta = e.deltaY > 0 ? -this.scaleStep : this.scaleStep;
-        const newScale = this.scale + delta;
-        this.setZoom(newScale);
-    }
-    
-    handleMouseDown(e) {
-        if (this.scale > 1) {
-            this.isPanning = true;
-            this.lastPanPoint = { x: e.clientX, y: e.clientY };
-            this.zoomContainer.style.cursor = 'grabbing';
-        }
-    }
-    
-    handleMouseMove(e) {
-        if (this.isPanning && this.scale > 1) {
-            const deltaX = e.clientX - this.lastPanPoint.x;
-            const deltaY = e.clientY - this.lastPanPoint.y;
-            
-            this.panOffset.x += deltaX;
-            this.panOffset.y += deltaY;
-            
-            this.updateTransform();
-            
-            this.lastPanPoint = { x: e.clientX, y: e.clientY };
-        }
-    }
-    
-    handleMouseUp(e) {
-        this.isPanning = false;
-        this.zoomContainer.style.cursor = this.scale > 1 ? 'grab' : 'default';
-    }
-    
-    getDistance(touch1, touch2) {
-        const dx = touch1.clientX - touch2.clientX;
-        const dy = touch1.clientY - touch2.clientY;
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-    
-    zoomIn() {
-        this.setZoom(this.scale + this.scaleStep);
-    }
-    
-    zoomOut() {
-        this.setZoom(this.scale - this.scaleStep);
-    }
+    // Removed complex touch gestures and mouse events for simplicity
     
     resetZoom() {
         this.scale = 1;
         this.panOffset = { x: 0, y: 0 };
         this.updateTransform();
-        this.updateZoomButtons();
+        console.log('Zoom reset to 1x');
     }
     
     fitToScreen() {
@@ -228,19 +83,7 @@ class MobileZoomHandler {
         this.scale = fitScale;
         this.panOffset = { x: 0, y: 0 };
         this.updateTransform();
-        this.updateZoomButtons();
-    }
-    
-    setZoom(newScale) {
-        this.scale = Math.max(this.minScale, Math.min(this.maxScale, newScale));
-        this.updateTransform();
-        this.updateZoomButtons();
-        
-        // Reset pan if zoomed out to 1x or less
-        if (this.scale <= 1) {
-            this.panOffset = { x: 0, y: 0 };
-            this.updateTransform();
-        }
+        console.log('Fit to screen:', fitScale);
     }
     
     updateTransform() {
@@ -249,8 +92,8 @@ class MobileZoomHandler {
         const transform = `scale(${this.scale}) translate(${this.panOffset.x / this.scale}px, ${this.panOffset.y / this.scale}px)`;
         this.zoomContainer.style.transform = transform;
         
-        // Update cursor
-        this.zoomContainer.style.cursor = this.scale > 1 ? 'grab' : 'default';
+        // Keep cursor simple
+        this.zoomContainer.style.cursor = 'default';
         
         // Update canvas size for annotation accuracy
         this.updateCanvasCoordinates();
@@ -263,18 +106,7 @@ class MobileZoomHandler {
         }
     }
     
-    updateZoomButtons() {
-        const zoomInBtn = document.getElementById('zoom-in-btn');
-        const zoomOutBtn = document.getElementById('zoom-out-btn');
-        
-        if (zoomInBtn) {
-            zoomInBtn.disabled = this.scale >= this.maxScale;
-        }
-        
-        if (zoomOutBtn) {
-            zoomOutBtn.disabled = this.scale <= this.minScale;
-        }
-    }
+    // No zoom buttons to update anymore
     
     // Public method to get current zoom info
     getZoomInfo() {
@@ -291,7 +123,6 @@ class MobileZoomHandler {
         this.scale = Math.max(this.minScale, Math.min(this.maxScale, scale));
         this.panOffset = { x: panX, y: panY };
         this.updateTransform();
-        this.updateZoomButtons();
     }
 }
 
