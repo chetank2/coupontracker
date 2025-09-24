@@ -278,16 +278,22 @@ class UploadManager {
     }
 
     async saveAnnotations() {
+        console.log('saveAnnotations called');
+        
         if (!window.annotationManager) {
+            console.error('Annotation manager not available');
             showToast('Annotation manager not available', 'error');
             return;
         }
 
+        console.log('Annotation manager available, starting save...');
         showLoading('Saving annotations...');
         
         try {
             // Save all annotations to storage
+            console.log('Calling saveAllToStorage...');
             const results = await window.annotationManager.saveAllToStorage();
+            console.log('Save results:', results);
             
             // Update upload status
             const successCount = results.filter(r => r.success).length;
@@ -393,11 +399,18 @@ document.addEventListener('DOMContentLoaded', () => {
         // Connect save button to upload manager
         const saveBtn = document.getElementById('save-annotations');
         if (saveBtn) {
+            console.log('Save button found, adding event listener');
             saveBtn.addEventListener('click', () => {
+                console.log('Save button clicked!');
                 if (window.uploadManager) {
+                    console.log('Upload manager available, calling handleAnnotationSave');
                     window.uploadManager.handleAnnotationSave();
+                } else {
+                    console.error('Upload manager not available');
                 }
             });
+        } else {
+            console.error('Save button not found!');
         }
     }
 });
