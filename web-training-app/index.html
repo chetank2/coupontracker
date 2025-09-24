@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0d6efd">
+    <title>Coupon Trainer - Web Training Platform</title>
+    <meta name="description" content="Advanced coupon annotation and model training platform">
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="./icons/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32x32.png">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="./css/style.css">
+    <link rel="stylesheet" href="./css/dashboard.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-icon">🎫</span>
+                <span class="brand-text">Coupon Trainer</span>
+            </div>
+            <div class="nav-menu" id="nav-menu">
+                <a href="./index.html" class="nav-link active">Dashboard</a>
+                <a href="./upload.html" class="nav-link">Upload & Annotate</a>
+                <a href="./training.html" class="nav-link">Training</a>
+                <a href="./testing.html" class="nav-link">Testing</a>
+                <a href="./models.html" class="nav-link">Models</a>
+                <a href="./data.html" class="nav-link">Data</a>
+            </div>
+            <div class="nav-toggle" id="nav-toggle">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Header Section -->
+        <section class="dashboard-header">
+            <div class="header-content">
+                <h1 class="page-title">Training Dashboard</h1>
+                <p class="page-subtitle">Monitor your coupon detection model training progress</p>
+                <div class="header-actions">
+                    <button class="btn btn-primary" id="quick-upload-btn">
+                        <span class="btn-icon">📤</span>
+                        Quick Upload
+                    </button>
+                    <button class="btn btn-success" id="start-training-btn">
+                        <span class="btn-icon">🚀</span>
+                        Start Training
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stats Grid -->
+        <section class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <h3>Total Coupons</h3>
+                    <span class="stat-icon">📊</span>
+                </div>
+                <div class="stat-number" id="total-coupons">0</div>
+                <div class="stat-change positive">+12 this week</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-header">
+                    <h3>Annotated</h3>
+                    <span class="stat-icon">✅</span>
+                </div>
+                <div class="stat-number" id="annotated-coupons">0</div>
+                <div class="stat-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="annotation-progress" style="width: 0%"></div>
+                    </div>
+                    <span class="progress-text" id="annotation-percentage">0%</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-header">
+                    <h3>Model Accuracy</h3>
+                    <span class="stat-icon">🎯</span>
+                </div>
+                <div class="stat-number" id="model-accuracy">--</div>
+                <div class="stat-change" id="accuracy-change">No training yet</div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-header">
+                    <h3>Training Status</h3>
+                    <span class="stat-icon">⚡</span>
+                </div>
+                <div class="stat-status" id="training-status">Idle</div>
+                <div class="stat-detail" id="training-detail">Ready to train</div>
+            </div>
+        </section>
+
+        <!-- Training Progress Section -->
+        <section class="training-section">
+            <div class="section-header">
+                <h2>Training Progress</h2>
+                <div class="section-actions">
+                    <button class="btn btn-outline" id="view-logs-btn">View Logs</button>
+                    <button class="btn btn-outline" id="download-model-btn">Download Model</button>
+                </div>
+            </div>
+            
+            <div class="training-grid">
+                <!-- Training History Chart -->
+                <div class="training-card">
+                    <h3>Training History</h3>
+                    <div class="chart-container">
+                        <canvas id="training-chart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Current Training Session -->
+                <div class="training-card">
+                    <h3>Current Session</h3>
+                    <div class="session-info" id="session-info">
+                        <div class="session-item">
+                            <span class="session-label">Epoch:</span>
+                            <span class="session-value" id="current-epoch">0/0</span>
+                        </div>
+                        <div class="session-item">
+                            <span class="session-label">Loss:</span>
+                            <span class="session-value" id="current-loss">--</span>
+                        </div>
+                        <div class="session-item">
+                            <span class="session-label">Time:</span>
+                            <span class="session-value" id="training-time">--</span>
+                        </div>
+                        <div class="session-item">
+                            <span class="session-label">ETA:</span>
+                            <span class="session-value" id="training-eta">--</span>
+                        </div>
+                    </div>
+                    <div class="training-progress-bar">
+                        <div class="progress-fill" id="training-progress" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quick Actions -->
+        <section class="actions-section">
+            <div class="section-header">
+                <h2>Quick Actions</h2>
+            </div>
+            
+            <div class="actions-grid">
+                <a href="./upload.html" class="action-card primary">
+                    <div class="action-icon">📤</div>
+                    <div class="action-content">
+                        <h3>Upload & Annotate</h3>
+                        <p>Add new coupon images and create training annotations</p>
+                    </div>
+                    <div class="action-arrow">→</div>
+                </a>
+                
+                <a href="./training.html" class="action-card">
+                    <div class="action-icon">🧠</div>
+                    <div class="action-content">
+                        <h3>Model Training</h3>
+                        <p>Configure and start model training sessions</p>
+                    </div>
+                    <div class="action-arrow">→</div>
+                </a>
+                
+                <a href="./testing.html" class="action-card">
+                    <div class="action-icon">🔬</div>
+                    <div class="action-content">
+                        <h3>Test & Evaluate</h3>
+                        <p>Test your models and evaluate performance</p>
+                    </div>
+                    <div class="action-arrow">→</div>
+                </a>
+                
+                <a href="./models.html" class="action-card">
+                    <div class="action-icon">🏆</div>
+                    <div class="action-content">
+                        <h3>Model Registry</h3>
+                        <p>Browse, compare and deploy trained models</p>
+                    </div>
+                    <div class="action-arrow">→</div>
+                </a>
+            </div>
+        </section>
+
+        <!-- Recent Activity -->
+        <section class="activity-section">
+            <div class="section-header">
+                <h2>Recent Activity</h2>
+                <button class="btn btn-sm btn-outline" id="clear-activity-btn">Clear All</button>
+            </div>
+            
+            <div class="activity-feed" id="activity-feed">
+                <div class="activity-item">
+                    <div class="activity-icon welcome">🎉</div>
+                    <div class="activity-content">
+                        <div class="activity-title">Welcome to Coupon Trainer!</div>
+                        <div class="activity-description">Start by uploading your first coupon images</div>
+                        <div class="activity-time">Just now</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="./about.html">About</a>
+                <a href="./help.html">Help</a>
+                <a href="./api.html">API</a>
+            </div>
+            <div class="footer-info">
+                <span>Coupon Trainer v2.0.0</span>
+                <span>•</span>
+                <span id="data-usage">0 MB used</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Modals -->
+    <div id="training-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Start Training</h3>
+                <button class="modal-close" id="close-training-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>Ready to start training with <span id="training-data-count">0</span> annotated images?</p>
+                <div class="training-options">
+                    <label class="option-label">
+                        <input type="checkbox" id="use-augmentation" checked>
+                        Use data augmentation
+                    </label>
+                    <label class="option-label">
+                        <input type="checkbox" id="use-pretrained" checked>
+                        Use pre-trained weights
+                    </label>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-outline" id="cancel-training-btn">Cancel</button>
+                <button class="btn btn-primary" id="confirm-training-btn">Start Training</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text" id="loading-text">Loading...</div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="./js/chart.min.js"></script>
+    <script src="./js/storage.js"></script>
+    <script src="./js/dashboard.js"></script>
+    <script src="./js/main.js"></script>
+</body>
+</html>

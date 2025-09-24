@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0d6efd">
+    <title>Testing - Coupon Trainer</title>
+    
+    <!-- Icons -->
+    <link rel="icon" type="image/svg+xml" href="./icons/favicon.svg">
+    <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32x32.png">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="./css/style.css">
+    <link rel="stylesheet" href="./css/dashboard.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <span class="brand-icon">🎫</span>
+                <span class="brand-text">Coupon Trainer</span>
+            </div>
+            <div class="nav-menu" id="nav-menu">
+                <a href="./index.html" class="nav-link">Dashboard</a>
+                <a href="./upload.html" class="nav-link">Upload & Annotate</a>
+                <a href="./training.html" class="nav-link">Training</a>
+                <a href="./testing.html" class="nav-link active">Testing</a>
+                <a href="./models.html" class="nav-link">Models</a>
+                <a href="./data.html" class="nav-link">Data</a>
+            </div>
+            <div class="nav-toggle" id="nav-toggle">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="page-header">
+            <h1>Model Testing & Evaluation</h1>
+            <p>Test your trained models and evaluate their performance</p>
+        </div>
+
+        <!-- Test Upload -->
+        <section class="test-upload-section">
+            <div class="upload-area" id="test-upload-area">
+                <div class="upload-content">
+                    <div class="upload-icon">🔬</div>
+                    <h3>Upload Test Images</h3>
+                    <p>Test your model with new coupon images</p>
+                    <input type="file" id="test-file-input" accept="image/*" multiple hidden>
+                    <button class="btn btn-primary" id="test-browse-btn">
+                        <span class="btn-icon">📁</span>
+                        Browse Test Images
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Test Results -->
+        <section class="test-results-section" id="test-results-section" style="display: none;">
+            <h2>Test Results</h2>
+            <div class="results-grid" id="results-grid">
+                <!-- Results will be populated here -->
+            </div>
+        </section>
+
+        <!-- Performance Metrics -->
+        <section class="metrics-section">
+            <h2>Performance Metrics</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h3>Overall Accuracy</h3>
+                    <div class="metric-value" id="overall-accuracy">--</div>
+                    <div class="metric-description">Percentage of correct predictions</div>
+                </div>
+                <div class="metric-card">
+                    <h3>Precision</h3>
+                    <div class="metric-value" id="precision">--</div>
+                    <div class="metric-description">True positives / (True positives + False positives)</div>
+                </div>
+                <div class="metric-card">
+                    <h3>Recall</h3>
+                    <div class="metric-value" id="recall">--</div>
+                    <div class="metric-description">True positives / (True positives + False negatives)</div>
+                </div>
+                <div class="metric-card">
+                    <h3>F1 Score</h3>
+                    <div class="metric-value" id="f1-score">--</div>
+                    <div class="metric-description">Harmonic mean of precision and recall</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Field-wise Performance -->
+        <section class="field-performance-section">
+            <h2>Field-wise Performance</h2>
+            <div class="performance-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Field Type</th>
+                            <th>Accuracy</th>
+                            <th>Precision</th>
+                            <th>Recall</th>
+                            <th>F1 Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Coupon Code</td>
+                            <td>--</td>
+                            <td>--</td>
+                            <td>--</td>
+                            <td>--</td>
+                        </tr>
+                        <tr>
+                            <td>Benefit/Offer</td>
+                            <td>--</td>
+                            <td>--</td>
+                            <td>--</td>
+                            <td>--</td>
+                        </tr>
+                        <tr>
+                            <td>Expiry Date</td>
+                            <td>--</td>
+                            <td>--</td>
+                            <td>--</td>
+                            <td>--</td>
+                        </tr>
+                        <tr>
+                            <td>App/Brand</td>
+                            <td>--</td>
+                            <td>--</td>
+                            <td>--</td>
+                            <td>--</td>
+                        </tr>
+                        <tr>
+                            <td>Terms & Conditions</td>
+                            <td>--</td>
+                            <td>--</td>
+                            <td>--</td>
+                            <td>--</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <!-- Scripts -->
+    <script src="./js/storage.js"></script>
+    <script src="./js/main.js"></script>
+</body>
+</html>
