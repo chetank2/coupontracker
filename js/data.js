@@ -128,25 +128,49 @@ class DataManager {
 
     async loadData() {
         try {
-            showLoading('Loading training data...');
+            // Show loading with fallback
+            if (typeof showLoading === 'function') {
+                showLoading('Loading training data...');
+            } else {
+                console.log('Loading: Loading training data...');
+            }
             
+            console.log('Getting all coupons from storage...');
             this.allCoupons = await storage.getAllCoupons();
+            console.log('Retrieved coupons:', this.allCoupons);
             
             // Load annotations for each coupon
             for (const coupon of this.allCoupons) {
+                console.log(`Loading annotations for coupon ${coupon.id}...`);
                 coupon.annotations = await storage.getAnnotations(coupon.id);
+                console.log(`Found ${coupon.annotations?.length || 0} annotations for ${coupon.id}`);
             }
             
             this.filteredCoupons = [...this.allCoupons];
             
-            hideLoading();
+            // Hide loading with fallback
+            if (typeof hideLoading === 'function') {
+                hideLoading();
+            } else {
+                console.log('Loading complete');
+            }
             
             console.log(`Loaded ${this.allCoupons.length} coupons`);
             
         } catch (error) {
-            hideLoading();
+            // Hide loading with fallback
+            if (typeof hideLoading === 'function') {
+                hideLoading();
+            } else {
+                console.log('Loading complete (error)');
+            }
             console.error('Failed to load data:', error);
-            showToast('Failed to load data: ' + error.message, 'error');
+            // Show error toast with fallback
+            if (typeof showToast === 'function') {
+                showToast('Failed to load data: ' + error.message, 'error');
+            } else {
+                console.error('❌ Failed to load data: ' + error.message);
+            }
         }
     }
 
