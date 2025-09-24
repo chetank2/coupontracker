@@ -90,11 +90,14 @@
                 </div>
             </div>
 
-            <!-- Annotation Tools - Compact -->
+            <!-- Annotation Tools - Compact with Collapsible -->
             <div class="annotation-tools">
                 <div class="tool-group">
-                    <h3>Field Types</h3>
-                    <div class="field-buttons">
+                    <div class="collapsible-header" id="field-types-header">
+                        <h3>Field Types</h3>
+                        <span class="collapse-icon">▼</span>
+                    </div>
+                    <div class="field-buttons collapsible-content" id="field-types-content">
                         <button class="field-btn active" data-field="code_region">
                             <span class="field-color" style="background-color: #ff6b6b;"></span>
                             Code

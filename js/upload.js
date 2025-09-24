@@ -468,8 +468,39 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             console.error('Save button not found!');
         }
+
+        // Setup collapsible field types
+        setupCollapsible();
     }
 });
+
+// Collapsible functionality
+function setupCollapsible() {
+    const header = document.getElementById('field-types-header');
+    const content = document.getElementById('field-types-content');
+    
+    if (header && content) {
+        header.addEventListener('click', () => {
+            const isCollapsed = content.classList.contains('collapsed');
+            
+            if (isCollapsed) {
+                // Expand
+                content.classList.remove('collapsed');
+                header.classList.remove('collapsed');
+                console.log('Field types expanded');
+            } else {
+                // Collapse
+                content.classList.add('collapsed');
+                header.classList.add('collapsed');
+                console.log('Field types collapsed');
+            }
+        });
+        
+        console.log('Collapsible field types setup complete');
+    } else {
+        console.warn('Collapsible elements not found');
+    }
+}
 
 // Export for use in other modules
 if (typeof module !== 'undefined' && module.exports) {

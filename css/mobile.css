@@ -367,6 +367,46 @@
   .tool-group:last-child {
     margin-bottom: 0;
   }
+
+  /* Collapsible Field Types */
+  .collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    padding: 4px 0;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  .collapsible-header:active {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+  }
+  
+  .collapse-icon {
+    font-size: 12px;
+    color: #666;
+    transition: transform 0.2s ease;
+    font-weight: bold;
+  }
+  
+  .collapsible-content {
+    max-height: 200px; /* Adjust based on content */
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.2s ease;
+    opacity: 1;
+  }
+  
+  .collapsible-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0 !important;
+  }
+  
+  .collapsible-header.collapsed .collapse-icon {
+    transform: rotate(-90deg);
+  }
 }
 
 .annotation-header {
