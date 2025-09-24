@@ -23,6 +23,7 @@ class AnnotationCanvas {
         
         this.setupEventListeners();
         this.setupTouchHandling();
+        this.setupResizeHandler();
     }
 
     setupEventListeners() {
@@ -44,13 +45,20 @@ class AnnotationCanvas {
         
         this.canvas.addEventListener('touchstart', (e) => {
             // Only handle single touch for annotation (avoid conflicts with zoom gestures)
-            if (e.touches.length !== 1) return;
+            if (e.touches.length !== 1) {
+                console.log(`Ignoring ${e.touches.length}-finger touch for annotation`);
+                return;
+            }
             
             e.preventDefault();
+            e.stopPropagation(); // Prevent zoom handler from seeing this
+            
             touchStartTime = Date.now();
             touchMoved = false;
             
             const touch = e.touches[0];
+            
+            console.log('Starting annotation touch at:', touch.clientX, touch.clientY);
             
             // Show touch indicator for better feedback
             this.showTouchIndicator(touch.clientX, touch.clientY);
@@ -72,6 +80,8 @@ class AnnotationCanvas {
             if (e.touches.length !== 1) return;
             
             e.preventDefault();
+            e.stopPropagation(); // Prevent zoom handler from seeing this
+            
             touchMoved = true;
             
             // Clear long press timer if user moves
@@ -81,6 +91,8 @@ class AnnotationCanvas {
             }
             
             const touch = e.touches[0];
+            
+            console.log('Moving annotation touch to:', touch.clientX, touch.clientY);
             
             // Update touch indicator
             this.updateTouchIndicator(touch.clientX, touch.clientY);
@@ -94,6 +106,9 @@ class AnnotationCanvas {
 
         this.canvas.addEventListener('touchend', (e) => {
             e.preventDefault();
+            e.stopPropagation(); // Prevent zoom handler from seeing this
+            
+            console.log('Ending annotation touch');
             
             // Clear long press timer
             if (longPressTimer) {
@@ -119,8 +134,24 @@ class AnnotationCanvas {
             this.canvas.dispatchEvent(mouseEvent);
         });
 
-        // Prevent default touch behaviors but allow zoom gestures to pass through
-        this.canvas.style.touchAction = 'pan-x pan-y';
+        // Prevent default touch behaviors - we'll handle everything
+        this.canvas.style.touchAction = 'none';
+    }
+    
+    setupResizeHandler() {
+        // Handle window resize and orientation changes
+        let resizeTimeout;
+        const handleResize = () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                console.log('Window resized, updating canvas size');
+                this.updateCanvasSize();
+                this.redrawCanvas();
+            }, 250);
+        };
+        
+        window.addEventListener('resize', handleResize);
+        window.addEventListener('orientationchange', handleResize);
     }
     
     showTouchIndicator(x, y) {
@@ -274,11 +305,17 @@ class AnnotationCanvas {
     }
 
     redrawCanvas() {
+        // Ensure canvas is properly sized
+        this.updateCanvasSize();
+        
         // Clear canvas
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
+        console.log(`Redrawing canvas: ${this.canvas.width}x${this.canvas.height}`);
+        
         // Draw image if loaded
         if (this.image.complete && this.image.naturalWidth > 0) {
+            console.log(`Drawing image: ${this.image.naturalWidth}x${this.image.naturalHeight}`);
             this.ctx.drawImage(this.image, 0, 0, this.canvas.width, this.canvas.height);
         }
         
@@ -289,8 +326,28 @@ class AnnotationCanvas {
         
         // Draw current annotation being drawn
         if (this.currentAnnotation && this.isDrawing) {
+            console.log('Drawing current annotation:', this.currentAnnotation);
             this.drawAnnotation(this.currentAnnotation, true);
         }
+        
+        console.log(`Total annotations: ${this.annotations.length}`);
+    }
+    
+    updateCanvasSize() {
+        if (!this.image || !this.image.complete || this.image.naturalWidth === 0) return;
+        
+        // Get the displayed image size
+        const imageRect = this.image.getBoundingClientRect();
+        
+        // Set canvas size to match the displayed image
+        this.canvas.width = imageRect.width;
+        this.canvas.height = imageRect.height;
+        
+        // Ensure canvas covers the image exactly
+        this.canvas.style.width = imageRect.width + 'px';
+        this.canvas.style.height = imageRect.height + 'px';
+        
+        console.log(`Canvas sized to: ${this.canvas.width}x${this.canvas.height}`);
     }
 
     drawAnnotation(annotation, isTemporary = false) {
@@ -395,22 +452,18 @@ class AnnotationCanvas {
     setImage(imageSrc) {
         return new Promise((resolve) => {
             this.image.onload = () => {
-                // Set canvas dimensions to match image aspect ratio
-                const maxWidth = 600;
-                const maxHeight = 400;
+                console.log('Image loaded:', this.image.naturalWidth, 'x', this.image.naturalHeight);
                 
-                let { width, height } = this.image;
-                const ratio = Math.min(maxWidth / width, maxHeight / height);
+                // Wait a moment for the image to be displayed, then size canvas
+                setTimeout(() => {
+                    this.updateCanvasSize();
+                    this.redrawCanvas();
+                    console.log('Canvas setup complete');
+                }, 100);
                 
-                width *= ratio;
-                height *= ratio;
-                
-                this.canvas.width = width;
-                this.canvas.height = height;
-                
-                // Update canvas display size
-                this.canvas.style.width = width + 'px';
-                this.canvas.style.height = height + 'px';
+                // For immediate setup, use natural dimensions
+                this.canvas.width = this.image.naturalWidth;
+                this.canvas.height = this.image.naturalHeight;
                 
                 this.redrawCanvas();
                 resolve();

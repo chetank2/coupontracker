@@ -70,12 +70,12 @@ class MobileZoomHandler {
     }
     
     setupTouchGestures() {
-        if (!this.zoomContainer) return;
+        if (!this.container) return;
         
-        // Prevent default touch behaviors
-        this.zoomContainer.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
-        this.zoomContainer.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
-        this.zoomContainer.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+        // Listen on the container (not zoom-container) to avoid conflicts with canvas
+        this.container.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+        this.container.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+        this.container.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
     }
     
     setupMouseEvents() {
@@ -92,6 +92,12 @@ class MobileZoomHandler {
     }
     
     handleTouchStart(e) {
+        // Check if touch is on canvas - if so, let annotation system handle it
+        const target = e.target;
+        if (target && target.tagName === 'CANVAS') {
+            return; // Let annotation system handle canvas touches
+        }
+        
         if (e.touches.length === 2) {
             // Two-finger pinch start
             e.preventDefault();
@@ -99,7 +105,7 @@ class MobileZoomHandler {
             this.initialDistance = this.getDistance(e.touches[0], e.touches[1]);
             this.initialScale = this.scale;
         } else if (e.touches.length === 1 && this.scale > 1) {
-            // Single finger pan start (only when zoomed)
+            // Single finger pan start (only when zoomed and not on canvas)
             this.isPanning = true;
             this.lastPanPoint = {
                 x: e.touches[0].clientX,
@@ -109,6 +115,12 @@ class MobileZoomHandler {
     }
     
     handleTouchMove(e) {
+        // Check if touch is on canvas - if so, let annotation system handle it
+        const target = e.target;
+        if (target && target.tagName === 'CANVAS' && e.touches.length === 1) {
+            return; // Let annotation system handle single-touch canvas moves
+        }
+        
         if (e.touches.length === 2 && this.isZooming) {
             // Two-finger pinch zoom
             e.preventDefault();
@@ -118,7 +130,7 @@ class MobileZoomHandler {
             
             this.setZoom(newScale);
         } else if (e.touches.length === 1 && this.isPanning && this.scale > 1) {
-            // Single finger pan
+            // Single finger pan (only when not on canvas)
             e.preventDefault();
             const currentPoint = {
                 x: e.touches[0].clientX,
