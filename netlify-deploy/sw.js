@@ -5,18 +5,18 @@ const DYNAMIC_CACHE = 'coupon-trainer-dynamic-v1';
 
 // Files to cache for offline functionality
 const STATIC_FILES = [
-  './',
-  './index.html',
-  './upload.html', 
-  './data.html',
-  './css/style.css',
-  './css/mobile.css',
-  './js/main.js',
-  './js/upload.js',
-  './js/annotation.js',
-  './js/storage.js',
-  './js/training.js',
-  './manifest.json'
+  '/',
+  '/index.html',
+  '/upload.html', 
+  '/data.html',
+  '/css/style.css',
+  '/css/mobile.css',
+  '/js/main.js',
+  '/js/upload.js',
+  '/js/annotation.js',
+  '/js/storage.js',
+  '/js/training.js',
+  '/manifest.json'
 ];
 
 // Install event - cache static files
