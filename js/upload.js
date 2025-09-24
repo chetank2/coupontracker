@@ -305,7 +305,12 @@ class UploadManager {
             return;
         }
         
-        showLoading('Saving annotations...');
+        // Show loading with fallback
+        if (typeof showLoading === 'function') {
+            showLoading('Saving annotations...');
+        } else {
+            console.log('Loading: Saving annotations...');
+        }
         
         try {
             // Save current annotations first
@@ -320,7 +325,12 @@ class UploadManager {
             const successCount = results.filter(r => r.success).length;
             const failureCount = results.length - successCount;
             
-            hideLoading();
+            // Hide loading with fallback
+            if (typeof hideLoading === 'function') {
+                hideLoading();
+            } else {
+                console.log('Loading complete');
+            }
             
             if (failureCount === 0) {
                 showToast(`All ${successCount} images saved successfully!`, 'success');
@@ -331,7 +341,12 @@ class UploadManager {
             }
             
         } catch (error) {
-            hideLoading();
+            // Hide loading with fallback
+            if (typeof hideLoading === 'function') {
+                hideLoading();
+            } else {
+                console.log('Loading complete (error)');
+            }
             showToast('Failed to save annotations: ' + error.message, 'error');
             console.error('Save failed:', error);
         }
