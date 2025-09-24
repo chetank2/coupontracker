@@ -199,28 +199,14 @@
     scrollbar-color: #0d6efd #f8f9fa;
   }
   
-  /* Webkit scrollbar styling for Chrome/Safari */
+  /* Hide default scrollbar - we'll create a custom one */
   .canvas-container::-webkit-scrollbar {
-    width: 8px;
+    display: none;
   }
   
-  .canvas-container::-webkit-scrollbar-track {
-    background: rgba(248, 249, 250, 0.8);
-    border-radius: 4px;
-  }
-  
-  .canvas-container::-webkit-scrollbar-thumb {
-    background: #0d6efd;
-    border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-  }
-  
-  .canvas-container::-webkit-scrollbar-thumb:hover {
-    background: #0b5ed7;
-  }
-  
-  .canvas-container::-webkit-scrollbar-thumb:active {
-    background: #0a58ca;
+  .canvas-container {
+    -ms-overflow-style: none;  /* Internet Explorer 10+ */
+    scrollbar-width: none;  /* Firefox */
   }
   
   /* Scroll indicator */
@@ -260,6 +246,68 @@
     60% {
       transform: translateY(-3px);
     }
+  }
+  
+  /* Custom Wide Scrollbar */
+  .custom-scrollbar {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    bottom: 8px;
+    width: 20px;
+    z-index: 20;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: auto;
+  }
+  
+  .custom-scrollbar.visible {
+    opacity: 1;
+  }
+  
+  .custom-scrollbar-track {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    right: 4px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+  }
+  
+  .custom-scrollbar-thumb {
+    position: absolute;
+    left: 2px;
+    right: 2px;
+    background: linear-gradient(180deg, #ff6b9d 0%, #c44569 50%, #6c5ce7 100%);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-height: 40px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+  
+  .custom-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ff7ba7 0%, #d1477a 50%, #7c6ce8 100%);
+    transform: scaleX(1.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+  
+  .custom-scrollbar-thumb:active {
+    background: linear-gradient(180deg, #ff8bb5 0%, #de588b 50%, #8c7ce9 100%);
+    transform: scaleX(1.2);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  }
+  
+  .custom-scrollbar-thumb.dragging {
+    transition: none;
+    transform: scaleX(1.2);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
   }
   
   .zoom-container {

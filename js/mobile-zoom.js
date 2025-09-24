@@ -36,6 +36,8 @@ class MobileZoomHandler {
         this.canvas = document.getElementById('annotation-canvas');
         this.image = document.getElementById('current-image');
         this.scrollIndicator = document.getElementById('scroll-indicator');
+        this.customScrollbar = document.getElementById('custom-scrollbar');
+        this.scrollbarThumb = document.getElementById('scrollbar-thumb');
         
         if (!this.container || !this.zoomContainer) {
             console.log('Zoom elements not found, skipping mobile zoom setup');
@@ -44,6 +46,7 @@ class MobileZoomHandler {
         
         this.setupZoomControls();
         this.setupScrollHandler();
+        this.setupCustomScrollbar();
         // Remove complex touch gestures and mouse events
         // this.setupTouchGestures();
         // this.setupMouseEvents();
@@ -89,6 +92,117 @@ class MobileZoomHandler {
             this.scrollIndicator.classList.add('show');
         } else {
             this.scrollIndicator.classList.remove('show');
+        }
+        
+        // Update custom scrollbar
+        this.updateCustomScrollbar();
+    }
+    
+    setupCustomScrollbar() {
+        if (!this.customScrollbar || !this.scrollbarThumb || !this.container) return;
+        
+        let isDragging = false;
+        let startY = 0;
+        let startScrollTop = 0;
+        
+        // Mouse events
+        this.scrollbarThumb.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startY = e.clientY;
+            startScrollTop = this.container.scrollTop;
+            this.scrollbarThumb.classList.add('dragging');
+            e.preventDefault();
+        });
+        
+        // Touch events for mobile
+        this.scrollbarThumb.addEventListener('touchstart', (e) => {
+            isDragging = true;
+            startY = e.touches[0].clientY;
+            startScrollTop = this.container.scrollTop;
+            this.scrollbarThumb.classList.add('dragging');
+            e.preventDefault();
+        }, { passive: false });
+        
+        // Global mouse/touch move events
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            this.handleScrollbarDrag(e.clientY, startY, startScrollTop);
+        });
+        
+        document.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            this.handleScrollbarDrag(e.touches[0].clientY, startY, startScrollTop);
+        }, { passive: false });
+        
+        // Global mouse/touch end events
+        document.addEventListener('mouseup', () => {
+            if (isDragging) {
+                isDragging = false;
+                this.scrollbarThumb.classList.remove('dragging');
+            }
+        });
+        
+        document.addEventListener('touchend', () => {
+            if (isDragging) {
+                isDragging = false;
+                this.scrollbarThumb.classList.remove('dragging');
+            }
+        });
+        
+        // Click on track to jump
+        this.customScrollbar.addEventListener('click', (e) => {
+            if (e.target === this.scrollbarThumb) return;
+            
+            const rect = this.customScrollbar.getBoundingClientRect();
+            const clickY = e.clientY - rect.top;
+            const trackHeight = rect.height - 8; // Account for padding
+            const scrollRatio = clickY / trackHeight;
+            
+            const { scrollHeight, clientHeight } = this.container;
+            const maxScroll = scrollHeight - clientHeight;
+            this.container.scrollTop = maxScroll * scrollRatio;
+        });
+        
+        console.log('Custom scrollbar setup complete');
+    }
+    
+    handleScrollbarDrag(currentY, startY, startScrollTop) {
+        const deltaY = currentY - startY;
+        const { scrollHeight, clientHeight } = this.container;
+        const maxScroll = scrollHeight - clientHeight;
+        
+        // Calculate scroll ratio based on scrollbar height
+        const scrollbarHeight = this.customScrollbar.getBoundingClientRect().height - 8;
+        const scrollRatio = deltaY / scrollbarHeight;
+        
+        const newScrollTop = startScrollTop + (maxScroll * scrollRatio);
+        this.container.scrollTop = Math.max(0, Math.min(maxScroll, newScrollTop));
+    }
+    
+    updateCustomScrollbar() {
+        if (!this.customScrollbar || !this.scrollbarThumb || !this.container) return;
+        
+        const { scrollTop, scrollHeight, clientHeight } = this.container;
+        const isScrollable = scrollHeight > clientHeight;
+        
+        if (isScrollable) {
+            // Show scrollbar
+            this.customScrollbar.classList.add('visible');
+            
+            // Calculate thumb position and size
+            const scrollRatio = scrollTop / (scrollHeight - clientHeight);
+            const thumbRatio = clientHeight / scrollHeight;
+            
+            // Update thumb position and size
+            const trackHeight = this.customScrollbar.getBoundingClientRect().height - 8;
+            const thumbHeight = Math.max(40, trackHeight * thumbRatio);
+            const thumbTop = (trackHeight - thumbHeight) * scrollRatio;
+            
+            this.scrollbarThumb.style.height = thumbHeight + 'px';
+            this.scrollbarThumb.style.top = (thumbTop + 4) + 'px';
+        } else {
+            // Hide scrollbar
+            this.customScrollbar.classList.remove('visible');
         }
     }
     
