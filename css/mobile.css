@@ -287,6 +287,86 @@
     font-size: 14px;
     min-height: 50px;
   }
+
+  /* COMPACT LAYOUT - Maximize image space */
+  .canvas-container {
+    height: 65vh !important; /* Increase from ~40% to 65% */
+    max-height: 500px;
+    margin-bottom: 10px;
+  }
+  
+  /* Compact annotation tools */
+  .annotation-tools {
+    padding: 8px 15px; /* Reduce from 15px */
+    position: sticky;
+    bottom: 0;
+    background: white;
+    border-top: 2px solid #ddd;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+    z-index: 5;
+  }
+  
+  /* More compact field buttons */
+  .field-buttons {
+    display: flex; /* Change from grid to flex */
+    flex-wrap: wrap;
+    gap: 4px; /* Reduce gap */
+    margin-bottom: 8px; /* Reduce margin */
+  }
+  
+  .field-btn {
+    flex: 1;
+    min-width: calc(50% - 2px);
+    padding: 6px 4px; /* Much smaller padding */
+    font-size: 11px; /* Smaller font */
+    min-height: 36px; /* Reduce height */
+    line-height: 1.2;
+  }
+  
+  .field-btn .field-color {
+    width: 10px;
+    height: 10px;
+    margin-right: 4px;
+  }
+  
+  /* Compact action buttons */
+  .action-buttons {
+    display: flex;
+    gap: 6px;
+    justify-content: space-between;
+  }
+  
+  .action-btn {
+    flex: 1;
+    padding: 8px 6px; /* Smaller padding */
+    font-size: 12px; /* Smaller font */
+    min-height: 38px; /* Smaller height */
+  }
+  
+  .action-btn.primary {
+    flex: 2; /* Make Save button bigger */
+    font-weight: 600;
+  }
+  
+  /* Hide instructions to save space */
+  .instructions {
+    display: none !important;
+  }
+  
+  /* Compact tool group headers */
+  .tool-group h3 {
+    font-size: 13px;
+    margin: 0 0 6px 0;
+    font-weight: 600;
+  }
+  
+  .tool-group {
+    margin-bottom: 8px;
+  }
+  
+  .tool-group:last-child {
+    margin-bottom: 0;
+  }
 }
 
 .annotation-header {
