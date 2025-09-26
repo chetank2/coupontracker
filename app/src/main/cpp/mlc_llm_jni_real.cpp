@@ -11,9 +11,11 @@
 // MLC-LLM headers (these would be real includes in production)
 // For now, we'll create interfaces that match MLC-LLM's expected API
 #ifdef MLC_LLM_AVAILABLE
-#include <mlc/runtime/c_runtime_api.h>
-#include <mlc/runtime/module.h>
-#include <mlc/runtime/packed_func.h>
+// TODO: Uncomment when actual MLC-LLM libraries are available
+// #include <mlc/runtime/c_runtime_api.h>
+// #include <mlc/runtime/module.h>
+// #include <mlc/runtime/packed_func.h>
+// For now, these headers don't exist, so we'll use placeholder implementations
 #endif
 
 #define LOG_TAG "MLC_LLM_JNI"

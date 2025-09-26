@@ -36,6 +36,9 @@ if(ENABLE_REAL_MLC_LLM)
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mlc_llm_jni_real.cpp")
         set(USE_REAL_MLC_LLM TRUE)
         message(STATUS "Using enhanced MLC-LLM JNI implementation")
+        # Enable MLC-LLM availability flag for conditional compilation
+        # TODO: Uncomment when actual MLC-LLM libraries are available
+        # add_compile_definitions(MLC_LLM_AVAILABLE)
     endif()
 endif()
 
