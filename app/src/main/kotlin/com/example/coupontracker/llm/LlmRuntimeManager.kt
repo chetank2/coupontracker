@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
@@ -44,8 +45,9 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         private const val AUTO_UNLOAD_DELAY_MS = 5 * 60 * 1000L
     }
     
-    // Model state
-    private var mlcEngine: MLCEngine? = null
+    // Native interface and model state
+    private val nativeInterface = MlcLlmNative()
+    private var modelHandle: Long = 0
     private val isModelLoaded = AtomicBoolean(false)
     private val referenceCount = AtomicInteger(0)
     private val loadMutex = Mutex()
@@ -108,15 +110,33 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 return@withContext false
             }
             
+            // Load native library
+            if (!MlcLlmNative.loadLibrary()) {
+                Log.e(TAG, "Failed to load MLC-LLM native library")
+                return@withContext false
+            }
+            
             try {
                 Log.d(TAG, "Loading MiniCPM-Llama3-V2.5 model...")
                 
-                // Initialize MLC-LLM engine
-                // This is a placeholder for actual MLC-LLM integration
-                // In real implementation, this would use MLC-LLM JNI bindings
-                mlcEngine = createMLCEngine()
+                // Initialize model through native interface
+                modelHandle = nativeInterface.initializeModel(
+                    modelPath.absolutePath,
+                    configPath.absolutePath
+                )
                 
-                if (mlcEngine != null) {
+                if (modelHandle != 0L) {
+                    // Warm up the model for faster inference
+                    nativeInterface.warmupModel(modelHandle)
+                    
+                    // Set inference parameters
+                    nativeInterface.setInferenceParams(
+                        modelHandle,
+                        temperature = 0.3f,
+                        maxTokens = MAX_TOKENS,
+                        topP = 0.9f
+                    )
+                    
                     isModelLoaded.set(true)
                     referenceCount.set(1)
                     lastUsedTime = System.currentTimeMillis()
@@ -124,15 +144,19 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                     // Schedule auto-unload check
                     scheduleAutoUnloadCheck()
                     
-                    Log.d(TAG, "MiniCPM model loaded successfully")
+                    Log.d(TAG, "MiniCPM model loaded successfully (handle: $modelHandle)")
                     return@withContext true
                 } else {
-                    Log.e(TAG, "Failed to create MLC engine")
+                    Log.e(TAG, "Failed to initialize MiniCPM model")
                     return@withContext false
                 }
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to load MiniCPM model", e)
+                if (modelHandle != 0L) {
+                    nativeInterface.releaseModel(modelHandle)
+                    modelHandle = 0L
+                }
                 isModelLoaded.set(false)
                 referenceCount.set(0)
                 return@withContext false
@@ -159,13 +183,16 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             // Preprocess image for model requirements
             val processedImage = preprocessImageForMiniCPM(bitmap)
             
-            // Run inference with timeout
-            val response = mlcEngine?.generate(
-                prompt = prompt,
-                image = processedImage,
-                maxTokens = MAX_TOKENS,
-                temperature = 0.1f, // Low temperature for consistent JSON output
-                timeoutMs = INFERENCE_TIMEOUT_MS
+            // Convert bitmap to byte array for native interface
+            val imageData = bitmapToByteArray(processedImage)
+            
+            // Run inference through native interface
+            val response = nativeInterface.runVisionInference(
+                modelHandle,
+                imageData,
+                processedImage.width,
+                processedImage.height,
+                prompt
             )
             
             Log.d(TAG, "Inference completed, response length: ${response?.length ?: 0}")
@@ -194,10 +221,10 @@ class LlmRuntimeManager private constructor(private val context: Context) {
      */
     private fun unloadModel() {
         synchronized(this) {
-            if (isModelLoaded.get()) {
+            if (isModelLoaded.get() && modelHandle != 0L) {
                 try {
-                    mlcEngine?.release()
-                    mlcEngine = null
+                    nativeInterface.releaseModel(modelHandle)
+                    modelHandle = 0L
                     isModelLoaded.set(false)
                     referenceCount.set(0)
                     Log.d(TAG, "MiniCPM model unloaded")
@@ -269,9 +296,31 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     }
     
     /**
-     * Create MLC Engine instance
-     * This is a placeholder for actual MLC-LLM integration
+     * Convert bitmap to RGB byte array for native interface
      */
+    private fun bitmapToByteArray(processedImage: ProcessedImage): ByteArray {
+        val bitmap = processedImage.bitmap
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        
+        // Convert ARGB to RGB byte array
+        val byteArray = ByteArray(pixels.size * 3)
+        var byteIndex = 0
+        
+        for (pixel in pixels) {
+            byteArray[byteIndex++] = ((pixel shr 16) and 0xFF).toByte() // Red
+            byteArray[byteIndex++] = ((pixel shr 8) and 0xFF).toByte()  // Green
+            byteArray[byteIndex++] = (pixel and 0xFF).toByte()          // Blue
+        }
+        
+        return byteArray
+    }
+    
+    /**
+     * Create MLC Engine instance - DEPRECATED
+     * This is replaced by native MLC-LLM integration
+     */
+    @Deprecated("Use native interface instead")
     private fun createMLCEngine(): MLCEngine? {
         return try {
             // In real implementation, this would initialize MLC-LLM with:

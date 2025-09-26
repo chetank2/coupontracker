@@ -2,8 +2,8 @@
 """
 MiniCPM-Llama3-V2.5 Mobile Converter
 
-Converts MiniCPM-Llama3-V2.5 to mobile-optimized format for Android deployment.
-Supports MLC-LLM and llama.cpp backends with aggressive quantization.
+Converts MiniCPM-Llama3-V2.5 to MLC-LLM format for Android deployment.
+Includes model quantization, optimization, and packaging for mobile devices.
 """
 
 import os
@@ -13,6 +13,7 @@ import logging
 import argparse
 import hashlib
 import shutil
+import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 

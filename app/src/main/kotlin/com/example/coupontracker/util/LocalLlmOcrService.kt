@@ -111,33 +111,44 @@ class LocalLlmOcrService(private val context: Context) {
     }
     
     /**
-     * Create structured prompt for coupon extraction
+     * Create optimized structured prompt for coupon extraction
      */
     private fun createCouponExtractionPrompt(): String {
         return """
-        You are an expert at extracting information from coupon images. Analyze this coupon image and extract the key information as JSON.
-        
-        Return ONLY valid JSON in this exact format (no additional text):
+        You are a precise coupon information extractor. Analyze this coupon image and extract structured information in JSON format.
+
+        CRITICAL RULES:
+        1. Extract ONLY information clearly visible in the image
+        2. Return valid JSON with the exact schema below
+        3. Use null for missing information (never use "Unknown")
+        4. Be conservative - if unsure, use null
+        5. Preserve original currency symbols and formatting
+
+        REQUIRED JSON FORMAT:
         {
-            "storeName": "name of the store or brand",
-            "description": "brief description of the offer", 
-            "amount": "discount amount with ₹ symbol if present",
-            "code": "coupon or promo code if visible",
-            "expiryDate": "expiry date if visible",
-            "cashbackAmount": "cashback amount if mentioned",
-            "minOrderAmount": "minimum order requirement if specified"
+            "storeName": "Store/brand name (required)",
+            "description": "Offer description (required)", 
+            "cashbackAmount": "Amount/percentage off or null",
+            "redeemCode": "Promo/coupon code or null",
+            "expiryDate": "Expiry date or null",
+            "minOrderAmount": "Minimum order value or null"
         }
-        
-        Extraction rules:
-        - Use "Unknown" for fields that cannot be determined
-        - Include ₹ symbol for Indian rupee amounts
-        - Keep descriptions concise (max 50 characters)
-        - Extract codes exactly as shown (preserve case and formatting)
-        - Format dates as DD/MM/YYYY when possible
-        - Look for common coupon elements: store logos, discount percentages, promo codes, expiry dates
-        - Pay attention to Indian brands: Myntra, Flipkart, Amazon, Swiggy, Zomato, PayTM, etc.
-        
-        Focus on accuracy and completeness. If you're unsure about a field, use "Unknown" rather than guessing.
+
+        EXTRACTION GUIDE:
+        - Store Name: Look for logos, brand names, prominent text
+        - Description: Main offer details in 1-2 sentences
+        - Cashback Amount: Exact discount (20%, ₹100, $50 off)
+        - Redeem Code: Alphanumeric codes (SAVE20, FIRST50, etc.)
+        - Expiry Date: Look for "valid till", "expires", date stamps
+        - Min Order: Find "minimum order", "above ₹X", "orders over"
+
+        QUALITY CHECKS:
+        - Verify store name appears in image
+        - Confirm discount amounts are realistic
+        - Validate promo codes don't contain spaces
+        - Ensure amounts include proper currency symbols
+
+        Return ONLY the JSON object, no additional text or formatting.
         """.trimIndent()
     }
     
