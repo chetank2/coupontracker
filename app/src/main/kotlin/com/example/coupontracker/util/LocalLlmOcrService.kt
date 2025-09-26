@@ -217,14 +217,42 @@ class LocalLlmOcrService(private val context: Context) {
                 storeName = storeName,
                 description = description,
                 expiryDate = parsedExpiryDate,
-                cashbackAmount = cashbackAmount?.toDoubleOrNull(),
+                cashbackAmount = parseNumericValue(cashbackAmount),
                 redeemCode = code,
-                minimumPurchase = minOrderAmount?.toDoubleOrNull()
+                minimumPurchase = parseNumericValue(minOrderAmount)
             )
             
         } catch (e: JSONException) {
             Log.e(TAG, "Failed to parse LLM JSON response: $response", e)
             throw IllegalStateException("Invalid JSON response from LLM: ${e.message}")
+        }
+    }
+    
+    /**
+     * Parse numeric value from currency/percentage strings
+     * Handles formats like: ₹150, $25, 25%, 150.50, etc.
+     */
+     private fun parseNumericValue(value: String?): Double? {
+        if (value.isNullOrBlank() || value == "Unknown") return null
+        
+        return try {
+            // Remove currency symbols and extract numeric value
+            val numericString = value
+                .replace(Regex("[₹$£€¥%,\\s]"), "") // Remove common currency symbols, %, commas, spaces
+                .replace(Regex("[^0-9.]"), "") // Keep only digits and decimal points
+                .trim()
+            
+            if (numericString.isBlank()) {
+                Log.w(TAG, "No numeric value found in: '$value'")
+                null
+            } else {
+                val parsed = numericString.toDoubleOrNull()
+                Log.d(TAG, "Parsed '$value' → $parsed")
+                parsed
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse numeric value: '$value'", e)
+            null
         }
     }
     
@@ -267,15 +295,27 @@ class LocalLlmOcrService(private val context: Context) {
             val mlKitText = performMlKitOcr(bitmap)
             Log.d(TAG, "ML Kit OCR extracted text: ${mlKitText.take(100)}...")
             
+            // Validate that we got real text, not empty/whitespace
+            if (mlKitText.isBlank()) {
+                throw Exception("ML Kit OCR returned blank text")
+            }
+            
             // Use existing TextExtractor to parse the OCR text
             val textExtractor = TextExtractor()
             val extractedInfo = textExtractor.extractCouponInfo(mlKitText)
+            
+            // Validate that we got meaningful extraction results
+            if (extractedInfo.storeName == "Unknown Store" && 
+                extractedInfo.redeemCode.isNullOrBlank() && 
+                (extractedInfo.cashbackAmount == null || extractedInfo.cashbackAmount <= 0)) {
+                throw Exception("ML Kit OCR produced insufficient coupon data")
+            }
             
             Log.d(TAG, "Traditional OCR fallback result: $extractedInfo")
             return@withContext extractedInfo
             
         } catch (e: Exception) {
-            Log.e(TAG, "Traditional OCR fallback failed", e)
+            Log.e(TAG, "ML Kit OCR fallback failed: ${e.message}", e)
             
             // Try using ModelBasedOCRService as final fallback
             try {
