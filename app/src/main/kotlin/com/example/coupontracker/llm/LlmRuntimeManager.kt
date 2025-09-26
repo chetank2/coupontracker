@@ -2,6 +2,8 @@ package com.example.coupontracker.llm
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -47,6 +49,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     
     // Native interface and model state
     private val nativeInterface = MlcLlmNative()
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var modelHandle: Long = 0
     private val isModelLoaded = AtomicBoolean(false)
     private val referenceCount = AtomicInteger(0)
@@ -208,9 +211,11 @@ class LlmRuntimeManager private constructor(private val context: Context) {
      * Release model reference, unload if no more references
      */
     fun releaseModel() {
+        mainHandler.removeCallbacks(autoUnloadRunnable)
+
         val newCount = referenceCount.decrementAndGet()
         Log.d(TAG, "Released model reference, count: $newCount")
-        
+
         if (newCount <= 0) {
             unloadModel()
         }
@@ -221,6 +226,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
      */
     private fun unloadModel() {
         synchronized(this) {
+            mainHandler.removeCallbacks(autoUnloadRunnable)
+
             if (isModelLoaded.get() && modelHandle != 0L) {
                 try {
                     nativeInterface.releaseModel(modelHandle)
@@ -254,14 +261,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
      * Schedule auto-unload check
      */
     private fun scheduleAutoUnloadCheck() {
-        // Remove any existing callbacks
-        android.os.Handler(android.os.Looper.getMainLooper()).removeCallbacks(autoUnloadRunnable)
-        
-        // Schedule new check
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(
-            autoUnloadRunnable, 
-            AUTO_UNLOAD_DELAY_MS
-        )
+        mainHandler.removeCallbacks(autoUnloadRunnable)
+        mainHandler.postDelayed(autoUnloadRunnable, AUTO_UNLOAD_DELAY_MS)
     }
     
     /**
