@@ -643,7 +643,7 @@ class AddFragment : Fragment() {
                     imageProcessor = ImageProcessor(requireContext())
                 }
 
-                val couponInfo = imageProcessor.processImage(uri)
+                val couponInfo = imageProcessor.processImage(uri) // URI-based processing includes metadata extraction
                 Log.d(TAG, "Extracted coupon info: $couponInfo")
 
                 if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&

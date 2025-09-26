@@ -81,9 +81,17 @@ class CouponInputManager(private val context: Context) {
                     return@withContext processPdfUri(imageUri)
                 }
 
-                // Process as a regular image
+                // Extract capture timestamp before processing
+                val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
+                if (captureTimestamp != null) {
+                    Log.d(TAG, "Extracted capture timestamp: $captureTimestamp")
+                } else {
+                    Log.w(TAG, "No capture timestamp found, using fallback")
+                }
+                
+                // Process as a regular image with capture timestamp
                 val bitmap = loadBitmapFromUri(imageUri)
-                return@withContext processCouponFromBitmap(bitmap)
+                return@withContext processCouponFromBitmap(bitmap, captureTimestamp)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon from image URI", e)
                 throw e
@@ -94,9 +102,10 @@ class CouponInputManager(private val context: Context) {
     /**
      * Process a bitmap and extract coupon information
      * @param bitmap The bitmap to process
+     * @param captureTimestamp The timestamp when the image was captured (for relative date calculations)
      * @return The extracted coupon information
      */
-    suspend fun processCouponFromBitmap(bitmap: Bitmap): Coupon {
+    suspend fun processCouponFromBitmap(bitmap: Bitmap, captureTimestamp: Date? = null): Coupon {
         return withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Processing coupon from bitmap")
@@ -139,8 +148,8 @@ class CouponInputManager(private val context: Context) {
                     }
                 }
 
-                // Process with OCR
-                val couponInfo = imageProcessor.processImage(bitmap)
+                // Process with OCR using capture timestamp
+                val couponInfo = imageProcessor.processImage(bitmap, captureTimestamp)
 
                 // Convert CouponInfo to Coupon
                 return@withContext Coupon(
@@ -194,7 +203,7 @@ class CouponInputManager(private val context: Context) {
                     page.close()
 
                     // Process the bitmap
-                    val coupon = processCouponFromBitmap(bitmap)
+                    val coupon = processCouponFromBitmap(bitmap, null) // PDF doesn't have capture timestamp
 
                     // Close the renderer
                     pdfRenderer.close()
@@ -240,7 +249,7 @@ class CouponInputManager(private val context: Context) {
                         inputStream.close()
                         connection.disconnect()
 
-                        return@withContext processCouponFromBitmap(bitmap)
+                        return@withContext processCouponFromBitmap(bitmap, null) // URL-based image doesn't have capture timestamp
                     }
                     contentType.startsWith("application/pdf") -> {
                         // Download PDF to temporary file
