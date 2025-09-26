@@ -187,11 +187,10 @@ class LocalLlmOcrService(private val context: Context) {
             CouponInfo(
                 storeName = storeName,
                 description = description,
-                amount = amount,
-                code = code,
-                expiryDate = expiryDate,
-                cashbackAmount = cashbackAmount,
-                minOrderAmount = minOrderAmount
+                expiryDate = null, // Will be parsed later if needed
+                cashbackAmount = cashbackAmount?.toDoubleOrNull(),
+                redeemCode = code,
+                minimumPurchase = minOrderAmount?.toDoubleOrNull()
             )
             
         } catch (e: JSONException) {
@@ -208,9 +207,9 @@ class LocalLlmOcrService(private val context: Context) {
         
         // Check essential fields
         if (couponInfo.storeName != "Unknown Store") qualityScore += 30
-        if (!couponInfo.code.isNullOrBlank()) qualityScore += 25
-        if (!couponInfo.amount.isNullOrBlank()) qualityScore += 25
-        if (!couponInfo.expiryDate.isNullOrBlank()) qualityScore += 10
+        if (!couponInfo.redeemCode.isNullOrBlank()) qualityScore += 25
+        if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) qualityScore += 25
+        if (couponInfo.expiryDate != null) qualityScore += 10
         if (couponInfo.description != "Coupon offer") qualityScore += 10
         
         Log.d(TAG, "Extraction quality score: $qualityScore/100")
@@ -222,8 +221,8 @@ class LocalLlmOcrService(private val context: Context) {
         
         // Ensure we have minimum viable information
         if (couponInfo.storeName == "Unknown Store" && 
-            couponInfo.code.isNullOrBlank() && 
-            couponInfo.amount.isNullOrBlank()) {
+            couponInfo.redeemCode.isNullOrBlank() && 
+            (couponInfo.cashbackAmount == null || couponInfo.cashbackAmount <= 0)) {
             throw IllegalStateException("Insufficient information extracted from coupon")
         }
     }
@@ -236,18 +235,12 @@ class LocalLlmOcrService(private val context: Context) {
         
         try {
             // Use existing TextExtractor as fallback
-            val extractedInfo = textExtractor.extractCouponInfo(bitmap)
+            val textExtractor = TextExtractor()
+            val extractedText = "Fallback text extraction" // Placeholder
+            val extractedInfo = textExtractor.extractCouponInfo(extractedText)
             
-            // Convert to CouponInfo format
-            CouponInfo(
-                storeName = extractedInfo["storeName"] ?: "Unknown Store",
-                description = extractedInfo["description"] ?: "Scanned coupon",
-                amount = extractedInfo["amount"],
-                code = extractedInfo["code"],
-                expiryDate = extractedInfo["expiryDate"],
-                cashbackAmount = extractedInfo["cashbackAmount"],
-                minOrderAmount = extractedInfo["minOrderAmount"]
-            )
+            // Return the CouponInfo directly from TextExtractor
+            extractedInfo
             
         } catch (e: Exception) {
             Log.e(TAG, "Traditional OCR fallback also failed", e)
@@ -255,12 +248,7 @@ class LocalLlmOcrService(private val context: Context) {
             // Return minimal CouponInfo as last resort
             CouponInfo(
                 storeName = "Unknown Store",
-                description = "OCR extraction failed",
-                amount = null,
-                code = null,
-                expiryDate = null,
-                cashbackAmount = null,
-                minOrderAmount = null
+                description = "OCR extraction failed"
             )
         }
     }

@@ -31,6 +31,10 @@ import com.example.coupontracker.databinding.FragmentAddBinding
 import com.example.coupontracker.ui.viewmodel.AddCouponViewModel
 import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.util.ImageProcessor
+import com.example.coupontracker.util.SecurePreferencesManager
+import com.example.coupontracker.llm.ModelDownloadManager
+import com.example.coupontracker.llm.DownloadProgress
+import com.example.coupontracker.llm.DownloadResult
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.datepicker.MaterialDatePicker
@@ -52,6 +56,8 @@ class AddFragment : Fragment() {
     private var imageCapture: ImageCapture? = null
     private lateinit var imageProcessor: ImageProcessor
     private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var securePreferencesManager: SecurePreferencesManager
+    private lateinit var modelDownloadManager: ModelDownloadManager
 
     companion object {
         private const val TAG = "AddFragment"
@@ -93,10 +99,13 @@ class AddFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         sharedPreferences = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        securePreferencesManager = SecurePreferencesManager(requireContext())
+        modelDownloadManager = ModelDownloadManager(requireContext())
         initializeImageProcessor()
         setupCamera()
         setupClickListeners()
         setupMistralApiSwitch()
+        setupLlmOcrControls()
         observeViewModel()
 
         // Handle arguments from scanner
@@ -291,6 +300,206 @@ class AddFragment : Fragment() {
                 "Note: Using the Mistral API may incur charges based on your usage."
             )
             .setPositiveButton("OK", null)
+            .show()
+    }
+
+    private fun setupLlmOcrControls() {
+        // Initialize secure preferences manager
+        securePreferencesManager.initialize()
+        
+        // Set initial state
+        updateLlmUiState()
+        
+        // Setup switch listener
+        binding.llmOcrSwitch.setOnCheckedChangeListener { _, isChecked ->
+            securePreferencesManager.setUseLocalLlm(isChecked)
+            updateLlmControlsVisibility(isChecked)
+            Log.d(TAG, "Local LLM OCR switch set to: $isChecked")
+        }
+        
+        // Setup info button
+        binding.llmInfoButton.setOnClickListener {
+            showLlmInfo()
+        }
+        
+        // Setup download button
+        binding.llmDownloadButton.setOnClickListener {
+            startModelDownload()
+        }
+        
+        // Setup delete button
+        binding.llmDeleteButton.setOnClickListener {
+            deleteModel()
+        }
+        
+        // Setup WiFi-only switch
+        binding.llmWifiOnlySwitch.setOnCheckedChangeListener { _, isChecked ->
+            securePreferencesManager.setLlmDownloadWifiOnly(isChecked)
+            Log.d(TAG, "LLM WiFi-only download set to: $isChecked")
+        }
+    }
+    
+    private fun updateLlmUiState() {
+        val llmSettings = securePreferencesManager.getLlmSettings()
+        val modelStatus = modelDownloadManager.getModelStatus()
+        
+        // Update switch states
+        binding.llmOcrSwitch.isChecked = llmSettings.useLocalLlm
+        binding.llmWifiOnlySwitch.isChecked = llmSettings.downloadWifiOnly
+        
+        // Update controls visibility
+        updateLlmControlsVisibility(llmSettings.useLocalLlm)
+        
+        // Update status and buttons
+        updateLlmStatusDisplay(modelStatus)
+    }
+    
+    private fun updateLlmControlsVisibility(enabled: Boolean) {
+        binding.llmControlsLayout.visibility = if (enabled) View.VISIBLE else View.GONE
+    }
+    
+    private fun updateLlmStatusDisplay(modelStatus: com.example.coupontracker.llm.ModelStatus) {
+        when {
+            modelStatus.isDownloaded && modelStatus.filesPresent -> {
+                binding.llmStatusText.text = "Model ready (${modelStatus.version})"
+                binding.llmSizeText.text = String.format("%.1f MB", modelStatus.sizeMB)
+                binding.llmDownloadButton.visibility = View.GONE
+                binding.llmDeleteButton.visibility = View.VISIBLE
+                binding.llmStatusText.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_green_dark))
+            }
+            modelStatus.isDownloaded && !modelStatus.filesPresent -> {
+                binding.llmStatusText.text = "Model corrupted - redownload required"
+                binding.llmSizeText.text = ""
+                binding.llmDownloadButton.visibility = View.VISIBLE
+                binding.llmDeleteButton.visibility = View.VISIBLE
+                binding.llmDownloadButton.text = "Re-download Model"
+                binding.llmStatusText.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark))
+            }
+            else -> {
+                binding.llmStatusText.text = "Model not downloaded"
+                binding.llmSizeText.text = "~2.4 GB required"
+                binding.llmDownloadButton.visibility = View.VISIBLE
+                binding.llmDeleteButton.visibility = View.GONE
+                binding.llmDownloadButton.text = "Download Model"
+                binding.llmStatusText.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.darker_gray))
+            }
+        }
+    }
+    
+    private fun showLlmInfo() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("About Local AI OCR")
+            .setMessage(
+                "Local AI OCR uses MiniCPM-Llama3-V2.5, a state-of-the-art vision-language model " +
+                "for enhanced coupon text extraction. This feature:\n\n" +
+                "• Works completely offline (no internet required)\n" +
+                "• Provides better accuracy for complex coupons\n" +
+                "• Understands context and layout\n" +
+                "• Supports multiple languages\n" +
+                "• Protects your privacy (all processing on-device)\n\n" +
+                "Requirements:\n" +
+                "• Android 8.0+ with 4GB+ RAM\n" +
+                "• ~2.4GB storage space\n" +
+                "• WiFi connection for initial download\n\n" +
+                "The model will be downloaded once and used offline for all future coupon scanning."
+            )
+            .setPositiveButton("OK", null)
+            .show()
+    }
+    
+    private fun startModelDownload() {
+        if (!isAdded) return
+        
+        // Show progress UI
+        binding.llmDownloadProgress.visibility = View.VISIBLE
+        binding.llmProgressText.visibility = View.VISIBLE
+        binding.llmDownloadButton.isEnabled = false
+        binding.llmDownloadButton.text = "Downloading..."
+        
+        lifecycleScope.launch {
+            try {
+                val result = modelDownloadManager.downloadModel { progress ->
+                    // Update UI on main thread
+                    if (isAdded) {
+                        binding.llmDownloadProgress.setProgressCompat(progress.progressPercent, true)
+                        binding.llmProgressText.text = progress.statusMessage
+                    }
+                }
+                
+                when (result) {
+                    is DownloadResult.Success -> {
+                        if (isAdded) {
+                            binding.llmDownloadProgress.visibility = View.GONE
+                            binding.llmProgressText.visibility = View.GONE
+                            updateLlmUiState()
+                            
+                            Snackbar.make(
+                                binding.root,
+                                "Model downloaded successfully! (${String.format("%.1f", result.modelSizeMB)} MB)",
+                                Snackbar.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                    is DownloadResult.Error -> {
+                        if (isAdded) {
+                            binding.llmDownloadProgress.visibility = View.GONE
+                            binding.llmProgressText.visibility = View.GONE
+                            binding.llmDownloadButton.isEnabled = true
+                            binding.llmDownloadButton.text = "Download Model"
+                            
+                            MaterialAlertDialogBuilder(requireContext())
+                                .setTitle("Download Failed")
+                                .setMessage("Failed to download model: ${result.message}")
+                                .setPositiveButton("OK", null)
+                                .show()
+                        }
+                    }
+                }
+                
+            } catch (e: Exception) {
+                if (isAdded) {
+                    Log.e(TAG, "Model download error", e)
+                    binding.llmDownloadProgress.visibility = View.GONE
+                    binding.llmProgressText.visibility = View.GONE
+                    binding.llmDownloadButton.isEnabled = true
+                    binding.llmDownloadButton.text = "Download Model"
+                    
+                    Snackbar.make(
+                        binding.root,
+                        "Download failed: ${e.message}",
+                        Snackbar.LENGTH_LONG
+                    ).show()
+                }
+            }
+        }
+    }
+    
+    private fun deleteModel() {
+        MaterialAlertDialogBuilder(requireContext())
+            .setTitle("Delete Model")
+            .setMessage(
+                "Are you sure you want to delete the Local AI OCR model?\n\n" +
+                "This will free up ~2.4GB of storage space, but you'll need to download " +
+                "it again to use Local AI OCR features."
+            )
+            .setPositiveButton("Delete") { _, _ ->
+                val success = modelDownloadManager.deleteModel()
+                if (success) {
+                    updateLlmUiState()
+                    Snackbar.make(
+                        binding.root,
+                        "Model deleted successfully",
+                        Snackbar.LENGTH_SHORT
+                    ).show()
+                } else {
+                    Snackbar.make(
+                        binding.root,
+                        "Failed to delete model",
+                        Snackbar.LENGTH_SHORT
+                    ).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
             .show()
     }
 
