@@ -56,7 +56,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         
         g_model_handles[handle] = reinterpret_cast<void*>(handle); // Placeholder
         
-        LOGI("Model initialized successfully with handle: %ld", handle);
+        LOGI("Model initialized successfully with handle: %lld", (long long)handle);
         return handle;
         
     } catch (const std::exception& e) {
@@ -73,7 +73,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
     std::lock_guard<std::mutex> lock(g_model_mutex);
     
     if (g_model_handles.find(model_handle) == g_model_handles.end()) {
-        LOGE("Invalid model handle: %ld", model_handle);
+        LOGE("Invalid model handle: %lld", (long long)model_handle);
         return nullptr;
     }
     
@@ -122,7 +122,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_getModelInfo(
     std::lock_guard<std::mutex> lock(g_model_mutex);
     
     if (g_model_handles.find(model_handle) == g_model_handles.end()) {
-        LOGE("Invalid model handle: %ld", model_handle);
+        LOGE("Invalid model handle: %lld", (long long)model_handle);
         return nullptr;
     }
     
@@ -143,30 +143,34 @@ JNIEXPORT jlong JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_getMemoryUsage(
     JNIEnv* env, jobject /* this */, jlong model_handle) {
     
+    (void)env; // Suppress unused parameter warning
+    
     std::lock_guard<std::mutex> lock(g_model_mutex);
     
     if (g_model_handles.find(model_handle) == g_model_handles.end()) {
-        LOGE("Invalid model handle: %ld", model_handle);
+        LOGE("Invalid model handle: %lld", (long long)model_handle);
         return -1;
     }
     
     // TODO: Get actual memory usage from MLC-LLM
     // For now, return mock value (~2.4GB)
-    return 2400L * 1024L * 1024L; // 2.4GB in bytes
+    return 2400LL * 1024LL * 1024LL; // 2.4GB in bytes
 }
 
 JNIEXPORT jboolean JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_warmupModel(
     JNIEnv* env, jobject /* this */, jlong model_handle) {
     
+    (void)env; // Suppress unused parameter warning
+    
     std::lock_guard<std::mutex> lock(g_model_mutex);
     
     if (g_model_handles.find(model_handle) == g_model_handles.end()) {
-        LOGE("Invalid model handle: %ld", model_handle);
+        LOGE("Invalid model handle: %lld", (long long)model_handle);
         return JNI_FALSE;
     }
     
-    LOGI("Warming up model with handle: %ld", model_handle);
+    LOGI("Warming up model with handle: %lld", (long long)model_handle);
     
     // TODO: Implement actual warmup
     // For now, simulate warmup success
@@ -177,15 +181,17 @@ JNIEXPORT void JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_releaseModel(
     JNIEnv* env, jobject /* this */, jlong model_handle) {
     
+    (void)env; // Suppress unused parameter warning
+    
     std::lock_guard<std::mutex> lock(g_model_mutex);
     
     auto it = g_model_handles.find(model_handle);
     if (it == g_model_handles.end()) {
-        LOGE("Invalid model handle: %ld", model_handle);
+        LOGE("Invalid model handle: %lld", (long long)model_handle);
         return;
     }
     
-    LOGI("Releasing model with handle: %ld", model_handle);
+    LOGI("Releasing model with handle: %lld", (long long)model_handle);
     
     // TODO: Properly release MLC-LLM model
     // delete static_cast<mlc::llm::Model*>(it->second);
@@ -198,10 +204,12 @@ Java_com_example_coupontracker_llm_MlcLlmNative_setInferenceParams(
     JNIEnv* env, jobject /* this */, jlong model_handle, 
     jfloat temperature, jint max_tokens, jfloat top_p) {
     
+    (void)env; // Suppress unused parameter warning
+    
     std::lock_guard<std::mutex> lock(g_model_mutex);
     
     if (g_model_handles.find(model_handle) == g_model_handles.end()) {
-        LOGE("Invalid model handle: %ld", model_handle);
+        LOGE("Invalid model handle: %lld", (long long)model_handle);
         return JNI_FALSE;
     }
     
@@ -216,14 +224,16 @@ JNIEXPORT void JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_cancelInference(
     JNIEnv* env, jobject /* this */, jlong model_handle) {
     
+    (void)env; // Suppress unused parameter warning
+    
     std::lock_guard<std::mutex> lock(g_model_mutex);
     
     if (g_model_handles.find(model_handle) == g_model_handles.end()) {
-        LOGE("Invalid model handle: %ld", model_handle);
+        LOGE("Invalid model handle: %lld", (long long)model_handle);
         return;
     }
     
-    LOGI("Canceling inference for model handle: %ld", model_handle);
+    LOGI("Canceling inference for model handle: %lld", (long long)model_handle);
     
     // TODO: Cancel actual inference
 }
@@ -232,10 +242,12 @@ JNIEXPORT jboolean JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_isInferenceRunning(
     JNIEnv* env, jobject /* this */, jlong model_handle) {
     
+    (void)env; // Suppress unused parameter warning
+    
     std::lock_guard<std::mutex> lock(g_model_mutex);
     
     if (g_model_handles.find(model_handle) == g_model_handles.end()) {
-        LOGE("Invalid model handle: %ld", model_handle);
+        LOGE("Invalid model handle: %lld", (long long)model_handle);
         return JNI_FALSE;
     }
     
@@ -247,10 +259,12 @@ JNIEXPORT jfloat JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_getInferenceProgress(
     JNIEnv* env, jobject /* this */, jlong model_handle) {
     
+    (void)env; // Suppress unused parameter warning
+    
     std::lock_guard<std::mutex> lock(g_model_mutex);
     
     if (g_model_handles.find(model_handle) == g_model_handles.end()) {
-        LOGE("Invalid model handle: %ld", model_handle);
+        LOGE("Invalid model handle: %lld", (long long)model_handle);
         return -1.0f;
     }
     
