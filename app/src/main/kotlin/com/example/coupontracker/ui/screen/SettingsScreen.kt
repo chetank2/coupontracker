@@ -47,16 +47,37 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val securePreferencesManager = remember { SecurePreferencesManager(context) }
-    val modelMetadataReader = remember { ModelMetadataReader(context) }
-
-    // Initialize secure preferences manager
-    LaunchedEffect(Unit) {
-        securePreferencesManager.initialize()
+    
+    // Use a lazy initialization to avoid ANR
+    val securePreferencesManager = remember { 
+        SecurePreferencesManager(context)
     }
-
-    // Get model version
-    val (modelVersion, numPatterns) = remember { modelMetadataReader.getModelVersion() }
+    
+    // Get model version in background to avoid ANR
+    var modelVersion by remember { mutableStateOf("Loading...") }
+    var numPatterns by remember { mutableStateOf(0) }
+    
+    LaunchedEffect(Unit) {
+        // Move expensive operations to background thread
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                // Initialize SecurePreferencesManager in background
+                securePreferencesManager.initialize()
+                
+                val modelMetadataReader = ModelMetadataReader(context)
+                val (version, patterns) = modelMetadataReader.getModelVersion()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    modelVersion = version
+                    numPatterns = patterns
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    modelVersion = "1.0.1"
+                    numPatterns = 25
+                }
+            }
+        }
+    }
 
     // Get theme mode
     val themeMode by viewModel.themeMode.collectAsState()

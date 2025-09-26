@@ -43,8 +43,8 @@ class ImageProcessor(
     // Default to using the model-based OCR service
     private var useModelBasedOcr = true
 
-    // Secure preferences manager
-    private val securePreferencesManager = SecurePreferencesManager(context)
+    // Secure preferences manager - lazy initialization to avoid ANR
+    private val securePreferencesManager by lazy { SecurePreferencesManager(context) }
 
     // SharedPreferences listener - we've simplified the OCR approach
     private val sharedPreferencesListener =
@@ -53,21 +53,22 @@ class ImageProcessor(
         }
 
     init {
-        // Initialize secure preferences manager
-        securePreferencesManager.initialize()
-
-        // Register for preference changes
-        securePreferencesManager.registerOnSharedPreferenceChangeListener(sharedPreferencesListener)
-
         Log.d(TAG, "ImageProcessor initialized with model-based OCR")
 
-        // Initialize model-based OCR service in a background thread
-        MainScope().launch {
+        // Initialize everything in background thread to avoid ANR
+        MainScope().launch(Dispatchers.IO) {
             try {
+                // Initialize secure preferences manager in background
+                securePreferencesManager.initialize()
+                
+                // Register for preference changes
+                securePreferencesManager.registerOnSharedPreferenceChangeListener(sharedPreferencesListener)
+                
+                // Initialize model-based OCR service
                 modelBasedOCRService.initialize()
-                Log.d(TAG, "Model-based OCR service initialized successfully")
+                Log.d(TAG, "ImageProcessor and services initialized successfully")
             } catch (e: Exception) {
-                Log.e(TAG, "Error initializing model-based OCR service", e)
+                Log.e(TAG, "Error initializing ImageProcessor services", e)
             }
         }
     }
