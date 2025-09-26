@@ -1,0 +1,5 @@
+{
+  "model": "MiniCPM-Llama3-V2.5",
+  "quantization": "q4f16_1",
+  "description": "Good config fixture"
+}

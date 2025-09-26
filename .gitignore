@@ -40,6 +40,8 @@ build/
 # Data directories
 data/
 models/
+!app/src/test/resources/models/
+!app/src/test/resources/models/**
 
 # Large files
 *.dylib
