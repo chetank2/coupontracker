@@ -40,6 +40,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.datepicker.MaterialDatePicker
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -55,7 +56,8 @@ class AddFragment : Fragment() {
     private lateinit var cameraExecutor: ExecutorService
     private var imageUri: Uri? = null
     private var imageCapture: ImageCapture? = null
-    private lateinit var imageProcessor: ImageProcessor
+    @Inject
+    lateinit var imageProcessor: ImageProcessor
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var securePreferencesManager: SecurePreferencesManager
     private lateinit var modelDownloadManager: ModelDownloadManager
@@ -102,7 +104,7 @@ class AddFragment : Fragment() {
         sharedPreferences = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         securePreferencesManager = SecurePreferencesManager(requireContext())
         modelDownloadManager = ModelDownloadManager(requireContext())
-        initializeImageProcessor()
+        // ImageProcessor now injected via Hilt
         setupCamera()
         setupClickListeners()
         setupMistralApiSwitch()
@@ -162,8 +164,8 @@ class AddFragment : Fragment() {
 
             // If turning off, reinitialize without API key
             if (!isChecked) {
-                Log.d(TAG, "Reinitializing ImageProcessor without API key")
-                imageProcessor = ImageProcessor(requireContext())
+                Log.d(TAG, "ImageProcessor reused from Hilt injection")
+                // No need to reinstantiate - using injected instance
 
                 // Show a message to the user
                 Snackbar.make(binding.root, "Mistral API disabled. Using default text extraction.", Snackbar.LENGTH_SHORT).show()
@@ -171,8 +173,8 @@ class AddFragment : Fragment() {
                 // If turning on and we have a saved key, reinitialize with it
                 val savedKey = sharedPreferences.getString(KEY_MISTRAL_API_KEY, null)
                 if (!savedKey.isNullOrBlank()) {
-                    Log.d(TAG, "Reinitializing ImageProcessor with saved API key: ${savedKey.take(5)}...")
-                    imageProcessor = ImageProcessor(requireContext())
+                    Log.d(TAG, "Using Hilt injected ImageProcessor with API key: ${savedKey.take(5)}...")
+                    // No need to reinstantiate - using injected instance
 
                     // Show a message to the user
                     Snackbar.make(binding.root, "Mistral API enabled with saved key.", Snackbar.LENGTH_SHORT).show()
@@ -196,8 +198,8 @@ class AddFragment : Fragment() {
             // Save to SharedPreferences
             sharedPreferences.edit().putString(KEY_MISTRAL_API_KEY, newApiKey).apply()
 
-            // Reinitialize image processor with new key
-            imageProcessor = ImageProcessor(requireContext())
+            // ImageProcessor will use the new key automatically (Hilt injected)
+            // No need to reinstantiate
 
             Snackbar.make(binding.root, "API key saved and activated", Snackbar.LENGTH_SHORT).show()
 
@@ -640,11 +642,10 @@ class AddFragment : Fragment() {
                 // Ensure ImageProcessor has the latest API key
                 if (useMistralApi && !apiKey.isNullOrBlank()) {
                     Log.d(TAG, "Using Mistral API with key: ${apiKey.take(5)}...")
-                    imageProcessor = ImageProcessor(requireContext())
                 } else {
                     Log.d(TAG, "Using default text extraction (no Mistral API)")
-                    imageProcessor = ImageProcessor(requireContext())
                 }
+                // ImageProcessor is now injected via Hilt, no manual instantiation needed
 
                 val couponInfo = imageProcessor.processImage(uri) // URI-based processing includes metadata extraction
                 Log.d(TAG, "Extracted coupon info: $couponInfo")

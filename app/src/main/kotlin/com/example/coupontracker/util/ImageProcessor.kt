@@ -28,7 +28,8 @@ import kotlin.coroutines.resumeWithException
  * Utility class to process images and extract coupon information using the trained model
  */
 class ImageProcessor(
-    private val context: Context
+    private val context: Context,
+    private val injectedLocalLlmOcrService: LocalLlmOcrService? = null
 ) {
     private val TAG = "ImageProcessor"
     private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
@@ -39,7 +40,7 @@ class ImageProcessor(
 
     // OCR services
     private var modelBasedOCRService: ModelBasedOCRService = ModelBasedOCRService(context)
-    private var localLlmOcrService: LocalLlmOcrService = LocalLlmOcrService(context)
+    private var localLlmOcrService: LocalLlmOcrService = injectedLocalLlmOcrService ?: LocalLlmOcrService(context)
 
     // Default to using the model-based OCR service
     private var useModelBasedOcr = true

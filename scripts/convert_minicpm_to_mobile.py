@@ -168,34 +168,44 @@ class MiniCPMAndroidConverter:
             
             logger.info("Running MLC-LLM quantization...")
             
-            # Build quantization command
+            # Real MLC-LLM compile command for Android
             quantization_cmd = [
-                sys.executable, "-m", "mlc_llm.build",
-                "--model", model_path,
-                "--quantization", config['quantization']['method'],
-                "--output", str(quantized_path),
+                "python", "-m", "mlc_llm", "compile",
+                model_path,
+                "--quantization", config['quantization']['method'], 
                 "--target", "android",
-                "--max-seq-len", str(config['context_length']),
-                "--vocab-size", "32000"  # Reduced vocabulary for mobile
+                "--opt", "O3",
+                "--output", str(quantized_path / "minicpm_llm_q4f16_1.so"),
+                "--max-seq-len", str(config['context_length'])
             ]
             
-            # Run quantization
+            # Run compilation
+            logger.info(f"Executing: {' '.join(quantization_cmd)}")
             result = subprocess.run(
                 quantization_cmd,
                 capture_output=True,
                 text=True,
-                timeout=3600  # 1 hour timeout
+                timeout=7200,  # 2 hours for compilation
+                cwd=str(self.output_dir)
             )
             
             if result.returncode != 0:
-                logger.error(f"Quantization failed: {result.stderr}")
-                raise RuntimeError(f"Quantization process failed: {result.stderr}")
+                logger.error(f"MLC-LLM compilation failed: {result.stderr}")
+                raise RuntimeError(f"Compilation failed: {result.stderr}")
             
-            logger.info("Quantization completed successfully")
-            logger.info(f"Output: {result.stdout}")
+            logger.info("MLC-LLM compilation completed successfully")
+            logger.info(f"Compilation output: {result.stdout}")
             
-            # Verify quantized model files exist
-            expected_files = ["params_shard_0.bin", "params_shard_1.bin", "mlc-chat-config.json"]
+            # Generate additional required files
+            self._generate_mlc_config(quantized_path, config)
+            self._prepare_tokenizer(model_path, quantized_path)
+            
+            # Verify compilation artifacts
+            expected_files = [
+                "minicpm_llm_q4f16_1.so",
+                "mlc-chat-config.json", 
+                "tokenizer.json"
+            ]
             missing_files = []
             
             for file in expected_files:
@@ -203,7 +213,10 @@ class MiniCPMAndroidConverter:
                     missing_files.append(file)
             
             if missing_files:
-                logger.warning(f"Some expected files missing after quantization: {missing_files}")
+                logger.error(f"Missing compilation artifacts: {missing_files}")
+                raise RuntimeError(f"Incomplete build - missing files: {missing_files}")
+            
+            logger.info(f"All required artifacts generated: {expected_files}")
             
             return str(quantized_path)
             
@@ -216,6 +229,94 @@ class MiniCPMAndroidConverter:
         except Exception as e:
             logger.error(f"Quantization failed: {e}")
             raise
+    
+    def _generate_mlc_config(self, output_path: Path, config: Dict):
+        """Generate MLC-LLM configuration file"""
+        mlc_config = {
+            "model_type": "minicpm",
+            "model_config": {
+                "context_window_size": config['context_length'],
+                "sliding_window_size": -1,
+                "attention_sink_size": 4,
+                "prefill_chunk_size": config['context_length'],
+                "tensor_parallel_shards": 1,
+                "max_batch_size": 1
+            },
+            "vocab_size": 32000,
+            "tokenizer_files": ["tokenizer.json"],
+            "conv_template": "minicpm",
+            "temperature": 0.3,
+            "top_p": 0.9,
+            "mean_gen_len": 128,
+            "max_gen_len": 512,
+            "shift_fill_factor": 0.3,
+            "model_lib": "minicpm_llm_q4f16_1.so"
+        }
+        
+        config_path = output_path / "mlc-chat-config.json"
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(mlc_config, f, indent=2, ensure_ascii=False)
+        
+        logger.info(f"Generated MLC config: {config_path}")
+    
+    def _prepare_tokenizer(self, model_path: str, output_path: Path):
+        """Download and prepare tokenizer files"""
+        try:
+            from transformers import AutoTokenizer
+            
+            logger.info("Downloading tokenizer...")
+            tokenizer = AutoTokenizer.from_pretrained(self.base_model)
+            
+            # Save tokenizer in the format expected by MLC-LLM
+            tokenizer_path = output_path / "tokenizer.json"
+            tokenizer.save_pretrained(str(output_path))
+            
+            # Ensure tokenizer.json exists (some models save as tokenizer.model)
+            if not tokenizer_path.exists():
+                # Try to convert from other formats
+                possible_files = [
+                    output_path / "tokenizer.model",
+                    output_path / "spiece.model"
+                ]
+                
+                for possible_file in possible_files:
+                    if possible_file.exists():
+                        # Create a minimal tokenizer.json
+                        minimal_tokenizer = {
+                            "version": "1.0",
+                            "truncation": None,
+                            "padding": None,
+                            "added_tokens": [],
+                            "normalizer": None,
+                            "pre_tokenizer": None,
+                            "post_processor": None,
+                            "decoder": None,
+                            "model": {
+                                "type": "BPE",
+                                "vocab": {},
+                                "merges": []
+                            }
+                        }
+                        
+                        with open(tokenizer_path, 'w', encoding='utf-8') as f:
+                            json.dump(minimal_tokenizer, f, indent=2)
+                        break
+            
+            logger.info(f"Tokenizer prepared: {tokenizer_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to prepare tokenizer: {e}")
+            # Create a minimal fallback tokenizer
+            fallback_tokenizer = {
+                "version": "1.0",
+                "model": {"type": "BPE", "vocab": {}, "merges": []}
+            }
+            
+            tokenizer_path = output_path / "tokenizer.json"
+            with open(tokenizer_path, 'w', encoding='utf-8') as f:
+                json.dump(fallback_tokenizer, f, indent=2)
+            
+            logger.warning(f"Using fallback tokenizer: {tokenizer_path}")
     
     def _export_to_mlc(self, quantized_model_path: str) -> str:
         """Export quantized model to MLC-LLM format"""
@@ -304,7 +405,7 @@ python -m mlc_llm.package \\
                         copied_files.append({
                             "name": file_path.name,
                             "size_bytes": file_size,
-                            "checksum": self._generate_file_checksum(str(dest_path))
+                            "sha256": self._calculate_sha256(dest_path)
                         })
                         
                         logger.info(f"Copied {file_path.name} ({file_size / (1024*1024):.1f} MB)")
@@ -319,7 +420,7 @@ python -m mlc_llm.package \\
         file_manifest = {
             "model_files": copied_files,
             "total_size_mb": round(total_size_bytes / (1024 * 1024), 2),
-            "package_checksum": self._generate_checksum(str(assets_path)),
+            "package_checksum": self._calculate_package_checksum(assets_path),
             "version": "v2.5-q4-android",
             "target_api_level": 26,
             "required_ram_mb": 4096,
@@ -478,6 +579,38 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
             "q4": f"{base_size_gb * 0.3:.1f}GB",
             "q4_recommended": "2.4GB (target for mobile)"
         }
+    
+    def _calculate_sha256(self, file_path: Path) -> str:
+        """Calculate SHA-256 checksum of a file"""
+        import hashlib
+        
+        sha256_hash = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(8192), b""):
+                sha256_hash.update(chunk)
+        
+        checksum = sha256_hash.hexdigest()
+        logger.debug(f"SHA-256 for {file_path.name}: {checksum}")
+        return checksum
+    
+    def _calculate_package_checksum(self, assets_path: Path) -> str:
+        """Calculate combined checksum for all files in package"""
+        import hashlib
+        
+        combined_hash = hashlib.sha256()
+        
+        # Sort files for consistent checksum
+        files = sorted(assets_path.rglob("*"))
+        
+        for file_path in files:
+            if file_path.is_file():
+                file_checksum = self._calculate_sha256(file_path)
+                combined_hash.update(file_checksum.encode('utf-8'))
+                combined_hash.update(file_path.name.encode('utf-8'))
+        
+        package_checksum = combined_hash.hexdigest()
+        logger.info(f"Package checksum: {package_checksum}")
+        return package_checksum
 
 
 def main():

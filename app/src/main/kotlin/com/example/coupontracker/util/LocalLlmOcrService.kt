@@ -22,7 +22,10 @@ import kotlin.coroutines.resumeWithException
  * Local LLM OCR Service using MiniCPM-Llama3-V2.5
  * Provides structured coupon extraction using on-device vision-language model
  */
-class LocalLlmOcrService(private val context: Context) {
+class LocalLlmOcrService(
+    private val context: Context,
+    private val injectedLlmRuntimeManager: LlmRuntimeManager? = null
+) {
     
     companion object {
         private const val TAG = "LocalLlmOcrService"
@@ -36,7 +39,7 @@ class LocalLlmOcrService(private val context: Context) {
     }
     
     // Dependencies
-    private val llmRuntime = LlmRuntimeManager.getInstance(context)
+    private val llmRuntime = injectedLlmRuntimeManager ?: LlmRuntimeManager.getInstance(context)
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor() // Fallback
     
