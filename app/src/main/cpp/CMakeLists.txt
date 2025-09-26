@@ -26,10 +26,28 @@ include_directories(
     # ${MLC_LLM_INCLUDE_DIR}  # Uncomment when MLC-LLM is available
 )
 
+# Check for MLC-LLM availability and select appropriate source
+option(ENABLE_REAL_MLC_LLM "Enable real MLC-LLM integration when libraries are available" ON)
+
+# Check if we can use the real implementation
+set(USE_REAL_MLC_LLM FALSE)
+if(ENABLE_REAL_MLC_LLM)
+    # Look for MLC-LLM headers/libraries (placeholder check)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mlc_llm_jni_real.cpp")
+        set(USE_REAL_MLC_LLM TRUE)
+        message(STATUS "Using enhanced MLC-LLM JNI implementation")
+    endif()
+endif()
+
 # Source files
-set(SOURCES
-    mlc_llm_jni.cpp
-)
+if(USE_REAL_MLC_LLM)
+    set(SOURCES mlc_llm_jni_real.cpp)
+    # Add MLC-LLM specific definitions
+    add_compile_definitions(MLC_LLM_ENHANCED)
+else()
+    set(SOURCES mlc_llm_jni.cpp)
+    message(STATUS "Using mock MLC-LLM JNI implementation")
+endif()
 
 # Create shared library
 add_library(
