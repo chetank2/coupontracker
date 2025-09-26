@@ -32,6 +32,7 @@ import com.example.coupontracker.ui.viewmodel.AddCouponViewModel
 import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.util.ImageProcessor
 import com.example.coupontracker.util.SecurePreferencesManager
+import com.example.coupontracker.util.ApiType
 import com.example.coupontracker.llm.ModelDownloadManager
 import com.example.coupontracker.llm.DownloadProgress
 import com.example.coupontracker.llm.DownloadResult
@@ -312,9 +313,11 @@ class AddFragment : Fragment() {
         
         // Setup switch listener
         binding.llmOcrSwitch.setOnCheckedChangeListener { _, isChecked ->
-            securePreferencesManager.setUseLocalLlm(isChecked)
+            // Set ApiType based on switch state
+            val apiType = if (isChecked) ApiType.LOCAL_LLM else ApiType.MODEL_BASED
+            securePreferencesManager.setSelectedApiType(apiType)
             updateLlmControlsVisibility(isChecked)
-            Log.d(TAG, "Local LLM OCR switch set to: $isChecked")
+            Log.d(TAG, "Local LLM OCR switch set to: $isChecked, ApiType: $apiType")
         }
         
         // Setup info button

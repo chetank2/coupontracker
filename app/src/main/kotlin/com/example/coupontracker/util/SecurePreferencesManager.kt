@@ -44,7 +44,7 @@ class SecurePreferencesManager @Inject constructor(
         const val KEY_PROTECTED_FEATURES_UNLOCKED = "protected_features_unlocked"
         
         // LLM-specific keys
-        const val KEY_USE_LOCAL_LLM = "use_local_llm"
+        // Removed KEY_USE_LOCAL_LLM - now using ApiType enum
         const val KEY_LLM_MODEL_DOWNLOADED = "llm_model_downloaded"
         const val KEY_LLM_MODEL_VERSION = "llm_model_version"
         const val KEY_LLM_MODEL_SIZE_MB = "llm_model_size_mb"
@@ -338,13 +338,8 @@ class SecurePreferencesManager @Inject constructor(
         saveString(KEY_SELECTED_API_TYPE, apiType.toString())
     }
     
-    /**
-     * Legacy method for string-based API type setting
-     * @param apiType The API type as a string
-     */
-    fun setSelectedApiType(apiType: String) {
-        setSelectedApiType(ApiType.fromString(apiType))
-    }
+    // Removed legacy string-based setSelectedApiType to avoid overload ambiguity
+    // Use ApiType enum directly
 
     /**
      * Get the selected Tesseract language
@@ -354,19 +349,8 @@ class SecurePreferencesManager @Inject constructor(
         return getString(KEY_SELECTED_TESSERACT_LANGUAGE, "eng") ?: "eng"
     }
 
-    /**
-     * Get whether local LLM is enabled
-     */
-    fun getUseLocalLlm(): Boolean {
-        return getBoolean(KEY_USE_LOCAL_LLM, false)
-    }
-    
-    /**
-     * Set whether local LLM is enabled
-     */
-    fun setUseLocalLlm(enabled: Boolean) {
-        saveBoolean(KEY_USE_LOCAL_LLM, enabled)
-    }
+    // Removed getUseLocalLlm() and setUseLocalLlm() - now using ApiType enum
+    // Use getSelectedApiType() and setSelectedApiType() instead
     
     /**
      * Get whether LLM model is downloaded
@@ -457,7 +441,7 @@ class SecurePreferencesManager @Inject constructor(
      */
     fun getLlmSettings(): LlmSettings {
         return LlmSettings(
-            useLocalLlm = getUseLocalLlm(),
+            useLocalLlm = (getSelectedApiType() == ApiType.LOCAL_LLM), // Convert enum to boolean for compatibility
             modelDownloaded = getLlmModelDownloaded(),
             modelVersion = getLlmModelVersion(),
             modelSizeMB = getLlmModelSizeMB(),
