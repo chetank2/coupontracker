@@ -4,7 +4,9 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import com.example.coupontracker.util.SecurePreferencesManager
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -19,7 +21,10 @@ import java.util.zip.ZipInputStream
 /**
  * Manages downloading and verification of MiniCPM-Llama3-V2.5 model files
  */
-class ModelDownloadManager(private val context: Context) {
+class ModelDownloadManager(
+    private val context: Context,
+    private val verificationDispatcher: CoroutineDispatcher = Dispatchers.IO
+) {
     
     companion object {
         private const val TAG = "ModelDownloadManager"
@@ -55,6 +60,14 @@ class ModelDownloadManager(private val context: Context) {
     
     private val securePrefs = SecurePreferencesManager(context)
     private val modelDir = File(context.filesDir, "models")
+
+    private data class VerificationCache(val version: String?, val result: Boolean)
+
+    @Volatile
+    private var verificationCache: VerificationCache? = null
+
+    @Volatile
+    private var verificationListener: (() -> Unit)? = null
     
     init {
         // Ensure model directory exists
@@ -152,7 +165,8 @@ class ModelDownloadManager(private val context: Context) {
             securePrefs.setLlmModelVersion(MODEL_VERSION)
             securePrefs.setLlmModelSizeMB(modelSizeMB)
             securePrefs.setLlmModelChecksum(calculateModelChecksum())
-            
+
+            verificationCache = VerificationCache(MODEL_VERSION, true)
             Log.d(TAG, "Model download completed successfully")
             progressCallback(DownloadProgress(100, "Download complete"))
             
@@ -400,7 +414,9 @@ class ModelDownloadManager(private val context: Context) {
                 securePrefs.setLlmModelVersion("")
                 securePrefs.setLlmModelSizeMB(0f)
                 securePrefs.setLlmModelChecksum("")
-                
+
+                verificationCache = null
+
                 Log.d(TAG, "Model files deleted successfully")
             }
             
@@ -419,15 +435,88 @@ class ModelDownloadManager(private val context: Context) {
         val isDownloaded = securePrefs.getLlmModelDownloaded()
         val modelVersion = securePrefs.getLlmModelVersion()
         val sizeMB = if (isDownloaded) securePrefs.getLlmModelSizeMB() else 0f
-        val filesPresent = if (isDownloaded) verifyModelFiles() else false
-        
-        return ModelStatus(
+
+        val cache = verificationCache
+        val cacheMatches = isDownloaded && cache != null && cache.version == modelVersion
+        val filesPresent = if (cacheMatches) cache.result else false
+
+        if (!isDownloaded) {
+            verificationCache = null
+        }
+
+        return updateCachedStatus(
             isDownloaded = isDownloaded,
             filesPresent = filesPresent,
             version = modelVersion ?: "Unknown",
             sizeMB = sizeMB,
+            verificationUpToDate = cacheMatches
+        )
+    }
+
+    suspend fun refreshModelStatus(force: Boolean = false): ModelStatus {
+        val isDownloaded = securePrefs.getLlmModelDownloaded()
+        val modelVersion = securePrefs.getLlmModelVersion()
+        val sizeMB = if (isDownloaded) securePrefs.getLlmModelSizeMB() else 0f
+
+        if (!isDownloaded) {
+            verificationCache = null
+            return updateCachedStatus(
+                isDownloaded = false,
+                filesPresent = false,
+                version = modelVersion ?: "Unknown",
+                sizeMB = 0f,
+                verificationUpToDate = false
+            )
+        }
+
+        val cache = verificationCache
+        val cacheMatches = !force && cache != null && cache.version == modelVersion
+        if (cacheMatches) {
+            return updateCachedStatus(
+                isDownloaded = true,
+                filesPresent = cache.result,
+                version = modelVersion ?: "Unknown",
+                sizeMB = sizeMB,
+                verificationUpToDate = true
+            )
+        }
+
+        val filesPresent = withContext(verificationDispatcher) {
+            verificationListener?.invoke()
+            verifyModelFiles()
+        }
+
+        verificationCache = VerificationCache(modelVersion, filesPresent)
+
+        return updateCachedStatus(
+            isDownloaded = true,
+            filesPresent = filesPresent,
+            version = modelVersion ?: "Unknown",
+            sizeMB = sizeMB,
+            verificationUpToDate = true
+        )
+    }
+
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal fun setVerificationListener(listener: (() -> Unit)?) {
+        verificationListener = listener
+    }
+
+    private fun updateCachedStatus(
+        isDownloaded: Boolean,
+        filesPresent: Boolean,
+        version: String,
+        sizeMB: Float,
+        verificationUpToDate: Boolean
+    ): ModelStatus {
+        return ModelStatus(
+            isDownloaded = isDownloaded,
+            filesPresent = filesPresent,
+            version = version,
+            sizeMB = sizeMB,
             downloadUrl = "$MODEL_BASE_URL/$MODEL_ZIP_NAME",
-            requiredFiles = REQUIRED_FILES.keys.toList()
+            requiredFiles = REQUIRED_FILES.keys.toList(),
+            isVerificationUpToDate = verificationUpToDate
         )
     }
     
@@ -469,5 +558,6 @@ data class ModelStatus(
     val version: String,
     val sizeMB: Float,
     val downloadUrl: String,
-    val requiredFiles: List<String>
+    val requiredFiles: List<String>,
+    val isVerificationUpToDate: Boolean
 )
