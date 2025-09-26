@@ -41,6 +41,8 @@ import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.datepicker.MaterialDatePicker
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -61,6 +63,7 @@ class AddFragment : Fragment() {
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var securePreferencesManager: SecurePreferencesManager
     private lateinit var modelDownloadManager: ModelDownloadManager
+    private var modelStatusJob: Job? = null
 
     companion object {
         private const val TAG = "AddFragment"
@@ -346,25 +349,87 @@ class AddFragment : Fragment() {
     
     private fun updateLlmUiState() {
         val llmSettings = securePreferencesManager.getLlmSettings()
-        val modelStatus = modelDownloadManager.getModelStatus()
-        
+        val cachedStatus = modelDownloadManager.getModelStatus()
+
         // Update switch states
         binding.llmOcrSwitch.isChecked = llmSettings.useLocalLlm
         binding.llmWifiOnlySwitch.isChecked = llmSettings.downloadWifiOnly
-        
+
         // Update controls visibility
         updateLlmControlsVisibility(llmSettings.useLocalLlm)
-        
-        // Update status and buttons
-        updateLlmStatusDisplay(modelStatus)
+
+        // Update status and buttons with cached data
+        updateLlmStatusDisplay(cachedStatus)
+
+        modelStatusJob?.cancel()
+
+        val shouldShowVerification =
+            cachedStatus.isDownloaded && !cachedStatus.isVerificationUpToDate
+        if (shouldShowVerification) {
+            showVerificationLoading(true)
+        } else {
+            showVerificationLoading(false)
+        }
+
+        modelStatusJob = viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                val refreshedStatus = modelDownloadManager.refreshModelStatus(
+                    force = !cachedStatus.isVerificationUpToDate
+                )
+                if (isAdded) {
+                    updateLlmStatusDisplay(refreshedStatus)
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to refresh model status", e)
+            } finally {
+                if (isAdded) {
+                    showVerificationLoading(false)
+                }
+            }
+        }
     }
     
     private fun updateLlmControlsVisibility(enabled: Boolean) {
         binding.llmControlsLayout.visibility = if (enabled) View.VISIBLE else View.GONE
     }
-    
+
+    private fun showVerificationLoading(show: Boolean) {
+        if (!isAdded) return
+
+        if (show) {
+            if (binding.llmDownloadProgress.visibility != View.VISIBLE) {
+                binding.llmDownloadProgress.visibility = View.VISIBLE
+            }
+            binding.llmDownloadProgress.isIndeterminate = true
+            binding.llmProgressText.visibility = View.VISIBLE
+            binding.llmProgressText.text = getString(R.string.llm_verifying_model)
+        } else {
+            val isShowingVerification =
+                binding.llmDownloadProgress.isIndeterminate &&
+                    binding.llmProgressText.text == getString(R.string.llm_verifying_model)
+
+            if (isShowingVerification) {
+                binding.llmDownloadProgress.isIndeterminate = false
+                binding.llmDownloadProgress.visibility = View.GONE
+                binding.llmProgressText.visibility = View.GONE
+                binding.llmProgressText.text = ""
+            }
+        }
+    }
+
     private fun updateLlmStatusDisplay(modelStatus: com.example.coupontracker.llm.ModelStatus) {
         when {
+            modelStatus.isDownloaded && !modelStatus.isVerificationUpToDate -> {
+                binding.llmStatusText.text = getString(R.string.llm_verifying_model)
+                binding.llmSizeText.text = ""
+                binding.llmDownloadButton.visibility = View.GONE
+                binding.llmDeleteButton.visibility = View.VISIBLE
+                binding.llmStatusText.setTextColor(
+                    ContextCompat.getColor(requireContext(), android.R.color.darker_gray)
+                )
+            }
             modelStatus.isDownloaded && modelStatus.filesPresent -> {
                 binding.llmStatusText.text = "Model ready (${modelStatus.version})"
                 binding.llmSizeText.text = String.format("%.1f MB", modelStatus.sizeMB)
@@ -417,6 +482,8 @@ class AddFragment : Fragment() {
         
         // Show progress UI
         binding.llmDownloadProgress.visibility = View.VISIBLE
+        binding.llmDownloadProgress.isIndeterminate = false
+        binding.llmDownloadProgress.setProgressCompat(0, false)
         binding.llmProgressText.visibility = View.VISIBLE
         binding.llmDownloadButton.isEnabled = false
         binding.llmDownloadButton.text = "Downloading..."
@@ -789,6 +856,7 @@ class AddFragment : Fragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         cameraExecutor.shutdown()
+        modelStatusJob?.cancel()
         _binding = null
     }
 }

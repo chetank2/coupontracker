@@ -27,4 +27,5 @@
     <string name="export_data">Export Data</string>
     <string name="import_data">Import Data</string>
     <string name="clear_data">Clear All Data</string>
+    <string name="llm_verifying_model">Verifying model integrity…</string>
 </resources>
