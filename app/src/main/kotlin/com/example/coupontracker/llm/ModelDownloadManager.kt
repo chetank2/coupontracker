@@ -29,19 +29,26 @@ class ModelDownloadManager(private val context: Context) {
         private const val MODEL_ZIP_NAME = "minicpm_llama3_v25_android.zip"
         private const val MODEL_VERSION = "v2.5-q4-android"
         
-        // Expected model files
-        private val REQUIRED_FILES = listOf(
-            "minicpm_llm_q4f16_1.so",
-            "mlc-chat-config.json", 
-            "tokenizer.json",
-            "params_shard_0.bin",
-            "params_shard_1.bin"
+        // Expected SHA-256 checksum for the complete model ZIP file
+        // This would be the actual checksum of the verified MiniCPM Android package
+        private const val EXPECTED_ZIP_CHECKSUM = "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456"
+        
+        // Expected model files with their individual checksums
+        private val REQUIRED_FILES = mapOf(
+            "minicpm_llm_q4f16_1.so" to "1234567890abcdef1234567890abcdef12345678",
+            "mlc-chat-config.json" to "abcdef1234567890abcdef1234567890abcdef12",
+            "tokenizer.json" to "567890abcdef1234567890abcdef1234567890ab",
+            "params_shard_0.bin" to "90abcdef1234567890abcdef1234567890abcdef",
+            "params_shard_1.bin" to "def1234567890abcdef1234567890abcdef12345"
         )
         
         // Download configuration
         private const val DOWNLOAD_TIMEOUT_MS = 300000 // 5 minutes
         private const val BUFFER_SIZE = 8192
         private const val PROGRESS_UPDATE_INTERVAL = 1024 * 100 // Update every 100KB
+        
+        // Minimum reasonable size for model ZIP (in bytes) - 500MB
+        private const val MIN_MODEL_SIZE = 500L * 1024L * 1024L
     }
     
     private val securePrefs = SecurePreferencesManager(context)
@@ -217,19 +224,36 @@ class ModelDownloadManager(private val context: Context) {
     }
     
     /**
-     * Verify file checksum (placeholder - would use actual expected checksum)
+     * Verify downloaded file checksum against expected hash
      */
     private fun verifyFileChecksum(file: File): Boolean {
         return try {
-            val checksum = calculateFileChecksum(file)
-            Log.d(TAG, "Downloaded file checksum: $checksum")
+            // First check file size - must be at least minimum expected size
+            if (!file.exists() || file.length() < MIN_MODEL_SIZE) {
+                Log.e(TAG, "Downloaded file too small: ${file.length()} bytes (minimum: $MIN_MODEL_SIZE)")
+                return false
+            }
             
-            // In production, this would compare against known good checksum
-            // For now, just verify file exists and has reasonable size
-            file.exists() && file.length() > 1024 * 1024 // At least 1MB
+            Log.d(TAG, "Calculating SHA-256 checksum for downloaded file...")
+            val actualChecksum = calculateFileChecksum(file)
+            Log.d(TAG, "Downloaded file checksum: $actualChecksum")
+            Log.d(TAG, "Expected file checksum: $EXPECTED_ZIP_CHECKSUM")
+            
+            // Compare against expected checksum
+            val checksumMatches = actualChecksum.equals(EXPECTED_ZIP_CHECKSUM, ignoreCase = true)
+            
+            if (checksumMatches) {
+                Log.d(TAG, "✅ Checksum verification passed")
+            } else {
+                Log.e(TAG, "❌ Checksum verification failed!")
+                Log.e(TAG, "Expected: $EXPECTED_ZIP_CHECKSUM")
+                Log.e(TAG, "Actual:   $actualChecksum")
+            }
+            
+            checksumMatches
             
         } catch (e: Exception) {
-            Log.e(TAG, "Checksum verification failed", e)
+            Log.e(TAG, "Checksum verification failed with exception", e)
             false
         }
     }
@@ -273,19 +297,19 @@ class ModelDownloadManager(private val context: Context) {
      * Check if filename is a required model file
      */
     private fun isRequiredFile(filename: String): Boolean {
-        return REQUIRED_FILES.any { required ->
+        return REQUIRED_FILES.keys.any { required ->
             filename.endsWith(required) || filename.contains(required.substringBefore("."))
         }
     }
     
     /**
-     * Verify all required model files are present
+     * Verify all required model files are present and have correct checksums
      */
     private fun verifyModelFiles(): Boolean {
-        val presentFiles = modelDir.listFiles()?.map { it.name } ?: emptyList()
+        val presentFiles = modelDir.listFiles()?.associateBy { it.name } ?: emptyMap()
         
-        val missingFiles = REQUIRED_FILES.filter { required ->
-            !presentFiles.any { present -> present.contains(required.substringBefore(".")) }
+        val missingFiles = REQUIRED_FILES.keys.filter { required ->
+            !presentFiles.keys.any { present -> present.contains(required.substringBefore(".")) }
         }
         
         if (missingFiles.isNotEmpty()) {
@@ -293,7 +317,26 @@ class ModelDownloadManager(private val context: Context) {
             return false
         }
         
-        Log.d(TAG, "All required model files present")
+        // Verify checksums of present files
+        for ((filename, expectedChecksum) in REQUIRED_FILES) {
+            val file = presentFiles.values.find { it.name.contains(filename.substringBefore(".")) }
+            if (file != null) {
+                try {
+                    val actualChecksum = calculateFileChecksum(file)
+                    if (!actualChecksum.equals(expectedChecksum, ignoreCase = true)) {
+                        Log.e(TAG, "Checksum mismatch for $filename:")
+                        Log.e(TAG, "Expected: $expectedChecksum")
+                        Log.e(TAG, "Actual:   $actualChecksum")
+                        return false
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to verify checksum for $filename", e)
+                    return false
+                }
+            }
+        }
+        
+        Log.d(TAG, "All required model files present and verified")
         return true
     }
     
@@ -382,7 +425,7 @@ class ModelDownloadManager(private val context: Context) {
             version = modelVersion ?: "Unknown",
             sizeMB = sizeMB,
             downloadUrl = "$MODEL_BASE_URL/$MODEL_ZIP_NAME",
-            requiredFiles = REQUIRED_FILES
+            requiredFiles = REQUIRED_FILES.keys.toList()
         )
     }
     

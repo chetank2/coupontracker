@@ -111,23 +111,32 @@ class ImageProcessor(
         try {
             Log.d(TAG, "Processing bitmap image")
 
-            // Check if local LLM should be used
-            val useLocalLlm = securePreferencesManager.getUseLocalLlm()
+            // Get the selected API type from preferences
+            val selectedApiType = securePreferencesManager.getSelectedApiType()
             val llmModelDownloaded = securePreferencesManager.getLlmModelDownloaded()
             
-            val result = when {
-                useLocalLlm && llmModelDownloaded -> {
-                    Log.d(TAG, "Using Local LLM OCR service")
-                    try {
-                        localLlmOcrService.processCouponImage(bitmap, captureTimestamp)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Local LLM failed, falling back to Model-based OCR", e)
+            val result = when (selectedApiType) {
+                ApiType.LOCAL_LLM -> {
+                    if (llmModelDownloaded) {
+                        Log.d(TAG, "Using Local LLM OCR service")
+                        try {
+                            localLlmOcrService.processCouponImage(bitmap, captureTimestamp)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Local LLM failed, falling back to Model-based OCR", e)
+                            fallbackToModelBasedOcr(bitmap, captureTimestamp)
+                        }
+                    } else {
+                        Log.w(TAG, "Local LLM selected but model not downloaded, falling back to Model-based OCR")
                         fallbackToModelBasedOcr(bitmap, captureTimestamp)
                     }
                 }
-                else -> {
-                    Log.d(TAG, "Using Model-based OCR service (LLM not enabled/downloaded)")
+                ApiType.MODEL_BASED -> {
+                    Log.d(TAG, "Using Model-based OCR service")
                     fallbackToModelBasedOcr(bitmap, captureTimestamp)
+                }
+                ApiType.ML_KIT_ONLY -> {
+                    Log.d(TAG, "Using ML Kit OCR only")
+                    tryMlKit(bitmap, captureTimestamp)
                 }
             }
 

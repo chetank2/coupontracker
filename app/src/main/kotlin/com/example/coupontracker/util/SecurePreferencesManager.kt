@@ -323,18 +323,27 @@ class SecurePreferencesManager @Inject constructor(
 
     /**
      * Get the selected API type
-     * @return The selected API type as a string
+     * @return The selected API type as an enum
      */
-    fun getSelectedApiType(): String {
-        return getString(KEY_SELECTED_API_TYPE, "SUPER") ?: "SUPER"
+    fun getSelectedApiType(): ApiType {
+        val storedValue = getString(KEY_SELECTED_API_TYPE, "MODEL_BASED") ?: "MODEL_BASED"
+        return ApiType.fromString(storedValue)
     }
 
     /**
      * Set the selected API type
      * @param apiType The API type to select
      */
+    fun setSelectedApiType(apiType: ApiType) {
+        saveString(KEY_SELECTED_API_TYPE, apiType.toString())
+    }
+    
+    /**
+     * Legacy method for string-based API type setting
+     * @param apiType The API type as a string
+     */
     fun setSelectedApiType(apiType: String) {
-        saveString(KEY_SELECTED_API_TYPE, apiType)
+        setSelectedApiType(ApiType.fromString(apiType))
     }
 
     /**
