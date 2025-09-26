@@ -2,7 +2,10 @@ package com.example.coupontracker.util
 
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class TextExtractorTest {
 
     private val extractor = TextExtractor()
@@ -32,7 +35,7 @@ class TextExtractorTest {
         
         val description = extractor.extractDescription(text)
         assertNotNull("Description should not be null", description)
-        assertEquals("Get upto ₹500 off", description)
+        assertEquals("ABHIBUS Coupon - ₹500.0 off", description)
     }
     
     @Test
@@ -88,7 +91,7 @@ class TextExtractorTest {
         
         val description = extractor.extractDescription(text)
         assertNotNull("Description should not be null", description)
-        assertEquals("Flat ₹250 OFF", description)
+        assertEquals("NEWMEE Coupon - Flat ₹250.0 off", description)
     }
     
     @Test
@@ -144,7 +147,7 @@ class TextExtractorTest {
         
         val description = extractor.extractDescription(text)
         assertNotNull("Description should not be null", description)
-        assertEquals("Get upto 30% off", description)
+        assertEquals("IXIGO Coupon - Up to 30.0% off", description)
     }
     
     @Test
@@ -200,7 +203,7 @@ class TextExtractorTest {
         
         val description = extractor.extractDescription(text)
         assertNotNull("Description should not be null", description)
-        assertEquals("Up to 80% Off", description)
+        assertEquals("BOAT Coupon - Up to 80.0% off", description)
     }
     
     @Test

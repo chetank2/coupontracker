@@ -147,6 +147,32 @@ class ScannerFragment : Fragment() {
                         ).show()
                         findNavController().navigateUp()
                     }
+                    is ScannerUiState.MultiCouponDetected -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.captureButton.isEnabled = true
+                        
+                        // Handle multi-coupon detection
+                        Snackbar.make(
+                            binding.root,
+                            "Detected ${state.couponInstances.size} coupons! Opening selection interface...",
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                        
+                        // Navigate to multi-coupon selection activity
+                        // For now, just show a message - you can implement navigation later
+                    }
+                    is ScannerUiState.AllCouponsSaved -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.captureButton.isEnabled = true
+                        
+                        Snackbar.make(
+                            binding.root,
+                            "Successfully saved ${state.coupons.size} coupons!",
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                        
+                        findNavController().navigateUp()
+                    }
                 }
             }
         }

@@ -42,6 +42,15 @@ class SecurePreferencesManager @Inject constructor(
         const val KEY_USE_CUSTOM_TESSERACT_MODEL = "use_custom_tesseract_model"
         const val KEY_ADMIN_PASSWORD = "admin_password"
         const val KEY_PROTECTED_FEATURES_UNLOCKED = "protected_features_unlocked"
+        
+        // LLM-specific keys
+        const val KEY_USE_LOCAL_LLM = "use_local_llm"
+        const val KEY_LLM_MODEL_DOWNLOADED = "llm_model_downloaded"
+        const val KEY_LLM_MODEL_VERSION = "llm_model_version"
+        const val KEY_LLM_MODEL_SIZE_MB = "llm_model_size_mb"
+        const val KEY_LLM_MODEL_CHECKSUM = "llm_model_checksum"
+        const val KEY_LLM_AUTO_DOWNLOAD_ENABLED = "llm_auto_download_enabled"
+        const val KEY_LLM_DOWNLOAD_WIFI_ONLY = "llm_download_wifi_only"
 
         // Key rotation period in days
         private const val KEY_ROTATION_PERIOD_DAYS = 90
@@ -337,6 +346,119 @@ class SecurePreferencesManager @Inject constructor(
     }
 
     /**
+     * Get whether local LLM is enabled
+     */
+    fun getUseLocalLlm(): Boolean {
+        return getBoolean(KEY_USE_LOCAL_LLM, false)
+    }
+    
+    /**
+     * Set whether local LLM is enabled
+     */
+    fun setUseLocalLlm(enabled: Boolean) {
+        saveBoolean(KEY_USE_LOCAL_LLM, enabled)
+    }
+    
+    /**
+     * Get whether LLM model is downloaded
+     */
+    fun getLlmModelDownloaded(): Boolean {
+        return getBoolean(KEY_LLM_MODEL_DOWNLOADED, false)
+    }
+    
+    /**
+     * Set LLM model download status
+     */
+    fun setLlmModelDownloaded(downloaded: Boolean) {
+        saveBoolean(KEY_LLM_MODEL_DOWNLOADED, downloaded)
+    }
+    
+    /**
+     * Get LLM model version
+     */
+    fun getLlmModelVersion(): String? {
+        return getString(KEY_LLM_MODEL_VERSION)
+    }
+    
+    /**
+     * Set LLM model version
+     */
+    fun setLlmModelVersion(version: String) {
+        saveString(KEY_LLM_MODEL_VERSION, version)
+    }
+    
+    /**
+     * Get LLM model size in MB
+     */
+    fun getLlmModelSizeMB(): Float {
+        return getString(KEY_LLM_MODEL_SIZE_MB)?.toFloatOrNull() ?: 0f
+    }
+    
+    /**
+     * Set LLM model size in MB
+     */
+    fun setLlmModelSizeMB(sizeMB: Float) {
+        saveString(KEY_LLM_MODEL_SIZE_MB, sizeMB.toString())
+    }
+    
+    /**
+     * Get LLM model checksum
+     */
+    fun getLlmModelChecksum(): String? {
+        return getString(KEY_LLM_MODEL_CHECKSUM)
+    }
+    
+    /**
+     * Set LLM model checksum
+     */
+    fun setLlmModelChecksum(checksum: String) {
+        saveString(KEY_LLM_MODEL_CHECKSUM, checksum)
+    }
+    
+    /**
+     * Get whether auto-download is enabled for LLM models
+     */
+    fun getLlmAutoDownloadEnabled(): Boolean {
+        return getBoolean(KEY_LLM_AUTO_DOWNLOAD_ENABLED, false)
+    }
+    
+    /**
+     * Set LLM auto-download preference
+     */
+    fun setLlmAutoDownloadEnabled(enabled: Boolean) {
+        saveBoolean(KEY_LLM_AUTO_DOWNLOAD_ENABLED, enabled)
+    }
+    
+    /**
+     * Get whether LLM downloads should be WiFi-only
+     */
+    fun getLlmDownloadWifiOnly(): Boolean {
+        return getBoolean(KEY_LLM_DOWNLOAD_WIFI_ONLY, true)
+    }
+    
+    /**
+     * Set LLM WiFi-only download preference
+     */
+    fun setLlmDownloadWifiOnly(wifiOnly: Boolean) {
+        saveBoolean(KEY_LLM_DOWNLOAD_WIFI_ONLY, wifiOnly)
+    }
+    
+    /**
+     * Get comprehensive LLM settings
+     */
+    fun getLlmSettings(): LlmSettings {
+        return LlmSettings(
+            useLocalLlm = getUseLocalLlm(),
+            modelDownloaded = getLlmModelDownloaded(),
+            modelVersion = getLlmModelVersion(),
+            modelSizeMB = getLlmModelSizeMB(),
+            modelChecksum = getLlmModelChecksum(),
+            autoDownloadEnabled = getLlmAutoDownloadEnabled(),
+            downloadWifiOnly = getLlmDownloadWifiOnly()
+        )
+    }
+    
+    /**
      * Set the selected Tesseract language
      * @param language The language code to select
      */
@@ -394,3 +516,16 @@ class SecurePreferencesManager @Inject constructor(
         return getBoolean(KEY_PROTECTED_FEATURES_UNLOCKED, false)
     }
 }
+
+/**
+ * LLM settings data class
+ */
+data class LlmSettings(
+    val useLocalLlm: Boolean,
+    val modelDownloaded: Boolean,
+    val modelVersion: String?,
+    val modelSizeMB: Float,
+    val modelChecksum: String?,
+    val autoDownloadEnabled: Boolean,
+    val downloadWifiOnly: Boolean
+)

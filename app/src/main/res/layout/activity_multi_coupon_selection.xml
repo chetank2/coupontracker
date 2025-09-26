@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/background_light"
+    tools:context=".ui.activity.MultiCouponSelectionActivity">
+
+    <!-- Toolbar -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/primary"
+        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
+        app:title="Multi-Coupon Detection"
+        app:titleTextColor="@android:color/white"
+        app:navigationIcon="@drawable/ic_arrow_back" />
+
+    <!-- Header Info -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@color/surface">
+
+        <TextView
+            android:id="@+id/detected_count_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Detected 0 coupons"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/on_surface"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Select coupons to process or process all at once"
+            android:textSize="14sp"
+            android:textColor="@color/on_surface_variant" />
+
+    </LinearLayout>
+
+    <!-- Original Image with Overlays -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_margin="16dp"
+        app:cardCornerRadius="8dp"
+        app:cardElevation="4dp">
+
+        <ImageView
+            android:id="@+id/original_image_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="centerCrop"
+            android:contentDescription="Original image with detected coupons"
+            tools:src="@drawable/ic_image_placeholder" />
+
+    </androidx.cardview.widget.CardView>
+
+    <!-- Coupons List -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/coupons_recycler_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="8dp"
+        android:clipToPadding="false"
+        tools:listitem="@layout/item_coupon_selection" />
+
+    <!-- Progress Bar -->
+    <ProgressBar
+        android:id="@+id/progress_bar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone"
+        android:indeterminate="true" />
+
+    <!-- Action Buttons -->
+    <LinearLayout
+        android:id="@+id/buttons_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:background="@color/surface"
+        android:elevation="8dp">
+
+        <Button
+            android:id="@+id/select_all_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="Select All"
+            android:textColor="@color/primary"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/process_selected_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginHorizontal="4dp"
+            android:text="Process Selected"
+            android:backgroundTint="@color/secondary"
+            android:textColor="@color/on_secondary"
+            android:visibility="gone" />
+
+        <Button
+            android:id="@+id/process_all_button"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:text="Process All"
+            android:backgroundTint="@color/primary"
+            android:textColor="@color/on_primary"
+            android:visibility="gone" />
+
+    </LinearLayout>
+
+</LinearLayout>

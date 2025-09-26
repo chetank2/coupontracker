@@ -36,8 +36,9 @@ class ImageProcessor(
     // Coupon pattern recognizer
     private var couponPatternRecognizer: CouponPatternRecognizer = CouponPatternRecognizer(context)
 
-    // Model-based OCR service
+    // OCR services
     private var modelBasedOCRService: ModelBasedOCRService = ModelBasedOCRService(context)
+    private var localLlmOcrService: LocalLlmOcrService = LocalLlmOcrService(context)
 
     // Default to using the model-based OCR service
     private var useModelBasedOcr = true
@@ -98,29 +99,53 @@ class ImageProcessor(
         try {
             Log.d(TAG, "Processing bitmap image")
 
-            // Use Model-based OCR service by default with fallbacks
-            val result = try {
-                Log.d(TAG, "Using Model-based OCR service")
-                modelBasedOCRService.processCouponImage(bitmap)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error using Model-based OCR service, falling back to Pattern Recognizer", e)
-
-                // Try Pattern Recognizer as fallback
-                val result = tryPatternRecognizer(bitmap)
-                if (result != null) {
-                    result
-                } else {
-                    // Fall back to ML Kit if Pattern Recognizer fails
-                    Log.d(TAG, "Pattern Recognizer failed, falling back to ML Kit")
-                    tryMlKit(bitmap)
+            // Check if local LLM should be used
+            val useLocalLlm = securePreferencesManager.getUseLocalLlm()
+            val llmModelDownloaded = securePreferencesManager.getLlmModelDownloaded()
+            
+            val result = when {
+                useLocalLlm && llmModelDownloaded -> {
+                    Log.d(TAG, "Using Local LLM OCR service")
+                    try {
+                        localLlmOcrService.processCouponImage(bitmap)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Local LLM failed, falling back to Model-based OCR", e)
+                        fallbackToModelBasedOcr(bitmap)
+                    }
+                }
+                else -> {
+                    Log.d(TAG, "Using Model-based OCR service (LLM not enabled/downloaded)")
+                    fallbackToModelBasedOcr(bitmap)
                 }
             }
 
-            // Return the result from the when expression
+            // Return the result
             return@withContext result
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process image", e)
             throw IOException("Failed to process image: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Fallback to model-based OCR with existing fallback chain
+     */
+    private suspend fun fallbackToModelBasedOcr(bitmap: Bitmap): CouponInfo {
+        return try {
+            Log.d(TAG, "Using Model-based OCR service")
+            modelBasedOCRService.processCouponImage(bitmap)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error using Model-based OCR service, falling back to Pattern Recognizer", e)
+
+            // Try Pattern Recognizer as fallback
+            val result = tryPatternRecognizer(bitmap)
+            if (result != null) {
+                result
+            } else {
+                // Fall back to ML Kit if Pattern Recognizer fails
+                Log.d(TAG, "Pattern Recognizer failed, falling back to ML Kit")
+                tryMlKit(bitmap)
+            }
         }
     }
 
