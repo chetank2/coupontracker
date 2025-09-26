@@ -4,12 +4,18 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import com.example.coupontracker.llm.LlmRuntimeManager
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
 import org.json.JSONObject
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Local LLM OCR Service using MiniCPM-Llama3-V2.5
@@ -175,13 +181,15 @@ class LocalLlmOcrService(private val context: Context) {
                 if (it.isBlank() || it == "Unknown") "Coupon offer" else it.take(100) // Limit length
             }
             
-            val amount = json.optString("amount").let {
-                if (it.isBlank() || it == "Unknown") null else it
-            }
+            // Note: 'amount' field is handled by cashbackAmount, keeping for future use
+            // val amount = json.optString("amount").let {
+            //     if (it.isBlank() || it == "Unknown") null else it
+            // }
             
-            val code = json.optString("code").let {
-                if (it.isBlank() || it == "Unknown") null else it.trim().uppercase()
-            }
+            // Try both 'redeemCode' (from prompt) and 'code' (fallback) to handle both field names
+            val code = (json.optString("redeemCode").takeIf { it.isNotBlank() && it != "Unknown" }
+                ?: json.optString("code").takeIf { it.isNotBlank() && it != "Unknown" })
+                ?.trim()?.uppercase()
             
             val expiryDate = json.optString("expiryDate").let {
                 if (it.isBlank() || it == "Unknown") null else it
@@ -195,10 +203,20 @@ class LocalLlmOcrService(private val context: Context) {
                 if (it.isBlank() || it == "Unknown") null else it
             }
             
+            // Parse expiry date if available
+            val parsedExpiryDate = expiryDate?.let { dateStr ->
+                try {
+                    DateParser.parseDate(dateStr)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to parse expiry date: $dateStr", e)
+                    null
+                }
+            }
+            
             CouponInfo(
                 storeName = storeName,
                 description = description,
-                expiryDate = null, // Will be parsed later if needed
+                expiryDate = parsedExpiryDate,
                 cashbackAmount = cashbackAmount?.toDoubleOrNull(),
                 redeemCode = code,
                 minimumPurchase = minOrderAmount?.toDoubleOrNull()
@@ -245,22 +263,61 @@ class LocalLlmOcrService(private val context: Context) {
         Log.d(TAG, "Using traditional OCR fallback")
         
         try {
-            // Use existing TextExtractor as fallback
-            val textExtractor = TextExtractor()
-            val extractedText = "Fallback text extraction" // Placeholder
-            val extractedInfo = textExtractor.extractCouponInfo(extractedText)
+            // Use Google ML Kit for text recognition
+            val mlKitText = performMlKitOcr(bitmap)
+            Log.d(TAG, "ML Kit OCR extracted text: ${mlKitText.take(100)}...")
             
-            // Return the CouponInfo directly from TextExtractor
-            extractedInfo
+            // Use existing TextExtractor to parse the OCR text
+            val textExtractor = TextExtractor()
+            val extractedInfo = textExtractor.extractCouponInfo(mlKitText)
+            
+            Log.d(TAG, "Traditional OCR fallback result: $extractedInfo")
+            return@withContext extractedInfo
             
         } catch (e: Exception) {
-            Log.e(TAG, "Traditional OCR fallback also failed", e)
+            Log.e(TAG, "Traditional OCR fallback failed", e)
             
-            // Return minimal CouponInfo as last resort
-            CouponInfo(
-                storeName = "Unknown Store",
-                description = "OCR extraction failed"
-            )
+            // Try using ModelBasedOCRService as final fallback
+            try {
+                val modelBasedService = ModelBasedOCRService(context)
+                val result = modelBasedService.processCouponImage(bitmap)
+                Log.d(TAG, "Model-based OCR fallback result: $result")
+                return@withContext result
+            } catch (e2: Exception) {
+                Log.e(TAG, "All OCR methods failed", e2)
+                
+                // Return minimal CouponInfo as last resort
+                CouponInfo(
+                    storeName = "Unknown Store",
+                    description = "All OCR methods failed - please try again"
+                )
+            }
+        }
+    }
+    
+    /**
+     * Perform ML Kit OCR on bitmap
+     */
+    private suspend fun performMlKitOcr(bitmap: Bitmap): String = withContext(Dispatchers.IO) {
+        return@withContext suspendCancellableCoroutine { continuation ->
+            try {
+                val image = InputImage.fromBitmap(bitmap, 0)
+                val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                
+                recognizer.process(image)
+                    .addOnSuccessListener { visionText ->
+                        val extractedText = visionText.text
+                        Log.d(TAG, "ML Kit OCR success: ${extractedText.length} chars")
+                        continuation.resume(extractedText)
+                    }
+                    .addOnFailureListener { exception ->
+                        Log.e(TAG, "ML Kit OCR failed", exception)
+                        continuation.resumeWithException(exception)
+                    }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting up ML Kit OCR", e)
+                continuation.resumeWithException(e)
+            }
         }
     }
     
