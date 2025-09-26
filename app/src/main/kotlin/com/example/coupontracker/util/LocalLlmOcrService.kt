@@ -14,6 +14,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
 import org.json.JSONObject
+import java.util.Date
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -68,7 +69,7 @@ class LocalLlmOcrService(private val context: Context) {
      * Process coupon image using local LLM
      * Main entry point that mirrors ModelBasedOCRService.processCouponImage
      */
-    suspend fun processCouponImage(bitmap: Bitmap): CouponInfo = coroutineScope {
+    suspend fun processCouponImage(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo = coroutineScope {
         try {
             Log.d(TAG, "Processing coupon with MiniCPM-Llama3-V2.5")
             
@@ -112,7 +113,7 @@ class LocalLlmOcrService(private val context: Context) {
             
             // Fallback to traditional OCR
             Log.d(TAG, "Falling back to traditional OCR")
-            fallbackToTraditionalOCR(bitmap)
+            fallbackToTraditionalOCR(bitmap, captureTimestamp)
         }
     }
     
@@ -287,7 +288,7 @@ class LocalLlmOcrService(private val context: Context) {
     /**
      * Fallback to traditional OCR when LLM fails
      */
-    private suspend fun fallbackToTraditionalOCR(bitmap: Bitmap): CouponInfo = withContext(Dispatchers.IO) {
+    private suspend fun fallbackToTraditionalOCR(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo = withContext(Dispatchers.IO) {
         Log.d(TAG, "Using traditional OCR fallback")
         
         try {
@@ -302,7 +303,7 @@ class LocalLlmOcrService(private val context: Context) {
             
             // Use existing TextExtractor to parse the OCR text
             val textExtractor = TextExtractor()
-            val extractedInfo = textExtractor.extractCouponInfo(mlKitText)
+            val extractedInfo = textExtractor.extractCouponInfoSync(mlKitText, captureTimestamp)
             
             // Validate that we got meaningful extraction results
             if (extractedInfo.storeName == "Unknown Store" && 

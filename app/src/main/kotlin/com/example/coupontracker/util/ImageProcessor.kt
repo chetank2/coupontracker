@@ -20,6 +20,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.util.Date
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -81,10 +82,19 @@ class ImageProcessor(
     suspend fun processImage(imageUri: Uri): CouponInfo = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Processing image: $imageUri")
+            
+            // Extract capture timestamp from image metadata
+            val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
+            if (captureTimestamp != null) {
+                Log.d(TAG, "Found image capture timestamp: $captureTimestamp")
+            } else {
+                Log.w(TAG, "No capture timestamp found, using fallback date")
+            }
+            
             val bitmap = getBitmapFromUri(imageUri)
             Log.d(TAG, "Successfully loaded bitmap from URI")
 
-            return@withContext processImage(bitmap)
+            return@withContext processImage(bitmap, captureTimestamp)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process image", e)
             throw IOException("Failed to process image: ${e.message}", e)
@@ -94,9 +104,10 @@ class ImageProcessor(
     /**
      * Process a bitmap image and extract coupon information
      * @param bitmap The bitmap to process
+     * @param captureTimestamp The timestamp when the image was captured (for relative date calculations)
      * @return The extracted coupon information
      */
-    suspend fun processImage(bitmap: Bitmap): CouponInfo = withContext(Dispatchers.IO) {
+    suspend fun processImage(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Processing bitmap image")
 
@@ -108,15 +119,15 @@ class ImageProcessor(
                 useLocalLlm && llmModelDownloaded -> {
                     Log.d(TAG, "Using Local LLM OCR service")
                     try {
-                        localLlmOcrService.processCouponImage(bitmap)
+                        localLlmOcrService.processCouponImage(bitmap, captureTimestamp)
                     } catch (e: Exception) {
                         Log.e(TAG, "Local LLM failed, falling back to Model-based OCR", e)
-                        fallbackToModelBasedOcr(bitmap)
+                        fallbackToModelBasedOcr(bitmap, captureTimestamp)
                     }
                 }
                 else -> {
                     Log.d(TAG, "Using Model-based OCR service (LLM not enabled/downloaded)")
-                    fallbackToModelBasedOcr(bitmap)
+                    fallbackToModelBasedOcr(bitmap, captureTimestamp)
                 }
             }
 
@@ -131,10 +142,10 @@ class ImageProcessor(
     /**
      * Fallback to model-based OCR with existing fallback chain
      */
-    private suspend fun fallbackToModelBasedOcr(bitmap: Bitmap): CouponInfo {
+    private suspend fun fallbackToModelBasedOcr(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo {
         return try {
             Log.d(TAG, "Using Model-based OCR service")
-            modelBasedOCRService.processCouponImage(bitmap)
+            modelBasedOCRService.processCouponImage(bitmap, captureTimestamp)
         } catch (e: Exception) {
             Log.e(TAG, "Error using Model-based OCR service, falling back to Pattern Recognizer", e)
 
@@ -145,7 +156,7 @@ class ImageProcessor(
             } else {
                 // Fall back to ML Kit if Pattern Recognizer fails
                 Log.d(TAG, "Pattern Recognizer failed, falling back to ML Kit")
-                tryMlKit(bitmap)
+                tryMlKit(bitmap, captureTimestamp)
             }
         }
     }
@@ -153,9 +164,10 @@ class ImageProcessor(
     /**
      * Try processing with ML Kit
      * @param bitmap The bitmap to process
+     * @param captureTimestamp The timestamp when the image was captured (for relative date calculations)
      * @return The extracted coupon information
      */
-    private suspend fun tryMlKit(bitmap: Bitmap): CouponInfo = withContext(Dispatchers.IO) {
+    private suspend fun tryMlKit(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Trying ML Kit OCR")
 
@@ -175,7 +187,7 @@ class ImageProcessor(
             val text = result.text
 
             // Use TextExtractor to extract coupon info
-            val couponInfo = textExtractor.extractCouponInfo(text)
+            val couponInfo = textExtractor.extractCouponInfoSync(text, captureTimestamp)
 
             Log.d(TAG, "ML Kit OCR result: $couponInfo")
             return@withContext couponInfo

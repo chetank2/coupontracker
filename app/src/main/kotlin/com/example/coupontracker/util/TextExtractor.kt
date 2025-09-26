@@ -66,23 +66,25 @@ class TextExtractor {
     /**
      * Extract all coupon information from text
      * @param text The text to extract information from
+     * @param baseDate The base date to use for relative expiry calculations (defaults to current time)
      * @return CouponInfo object containing extracted information
      */
-    suspend fun extractCouponInfo(text: String): CouponInfo = withContext(Dispatchers.Default) {
-        extractCouponInfoSync(text)
+    suspend fun extractCouponInfo(text: String, baseDate: Date? = null): CouponInfo = withContext(Dispatchers.Default) {
+        extractCouponInfoSync(text, baseDate)
     }
 
     /**
      * Synchronous version of extractCouponInfo
      * @param text The text to extract information from
+     * @param baseDate The base date to use for relative expiry calculations (defaults to current time)
      * @return CouponInfo object containing extracted information
      */
-    fun extractCouponInfoSync(text: String): CouponInfo {
+    fun extractCouponInfoSync(text: String, baseDate: Date? = null): CouponInfo {
         Log.d(TAG, "Extracting coupon info from text: ${text.take(100)}...")
 
         val storeName = extractStoreName(text)
         val description = extractDescription(text)
-        val expiryDate = extractExpiryDate(text)
+        val expiryDate = extractExpiryDate(text, baseDate)
         val cashbackAmount = extractCashbackAmount(text)
         val redeemCode = extractRedeemCode(text)
         val category = extractCategory(text)
@@ -284,26 +286,31 @@ class TextExtractor {
     /**
      * Extract expiry date from text
      * @param text The text to extract from
+     * @param baseDate The base date to use for relative calculations (defaults to current time)
      * @return The extracted expiry date or null if not found
      */
-    fun extractExpiryDate(text: String): Date? {
-        return parseExpiryDate(text)
+    fun extractExpiryDate(text: String, baseDate: Date? = null): Date? {
+        return parseExpiryDate(text, baseDate)
     }
 
     /**
      * Parse expiry date from text
      * @param text The text to parse
+     * @param baseDate The base date to use for relative calculations (defaults to current time)
      * @return The parsed date or null if not found
      */
-    fun parseExpiryDate(text: String): Date? {
+    fun parseExpiryDate(text: String, baseDate: Date? = null): Date? {
+        val referenceDate = baseDate ?: Date()
+        
         // Check for "Expires in X hours" format
         val expiresInHoursPattern = Pattern.compile("(?i)expires?\\s+in\\s+(\\d+)\\s+hours?")
         val expiresInHoursMatcher = expiresInHoursPattern.matcher(text)
         if (expiresInHoursMatcher.find()) {
             val hoursToAdd = expiresInHoursMatcher.group(1)?.toIntOrNull() ?: 0
             val calendar = Calendar.getInstance()
+            calendar.time = referenceDate
             calendar.add(Calendar.HOUR_OF_DAY, hoursToAdd)
-            Log.d(TAG, "Found expiry date from 'expires in X hours' format: ${hoursToAdd} hours from now")
+            Log.d(TAG, "Found expiry date from 'expires in X hours' format: ${hoursToAdd} hours from base date $referenceDate")
             return calendar.time
         }
 
@@ -321,13 +328,14 @@ class TextExtractor {
                 val timeUnit = expiresInMatcher.group(2)?.lowercase() ?: ""
 
                 val calendar = Calendar.getInstance()
+                calendar.time = referenceDate
                 if (timeUnit.startsWith("hour")) {
                     calendar.add(Calendar.HOUR_OF_DAY, timeValue)
                 } else {
                     calendar.add(Calendar.DAY_OF_YEAR, timeValue)
                 }
 
-                Log.d(TAG, "Found expiry date from 'Expiry:' with 'expires in' format: $timeValue $timeUnit from now")
+                Log.d(TAG, "Found expiry date from 'Expiry:' with 'expires in' format: $timeValue $timeUnit from base date $referenceDate")
                 return calendar.time
             }
 
@@ -380,8 +388,9 @@ class TextExtractor {
         if (expiresInMatcher.find()) {
             val daysToAdd = expiresInMatcher.group(1)?.toIntOrNull() ?: 0
             val calendar = Calendar.getInstance()
+            calendar.time = referenceDate
             calendar.add(Calendar.DAY_OF_YEAR, daysToAdd)
-            Log.d(TAG, "Found expiry date from 'expires in X days' format: ${daysToAdd} days from now")
+            Log.d(TAG, "Found expiry date from 'expires in X days' format: ${daysToAdd} days from base date $referenceDate")
             return calendar.time
         }
 
