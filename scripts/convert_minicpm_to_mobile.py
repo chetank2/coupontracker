@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -405,6 +406,7 @@ python -m mlc_llm.package \\
         # Copy actual model files from MLC output
         mlc_source = Path(mlc_model_path)
         copied_files = []
+        copied_names = set()
         total_size_bytes = 0
         
         # Define file patterns to copy
@@ -417,24 +419,31 @@ python -m mlc_llm.package \\
         
         for pattern in file_patterns:
             for file_path in mlc_source.glob(pattern):
-                if file_path.is_file():
-                    dest_path = assets_path / file_path.name
-                    
-                    try:
-                        shutil.copy2(file_path, dest_path)
-                        file_size = dest_path.stat().st_size
-                        total_size_bytes += file_size
-                        
-                        copied_files.append({
-                            "name": file_path.name,
-                            "size_bytes": file_size,
-                            "sha256": self._calculate_sha256(dest_path)
-                        })
-                        
-                        logger.info(f"Copied {file_path.name} ({file_size / (1024*1024):.1f} MB)")
-                        
-                    except Exception as e:
-                        logger.error(f"Failed to copy {file_path}: {e}")
+                if not file_path.is_file():
+                    continue
+
+                if file_path.name in copied_names:
+                    logger.debug(f"Skipping duplicate file: {file_path.name}")
+                    continue
+
+                dest_path = assets_path / file_path.name
+
+                try:
+                    shutil.copy2(file_path, dest_path)
+                    file_size = dest_path.stat().st_size
+                    total_size_bytes += file_size
+                    copied_names.add(file_path.name)
+
+                    copied_files.append({
+                        "name": file_path.name,
+                        "size_bytes": file_size,
+                        "sha256": self._calculate_sha256(dest_path)
+                    })
+
+                    logger.info(f"Copied {file_path.name} ({file_size / (1024*1024):.1f} MB)")
+
+                except Exception as e:
+                    logger.error(f"Failed to copy {file_path}: {e}")
         
         # Generate native library if needed
         self._generate_jni_wrapper(jni_path)
