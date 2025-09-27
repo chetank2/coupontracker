@@ -70,8 +70,8 @@ For team testing, deploy the mock artifacts to a simple web server:
 # Upload to your web server
 scp android_models/minicpm_llama3_v25_android.zip user@server:/var/www/html/
 
-# Update MODEL_BASE_URL in ModelDownloadManager.kt
-private const val MODEL_BASE_URL = "https://your-server.com"
+# Update the runtime override in ModelDownloadManager
+securePreferencesManager.setLlmModelBaseUrlOverride("https://your-server.com")
 ```
 
 ### **Option 2: Real MLC-LLM Deployment (Production)**
@@ -119,8 +119,9 @@ python scripts/update_model_checksums.py \
 aws s3 cp android_models/minicpm_llama3_v25_android.zip \
           s3://your-bucket/models/
 
-# Update MODEL_BASE_URL for production
-private const val MODEL_BASE_URL = "https://cdn.your-app.com/models"
+# Default distribution uses Hugging Face (no code changes required)
+# Optional: configure a runtime override once your CDN is live
+securePreferencesManager.setLlmModelBaseUrlOverride("https://cdn.your-app.com/android/minicpm")
 ```
 
 #### **4. Validation & Deployment**
@@ -140,19 +141,23 @@ private const val MODEL_BASE_URL = "https://cdn.your-app.com/models"
 #### **Development (Mock)**
 ```kotlin
 // ModelDownloadManager.kt
-private const val MODEL_BASE_URL = "http://127.0.0.1:8080"
+private const val DEFAULT_MODEL_BASE_URL = "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5/resolve/main/android"
+securePreferencesManager.setLlmModelBaseUrlOverride("http://127.0.0.1:8080")
 private const val EXPECTED_ZIP_CHECKSUM = "7a45f222885f84fd0160eeac794ad56be91c6139c436724a56627f16a93d1a76"
 ```
 
 #### **Staging (Mock on Server)**
 ```kotlin
-private const val MODEL_BASE_URL = "https://staging-api.your-app.com/models"
+private const val DEFAULT_MODEL_BASE_URL = "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5/resolve/main/android"
+securePreferencesManager.setLlmModelBaseUrlOverride("https://staging-api.your-app.com/models")
 private const val EXPECTED_ZIP_CHECKSUM = "7a45f222885f84fd0160eeac794ad56be91c6139c436724a56627f16a93d1a76"
 ```
 
 #### **Production (Real MLC-LLM)**
 ```kotlin
-private const val MODEL_BASE_URL = "https://cdn.your-app.com/models"
+private const val DEFAULT_MODEL_BASE_URL = "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5/resolve/main/android"
+// Optional when CDN is healthy
+securePreferencesManager.setLlmModelBaseUrlOverride("https://cdn.your-app.com/android/minicpm")
 private const val EXPECTED_ZIP_CHECKSUM = "REAL_CHECKSUM_FROM_BUILD_RESULTS"
 ```
 
@@ -272,8 +277,8 @@ adb logcat | grep "mlc_llm_jni"
 ### **Production Deployment**
 - [ ] Real MLC-LLM environment provisioned
 - [ ] Model conversion completed successfully  
-- [ ] Real artifacts uploaded to production CDN
-- [ ] MODEL_BASE_URL updated for production
+- [ ] Real artifacts uploaded to Hugging Face (default) or production CDN
+- [ ] Base URL override configured for production CDN (if applicable)
 - [ ] Release build tested with real artifacts
 - [ ] Analytics/monitoring configured
 - [ ] Rollback plan prepared

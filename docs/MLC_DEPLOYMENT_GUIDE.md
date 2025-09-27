@@ -97,7 +97,9 @@ For larger models (our case: ~2.4GB):
 
 ```kotlin
 // ModelDownloadManager configuration
-private val MODEL_DOWNLOAD_URL = "https://your-cdn.com/minicpm-android.zip"
+private val MODEL_DOWNLOAD_URL = "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5/resolve/main/minicpm_llama3_v25_android.zip"
+// Optional: override with your CDN once it is verified
+securePreferencesManager.setLlmModelBaseUrlOverride("https://cdn.your-app.com/android/minicpm")
 private val MODEL_CHECKSUM = "sha256_from_deployment_manifest"
 ```
 
