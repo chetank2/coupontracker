@@ -30,7 +30,8 @@ android {
                 cppFlags += listOf("-std=c++17", "-frtti", "-fexceptions")
                 arguments += listOf(
                     "-DANDROID_STL=c++_shared",
-                    "-DANDROID_PLATFORM=android-26"
+                    "-DANDROID_PLATFORM=android-26",
+                    "-DBUILD_MOCK_JNI=ON"
                 )
             }
         }
