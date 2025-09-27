@@ -32,6 +32,7 @@ android {
                     "-DANDROID_STL=c++_shared",
                     "-DANDROID_PLATFORM=android-26",
                     "-DBUILD_MOCK_JNI=ON"
+                    // Note: Remove BUILD_MOCK_JNI=ON when real MLC-LLM libraries are available
                 )
             }
         }

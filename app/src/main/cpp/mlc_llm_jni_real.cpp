@@ -10,16 +10,11 @@
 #include <cstdint>
 #include <algorithm>
 
-// MLC-LLM headers (these would be real includes in production)
-// For now, we'll create interfaces that match MLC-LLM's expected API
+// MLC-LLM headers for production integration
 #ifdef MLC_LLM_AVAILABLE
 #include <dlpack/dlpack.h>
-#include <mlc/llm/llm_chat.h>
-#include <tvm/runtime/container/string.h>
+#include <mlc/runtime/c_runtime_api.h>
 #include <tvm/runtime/module.h>
-#include <tvm/runtime/ndarray.h>
-#include <tvm/runtime/packed_func.h>
-#include <tvm/runtime/registry.h>
 #endif
 
 #define LOG_TAG "MLC_LLM_JNI"
@@ -34,9 +29,9 @@ struct MLCModelInstance {
     
 #ifdef MLC_LLM_AVAILABLE
     // Real MLC-LLM runtime components
-    tvm::runtime::Module chat_module;
-    tvm::runtime::PackedFunc chat_func;
-    tvm::runtime::PackedFunc vision_func;
+    MLCRuntimeHandle runtime_handle;
+    MLCModelHandle model_handle;
+    bool is_loaded;
 #endif
     
     // Model configuration
@@ -72,23 +67,35 @@ struct MLCModelInstance {
                 return false;
             }
 
-            auto create_chat = tvm::runtime::Registry::Get("mlc.llm_chat_create");
-            if (!create_chat) {
-                LOGE("mlc.llm_chat_create not found in runtime registry");
+            // Initialize MLC-LLM runtime
+            runtime_handle = MLCRuntimeCreate(MLC_DEVICE_CPU, 0);
+            if (runtime_handle == nullptr) {
+                LOGE("Failed to create MLC runtime");
                 return false;
             }
 
-            tvm::runtime::Module module = (*create_chat)(
-                tvm::runtime::String(model_path),
-                tvm::runtime::String(config_json));
-            if (!module.defined()) {
-                LOGE("Failed to create chat module");
+            // Load the model
+            model_handle = MLCModelLoad(runtime_handle, model_path.c_str(), config_path.c_str());
+            if (model_handle == nullptr) {
+                LOGE("Failed to load MLC model from path: %s", model_path.c_str());
+                MLCRuntimeDestroy(runtime_handle);
+                runtime_handle = nullptr;
                 return false;
             }
 
-            chat_module = module;
-            chat_func = chat_module.GetFunction("chat");
-            vision_func = chat_module.GetFunction("vision_chat");
+            // Set inference parameters
+            MLCReturnCode ret = MLCModelSetInferenceParams(
+                model_handle, 
+                config.temperature, 
+                config.top_p, 
+                config.max_tokens
+            );
+            
+            if (ret != MLC_SUCCESS) {
+                LOGD("Warning: Failed to set inference parameters, using defaults");
+            }
+
+            is_loaded = true;
 
             if (!chat_func.defined()) {
                 LOGE("Chat function not defined in module");
@@ -134,21 +141,28 @@ struct MLCModelInstance {
         }
 
         try {
-            // Preprocess image into NDArray tensor expected by runtime
-            tvm::runtime::NDArray processed_image = preprocess_image(image_data, width, height);
+            // Prepare output buffer for result
+            char output_buffer[8192];
+            memset(output_buffer, 0, sizeof(output_buffer));
 
-            tvm::runtime::String prompt_arg(prompt);
+            // Run vision inference using C API
+            MLCReturnCode ret = MLCModelRunVisionInference(
+                model_handle,
+                image_data.data(),
+                width,
+                height,
+                prompt.c_str(),
+                output_buffer,
+                sizeof(output_buffer)
+            );
 
-            tvm::runtime::PackedFunc vision = vision_func;
-            tvm::runtime::String result = vision(
-                processed_image,
-                prompt_arg,
-                static_cast<double>(config.temperature),
-                static_cast<double>(config.top_p),
-                static_cast<int64_t>(config.max_tokens));
+            if (ret != MLC_SUCCESS) {
+                LOGE("Vision inference failed with code: %d", ret);
+                return R"({"error": "Vision inference failed"})";
+            }
 
             // Parse and validate response
-            std::string response = std::string(result);
+            std::string response(output_buffer);
             if (is_valid_json(response)) {
                 return response;
             } else {
@@ -169,9 +183,17 @@ struct MLCModelInstance {
 private:
 #ifdef MLC_LLM_AVAILABLE
     void cleanup() {
-        chat_module = tvm::runtime::Module();
-        chat_func = tvm::runtime::PackedFunc();
-        vision_func = tvm::runtime::PackedFunc();
+        if (model_handle != nullptr) {
+            MLCModelDestroy(model_handle);
+            model_handle = nullptr;
+        }
+        
+        if (runtime_handle != nullptr) {
+            MLCRuntimeDestroy(runtime_handle);
+            runtime_handle = nullptr;
+        }
+        
+        is_loaded = false;
     }
 #endif
 
@@ -381,8 +403,12 @@ Java_com_example_coupontracker_llm_MlcLlmNative_getMemoryUsage(
     
 #ifdef MLC_LLM_AVAILABLE
     // Get actual memory usage from MLC-LLM
-    // This would query the runtime for current memory consumption
-    return 2400LL * 1024LL * 1024LL; // Placeholder: 2.4GB
+    if (it->second->model_handle != nullptr) {
+        size_t memory_bytes = MLCModelGetMemoryUsage(it->second->model_handle);
+        return static_cast<jlong>(memory_bytes);
+    } else {
+        return 0LL;
+    }
 #else
     return 2400LL * 1024LL * 1024LL; // Mock value
 #endif
@@ -401,5 +427,14 @@ Java_com_example_coupontracker_llm_MlcLlmNative_isModelLoaded(
         return JNI_FALSE;
     }
     
+#ifdef MLC_LLM_AVAILABLE
+    if (it->second->model_handle != nullptr) {
+        int is_loaded = MLCModelIsLoaded(it->second->model_handle);
+        return is_loaded ? JNI_TRUE : JNI_FALSE;
+    } else {
+        return JNI_FALSE;
+    }
+#else
     return it->second->is_initialized ? JNI_TRUE : JNI_FALSE;
+#endif
 }
