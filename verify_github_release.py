@@ -21,10 +21,10 @@ def test_github_release():
     
     print(f"🌐 Testing URL: {expected_url}")
     
-    # Test 1: HEAD request to check if file exists
+    # Test 1: HEAD request to check if file exists (follow redirects)
     print("\n🔍 Step 1: Checking if release exists...")
     try:
-        response = requests.head(expected_url, timeout=10)
+        response = requests.head(expected_url, timeout=10, allow_redirects=True)
         
         if response.status_code == 200:
             content_length = int(response.headers.get('Content-Length', 0))
@@ -48,6 +48,7 @@ def test_github_release():
         
         else:
             print(f"⚠️ Unexpected status: HTTP {response.status_code}")
+            print(f"   Response headers: {dict(response.headers)}")
             return False
     
     except requests.exceptions.RequestException as e:
@@ -65,7 +66,7 @@ def test_github_release():
         
         # Download the file
         print("   Downloading...")
-        with requests.get(expected_url, stream=True, timeout=30) as response:
+        with requests.get(expected_url, stream=True, timeout=30, allow_redirects=True) as response:
             response.raise_for_status()
             
             with open(test_file, 'wb') as f:
