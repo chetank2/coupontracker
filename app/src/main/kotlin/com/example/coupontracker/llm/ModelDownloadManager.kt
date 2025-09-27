@@ -44,20 +44,19 @@ class ModelDownloadManager(
         
         // Expected SHA-256 checksum for the complete model ZIP file
         // Real checksum for MiniCPM-Llama3-V2.5 4-bit quantized Android package
-        private const val EXPECTED_ZIP_CHECKSUM = "7a45f222885f84fd0160eeac794ad56be91c6139c436724a56627f16a93d1a76"
+        private const val EXPECTED_ZIP_CHECKSUM = "50228f383839be79d99d286f02ed68eb684ff44e4c460b90a0c8247d661662eb"
 
         // Expected model files with their individual checksums (real MiniCPM structure)
         private val REQUIRED_FILES = mapOf(
-            "minicpm_llm_q4f16_1.so" to "65d9139e97c5a196b48ae08facc468bcc41fef82ef1325ecab2c32e85e1fbbde",
-            "model.bin" to "94d7d225fbf28a20ec30534207ec1a0ea017a20cf25674cde166a6d4f0c7bad1",
-            "vision_config.json" to "a1e7efdfb761c86a3b1a323b3e859eb61718babb036ce66574d75528c33ebb6c",
-            "mlc-chat-config.json" to "c039de2a0c0ec44016207af64a896f7cd3b6940962709c3e49c9321d6c666ff6",
-            "tokenizer.model" to "fd635c2e01878a509339a2d4a269c3600531d0e2c8757b553ab4dee59a215869",
-            "tokenizer.json" to "ba0c892b641f9804451f900a0aa3227555545fdc5f4bd33702436c595b313cf5"
-        )
+        "minicpm_llm_q4f16_1.so" to "65d9139e97c5a196b48ae08facc468bcc41fef82ef1325ecab2c32e85e1fbbde",
+        "model.bin" to "94d7d225fbf28a20ec30534207ec1a0ea017a20cf25674cde166a6d4f0c7bad1",
+        "vision_config.json" to "a1e7efdfb761c86a3b1a323b3e859eb61718babb036ce66574d75528c33ebb6c",
+        "mlc-chat-config.json" to "c039de2a0c0ec44016207af64a896f7cd3b6940962709c3e49c9321d6c666ff6",
+        "tokenizer.model" to "fd635c2e01878a509339a2d4a269c3600531d0e2c8757b553ab4dee59a215869"
+    )
         
         // Minimum expected model size (90% of actual size for validation)
-        private const val MIN_MODEL_SIZE = 4227858L // 4.03MB (90% of 4.48MB)
+        private const val MIN_MODEL_SIZE = 4697620L // 4.48MB
         
         // Download configuration
         private const val DOWNLOAD_TIMEOUT_MS = 30_000L

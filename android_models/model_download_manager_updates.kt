@@ -1,9 +1,9 @@
 
 // GENERATED CODE - Update ModelDownloadManager.kt with these values
-// Generated at: 2025-09-27 15:00:48
+// Generated at: 2025-09-27 20:05:35
 
 // Replace EXPECTED_ZIP_CHECKSUM:
-private const val EXPECTED_ZIP_CHECKSUM = "7a45f222885f84fd0160eeac794ad56be91c6139c436724a56627f16a93d1a76"
+private const val EXPECTED_ZIP_CHECKSUM = "50228f383839be79d99d286f02ed68eb684ff44e4c460b90a0c8247d661662eb"
 
 // Replace REQUIRED_FILES:
 private val REQUIRED_FILES = mapOf(
@@ -21,6 +21,6 @@ private const val MODEL_VERSION = "v2.5-q4-android"
 private const val MIN_MODEL_SIZE = 4697620L // 4.48MB
 
 // Additional metadata:
-// Build timestamp: 1758965447
+// Build timestamp: 1758983734
 // MLC-LLM version: 0.13.0-mock
 // Total artifacts: 5
