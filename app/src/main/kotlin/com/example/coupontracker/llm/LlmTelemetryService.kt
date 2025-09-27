@@ -2,6 +2,7 @@ package com.example.coupontracker.llm
 
 import android.content.Context
 import android.util.Log
+import com.example.coupontracker.util.AnalyticsTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -16,7 +17,10 @@ import java.util.concurrent.atomic.AtomicInteger
  * Telemetry service for monitoring MiniCPM LLM performance and behavior
  * Tracks inference timing, memory usage, fallback counts, and error patterns
  */
-class LlmTelemetryService(private val context: Context) {
+class LlmTelemetryService(
+    private val context: Context,
+    private val analyticsTracker: AnalyticsTracker? = null
+) {
     
     companion object {
         private const val TAG = "LlmTelemetryService"
@@ -26,9 +30,9 @@ class LlmTelemetryService(private val context: Context) {
         @Volatile
         private var INSTANCE: LlmTelemetryService? = null
         
-        fun getInstance(context: Context): LlmTelemetryService {
+        fun getInstance(context: Context, analyticsTracker: AnalyticsTracker? = null): LlmTelemetryService {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: LlmTelemetryService(context.applicationContext).also { INSTANCE = it }
+                INSTANCE ?: LlmTelemetryService(context.applicationContext, analyticsTracker).also { INSTANCE = it }
             }
         }
     }
@@ -86,6 +90,24 @@ class LlmTelemetryService(private val context: Context) {
             peakMemoryUsageMB.set(memoryUsageMB)
         }
         
+        // Send analytics event for performance monitoring
+        analyticsTracker?.let { tracker ->
+            CoroutineScope(Dispatchers.IO).launch {
+                val eventData = mapOf(
+                    "duration_ms" to durationMs,
+                    "success" to success,
+                    "error_type" to (errorType ?: "none"),
+                    "fallback_used" to (fallbackUsed ?: "none"),
+                    "extracted_fields" to extractedFieldCount,
+                    "memory_usage_mb" to memoryUsageMB,
+                    "total_inferences" to totalInferences.get(),
+                    "success_rate" to (successfulInferences.get().toFloat() / totalInferences.get().toFloat())
+                )
+                
+                tracker.trackEvent("llm_inference", eventData)
+            }
+        }
+        
         // Log detailed metrics
         Log.d(TAG, "Inference recorded: ${durationMs}ms, success=$success, " +
                 "fields=$extractedFieldCount, memory=${memoryUsageMB}MB, fallback=$fallbackUsed")
@@ -111,12 +133,35 @@ class LlmTelemetryService(private val context: Context) {
         if (success) {
             modelLoadCount.incrementAndGet()
             Log.d(TAG, "Model load recorded: ${loadTimeMs}ms")
+            
+            // Send analytics event for model loading
+            analyticsTracker?.let { tracker ->
+                CoroutineScope(Dispatchers.IO).launch {
+                    val eventData = mapOf(
+                        "load_time_ms" to loadTimeMs,
+                        "success" to success,
+                        "total_loads" to modelLoadCount.get()
+                    )
+                    tracker.trackEvent("llm_model_load", eventData)
+                }
+            }
         }
     }
     
     fun recordModelUnload() {
         modelUnloadCount.incrementAndGet()
         Log.d(TAG, "Model unload recorded")
+        
+        // Send analytics event for model unloading
+        analyticsTracker?.let { tracker ->
+            CoroutineScope(Dispatchers.IO).launch {
+                val eventData = mapOf(
+                    "total_unloads" to modelUnloadCount.get(),
+                    "session_duration_ms" to (System.currentTimeMillis() - sessionStartTime)
+                )
+                tracker.trackEvent("llm_model_unload", eventData)
+            }
+        }
     }
     
     /**

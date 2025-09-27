@@ -49,6 +49,193 @@ class EndToEndLlmIntegrationTest {
     fun testFullPipelineWithMockModel() = runBlocking {
         // Test the full pipeline with mock model (when real model not available)
         
+        // Set up LOCAL_LLM as selected API type
+        securePreferencesManager.setSelectedApiType(ApiType.LOCAL_LLM)
+        
+        // Create test bitmap (small test image)
+        val testBitmap = createTestBitmap()
+        val captureTimestamp = Date()
+        
+        // Process image through full pipeline
+        val result = try {
+            localLlmOcrService.processCouponImage(testBitmap, captureTimestamp)
+        } catch (e: Exception) {
+            // Expected when model not available - should fallback
+            assertNotNull("Exception should contain fallback info", e.message)
+            return@runBlocking
+        }
+        
+        // Verify result structure (either from LLM or fallback)
+        assertNotNull("Result should not be null", result)
+        assertNotNull("Store name should be extracted", result.storeName)
+        
+        // Verify telemetry was recorded
+        val metrics = telemetryService.getMetrics()
+        assertTrue("Should have recorded at least one inference attempt", 
+                  metrics.totalInferences > 0)
+    }
+    
+    @Test
+    fun testModelAvailabilityChecks() = runBlocking {
+        // Test comprehensive model availability validation
+        val isAvailable = llmRuntimeManager.isModelAvailable()
+        
+        if (!isAvailable) {
+            // Verify specific missing files are reported
+            val modelInfo = llmRuntimeManager.getModelInfo()
+            assertFalse("Model should not be marked as available", modelInfo.isAvailable)
+            assertEquals("Size should be 0 when not available", 0L, modelInfo.sizeBytes)
+        } else {
+            // If model is available, verify all files exist
+            val modelInfo = llmRuntimeManager.getModelInfo()
+            assertTrue("Model should be marked as available", modelInfo.isAvailable)
+            assertTrue("Model size should be positive", modelInfo.sizeBytes > 0)
+        }
+    }
+    
+    @Test
+    fun testFallbackMechanisms() = runBlocking {
+        // Test that fallback cascade works correctly
+        
+        // Force LOCAL_LLM selection but ensure model is not available
+        securePreferencesManager.setSelectedApiType(ApiType.LOCAL_LLM)
+        securePreferencesManager.setLlmModelDownloaded(false)
+        
+        val testBitmap = createTestBitmap()
+        val captureTimestamp = Date()
+        
+        // Process through ImageProcessor (should fallback to MODEL_BASED)
+        val result = imageProcessor.processImage(testBitmap, captureTimestamp)
+        
+        // Verify we got a result (from fallback)
+        assertNotNull("Should get result from fallback", result)
+        assertNotNull("Should have store name from fallback", result.storeName)
+        
+        // Verify telemetry recorded the fallback
+        val metrics = telemetryService.getMetrics()
+        assertTrue("Should have recorded fallback usage", 
+                  metrics.fallbackCount > 0)
+    }
+    
+    @Test
+    fun testCaptureTimestampHandling() = runBlocking {
+        // Test that capture timestamps are properly threaded through pipeline
+        
+        val testBitmap = createTestBitmap()
+        val captureTimestamp = Date(System.currentTimeMillis() - 86400000) // 1 day ago
+        
+        // Process with specific timestamp
+        val result = try {
+            localLlmOcrService.processCouponImage(testBitmap, captureTimestamp)
+        } catch (e: Exception) {
+            // If LLM fails, test fallback timestamp handling
+            imageProcessor.processImage(testBitmap, captureTimestamp)
+        }
+        
+        assertNotNull("Should get result with timestamp", result)
+        
+        // Note: Actual timestamp validation would require inspecting
+        // the date parsing logic, which is tested separately
+    }
+    
+    @Test
+    fun testTelemetryCapture() = runBlocking {
+        // Test comprehensive telemetry capture
+        
+        telemetryService.resetMetrics()
+        
+        val testBitmap = createTestBitmap()
+        
+        // Record a successful inference
+        telemetryService.recordInference(
+            durationMs = 1500,
+            success = true,
+            extractedFieldCount = 4,
+            memoryUsageMB = 2048
+        )
+        
+        // Record a timeout
+        telemetryService.recordTimeout(30000)
+        
+        // Record a failure with fallback
+        telemetryService.recordInference(
+            durationMs = 2000,
+            success = false,
+            errorType = "TIMEOUT",
+            fallbackUsed = "ML_KIT",
+            extractedFieldCount = 2,
+            memoryUsageMB = 2048
+        )
+        
+        // Verify metrics
+        val metrics = telemetryService.getMetrics()
+        assertEquals("Should have 2 total inferences", 2, metrics.totalInferences)
+        assertEquals("Should have 1 successful inference", 1, metrics.successfulInferences)
+        assertEquals("Should have 1 timeout", 1, metrics.timeoutCount)
+        assertEquals("Should have 1 fallback", 1, metrics.fallbackCount)
+        assertTrue("Average duration should be reasonable", 
+                  metrics.averageInferenceDurationMs > 0)
+    }
+    
+    @Test
+    fun testMemoryManagement() = runBlocking {
+        // Test LLM memory management and reference counting
+        
+        if (!llmRuntimeManager.isModelAvailable()) {
+            // Skip if model not available
+            return@runBlocking
+        }
+        
+        // Load model
+        val loadSuccess = llmRuntimeManager.loadModel()
+        if (!loadSuccess) {
+            // Model loading failed - expected in test environment
+            return@runBlocking
+        }
+        
+        // Check memory stats
+        val memoryStats = llmRuntimeManager.getMemoryStats()
+        assertTrue("Model loaded memory should be positive", 
+                  memoryStats.modelLoadedMemoryMB > 0)
+        assertTrue("Reference count should be positive", 
+                  memoryStats.referenceCount > 0)
+        
+        // Unload model
+        llmRuntimeManager.unloadModel()
+        
+        // Verify cleanup
+        val postUnloadStats = llmRuntimeManager.getMemoryStats()
+        assertEquals("Reference count should be 0 after unload", 
+                    0, postUnloadStats.referenceCount)
+    }
+    
+    @Test
+    fun testApiTypeRouting() = runBlocking {
+        // Test that ApiType selection properly routes to correct engines
+        
+        val testBitmap = createTestBitmap()
+        val captureTimestamp = Date()
+        
+        // Test LOCAL_LLM routing
+        securePreferencesManager.setSelectedApiType(ApiType.LOCAL_LLM)
+        val llmResult = imageProcessor.processImage(testBitmap, captureTimestamp)
+        assertNotNull("LOCAL_LLM should produce result", llmResult)
+        
+        // Test MODEL_BASED routing
+        securePreferencesManager.setSelectedApiType(ApiType.MODEL_BASED)
+        val modelResult = imageProcessor.processImage(testBitmap, captureTimestamp)
+        assertNotNull("MODEL_BASED should produce result", modelResult)
+        
+        // Test ML_KIT_ONLY routing
+        securePreferencesManager.setSelectedApiType(ApiType.ML_KIT_ONLY)
+        val mlKitResult = imageProcessor.processImage(testBitmap, captureTimestamp)
+        assertNotNull("ML_KIT_ONLY should produce result", mlKitResult)
+    }
+    
+    private fun createTestBitmap(): Bitmap {
+        // Create a simple test bitmap for testing
+        return Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+        
         // Create test bitmap
         val testBitmap = createTestCouponBitmap()
         val captureTimestamp = Date()

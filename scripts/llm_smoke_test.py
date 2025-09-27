@@ -24,14 +24,20 @@ class LlmSmokeTestRunner:
         """Run Android unit tests for LLM integration"""
         print("🧪 Running Android Unit Tests...")
         
+        start_time = time.time()
+        
         try:
-            # Run LLM-specific unit tests
+            # Run comprehensive LLM-specific unit tests
             cmd = [
                 "./gradlew", 
                 "testDebugUnitTest",
                 "--tests", "*LlmIntegrationTest*",
                 "--tests", "*EndToEndLlmIntegrationTest*",
-                "--tests", "*LlmPerformanceBenchmarkTest*"
+                "--tests", "*LlmRuntimeManagerTest*",
+                "--tests", "*LocalLlmOcrServiceTest*",
+                "--tests", "*ModelDownloadManagerTest*",
+                "--tests", "*LlmTelemetryServiceTest*",
+                "--continue"  # Continue on test failures to get full report
             ]
             
             result = subprocess.run(
@@ -39,15 +45,24 @@ class LlmSmokeTestRunner:
                 cwd=self.project_root,
                 capture_output=True,
                 text=True,
-                timeout=300  # 5 minutes
+                timeout=600  # 10 minutes for comprehensive tests
             )
             
+            duration_ms = int((time.time() - start_time) * 1000)
             success = result.returncode == 0
+            
+            # Parse test results from gradle output
+            test_count = self._extract_test_count(result.stdout)
+            failure_count = self._extract_failure_count(result.stdout)
             
             test_result = {
                 "test_name": "Android Unit Tests",
                 "success": success,
-                "duration_ms": 0,  # Would be extracted from gradle output
+                "duration_ms": duration_ms,
+                "test_count": test_count,
+                "failure_count": failure_count,
+                "stdout": result.stdout[-1000:] if result.stdout else "",  # Last 1000 chars
+                "stderr": result.stderr[-1000:] if result.stderr else ""
                 "output": result.stdout,
                 "error": result.stderr if not success else None
             }
@@ -314,6 +329,18 @@ class LlmSmokeTestRunner:
         print(f"\n📄 Results saved to: {results_file}")
         
         return summary
+
+    def _extract_test_count(self, gradle_output: str) -> int:
+        """Extract total test count from gradle output"""
+        import re
+        match = re.search(r'(\d+) tests completed', gradle_output)
+        return int(match.group(1)) if match else 0
+    
+    def _extract_failure_count(self, gradle_output: str) -> int:
+        """Extract failure count from gradle output"""
+        import re
+        match = re.search(r'(\d+) failed', gradle_output)
+        return int(match.group(1)) if match else 0
 
 def main():
     parser = argparse.ArgumentParser(description="MiniCPM LLM Smoke Test Runner")

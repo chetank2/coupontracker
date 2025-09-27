@@ -41,9 +41,10 @@ object LlmModule {
     @Provides
     @Singleton
     fun provideLlmTelemetryService(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
+        analyticsTracker: com.example.coupontracker.util.AnalyticsTracker
     ): LlmTelemetryService {
-        return LlmTelemetryService.getInstance(context)
+        return LlmTelemetryService.getInstance(context, analyticsTracker)
     }
 
     @Provides
