@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import androidx.test.core.app.ApplicationProvider
+import com.example.coupontracker.R
 import com.example.coupontracker.util.SecurePreferencesManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
@@ -29,6 +30,7 @@ import java.io.File
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.UnknownHostException
 import java.security.MessageDigest
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -141,6 +143,34 @@ class ModelDownloadManagerTest {
             kotlin.test.assertTrue(message.contains("Service Unavailable"), "Expected error message to include response message, but was: $message")
         } finally {
             tempFile.delete()
+            unmockkConstructor(URL::class)
+        }
+    }
+
+    @Test
+    fun downloadModel_whenConnectivityFails_returnsFriendlyError() = runTest {
+        simulateWifiConnection()
+        securePreferencesManager.setLlmDownloadWifiOnly(false)
+
+        mockkConstructor(URL::class)
+        val exception = UnknownHostException("Unable to resolve host example.com")
+        every { anyConstructed<URL>().openConnection() } throws exception
+
+        securePreferencesManager.setLlmModelBaseUrlOverride("https://example.com")
+
+        try {
+            val result = modelDownloadManager.downloadModel { }
+
+            kotlin.test.assertTrue(result is DownloadResult.Error, "Expected download to fail for connectivity issues")
+            val expectedMessage = context.getString(R.string.llm_download_error_network)
+            val actualMessage = (result as DownloadResult.Error).message
+            kotlin.test.assertEquals(
+                expectedMessage,
+                actualMessage,
+                "Expected connectivity exceptions to map to a user-friendly message"
+            )
+        } finally {
+            securePreferencesManager.setLlmModelBaseUrlOverride(null)
             unmockkConstructor(URL::class)
         }
     }
