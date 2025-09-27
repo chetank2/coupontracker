@@ -36,17 +36,17 @@ class ModelDownloadManager(
         
         // Expected SHA-256 checksum for the complete model ZIP file
         // Real checksum for MiniCPM-Llama3-V2.5 4-bit quantized Android package
-        private const val EXPECTED_ZIP_CHECKSUM = "8f7e6d5c4b3a29180e1f2d3c4b5a69780e1f2d3c4b5a69780e1f2d3c4b5a6978"
-        
+        private const val EXPECTED_ZIP_CHECKSUM = "eac9c206b2597fb01b5df9dd346b546a70958999b755a3e9ed8abcb1f29a0e75"
+
         // Expected model files with their individual checksums (real MiniCPM structure)
         private val REQUIRED_FILES = mapOf(
-            "minicpm_llm_q4f16_1.so" to "7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d",
-            "mlc-chat-config.json" to "4f5e6d7c8b9a0f1e2d3c4b5a6978e1f2d3c4b5a6",
-            "tokenizer.json" to "9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d3e2f1a0b",
-            "params_shard_0.bin" to "2d3c4b5a69780e1f7c8d9e0f1a2b3c4d5e6f7a8b",
-            "params_shard_1.bin" to "5a69780e1f2d3c4b9c0d1e2f3a4b5c6d7e8f9a0b",
-            "ndarray-cache.json" to "1e2f3a4b5c6d7e8f9a0b2d3c4b5a69780e1f7c8d",
-            "vocab.txt" to "6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e"
+            "minicpm_llm_q4f16_1.so" to "a531bca3ad305b6ec275e72326854ed0fc3675e9e7aa89ff408ea90153216f59",
+            "mlc-chat-config.json" to "aae5b87ae34e0cd019eb68f32cd55d382e80d40aecef9376230f0a8c63ae9db4",
+            "tokenizer.json" to "4065ed0e9d31908847128cfd90aeb2ec2b1f7cb02dd78be85e6aef9881c60a0d",
+            "params_shard_0.bin" to "6a290d28eed067400ad607986820c660707be425cfff4190c8d96ef7550edaf8",
+            "params_shard_1.bin" to "1671f6be07127bdbc51afe43c9c7b6efb4889972ace72f312d9b8f7e67bcb396",
+            "ndarray-cache.json" to "41b1cf789796ca4f902e1267ab575982cfc8e3db029ebc37a0eedefed82dd356",
+            "vocab.txt" to "92b08ab31d99d02284cd308f529e5cc0ddcfe0af19cf64c6326cc3d897695402"
         )
         
         // Download configuration

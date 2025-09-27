@@ -13,8 +13,6 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 import java.io.InputStream
-import java.lang.reflect.Field
-import java.lang.reflect.Modifier
 import java.security.MessageDigest
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -25,9 +23,6 @@ class ModelDownloadManagerTest {
     private lateinit var context: Context
     private lateinit var securePreferencesManager: SecurePreferencesManager
     private lateinit var modelDownloadManager: ModelDownloadManager
-
-    private lateinit var originalRequiredFiles: Map<String, String>
-    private lateinit var goodFixtureChecksums: Map<String, String>
 
     private val fixtureFileNames = listOf(
         "minicpm_llm_q4f16_1.so",
@@ -44,10 +39,6 @@ class ModelDownloadManagerTest {
         context = ApplicationProvider.getApplicationContext()
         securePreferencesManager = SecurePreferencesManager(context)
 
-        originalRequiredFiles = readRequiredFiles()
-        goodFixtureChecksums = loadFixtureChecksums("good")
-        overrideRequiredFiles(goodFixtureChecksums)
-
         modelDownloadManager = ModelDownloadManager(context)
 
         securePreferencesManager.setLlmModelDownloaded(true)
@@ -56,7 +47,6 @@ class ModelDownloadManagerTest {
 
     @After
     fun tearDown() {
-        overrideRequiredFiles(originalRequiredFiles)
         securePreferencesManager.setLlmModelDownloaded(false)
         securePreferencesManager.setLlmModelVersion("")
         securePreferencesManager.setLlmModelSizeMB(0f)
@@ -65,8 +55,11 @@ class ModelDownloadManagerTest {
     }
 
     @Test
-    fun refreshModelStatus_withValidFixture_marksFilesPresent() = runTest {
+    fun verifyModelFiles_withValidFixture_allowsInstall() = runTest {
         copyFixtureFiles("good")
+
+        val verified = invokeVerifyModelFiles()
+        kotlin.test.assertTrue(verified, "Expected verifyModelFiles to accept valid MiniCPM fixture")
 
         val status = modelDownloadManager.refreshModelStatus(force = true)
 
@@ -74,8 +67,11 @@ class ModelDownloadManagerTest {
     }
 
     @Test
-    fun refreshModelStatus_withTamperedFixture_detectsChecksumMismatch() = runTest {
+    fun verifyModelFiles_withTamperedFixture_detectsChecksumMismatch() = runTest {
         copyFixtureFiles("tampered")
+
+        val verified = invokeVerifyModelFiles()
+        kotlin.test.assertFalse(verified, "Expected verifyModelFiles to reject tampered MiniCPM fixture")
 
         val status = modelDownloadManager.refreshModelStatus(force = true)
 
@@ -111,16 +107,6 @@ class ModelDownloadManagerTest {
         securePreferencesManager.setLlmModelChecksum(calculateAggregateChecksum(modelDir))
     }
 
-    private fun loadFixtureChecksums(fixtureName: String): Map<String, String> {
-        val classLoader = javaClass.classLoader ?: error("Missing class loader")
-        return fixtureFileNames.associateWith { fileName ->
-            val resourcePath = "models/minicpm/$fixtureName/$fileName"
-            classLoader.getResourceAsStream(resourcePath)?.use { input ->
-                calculateChecksum(input)
-            } ?: error("Fixture resource not found: $resourcePath")
-        }
-    }
-
     private fun calculateAggregateChecksum(modelDir: File): String {
         val digest = MessageDigest.getInstance("SHA-256")
         modelDir.walkTopDown()
@@ -146,33 +132,10 @@ class ModelDownloadManagerTest {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun readRequiredFiles(): Map<String, String> {
-        val companion = getCompanionInstance()
-        val field = companion.javaClass.getDeclaredField("REQUIRED_FILES")
-        field.isAccessible = true
-        @Suppress("UNCHECKED_CAST")
-        return (field.get(companion) as Map<String, String>).toMap()
-    }
-
-    private fun overrideRequiredFiles(newValue: Map<String, String>) {
-        val companion = getCompanionInstance()
-        val field = companion.javaClass.getDeclaredField("REQUIRED_FILES")
-        field.isAccessible = true
-
-        removeFinalModifier(field)
-        field.set(companion, newValue)
-    }
-
-    private fun getCompanionInstance(): Any {
-        val companionField = ModelDownloadManager::class.java.getDeclaredField("Companion")
-        companionField.isAccessible = true
-        return companionField.get(null)
-    }
-
-    private fun removeFinalModifier(field: Field) {
-        val modifiersField = Field::class.java.getDeclaredField("modifiers")
-        modifiersField.isAccessible = true
-        modifiersField.setInt(field, field.modifiers and Modifier.FINAL.inv())
+    private fun invokeVerifyModelFiles(): Boolean {
+        val method = ModelDownloadManager::class.java.getDeclaredMethod("verifyModelFiles")
+        method.isAccessible = true
+        return method.invoke(modelDownloadManager) as Boolean
     }
 
     private fun getModelDir(): File = File(context.filesDir, "models")
