@@ -48,7 +48,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     }
     
     // Native interface and model state
-    private val nativeInterface = MlcLlmNative()
+    private val nativeInterface = SafeMlcLlmNative()
     private val mainHandler = Handler(Looper.getMainLooper())
     private var modelHandle: Long = 0
     private val isModelLoaded = AtomicBoolean(false)

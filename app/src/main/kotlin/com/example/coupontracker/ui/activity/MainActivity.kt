@@ -36,6 +36,34 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.d(TAG, "MainActivity onCreate started")
+        
+        // Set up global exception handler to prevent crashes
+        Thread.setDefaultUncaughtExceptionHandler { thread, exception ->
+            Log.e(TAG, "Uncaught exception in thread ${thread.name}", exception)
+            
+            // Try to handle gracefully
+            try {
+                runOnUiThread {
+                    // Show error dialog instead of crashing
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("Error")
+                        .setMessage("An error occurred. The app will restart.")
+                        .setPositiveButton("OK") { _, _ ->
+                            // Restart the app
+                            val intent = packageManager.getLaunchIntentForPackage(packageName)
+                            intent?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                            startActivity(intent)
+                            finish()
+                        }
+                        .setCancelable(false)
+                        .show()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error showing crash dialog", e)
+                // If we can't show dialog, just restart
+                System.exit(1)
+            }
+        }
 
         setContent {
             // Collect the current theme mode

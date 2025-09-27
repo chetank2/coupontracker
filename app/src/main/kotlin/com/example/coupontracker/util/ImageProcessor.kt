@@ -76,6 +76,20 @@ class ImageProcessor(
     }
 
     /**
+     * Safely recycle bitmap to prevent memory leaks
+     */
+    private fun recycleBitmapSafely(bitmap: Bitmap?) {
+        try {
+            if (bitmap != null && !bitmap.isRecycled) {
+                bitmap.recycle()
+                Log.d(TAG, "Bitmap recycled successfully")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error recycling bitmap", e)
+        }
+    }
+
+    /**
      * Process an image URI and extract coupon information based on the selected API priority
      * @param imageUri The URI of the image to process
      * @return CouponInfo object containing extracted information
