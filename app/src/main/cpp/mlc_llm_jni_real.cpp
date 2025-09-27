@@ -6,16 +6,20 @@
 #include <mutex>
 #include <vector>
 #include <fstream>
+#include <sstream>
 #include <cstdint>
+#include <algorithm>
 
 // MLC-LLM headers (these would be real includes in production)
 // For now, we'll create interfaces that match MLC-LLM's expected API
 #ifdef MLC_LLM_AVAILABLE
-// TODO: Uncomment when actual MLC-LLM libraries are available
-// #include <mlc/runtime/c_runtime_api.h>
-// #include <mlc/runtime/module.h>
-// #include <mlc/runtime/packed_func.h>
-// For now, these headers don't exist, so we'll use placeholder implementations
+#include <dlpack/dlpack.h>
+#include <mlc/llm/llm_chat.h>
+#include <tvm/runtime/container/string.h>
+#include <tvm/runtime/module.h>
+#include <tvm/runtime/ndarray.h>
+#include <tvm/runtime/packed_func.h>
+#include <tvm/runtime/registry.h>
 #endif
 
 #define LOG_TAG "MLC_LLM_JNI"
@@ -30,10 +34,9 @@ struct MLCModelInstance {
     
 #ifdef MLC_LLM_AVAILABLE
     // Real MLC-LLM runtime components
-    mlc::runtime::Module model_module;
-    mlc::runtime::PackedFunc chat_func;
-    mlc::runtime::PackedFunc vision_func;
-    void* device_handle;
+    tvm::runtime::Module chat_module;
+    tvm::runtime::PackedFunc chat_func;
+    tvm::runtime::PackedFunc vision_func;
 #endif
     
     // Model configuration
@@ -49,72 +52,74 @@ struct MLCModelInstance {
     bool supports_vision = true;
     
     MLCModelInstance(const std::string& model_path, const std::string& config_path)
-        : model_path(model_path), config_path(config_path) {
-#ifdef MLC_LLM_AVAILABLE
-        device_handle = nullptr;
-#endif
-    }
-    
+        : model_path(model_path), config_path(config_path) {}
+
     ~MLCModelInstance() {
 #ifdef MLC_LLM_AVAILABLE
-        if (device_handle) {
-            // Cleanup MLC-LLM resources
-            cleanup();
-        }
+        cleanup();
 #endif
     }
-    
+
     bool initialize() {
 #ifdef MLC_LLM_AVAILABLE
         try {
             LOGI("Initializing MLC-LLM model from: %s", model_path.c_str());
-            
-            // Load model configuration
-            if (!load_config()) {
-                LOGE("Failed to load model configuration");
+
+            // Load model configuration into memory
+            std::string config_json = read_file(config_path);
+            if (config_json.empty()) {
+                LOGE("Failed to read config file: %s", config_path.c_str());
                 return false;
             }
-            
-            // Initialize MLC runtime
-            if (!init_runtime()) {
-                LOGE("Failed to initialize MLC runtime");
+
+            auto create_chat = tvm::runtime::Registry::Get("mlc.llm_chat_create");
+            if (!create_chat) {
+                LOGE("mlc.llm_chat_create not found in runtime registry");
                 return false;
             }
-            
-            // Load model weights
-            if (!load_model_weights()) {
-                LOGE("Failed to load model weights");
+
+            tvm::runtime::Module module = (*create_chat)(
+                tvm::runtime::String(model_path),
+                tvm::runtime::String(config_json));
+            if (!module.defined()) {
+                LOGE("Failed to create chat module");
                 return false;
             }
-            
-            // Setup vision processing pipeline
-            if (!setup_vision_pipeline()) {
-                LOGE("Failed to setup vision pipeline");
+
+            chat_module = module;
+            chat_func = chat_module.GetFunction("chat");
+            vision_func = chat_module.GetFunction("vision_chat");
+
+            if (!chat_func.defined()) {
+                LOGE("Chat function not defined in module");
+                return false;
+            }
+
+            if (!vision_func.defined()) {
+                LOGE("Vision function not defined in module, disabling vision support");
                 supports_vision = false;
-                // Continue without vision support
             }
-            
+
             is_initialized = true;
             LOGI("MLC-LLM model initialized successfully");
             return true;
-            
+
         } catch (const std::exception& e) {
             LOGE("Exception during model initialization: %s", e.what());
             return false;
         }
 #else
         // Fallback implementation without MLC-LLM
-        LOGD("MLC-LLM not available, using mock implementation");
-        is_initialized = true;
-        return true;
+        LOGE("MLC-LLM runtime not bundled with this build");
+        return false;
 #endif
     }
-    
-    std::string run_vision_inference(const std::vector<uint8_t>& image_data, 
-                                    int width, int height, 
+
+    std::string run_vision_inference(const std::vector<uint8_t>& image_data,
+                                    int width, int height,
                                     const std::string& prompt) {
         (void)image_data; // Suppress unused parameter warning in non-MLC build
-        (void)width;      // Suppress unused parameter warning in non-MLC build  
+        (void)width;      // Suppress unused parameter warning in non-MLC build
         (void)height;     // Suppress unused parameter warning in non-MLC build
         (void)prompt;     // Suppress unused parameter warning in non-MLC build
 #ifdef MLC_LLM_AVAILABLE
@@ -122,121 +127,96 @@ struct MLCModelInstance {
             LOGE("Model not initialized");
             return R"({"error": "Model not initialized"})";
         }
-        
+
         if (!supports_vision) {
             LOGE("Vision processing not supported");
             return R"({"error": "Vision processing not supported"})";
         }
-        
+
         try {
-            // Preprocess image for MiniCPM
-            auto processed_image = preprocess_image(image_data, width, height);
-            
-            // Run vision-language inference
-            auto result = vision_func(processed_image, prompt, config.temperature, config.max_tokens);
-            
+            // Preprocess image into NDArray tensor expected by runtime
+            tvm::runtime::NDArray processed_image = preprocess_image(image_data, width, height);
+
+            tvm::runtime::String prompt_arg(prompt);
+
+            tvm::runtime::PackedFunc vision = vision_func;
+            tvm::runtime::String result = vision(
+                processed_image,
+                prompt_arg,
+                static_cast<double>(config.temperature),
+                static_cast<double>(config.top_p),
+                static_cast<int64_t>(config.max_tokens));
+
             // Parse and validate response
-            std::string response = result.AsString();
+            std::string response = std::string(result);
             if (is_valid_json(response)) {
                 return response;
             } else {
                 LOGE("Invalid JSON response from model");
                 return R"({"error": "Invalid model response"})";
             }
-            
+
         } catch (const std::exception& e) {
             LOGE("Exception during vision inference: %s", e.what());
             return R"({"error": "Inference failed"})";
         }
 #else
-        // Mock implementation for development/testing
-        LOGD("Mock vision inference: %dx%d image with prompt: %.50s...", width, height, prompt.c_str());
-        
-        // Return realistic mock JSON response
-        return R"({
-            "storeName": "Sample Store",
-            "description": "Mock inference result - 20% off your purchase",
-            "cashbackAmount": "20%",
-            "redeemCode": "MOCK20",
-            "expiryDate": "2024-12-31",
-            "minOrderAmount": "₹100"
-        })";
+        LOGE("Vision inference requested but MLC-LLM runtime is unavailable");
+        return R"({"error": "MLC-LLM runtime unavailable"})";
 #endif
     }
-    
+
 private:
 #ifdef MLC_LLM_AVAILABLE
-    bool load_config() {
-        std::ifstream config_file(config_path);
-        if (!config_file.is_open()) {
-            LOGE("Cannot open config file: %s", config_path.c_str());
-            return false;
-        }
-        
-        // Parse JSON config (simplified)
-        // In real implementation, would use proper JSON parser
-        return true;
-    }
-    
-    bool init_runtime() {
-        // Initialize MLC runtime with Android-specific settings
-        try {
-            // Set device context (GPU if available, CPU fallback)
-            device_handle = mlc::runtime::DeviceAPI::Get()->AllocDevice("vulkan", 0);
-            if (!device_handle) {
-                device_handle = mlc::runtime::DeviceAPI::Get()->AllocDevice("cpu", 0);
-            }
-            
-            return device_handle != nullptr;
-        } catch (...) {
-            return false;
-        }
-    }
-    
-    bool load_model_weights() {
-        try {
-            // Load quantized model weights
-            model_module = mlc::runtime::Module::LoadFromFile(model_path + "/minicpm_llm_q4f16_1.so");
-            chat_func = model_module.GetFunction("chat");
-            vision_func = model_module.GetFunction("vision_chat");
-            
-            return chat_func.defined() && vision_func.defined();
-        } catch (...) {
-            return false;
-        }
-    }
-    
-    bool setup_vision_pipeline() {
-        try {
-            // Setup vision preprocessing pipeline
-            // This would configure image preprocessing, tokenization, etc.
-            return true;
-        } catch (...) {
-            return false;
-        }
-    }
-    
-    std::vector<float> preprocess_image(const std::vector<uint8_t>& image_data, 
-                                       int width, int height) {
-        // Image preprocessing for MiniCPM vision model
-        // Convert RGB bytes to normalized float tensor
-        std::vector<float> processed(width * height * 3);
-        
-        for (size_t i = 0; i < image_data.size(); i++) {
-            processed[i] = static_cast<float>(image_data[i]) / 255.0f;
-        }
-        
-        return processed;
-    }
-    
     void cleanup() {
-        if (device_handle) {
-            mlc::runtime::DeviceAPI::Get()->FreeDevice(device_handle);
-            device_handle = nullptr;
-        }
+        chat_module = tvm::runtime::Module();
+        chat_func = tvm::runtime::PackedFunc();
+        vision_func = tvm::runtime::PackedFunc();
     }
 #endif
-    
+
+#ifdef MLC_LLM_AVAILABLE
+    std::string read_file(const std::string& path) {
+        std::ifstream file(path, std::ios::in | std::ios::binary);
+        if (!file.is_open()) {
+            return "";
+        }
+
+        std::ostringstream ss;
+        ss << file.rdbuf();
+        return ss.str();
+    }
+
+    tvm::runtime::NDArray preprocess_image(const std::vector<uint8_t>& image_data,
+                                           int width, int height) {
+        // Convert RGB bytes to normalized float tensor stored on CPU
+        std::vector<int64_t> shape = {1, height, width, 3};
+        DLDataType dtype;
+        dtype.code = kDLFloat;
+        dtype.bits = 32;
+        dtype.lanes = 1;
+
+        DLDevice device;
+        device.device_type = kDLCPU;
+        device.device_id = 0;
+
+        tvm::runtime::NDArray array = tvm::runtime::NDArray::Empty(shape, dtype, device);
+        float* data_ptr = static_cast<float*>(array->data);
+        size_t num_elems = static_cast<size_t>(width) * static_cast<size_t>(height) * 3;
+        size_t available = std::min(num_elems, image_data.size());
+
+        for (size_t i = 0; i < available; ++i) {
+            data_ptr[i] = static_cast<float>(image_data[i]) / 255.0f;
+        }
+
+        for (size_t i = available; i < num_elems; ++i) {
+            data_ptr[i] = 0.0f;
+        }
+
+        return array;
+    }
+#endif
+
     bool is_valid_json(const std::string& str) {
         // Simple JSON validation
         return !str.empty() && str[0] == '{' && str.back() == '}';
