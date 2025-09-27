@@ -2,6 +2,7 @@ package com.example.coupontracker.di
 
 import android.content.Context
 import com.example.coupontracker.llm.LlmRuntimeManager
+import com.example.coupontracker.llm.LlmTelemetryService
 import com.example.coupontracker.llm.ModelDownloadManager
 import com.example.coupontracker.util.LocalLlmOcrService
 import com.example.coupontracker.util.ImageProcessor
@@ -35,6 +36,14 @@ object LlmModule {
         @ApplicationContext context: Context
     ): ModelDownloadManager {
         return ModelDownloadManager(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideLlmTelemetryService(
+        @ApplicationContext context: Context
+    ): LlmTelemetryService {
+        return LlmTelemetryService.getInstance(context)
     }
 
     @Provides

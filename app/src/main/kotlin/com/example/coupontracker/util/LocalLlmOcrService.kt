@@ -195,15 +195,17 @@ class LocalLlmOcrService(
         3. Use null for missing information (never use "Unknown")
         4. Be conservative - if unsure, use null
         5. Preserve original currency symbols and formatting
+        6. For dates, use format: "YYYY-MM-DD" or "DD/MM/YYYY" as shown
+        7. For amounts, include currency symbol: "₹100", "$50", "20%"
 
         REQUIRED JSON FORMAT:
         {
             "storeName": "Store/brand name (required)",
             "description": "Offer description (required)", 
-            "cashbackAmount": "Amount/percentage off or null",
+            "cashbackAmount": "Amount/percentage off with currency or null",
             "redeemCode": "Promo/coupon code or null",
-            "expiryDate": "Expiry date or null",
-            "minOrderAmount": "Minimum order value or null"
+            "expiryDate": "Expiry date in original format or null",
+            "minOrderAmount": "Minimum order value with currency or null"
         }
 
         EXTRACTION GUIDE:

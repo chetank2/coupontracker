@@ -67,9 +67,32 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     
     /**
      * Check if the model is available on device
+     * Verifies all required files exist and are not empty
      */
     fun isModelAvailable(): Boolean {
-        return modelPath.exists() && configPath.exists() && tokenizerPath.exists()
+        val requiredFiles = listOf(
+            modelPath,           // minicpm_llm_q4f16_1.so
+            configPath,          // mlc-chat-config.json
+            tokenizerPath,       // tokenizer.json
+            File(modelDir, "model.bin"),        // model parameters
+            File(modelDir, "vision_config.json"), // vision configuration
+            File(modelDir, "tokenizer.model")   // tokenizer model
+        )
+        
+        val missingFiles = mutableListOf<String>()
+        for (file in requiredFiles) {
+            if (!file.exists() || file.length() == 0L) {
+                missingFiles.add(file.name)
+            }
+        }
+        
+        if (missingFiles.isNotEmpty()) {
+            Log.d(TAG, "Missing or empty model files: ${missingFiles.joinToString(", ")}")
+            return false
+        }
+        
+        Log.d(TAG, "✅ All required model files are present and valid")
+        return true
     }
     
     /**
