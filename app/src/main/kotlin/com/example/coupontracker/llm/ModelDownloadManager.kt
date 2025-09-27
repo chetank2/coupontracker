@@ -38,7 +38,7 @@ class ModelDownloadManager(
         
         // Model download configuration
         private const val DEFAULT_MODEL_BASE_URL =
-            "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5/resolve/main/android"
+            "https://github.com/chetank2/coupontracker/releases/download/v1.0-minicpm"
         private const val MODEL_ZIP_NAME = "minicpm_llama3_v25_android.zip"
         private const val MODEL_VERSION = "v2.5-q4-android"
         

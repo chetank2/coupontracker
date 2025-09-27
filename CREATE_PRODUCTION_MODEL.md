@@ -33,13 +33,14 @@ mlc_llm package \
 
 ### **Step 2: Host on Production CDN**
 
-**Option A: GitHub Releases (Free)**
+**Option A: GitHub Releases (Free) - IMPLEMENTED**
 1. Upload `minicpm_llama3_v25_android.zip` to GitHub Releases
 2. Update `ModelDownloadManager.kt`:
    ```kotlin
    private const val DEFAULT_MODEL_BASE_URL = 
-       "https://github.com/chetank2/coupontracker/releases/download/v1.0"
+       "https://github.com/chetank2/coupontracker/releases/download/v1.0-minicpm"
    ```
+   ✅ **Status**: ModelDownloadManager.kt updated with GitHub URL
 
 **Option B: AWS S3/CloudFront (Production)**
 1. Upload to S3 bucket
