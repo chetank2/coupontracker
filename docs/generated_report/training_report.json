@@ -1,0 +1,19 @@
+{
+  "timestamp": "2025-09-27T13:46:27.050732",
+  "metrics": {
+    "test_accuracy": 0.93,
+    "train_samples": 800,
+    "val_samples": 100,
+    "test_samples": 100
+  },
+  "directories": {
+    "scraped": "docs/generated_report/scraped_coupons",
+    "processed": "docs/generated_report/processed_coupons",
+    "annotated": "docs/generated_report/annotated_coupons",
+    "models": "docs/model_history"
+  },
+  "model": {
+    "run_id": "2024-09-10T18:45:00",
+    "accuracy": 0.94
+  }
+}
