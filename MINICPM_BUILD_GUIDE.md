@@ -218,7 +218,7 @@ Checksums verified and synced with ModelDownloadManager.kt"
 If hosting externally:
 
 1. **Upload** `android_models/minicpm_llama3_v25_android.zip` to your storage
-2. **Update** `MODEL_BASE_URL` in `ModelDownloadManager.kt`
+2. **Configure** `SecurePreferencesManager.setLlmModelBaseUrlOverride(...)` for your distribution endpoint
 3. **Test** download from the new URL
 4. **Commit** the URL change
 

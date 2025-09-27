@@ -30,7 +30,8 @@ class ModelDownloadManager(
         private const val TAG = "ModelDownloadManager"
         
         // Model download configuration
-        private const val MODEL_BASE_URL = "https://cdn.coupontracker.ai/android/minicpm"
+        private const val DEFAULT_MODEL_BASE_URL =
+            "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5/resolve/main/android"
         private const val MODEL_ZIP_NAME = "minicpm_llama3_v25_android.zip"
         private const val MODEL_VERSION = "v2.5-q4-android"
         
@@ -89,7 +90,7 @@ class ModelDownloadManager(
      */
     private fun shouldProceedWithDownload(): Boolean {
         val wifiOnly = securePrefs.getLlmDownloadWifiOnly()
-        
+
         return if (wifiOnly) {
             isWifiAvailable()
         } else {
@@ -97,6 +98,17 @@ class ModelDownloadManager(
             val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             connectivityManager.activeNetwork != null
         }
+    }
+
+    /**
+     * Resolve the model download base URL, allowing an override for testing or staged rollouts.
+     */
+    private fun resolveModelBaseUrl(): String {
+        val override = securePrefs.getLlmModelBaseUrlOverride()
+            ?.trim()
+            ?.trimEnd('/')
+
+        return (override?.takeIf { it.isNotEmpty() } ?: DEFAULT_MODEL_BASE_URL).trimEnd('/')
     }
     
     /**
@@ -121,7 +133,7 @@ class ModelDownloadManager(
             
             // Download model zip
             val downloadResult = downloadFile(
-                url = "$MODEL_BASE_URL/$MODEL_ZIP_NAME",
+                url = "${resolveModelBaseUrl()}/$MODEL_ZIP_NAME",
                 outputFile = tempFile,
                 progressCallback = progressCallback
             )
@@ -529,7 +541,7 @@ class ModelDownloadManager(
             filesPresent = filesPresent,
             version = version,
             sizeMB = sizeMB,
-            downloadUrl = "$MODEL_BASE_URL/$MODEL_ZIP_NAME",
+            downloadUrl = "${resolveModelBaseUrl()}/$MODEL_ZIP_NAME",
             requiredFiles = REQUIRED_FILES.keys.toList(),
             isVerificationUpToDate = verificationUpToDate
         )

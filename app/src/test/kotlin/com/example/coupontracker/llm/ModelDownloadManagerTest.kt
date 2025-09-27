@@ -1,6 +1,9 @@
 package com.example.coupontracker.llm
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import androidx.test.core.app.ApplicationProvider
 import com.example.coupontracker.util.SecurePreferencesManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -12,12 +15,16 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.mockkConstructor
 import io.mockk.unmockkConstructor
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okio.Buffer
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.Shadows.shadowOf
 import java.io.File
 import java.io.InputStream
 import java.net.HttpURLConnection
@@ -50,6 +57,8 @@ class ModelDownloadManagerTest {
 
         modelDownloadManager = ModelDownloadManager(context)
 
+        getModelDir().deleteRecursively()
+
         securePreferencesManager.setLlmModelDownloaded(true)
         securePreferencesManager.setLlmModelVersion("test-fixture")
     }
@@ -60,6 +69,7 @@ class ModelDownloadManagerTest {
         securePreferencesManager.setLlmModelVersion("")
         securePreferencesManager.setLlmModelSizeMB(0f)
         securePreferencesManager.setLlmModelChecksum("")
+        securePreferencesManager.setLlmModelBaseUrlOverride(null)
         getModelDir().deleteRecursively()
         runCatching { unmockkConstructor(URL::class) }
     }
@@ -133,6 +143,79 @@ class ModelDownloadManagerTest {
             tempFile.delete()
             unmockkConstructor(URL::class)
         }
+    }
+
+    @Test
+    fun downloadModel_withValidDistribution_succeedsAndExtracts() = runTest {
+        simulateWifiConnection()
+        securePreferencesManager.setLlmDownloadWifiOnly(true)
+
+        val server = MockWebServer()
+        val zipFile = locateDistributionZip()
+        val buffer = Buffer().write(zipFile.readBytes())
+
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setHeader("Content-Length", zipFile.length())
+                .setBody(buffer)
+        )
+
+        server.start()
+
+        try {
+            val overrideBaseUrl = server.url("/android/minicpm").toString().trimEnd('/')
+            securePreferencesManager.setLlmModelBaseUrlOverride(overrideBaseUrl)
+
+            val result = modelDownloadManager.downloadModel { }
+
+            kotlin.test.assertTrue(result is DownloadResult.Success, "Expected download to succeed: $result")
+
+            val modelDir = getModelDir()
+            val expectedFiles = listOf(
+                "model.bin",
+                "vision_config.json",
+                "minicpm_llm_q4f16_1.so",
+                "mlc-chat-config.json",
+                "tokenizer.model",
+                "tokenizer.json"
+            )
+
+            expectedFiles.forEach { fileName ->
+                kotlin.test.assertTrue(
+                    File(modelDir, fileName).exists(),
+                    "Expected $fileName to be extracted"
+                )
+            }
+        } finally {
+            securePreferencesManager.setLlmModelBaseUrlOverride(null)
+            server.shutdown()
+        }
+    }
+
+    private fun simulateWifiConnection() {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val shadowConnectivity = shadowOf(connectivityManager)
+        val network = Network(0)
+        shadowConnectivity.setActiveNetwork(network)
+
+        val capabilities = NetworkCapabilities.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+
+        shadowConnectivity.setNetworkCapabilities(network, capabilities)
+    }
+
+    private fun locateDistributionZip(): File {
+        val candidates = listOf(
+            File(System.getProperty("user.dir"), "android_models/minicpm_llama3_v25_android.zip"),
+            File("android_models/minicpm_llama3_v25_android.zip"),
+            File("../android_models/minicpm_llama3_v25_android.zip")
+        )
+
+        return candidates.firstOrNull { it.exists() }
+            ?: error("Unable to locate MiniCPM distribution zip")
     }
 
     private fun copyFixtureFiles(fixtureName: String) {

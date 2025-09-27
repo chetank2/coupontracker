@@ -51,6 +51,7 @@ class SecurePreferencesManager @Inject constructor(
         const val KEY_LLM_MODEL_CHECKSUM = "llm_model_checksum"
         const val KEY_LLM_AUTO_DOWNLOAD_ENABLED = "llm_auto_download_enabled"
         const val KEY_LLM_DOWNLOAD_WIFI_ONLY = "llm_download_wifi_only"
+        const val KEY_LLM_MODEL_BASE_URL_OVERRIDE = "llm_model_base_url_override"
 
         // Key rotation period in days
         private const val KEY_ROTATION_PERIOD_DAYS = 90
@@ -434,6 +435,26 @@ class SecurePreferencesManager @Inject constructor(
      */
     fun setLlmDownloadWifiOnly(wifiOnly: Boolean) {
         saveBoolean(KEY_LLM_DOWNLOAD_WIFI_ONLY, wifiOnly)
+    }
+
+    /**
+     * Get any override that should be used instead of the default model base URL.
+     */
+    fun getLlmModelBaseUrlOverride(): String? {
+        return securePrefs.getString(KEY_LLM_MODEL_BASE_URL_OVERRIDE, null)?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * Persist an override for the model base URL or clear it when null/blank.
+     */
+    fun setLlmModelBaseUrlOverride(baseUrl: String?) {
+        securePrefs.edit().apply {
+            if (baseUrl.isNullOrBlank()) {
+                remove(KEY_LLM_MODEL_BASE_URL_OVERRIDE)
+            } else {
+                putString(KEY_LLM_MODEL_BASE_URL_OVERRIDE, baseUrl)
+            }
+        }.apply()
     }
     
     /**
