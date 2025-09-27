@@ -92,7 +92,7 @@ class MiniCPMAndroidConverter:
             
             # Step 5: Package for Android with REAL checksums
             logger.info("📦 Packaging for Android with cryptographic verification...")
-            android_package = self._package_for_android(quantized_model_path)
+            android_package = self._package_for_android(mlc_model_path)
             
             # Step 6: Generate deployment manifest with REAL hashes
             logger.info("📋 Generating deployment manifest with real checksums...")

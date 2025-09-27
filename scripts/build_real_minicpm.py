@@ -69,17 +69,13 @@ def build_real_minicpm():
         converter = MiniCPMAndroidConverter(output_dir)
         
         # Configure for mobile deployment
-        converter.mobile_config.update({
-            'quantization': {'method': 'q4f16_1'},
-            'context_length': 2048,
-            'max_image_size': (768, 768),
-            'vocab_size_reduction': True,
-            'target_runtime': 'mlc-llm'
-        })
+        converter.mobile_config['quantization'] = 'q4f16_1'
+        converter.mobile_config['max_seq_len'] = 2048
+        converter.mobile_config['max_image_size'] = (768, 768)
         
         logger.info("⚙️ Configuration:")
-        logger.info(f"   - Quantization: {converter.mobile_config['quantization']['method']}")
-        logger.info(f"   - Context length: {converter.mobile_config['context_length']}")
+        logger.info(f"   - Quantization: {converter.mobile_config['quantization']}")
+        logger.info(f"   - Max sequence length: {converter.mobile_config['max_seq_len']}")
         logger.info(f"   - Max image size: {converter.mobile_config['max_image_size']}")
         logger.info(f"   - Output directory: {output_dir}")
         
