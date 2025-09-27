@@ -30,7 +30,7 @@ class ModelDownloadManager(
         private const val TAG = "ModelDownloadManager"
         
         // Model download configuration
-        private const val MODEL_BASE_URL = "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5-int4/resolve/main"
+        private const val MODEL_BASE_URL = "https://cdn.coupontracker.ai/android/minicpm"
         private const val MODEL_ZIP_NAME = "minicpm_llama3_v25_android.zip"
         private const val MODEL_VERSION = "v2.5-q4-android"
         
