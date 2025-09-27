@@ -89,6 +89,13 @@ shasum -a 256 test_download.zip
 rm test_download.zip
 ```
 
+### **2.3 Run automated integration test**
+Use the repository script to exercise the full download + checksum flow and verify the Android constants stay in sync:
+```bash
+python3 test_model_download_integration.py
+```
+This command exits non-zero on failure so CI (or a manual release checklist) will catch missing or outdated artifacts immediately.
+
 ---
 
 ## 📱 **STEP 3: TEST ANDROID APP**
