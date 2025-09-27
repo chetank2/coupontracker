@@ -665,7 +665,7 @@ private fun LlmStatusCard(securePreferencesManager: SecurePreferencesManager) {
                                                         }
                                                     }
                                                     is com.example.coupontracker.llm.DownloadResult.Error -> {
-                                                        Toast.makeText(context, "Download failed: ${result.message}", Toast.LENGTH_LONG).show()
+                                                        Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
                                                         downloadStatusMessage = "Download failed"
                                                     }
                                                 }
