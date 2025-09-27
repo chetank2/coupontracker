@@ -62,7 +62,7 @@ class LlmSmokeTestRunner:
                 "test_count": test_count,
                 "failure_count": failure_count,
                 "stdout": result.stdout[-1000:] if result.stdout else "",  # Last 1000 chars
-                "stderr": result.stderr[-1000:] if result.stderr else ""
+                "stderr": result.stderr[-1000:] if result.stderr else "",
                 "output": result.stdout,
                 "error": result.stderr if not success else None
             }
