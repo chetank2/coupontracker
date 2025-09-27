@@ -438,7 +438,7 @@ class ModelDownloadManager(
 
         val cache = verificationCache
         val cacheMatches = isDownloaded && cache != null && cache.version == modelVersion
-        val filesPresent = if (cacheMatches) cache.result else false
+        val filesPresent = if (cacheMatches) cache?.result ?: false else false
 
         if (!isDownloaded) {
             verificationCache = null
@@ -474,7 +474,7 @@ class ModelDownloadManager(
         if (cacheMatches) {
             return updateCachedStatus(
                 isDownloaded = true,
-                filesPresent = cache.result,
+                filesPresent = cache?.result ?: false,
                 version = modelVersion ?: "Unknown",
                 sizeMB = sizeMB,
                 verificationUpToDate = true

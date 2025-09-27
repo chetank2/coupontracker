@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import com.example.coupontracker.llm.LlmRuntimeManager
+import com.example.coupontracker.llm.LlmTelemetryService
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -40,6 +41,7 @@ class LocalLlmOcrService(
     
     // Dependencies
     private val llmRuntime = injectedLlmRuntimeManager ?: LlmRuntimeManager.getInstance(context)
+    private val telemetryService = LlmTelemetryService.getInstance(context)
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor() // Fallback
     
@@ -73,6 +75,11 @@ class LocalLlmOcrService(
      * Main entry point that mirrors ModelBasedOCRService.processCouponImage
      */
     suspend fun processCouponImage(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo = coroutineScope {
+        val startTime = System.currentTimeMillis()
+        var memoryUsage = 0L
+        var extractedFieldCount = 0
+        var fallbackUsed: String? = null
+        
         try {
             Log.d(TAG, "Processing coupon with MiniCPM-Llama3-V2.5")
             
@@ -86,14 +93,15 @@ class LocalLlmOcrService(
                 throw IllegalStateException("LLM model not available on device")
             }
             
-            // Step 3: Preprocess image (reuse existing pipeline)
-            val preprocessedBitmap = imagePreprocessor.preprocess(bitmap)
-            Log.d(TAG, "Preprocessed image: ${preprocessedBitmap.width}x${preprocessedBitmap.height}")
+            // Step 3: Preprocess image for MiniCPM (768px long side, RGB format)
+            val preprocessedBitmap = preprocessForMiniCPM(bitmap)
+            Log.d(TAG, "Preprocessed image for MiniCPM: ${preprocessedBitmap.width}x${preprocessedBitmap.height}")
             
             // Step 4: Create structured extraction prompt
             val prompt = createCouponExtractionPrompt()
             
-            // Step 5: Run LLM inference with timeout
+            // Step 5: Run LLM inference with timeout and memory tracking
+            memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
             val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
                 llmRuntime.runInference(preprocessedBitmap, prompt)
             }
@@ -102,22 +110,76 @@ class LocalLlmOcrService(
             val couponInfo = if (llmResponse != null) {
                 parseLlmResponseToCouponInfo(llmResponse)
             } else {
+                // Record timeout and throw
+                val duration = System.currentTimeMillis() - startTime
+                telemetryService.recordTimeout(duration, memoryUsage)
                 throw Exception("LLM inference timed out or returned null")
             }
             
-            // Step 7: Validate extraction quality
+            // Step 7: Validate extraction quality and count fields
             validateExtractionQuality(couponInfo)
+            extractedFieldCount = countExtractedFields(couponInfo)
             
-            Log.d(TAG, "LLM extraction complete: $couponInfo")
+            // Record successful inference
+            val duration = System.currentTimeMillis() - startTime
+            telemetryService.recordInference(
+                durationMs = duration,
+                success = true,
+                extractedFieldCount = extractedFieldCount,
+                memoryUsageMB = memoryUsage
+            )
+            
+            Log.d(TAG, "MiniCPM extraction completed successfully in ${duration}ms")
             couponInfo
             
         } catch (e: Exception) {
             Log.e(TAG, "LLM processing failed: ${e.message}", e)
             
+            // Record failure
+            val duration = System.currentTimeMillis() - startTime
+            val errorType = when {
+                e.message?.contains("timeout", ignoreCase = true) == true -> "TIMEOUT"
+                e.message?.contains("memory", ignoreCase = true) == true -> "MEMORY"
+                e.message?.contains("model", ignoreCase = true) == true -> "MODEL_ERROR"
+                else -> "PROCESSING_ERROR"
+            }
+            
             // Fallback to traditional OCR
             Log.d(TAG, "Falling back to traditional OCR")
-            fallbackToTraditionalOCR(bitmap, captureTimestamp)
+            val fallbackResult = fallbackToTraditionalOCR(bitmap, captureTimestamp)
+            
+            // Determine which fallback was used based on result quality
+            fallbackUsed = if (fallbackResult.storeName != "Unknown Store" || 
+                             !fallbackResult.redeemCode.isNullOrBlank()) {
+                "ML_KIT"
+            } else {
+                "MODEL_BASED"
+            }
+            
+            extractedFieldCount = countExtractedFields(fallbackResult)
+            
+            telemetryService.recordInference(
+                durationMs = duration,
+                success = false,
+                errorType = errorType,
+                fallbackUsed = fallbackUsed,
+                extractedFieldCount = extractedFieldCount,
+                memoryUsageMB = memoryUsage
+            )
+            
+            fallbackResult
         }
+    }
+    
+    private fun countExtractedFields(couponInfo: CouponInfo): Int {
+        var count = 0
+        if (couponInfo.storeName != "Unknown Store") count++
+        if (!couponInfo.redeemCode.isNullOrBlank()) count++
+        if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) count++
+        if (couponInfo.expiryDate != null) count++
+        if (couponInfo.description != "Coupon offer") count++
+        if (couponInfo.minimumPurchase != null && couponInfo.minimumPurchase > 0) count++
+        return count
     }
     
     /**
@@ -258,6 +320,41 @@ class LocalLlmOcrService(
             Log.w(TAG, "Failed to parse numeric value: '$value'", e)
             null
         }
+    }
+    
+    /**
+     * Preprocess bitmap specifically for MiniCPM-Llama3-V2.5 vision model
+     * Ensures optimal input format: 768px long side, RGB format, proper aspect ratio
+     */
+    private fun preprocessForMiniCPM(bitmap: Bitmap): Bitmap {
+        val targetLongSide = 768
+        val originalWidth = bitmap.width
+        val originalHeight = bitmap.height
+        
+        // Calculate scaling to fit target long side
+        val longSide = maxOf(originalWidth, originalHeight)
+        val scale = if (longSide > targetLongSide) {
+            targetLongSide.toFloat() / longSide
+        } else {
+            1.0f // Don't upscale small images
+        }
+        
+        val newWidth = (originalWidth * scale).toInt()
+        val newHeight = (originalHeight * scale).toInt()
+        
+        // Create scaled bitmap with RGB_565 format (efficient for inference)
+        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+        
+        // Ensure RGB format for MiniCPM
+        val rgbBitmap = if (scaledBitmap.config != Bitmap.Config.RGB_565) {
+            scaledBitmap.copy(Bitmap.Config.RGB_565, false)
+        } else {
+            scaledBitmap
+        }
+        
+        Log.d(TAG, "MiniCPM preprocessing: ${originalWidth}x${originalHeight} -> ${newWidth}x${newHeight} (scale: $scale)")
+        
+        return rgbBitmap
     }
     
     /**

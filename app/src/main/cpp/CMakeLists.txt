@@ -59,13 +59,50 @@ add_library(
     ${SOURCES}
 )
 
-# Link libraries
-target_link_libraries(
-    mlc_llm_android
-    ${log-lib}
-    ${android-lib}
-    # ${MLC_LLM_LIB_DIR}/libmlc_llm.so  # Uncomment when MLC-LLM is available
-)
+# MLC-LLM library configuration
+if(USE_REAL_MLC_LLM)
+    # Look for MLC-LLM libraries in standard locations
+    set(MLC_LLM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/mlc_llm" CACHE PATH "MLC-LLM installation path")
+    
+    # Try to find MLC-LLM libraries
+    find_library(MLC_LLM_RUNTIME_LIB
+        NAMES mlc_llm_runtime libmlc_llm_runtime
+        PATHS ${MLC_LLM_ROOT}/lib
+        NO_DEFAULT_PATH
+    )
+    
+    if(MLC_LLM_RUNTIME_LIB)
+        message(STATUS "Found MLC-LLM runtime library: ${MLC_LLM_RUNTIME_LIB}")
+        
+        # Add MLC-LLM include directories
+        target_include_directories(mlc_llm_android PRIVATE
+            ${MLC_LLM_ROOT}/include
+            ${MLC_LLM_ROOT}/3rdparty/tvm/include
+        )
+        
+        # Link MLC-LLM libraries
+        target_link_libraries(mlc_llm_android
+            ${log-lib}
+            ${android-lib}
+            ${MLC_LLM_RUNTIME_LIB}
+        )
+        
+        message(STATUS "MLC-LLM libraries linked successfully")
+    else()
+        message(WARNING "MLC-LLM libraries not found, using enhanced mock implementation")
+        # Still compile with enhanced features but without real MLC calls
+        target_link_libraries(mlc_llm_android
+            ${log-lib}
+            ${android-lib}
+        )
+    endif()
+else()
+    # Standard linking for mock implementation
+    target_link_libraries(mlc_llm_android
+        ${log-lib}
+        ${android-lib}
+    )
+endif()
 
 # Compiler definitions
 target_compile_definitions(

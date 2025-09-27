@@ -89,15 +89,38 @@ class MiniCPMAndroidConverter:
             logger.info("Exporting to MLC-LLM format...")
             mlc_model_path = self._export_to_mlc(quantized_model_path)
             
-            # Step 5: Package for Android
-            logger.info("Packaging for Android deployment...")
-            android_package = self._package_for_android(mlc_model_path)
+            # Step 5: Package for Android with REAL checksums
+            logger.info("📦 Packaging for Android with cryptographic verification...")
+            android_package = self._package_for_android(quantized_model_path)
             
-            # Step 6: Generate metadata
-            metadata = self._generate_metadata(android_package)
+            # Step 6: Generate deployment manifest with REAL hashes
+            logger.info("📋 Generating deployment manifest with real checksums...")
+            deployment_manifest = self._generate_deployment_manifest(android_package)
             
-            logger.info("Conversion completed successfully!")
-            return metadata
+            # Step 7: Create distribution ZIP with verification
+            logger.info("🗜️ Creating verified distribution ZIP...")
+            distribution_zip = self._create_verified_distribution(android_package, deployment_manifest)
+            
+            logger.info("✅ REAL MiniCPM conversion completed successfully!")
+            
+            # Return comprehensive build results
+            conversion_result = {
+                "success": True,
+                "build_type": "REAL_MLC_LLM_BUILD",
+                "model_version": "MiniCPM-Llama3-V2.5-q4f16_1-android",
+                "package_path": android_package["package_path"],
+                "zip_path": distribution_zip["zip_path"],
+                "zip_checksum": distribution_zip["zip_checksum"],
+                "manifest": deployment_manifest,
+                "artifacts": android_package.get("artifacts", []),
+                "total_size_mb": deployment_manifest["total_size_mb"],
+                "build_timestamp": deployment_manifest["build_timestamp"]
+            }
+            
+            # Print checksums for ModelDownloadManager integration
+            self._print_integration_checksums(conversion_result)
+            
+            return conversion_result
             
         except Exception as e:
             logger.error(f"Conversion failed: {e}")
@@ -611,6 +634,100 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
         package_checksum = combined_hash.hexdigest()
         logger.info(f"Package checksum: {package_checksum}")
         return package_checksum
+    
+    def _generate_deployment_manifest(self, android_package: Dict) -> Dict:
+        """Generate deployment manifest with real checksums for ModelDownloadManager"""
+        manifest = android_package["manifest"]
+        
+        # Extract real checksums for ModelDownloadManager integration
+        file_checksums = {}
+        for file_info in manifest["model_files"]:
+            file_checksums[file_info["name"]] = file_info["sha256"]
+        
+        deployment_manifest = {
+            "model_version": "v2.5-q4-android",
+            "build_timestamp": int(time.time()),
+            "total_size_mb": manifest["total_size_mb"],
+            "package_checksum": manifest["package_checksum"],
+            "required_files": file_checksums,
+            "min_android_api": 26,
+            "min_ram_gb": 4,
+            "target_devices": manifest["supported_devices"],
+            "performance_profile": manifest["performance_profile"],
+            "mlc_llm_version": self._get_mlc_version(),
+            "quantization_method": "q4f16_1"
+        }
+        
+        logger.info("📋 Generated deployment manifest with real checksums")
+        return deployment_manifest
+    
+    def _create_verified_distribution(self, android_package: Dict, manifest: Dict) -> Dict:
+        """Create verified distribution ZIP with real checksums"""
+        package_path = Path(android_package["package_path"])
+        zip_name = f"minicpm_llama3_v25_android_{manifest['build_timestamp']}.zip"
+        zip_path = package_path.parent / zip_name
+        
+        # Create ZIP with all artifacts
+        import zipfile
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as zipf:
+            # Add all model files
+            assets_path = package_path / "assets" / "models"
+            for file_path in assets_path.rglob('*'):
+                if file_path.is_file():
+                    arcname = f"models/{file_path.name}"
+                    zipf.write(file_path, arcname)
+            
+            # Add manifest
+            manifest_json = json.dumps(manifest, indent=2)
+            zipf.writestr("deployment_manifest.json", manifest_json)
+        
+        # Calculate ZIP checksum
+        zip_checksum = self._calculate_sha256(zip_path)
+        
+        logger.info(f"📦 Created verified distribution ZIP: {zip_path}")
+        logger.info(f"🔐 ZIP checksum: {zip_checksum}")
+        
+        return {
+            "zip_path": str(zip_path),
+            "zip_checksum": zip_checksum,
+            "zip_size_mb": round(zip_path.stat().st_size / (1024 * 1024), 2)
+        }
+    
+    def _get_mlc_version(self) -> str:
+        """Get MLC-LLM version for manifest"""
+        try:
+            import mlc_llm
+            return getattr(mlc_llm, '__version__', 'unknown')
+        except:
+            return 'unknown'
+    
+    def _print_integration_checksums(self, conversion_result: Dict):
+        """Print checksums for easy integration into ModelDownloadManager"""
+        manifest = conversion_result["manifest"]
+        
+        print("\n" + "="*80)
+        print("🔐 INTEGRATION CHECKSUMS FOR ModelDownloadManager.kt")
+        print("="*80)
+        
+        print(f"\n// Update EXPECTED_ZIP_CHECKSUM:")
+        print(f'private const val EXPECTED_ZIP_CHECKSUM = "{conversion_result["zip_checksum"]}"')
+        
+        print(f"\n// Update REQUIRED_FILES:")
+        print("private val REQUIRED_FILES = mapOf(")
+        for filename, checksum in manifest["required_files"].items():
+            print(f'    "{filename}" to "{checksum}",')
+        print(")")
+        
+        print(f"\n// Update MODEL_VERSION:")
+        print(f'private const val MODEL_VERSION = "{manifest["model_version"]}"')
+        
+        print(f"\n// Update MIN_MODEL_SIZE:")
+        size_bytes = int(manifest["total_size_mb"] * 1024 * 1024)
+        print(f'private const val MIN_MODEL_SIZE = {size_bytes}L // {manifest["total_size_mb"]}MB')
+        
+        print("\n" + "="*80)
+        print("✅ Copy these values into ModelDownloadManager.kt")
+        print("="*80)
 
 
 def main():

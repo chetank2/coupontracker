@@ -35,6 +35,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.coupontracker.ui.components.PasswordDialog
 import com.example.coupontracker.ui.components.ThemeSelector
 import com.example.coupontracker.ui.viewmodel.SettingsViewModel
+import com.example.coupontracker.llm.LlmRuntimeManager
+import com.example.coupontracker.util.LlmServiceStatus
+import com.example.coupontracker.util.LocalLlmOcrService
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Memory
 
 // Using keys from SecurePreferencesManager
 
@@ -260,6 +267,9 @@ fun SettingsScreen(
                     }
                 }
             }
+            
+            // LLM Status Info
+            LlmStatusCard(securePreferencesManager = securePreferencesManager)
 
             // Protected features button (only shown if features are not unlocked)
             if (!protectedFeaturesUnlocked) {
@@ -348,6 +358,198 @@ fun SettingsScreen(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LlmStatusCard(securePreferencesManager: SecurePreferencesManager) {
+    val context = LocalContext.current
+    var llmStatus by remember { mutableStateOf<LlmServiceStatus?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    
+    // Load LLM status in background
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val llmRuntimeManager = LlmRuntimeManager.getInstance(context)
+                val localLlmOcrService = LocalLlmOcrService(context, llmRuntimeManager)
+                val status = localLlmOcrService.getServiceStatus()
+                
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    llmStatus = status
+                    isLoading = false
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    isLoading = false
+                }
+            }
+        }
+    }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Memory,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = "Local LLM Status",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            if (isLoading) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Loading status...",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            } else {
+                llmStatus?.let { status ->
+                    // Model availability status
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Model Available:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (status.isAvailable) Icons.Default.CheckCircle else Icons.Default.Error,
+                                contentDescription = null,
+                                tint = if (status.isAvailable) androidx.compose.ui.graphics.Color.Green else androidx.compose.ui.graphics.Color.Red,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (status.isAvailable) "Yes" else "No",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (status.isAvailable) androidx.compose.ui.graphics.Color.Green else androidx.compose.ui.graphics.Color.Red
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Model loaded status
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Model Loaded:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (status.isModelLoaded) Icons.Default.CheckCircle else Icons.Default.CloudDownload,
+                                contentDescription = null,
+                                tint = if (status.isModelLoaded) androidx.compose.ui.graphics.Color.Green else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (status.isModelLoaded) "Loaded" else "Not Loaded",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Model version
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Model Version:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = status.modelVersion,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Memory usage
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Memory Usage:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = "${status.memoryUsageMB}MB",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    if (status.referenceCount > 0) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Active References:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                text = status.referenceCount.toString(),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                } ?: run {
+                    Text(
+                        text = "Unable to load LLM status",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = androidx.compose.ui.graphics.Color.Red
+                    )
+                }
             }
         }
     }
