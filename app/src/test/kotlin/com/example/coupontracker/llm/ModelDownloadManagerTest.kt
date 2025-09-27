@@ -5,6 +5,13 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.coupontracker.util.SecurePreferencesManager
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
+import io.mockk.Runs
+import io.mockk.anyConstructed
+import io.mockk.every
+import io.mockk.just
+import io.mockk.mockk
+import io.mockk.mockkConstructor
+import io.mockk.unmockkConstructor
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -13,6 +20,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
 import java.security.MessageDigest
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -52,6 +61,7 @@ class ModelDownloadManagerTest {
         securePreferencesManager.setLlmModelSizeMB(0f)
         securePreferencesManager.setLlmModelChecksum("")
         getModelDir().deleteRecursively()
+        runCatching { unmockkConstructor(URL::class) }
     }
 
     @Test
@@ -90,6 +100,39 @@ class ModelDownloadManagerTest {
 
         val status = modelDownloadManager.refreshModelStatus(force = true)
         kotlin.test.assertFalse(status.filesPresent, "Expected status to report missing tokenizer.json")
+    }
+
+    @Test
+    fun downloadFile_whenHttpError_returnsDetailedFailure() = runTest {
+        mockkConstructor(URL::class)
+        val connection = mockk<HttpURLConnection>()
+
+        every { anyConstructed<URL>().openConnection() } returns connection
+        every { connection.connectTimeout = any() } just Runs
+        every { connection.readTimeout = any() } just Runs
+        every { connection.connect() } just Runs
+        every { connection.responseCode } returns 503
+        every { connection.responseMessage } returns "Service Unavailable"
+        every { connection.disconnect() } just Runs
+
+        val tempFile = File.createTempFile("download-test", ".zip")
+        tempFile.deleteOnExit()
+
+        try {
+            val result = modelDownloadManager.downloadFile(
+                url = "https://example.com/model.zip",
+                outputFile = tempFile,
+                progressCallback = { }
+            )
+
+            kotlin.test.assertTrue(result.isFailure, "Expected download to fail for non-200 response")
+            val message = result.exceptionOrNull()?.message ?: ""
+            kotlin.test.assertTrue(message.contains("503"), "Expected error message to include status code, but was: $message")
+            kotlin.test.assertTrue(message.contains("Service Unavailable"), "Expected error message to include response message, but was: $message")
+        } finally {
+            tempFile.delete()
+            unmockkConstructor(URL::class)
+        }
     }
 
     private fun copyFixtureFiles(fixtureName: String) {

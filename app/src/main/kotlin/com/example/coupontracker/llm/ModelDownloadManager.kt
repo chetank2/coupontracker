@@ -11,7 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
-import java.io.InputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -120,15 +120,16 @@ class ModelDownloadManager(
             val tempFile = File(context.cacheDir, "temp_$MODEL_ZIP_NAME")
             
             // Download model zip
-            val downloadSuccess = downloadFile(
+            val downloadResult = downloadFile(
                 url = "$MODEL_BASE_URL/$MODEL_ZIP_NAME",
                 outputFile = tempFile,
                 progressCallback = progressCallback
             )
-            
-            if (!downloadSuccess) {
+
+            downloadResult.getOrElse { error ->
                 tempFile.delete()
-                return@withContext DownloadResult.Error("Download failed")
+                val reason = error.message?.takeIf { it.isNotBlank() } ?: error::class.java.simpleName
+                return@withContext DownloadResult.Error("Download failed: $reason")
             }
             
             // Verify downloaded file
@@ -173,68 +174,82 @@ class ModelDownloadManager(
             
         } catch (e: Exception) {
             Log.e(TAG, "Model download failed", e)
-            DownloadResult.Error("Download failed: ${e.message}")
+            val reason = e.message?.takeIf { it.isNotBlank() } ?: e::class.java.simpleName
+            DownloadResult.Error("Download failed: $reason")
         }
     }
-    
+
     /**
      * Download a file with progress tracking
      */
-    private suspend fun downloadFile(
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal suspend fun downloadFile(
         url: String,
         outputFile: File,
         progressCallback: (DownloadProgress) -> Unit
-    ): Boolean = withContext(Dispatchers.IO) {
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             val connection = URL(url).openConnection() as HttpURLConnection
             connection.connectTimeout = DOWNLOAD_TIMEOUT_MS.toInt()
             connection.readTimeout = DOWNLOAD_TIMEOUT_MS.toInt()
-            connection.connect()
-            
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                Log.e(TAG, "Download failed with response code: ${connection.responseCode}")
-                return@withContext false
-            }
-            
-            val fileSize = connection.contentLength
-            var totalBytesRead = 0L
-            var lastProgressUpdate = 0L
-            
-            connection.inputStream.use { input ->
-                FileOutputStream(outputFile).use { output ->
-                    val buffer = ByteArray(BUFFER_SIZE)
-                    var bytesRead: Int
-                    
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalBytesRead += bytesRead
-                        
-                        // Update progress periodically
-                        if (totalBytesRead - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL) {
-                            val progressPercent = if (fileSize > 0) {
-                                ((totalBytesRead * 100) / fileSize).toInt()
-                            } else {
-                                -1 // Unknown progress
+
+            try {
+                connection.connect()
+
+                if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+                    val statusMessage = connection.responseMessage?.takeIf { it.isNotBlank() }
+                    val errorMessage = if (statusMessage != null) {
+                        "HTTP ${connection.responseCode} $statusMessage"
+                    } else {
+                        "HTTP ${connection.responseCode}"
+                    }
+                    Log.e(TAG, "Download failed with response code: $errorMessage")
+                    return@withContext Result.failure(IOException(errorMessage))
+                }
+
+                val fileSize = connection.contentLengthLong
+                var totalBytesRead = 0L
+                var lastProgressUpdate = 0L
+
+                connection.inputStream.use { input ->
+                    FileOutputStream(outputFile).use { output ->
+                        val buffer = ByteArray(BUFFER_SIZE)
+                        var bytesRead: Int
+
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                            totalBytesRead += bytesRead
+
+                            // Update progress periodically
+                            if (totalBytesRead - lastProgressUpdate >= PROGRESS_UPDATE_INTERVAL) {
+                                val progressPercent = if (fileSize > 0) {
+                                    ((totalBytesRead * 100) / fileSize).toInt()
+                                } else {
+                                    -1 // Unknown progress
+                                }
+
+                                progressCallback(
+                                    DownloadProgress(
+                                        progressPercent,
+                                        "Downloading... ${formatBytes(totalBytesRead)}" +
+                                            if (fileSize > 0) " / ${formatBytes(fileSize)}" else ""
+                                    )
+                                )
+
+                                lastProgressUpdate = totalBytesRead
                             }
-                            
-                            progressCallback(DownloadProgress(
-                                progressPercent,
-                                "Downloading... ${formatBytes(totalBytesRead)}" +
-                                if (fileSize > 0) " / ${formatBytes(fileSize.toLong())}" else ""
-                            ))
-                            
-                            lastProgressUpdate = totalBytesRead
                         }
                     }
                 }
+
+                Log.d(TAG, "Download completed: ${formatBytes(totalBytesRead)}")
+                Result.success(Unit)
+            } finally {
+                connection.disconnect()
             }
-            
-            Log.d(TAG, "Download completed: ${formatBytes(totalBytesRead)}")
-            true
-            
         } catch (e: Exception) {
             Log.e(TAG, "File download failed", e)
-            false
+            Result.failure(e)
         }
     }
     
