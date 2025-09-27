@@ -38,7 +38,7 @@ class ModelDownloadManager(
         
         // Model download configuration
         private const val DEFAULT_MODEL_BASE_URL =
-            "https://github.com/chetank2/coupontracker/releases/download/v1.0-minicpm"
+            "https://github.com/chetank2/coupontracker/releases/download/v1.0-minicp"
         private const val MODEL_ZIP_NAME = "minicpm_llama3_v25_android.zip"
         private const val MODEL_VERSION = "v2.5-q4-android"
         
