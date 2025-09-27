@@ -44,7 +44,8 @@ class ModelDownloadManager(
             "model.bin" to "94d7d225fbf28a20ec30534207ec1a0ea017a20cf25674cde166a6d4f0c7bad1",
             "vision_config.json" to "a1e7efdfb761c86a3b1a323b3e859eb61718babb036ce66574d75528c33ebb6c",
             "mlc-chat-config.json" to "c039de2a0c0ec44016207af64a896f7cd3b6940962709c3e49c9321d6c666ff6",
-            "tokenizer.model" to "fd635c2e01878a509339a2d4a269c3600531d0e2c8757b553ab4dee59a215869"
+            "tokenizer.model" to "fd635c2e01878a509339a2d4a269c3600531d0e2c8757b553ab4dee59a215869",
+            "tokenizer.json" to "ba0c892b641f9804451f900a0aa3227555545fdc5f4bd33702436c595b313cf5"
         )
         
         // Minimum expected model size (90% of actual size for validation)
@@ -311,32 +312,33 @@ class ModelDownloadManager(
      * Check if filename is a required model file
      */
     private fun isRequiredFile(filename: String): Boolean {
-        return REQUIRED_FILES.keys.any { required ->
-            filename.endsWith(required) || filename.contains(required.substringBefore("."))
-        }
+        val normalizedName = filename.substringAfterLast('/')
+        return REQUIRED_FILES.containsKey(normalizedName)
     }
     
     /**
      * Verify all required model files are present and have correct checksums
      */
     private fun verifyModelFiles(): Boolean {
-        val presentFiles = modelDir.listFiles()?.associateBy { it.name } ?: emptyMap()
-        
+        val presentFiles = modelDir.walkTopDown()
+            .filter { it.isFile }
+            .groupBy { it.name }
+
         val missingFiles = REQUIRED_FILES.keys.filter { required ->
-            !presentFiles.keys.any { present -> present.contains(required.substringBefore(".")) }
+            presentFiles[required].isNullOrEmpty()
         }
-        
+
         if (missingFiles.isNotEmpty()) {
             Log.w(TAG, "Missing model files: $missingFiles")
             return false
         }
-        
+
         // Verify checksums of present files
         for ((filename, expectedChecksum) in REQUIRED_FILES) {
-            val file = presentFiles.values.find { it.name.contains(filename.substringBefore(".")) }
-            if (file != null) {
+            val candidateFile = presentFiles[filename]?.firstOrNull()
+            if (candidateFile != null) {
                 try {
-                    val actualChecksum = calculateFileChecksum(file)
+                    val actualChecksum = calculateFileChecksum(candidateFile)
                     if (!actualChecksum.equals(expectedChecksum, ignoreCase = true)) {
                         Log.e(TAG, "Checksum mismatch for $filename:")
                         Log.e(TAG, "Expected: $expectedChecksum")
