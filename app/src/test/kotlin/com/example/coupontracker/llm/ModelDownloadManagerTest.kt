@@ -24,10 +24,10 @@ class ModelDownloadManagerTest {
     private lateinit var securePreferencesManager: SecurePreferencesManager
     private lateinit var modelDownloadManager: ModelDownloadManager
 
-    private val fixtureFileNames = listOf(
+    private val fixtureFilePaths = listOf(
         "minicpm_llm_q4f16_1.so",
         "mlc-chat-config.json",
-        "tokenizer.json",
+        "tokenizer/tokenizer.json",
         "params_shard_0.bin",
         "params_shard_1.bin",
         "ndarray-cache.json",
@@ -78,6 +78,20 @@ class ModelDownloadManagerTest {
         kotlin.test.assertFalse(status.filesPresent, "Expected tampered MiniCPM fixture to be rejected")
     }
 
+    @Test
+    fun refreshModelStatus_whenTokenizerMissing_marksModelIncomplete() = runTest {
+        copyFixtureFiles("good")
+
+        val tokenizerFile = File(getModelDir(), "tokenizer/tokenizer.json")
+        kotlin.test.assertTrue(tokenizerFile.delete(), "Expected tokenizer.json to be deleted for test")
+
+        val verified = invokeVerifyModelFiles()
+        kotlin.test.assertFalse(verified, "Expected verification to fail when tokenizer.json is missing")
+
+        val status = modelDownloadManager.refreshModelStatus(force = true)
+        kotlin.test.assertFalse(status.filesPresent, "Expected status to report missing tokenizer.json")
+    }
+
     private fun copyFixtureFiles(fixtureName: String) {
         val modelDir = getModelDir()
         if (modelDir.exists()) {
@@ -87,15 +101,38 @@ class ModelDownloadManagerTest {
 
         val classLoader = javaClass.classLoader ?: error("Missing class loader")
 
-        fixtureFileNames.forEach { fileName ->
-            val resourcePath = "models/minicpm/$fixtureName/$fileName"
-            val targetFile = File(modelDir, fileName)
+        fixtureFilePaths.forEach { relativePath ->
+            val resourcePath = "models/minicpm/$fixtureName/$relativePath"
+            val targetFile = File(modelDir, relativePath)
+
+            targetFile.parentFile?.mkdirs()
 
             classLoader.getResourceAsStream(resourcePath)?.use { input ->
                 targetFile.outputStream().use { output ->
                     input.copyTo(output)
                 }
             } ?: error("Fixture resource not found: $resourcePath")
+        }
+
+        val baseModelDir = listOf(
+            File(System.getProperty("user.dir"), "android_models/mlc_model"),
+            File("android_models/mlc_model"),
+            File("../android_models/mlc_model")
+        ).firstOrNull { it.exists() }
+            ?: error("Unable to locate android_models/mlc_model fixture directory")
+        val baseModelFiles = listOf(
+            "model.bin",
+            "vision_config.json",
+            "tokenizer.model"
+        )
+
+        baseModelFiles.forEach { fileName ->
+            val sourceFile = File(baseModelDir, fileName)
+            require(sourceFile.exists()) { "Required base model fixture missing: ${sourceFile.path}" }
+
+            val targetFile = File(modelDir, fileName)
+            targetFile.parentFile?.mkdirs()
+            sourceFile.copyTo(targetFile, overwrite = true)
         }
 
         val totalBytes = modelDir.walkTopDown()
