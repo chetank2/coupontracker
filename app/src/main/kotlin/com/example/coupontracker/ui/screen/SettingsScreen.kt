@@ -376,6 +376,8 @@ private fun LlmStatusCard(securePreferencesManager: SecurePreferencesManager) {
     var modelDownloadStatus by remember { mutableStateOf("Unknown") }
     var modelSize by remember { mutableStateOf(0f) }
     var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0) }
+    var downloadStatusMessage by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
     
     // Load LLM status and download info in background
@@ -384,7 +386,6 @@ private fun LlmStatusCard(securePreferencesManager: SecurePreferencesManager) {
             try {
                 val llmRuntimeManager = LlmRuntimeManager.getInstance(context)
                 val localLlmOcrService = LocalLlmOcrService(context, llmRuntimeManager)
-                val modelDownloadManager = ModelDownloadManager(context)
                 
                 val status = localLlmOcrService.getServiceStatus()
                 val downloadStatus = if (securePreferencesManager.getLlmModelDownloaded()) {
@@ -634,18 +635,49 @@ private fun LlmStatusCard(securePreferencesManager: SecurePreferencesManager) {
                             onClick = {
                                 if (!isDownloading) {
                                     isDownloading = true
+                                    downloadProgress = 0
+                                    downloadStatusMessage = "Starting download..."
+                                    
                                     coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                                         try {
                                             val modelDownloadManager = ModelDownloadManager(context)
-                                            // Note: This is a placeholder - real implementation would handle download progress
+                                            
+                                            // Start download with progress callback
+                                            val result = modelDownloadManager.downloadModel { progress ->
+                                                // Update UI on main thread
+                                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                                                    downloadProgress = progress.progressPercent
+                                                    downloadStatusMessage = progress.statusMessage
+                                                }
+                                            }
+                                            
+                                            // Handle result on main thread
                                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                Toast.makeText(context, "Model download started (placeholder)", Toast.LENGTH_SHORT).show()
+                                                when (result) {
+                                                    is com.example.coupontracker.llm.DownloadResult.Success -> {
+                                                        Toast.makeText(context, "Model downloaded successfully!", Toast.LENGTH_LONG).show()
+                                                        modelDownloadStatus = "Downloaded"
+                                                        modelSize = result.modelSizeMB
+                                                        // Update preferences
+                                                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                            securePreferencesManager.setLlmModelDownloaded(true)
+                                                            securePreferencesManager.setLlmModelSizeMB(result.modelSizeMB)
+                                                        }
+                                                    }
+                                                    is com.example.coupontracker.llm.DownloadResult.Error -> {
+                                                        Toast.makeText(context, "Download failed: ${result.message}", Toast.LENGTH_LONG).show()
+                                                        downloadStatusMessage = "Download failed"
+                                                    }
+                                                }
                                                 isDownloading = false
+                                                downloadProgress = 0
                                             }
                                         } catch (e: Exception) {
                                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                Toast.makeText(context, "Download failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(context, "Download error: ${e.message}", Toast.LENGTH_LONG).show()
+                                                downloadStatusMessage = "Download error"
                                                 isDownloading = false
+                                                downloadProgress = 0
                                             }
                                         }
                                     }
@@ -655,15 +687,32 @@ private fun LlmStatusCard(securePreferencesManager: SecurePreferencesManager) {
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             if (isDownloading) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Downloading...")
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            progress = { if (downloadProgress > 0) downloadProgress / 100f else 0f },
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = if (downloadProgress > 0) "Downloading... ${downloadProgress}%" else "Downloading...",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                    
+                                    if (downloadStatusMessage.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = downloadStatusMessage,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             } else {
                                 Row(
@@ -675,7 +724,40 @@ private fun LlmStatusCard(securePreferencesManager: SecurePreferencesManager) {
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Download MiniCPM Model (~3GB)")
+                                    Text("Download MiniCPM Model (~4.5MB)")
+                                }
+                            }
+                        }
+                        
+                        // Progress bar for download
+                        if (isDownloading && downloadProgress > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            LinearProgressIndicator(
+                                progress = { downloadProgress / 100f },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            
+                            Spacer(modifier = Modifier.height(4.dp))
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "${downloadProgress}%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                
+                                if (downloadStatusMessage.isNotEmpty()) {
+                                    Text(
+                                        text = downloadStatusMessage,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
                         }
