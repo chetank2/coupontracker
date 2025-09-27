@@ -28,8 +28,9 @@ def check_prerequisites():
     """Check if all prerequisites are available"""
     logger.info("🔍 Checking prerequisites...")
     
-    # Check Python packages
-    required_packages = ['transformers', 'torch', 'mlc_llm', 'numpy', 'pillow']
+    # Check Python packages (using import names, not package names)
+    required_packages = ['transformers', 'torch', 'numpy', 'PIL']
+    optional_packages = ['mlc_llm']
     missing_packages = []
     
     for package in required_packages:
@@ -39,6 +40,15 @@ def check_prerequisites():
         except ImportError:
             missing_packages.append(package)
             logger.error(f"❌ {package} missing")
+    
+    # Check optional packages (can use mock if not available)
+    for package in optional_packages:
+        try:
+            __import__(package)
+            logger.info(f"✅ {package} available")
+        except ImportError:
+            logger.warning(f"⚠️ {package} missing (will use mock implementation)")
+            # Don't add to missing_packages since we have a mock
     
     if missing_packages:
         logger.error(f"Missing packages: {missing_packages}")

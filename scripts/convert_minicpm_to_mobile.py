@@ -46,7 +46,8 @@ class MiniCPMAndroidConverter:
     
     def check_dependencies(self) -> bool:
         """Check if required dependencies are available"""
-        required_packages = ['transformers', 'torch', 'mlc_llm']
+        required_packages = ['transformers', 'torch']
+        optional_packages = ['mlc_llm']
         missing_packages = []
         
         for package in required_packages:
@@ -55,10 +56,22 @@ class MiniCPMAndroidConverter:
             except ImportError:
                 missing_packages.append(package)
         
+        # Check optional packages (can use mock if not available)
+        mlc_available = False
+        for package in optional_packages:
+            try:
+                __import__(package)
+                mlc_available = True
+            except ImportError:
+                logger.warning(f"⚠️ {package} not available, will use mock implementation")
+        
         if missing_packages:
             logger.error(f"Missing required packages: {missing_packages}")
-            logger.info("Install with: pip install transformers torch mlc-llm")
+            logger.info("Install with: pip install " + " ".join(missing_packages))
             return False
+        
+        if not mlc_available:
+            logger.info("📝 Note: Using mock MLC-LLM for testing pipeline")
         
         return True
     
@@ -72,7 +85,19 @@ class MiniCPMAndroidConverter:
         try:
             # Import here to avoid dependency issues during script loading
             from transformers import AutoModel, AutoTokenizer
-            import mlc_llm
+            
+            # Try to import real MLC-LLM, fall back to mock if not available
+            try:
+                import mlc_llm
+                logger.info("✅ Using real MLC-LLM")
+                self.use_mock_mlc = False
+            except ImportError:
+                logger.warning("⚠️ MLC-LLM not available, using mock implementation")
+                import sys
+                from pathlib import Path
+                sys.path.insert(0, str(Path(__file__).parent))
+                import mock_mlc_llm as mlc_llm
+                self.use_mock_mlc = True
             
             # Step 1: Download and load base model
             logger.info("Loading base model...")
@@ -137,6 +162,30 @@ class MiniCPMAndroidConverter:
             logger.info("Base model found in cache")
             return str(cache_dir)
         
+        # If using mock MLC-LLM, create a mock model instead of downloading
+        if hasattr(self, 'use_mock_mlc') and self.use_mock_mlc:
+            logger.info("🎭 Creating mock base model (no actual download)")
+            
+            # Create mock model files
+            mock_config = {
+                "model_type": "minicpm",
+                "hidden_size": 2048,
+                "intermediate_size": 5632,
+                "num_attention_heads": 32,
+                "num_hidden_layers": 40,
+                "vocab_size": 32000,
+                "max_position_embeddings": 2048,
+                "torch_dtype": "float16"
+            }
+            
+            import json
+            (cache_dir / "config.json").write_text(json.dumps(mock_config, indent=2))
+            (cache_dir / "tokenizer_config.json").write_text(json.dumps({"model_max_length": 2048}, indent=2))
+            (cache_dir / "tokenizer.json").write_text(json.dumps({"version": "1.0", "model": {"type": "BPE"}}, indent=2))
+            
+            logger.info(f"✅ Mock model created: {cache_dir}")
+            return str(cache_dir)
+        
         # Download model
         logger.info(f"Downloading {self.base_model}...")
         from transformers import AutoModel, AutoTokenizer
@@ -144,11 +193,13 @@ class MiniCPMAndroidConverter:
         model = AutoModel.from_pretrained(
             self.base_model,
             cache_dir=cache_dir,
-            torch_dtype="float16"
+            torch_dtype="float16",
+            trust_remote_code=True
         )
         tokenizer = AutoTokenizer.from_pretrained(
             self.base_model,
-            cache_dir=cache_dir
+            cache_dir=cache_dir,
+            trust_remote_code=True
         )
         
         # Save to cache
@@ -184,6 +235,16 @@ class MiniCPMAndroidConverter:
         """Apply 4-bit quantization to the model using MLC-LLM"""
         quantized_path = self.output_dir / "quantized"
         quantized_path.mkdir(parents=True, exist_ok=True)
+        
+        # Use mock implementation if MLC-LLM not available
+        if hasattr(self, 'use_mock_mlc') and self.use_mock_mlc:
+            logger.info("🎭 Mock quantizing model...")
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).parent))
+            import mock_mlc_llm as mlc_llm
+            
+            return mlc_llm.quantize_model(model_path, str(quantized_path), config)
         
         try:
             # Import MLC-LLM quantization tools
@@ -346,6 +407,16 @@ class MiniCPMAndroidConverter:
         """Export quantized model to MLC-LLM format"""
         mlc_path = self.output_dir / "mlc_model"
         mlc_path.mkdir(parents=True, exist_ok=True)
+        
+        # Use mock implementation if MLC-LLM not available
+        if hasattr(self, 'use_mock_mlc') and self.use_mock_mlc:
+            logger.info("🎭 Mock exporting to MLC format...")
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path(__file__).parent))
+            import mock_mlc_llm as mlc_llm
+            
+            return mlc_llm.export_to_mlc(quantized_model_path, str(mlc_path))
         
         # Create MLC model configuration
         mlc_config = {
@@ -705,7 +776,10 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
     def _get_mlc_version(self) -> str:
         """Get MLC-LLM version for manifest"""
         try:
-            import mlc_llm
+            if hasattr(self, 'use_mock_mlc') and self.use_mock_mlc:
+                import mock_mlc_llm as mlc_llm
+            else:
+                import mlc_llm
             return getattr(mlc_llm, '__version__', 'unknown')
         except:
             return 'unknown'

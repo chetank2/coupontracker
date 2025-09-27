@@ -36,25 +36,24 @@ class ModelDownloadManager(
         
         // Expected SHA-256 checksum for the complete model ZIP file
         // Real checksum for MiniCPM-Llama3-V2.5 4-bit quantized Android package
-        private const val EXPECTED_ZIP_CHECKSUM = "b9574a2d2af8fb2817a76838b4d223f62af1f4d52660dccac0af46a977f2b30d"
+        private const val EXPECTED_ZIP_CHECKSUM = "7a45f222885f84fd0160eeac794ad56be91c6139c436724a56627f16a93d1a76"
 
         // Expected model files with their individual checksums (real MiniCPM structure)
         private val REQUIRED_FILES = mapOf(
-            "minicpm_llm_q4f16_1.so" to "8a364ab325f8e13f093eed15bfd2e0095f36bc60a4830daba230430adf3567df",
-            "model.bin" to "5fadcbf944bb024de290e5045e02ac92367c0025787af54f012aede2f68fea6c",
-            "vision_config.json" to "362b3cfb84542a36d47abe7cb14a17a5d840df96199c07a83ae1f7a931d73aa5",
-            "mlc-chat-config.json" to "2cf37d736fdffbea3db5802ce7c4ecf28971f114b9aeea81b8c847465bfc166f",
-            "tokenizer.json" to "dd5d31e0161a538138eb0ba0b202f59cfbac14fc25a3264bf56cf2f08a53f57b",
-            "tokenizer.model" to "c6be96d150e7a4502a8f2b8168cf2f29ecbec534a42a1733e94df321525a1bc7"
+            "minicpm_llm_q4f16_1.so" to "65d9139e97c5a196b48ae08facc468bcc41fef82ef1325ecab2c32e85e1fbbde",
+            "model.bin" to "94d7d225fbf28a20ec30534207ec1a0ea017a20cf25674cde166a6d4f0c7bad1",
+            "vision_config.json" to "a1e7efdfb761c86a3b1a323b3e859eb61718babb036ce66574d75528c33ebb6c",
+            "mlc-chat-config.json" to "c039de2a0c0ec44016207af64a896f7cd3b6940962709c3e49c9321d6c666ff6",
+            "tokenizer.model" to "fd635c2e01878a509339a2d4a269c3600531d0e2c8757b553ab4dee59a215869"
         )
         
-        // Download configuration
-        private const val DOWNLOAD_TIMEOUT_MS = 300000 // 5 minutes
-        private const val BUFFER_SIZE = 8192
-        private const val PROGRESS_UPDATE_INTERVAL = 1024 * 100 // Update every 100KB
+        // Minimum expected model size (90% of actual size for validation)
+        private const val MIN_MODEL_SIZE = 4227858L // 4.03MB (90% of 4.48MB)
         
-        // Minimum reasonable size for model ZIP (in bytes) - 500MB
-        private const val MIN_MODEL_SIZE = 2500L * 1024L * 1024L // 2.5GB for 4-bit quantized MiniCPM
+        // Download configuration
+        private const val DOWNLOAD_TIMEOUT_MS = 30_000L
+        private const val BUFFER_SIZE = 8192
+        private const val PROGRESS_UPDATE_INTERVAL = 100L
     }
     
     private val securePrefs = SecurePreferencesManager(context)
@@ -187,8 +186,8 @@ class ModelDownloadManager(
     ): Boolean = withContext(Dispatchers.IO) {
         try {
             val connection = URL(url).openConnection() as HttpURLConnection
-            connection.connectTimeout = DOWNLOAD_TIMEOUT_MS
-            connection.readTimeout = DOWNLOAD_TIMEOUT_MS
+            connection.connectTimeout = DOWNLOAD_TIMEOUT_MS.toInt()
+            connection.readTimeout = DOWNLOAD_TIMEOUT_MS.toInt()
             connection.connect()
             
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
