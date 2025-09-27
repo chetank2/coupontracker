@@ -104,11 +104,11 @@ class ModelBasedOCRService(private val context: Context) {
      */
     private fun fillMissingFields(info: CouponInfo, mlKitText: String): CouponInfo {
         return info.copy(
-            storeName = if (isGenericOrMissing(info.storeName)) {
+            storeName = if (GenericFieldHeuristics.isGenericOrMissing(info.storeName)) {
                 extractStoreName(mlKitText) ?: info.storeName
             } else info.storeName,
             
-            description = if (isGenericOrMissing(info.description)) {
+            description = if (GenericFieldHeuristics.isGenericOrMissing(info.description)) {
                 extractDescription(mlKitText) ?: info.description
             } else info.description,
             
@@ -128,53 +128,6 @@ class ModelBasedOCRService(private val context: Context) {
         )
     }
     
-    /**
-     * Check if a field contains generic/boilerplate text that should be treated as missing
-     */
-    private fun isGenericOrMissing(value: String?): Boolean {
-        if (value.isNullOrBlank()) return true
-        
-        val genericWords = setOf(
-            // Generic UI labels
-            "voucher", "vouchers", "coupon", "coupons", "offer", "offers",
-            "deal", "deals", "discount", "discounts", "promo", "promotion",
-            
-            // Generic descriptions  
-            "details", "description", "info", "information", "text",
-            "content", "data", "field", "value", "item", "element",
-            
-            // Generic store names
-            "store", "shop", "merchant", "brand", "company", "business",
-            "retailer", "vendor", "seller", "provider",
-            
-            // Common placeholder text
-            "unknown", "default", "placeholder", "sample", "example",
-            "test", "demo", "temp", "temporary", "loading"
-        )
-        
-        val cleanValue = value.trim().lowercase()
-        
-        // Check if the entire value is a generic word
-        if (genericWords.contains(cleanValue)) {
-            Log.d(TAG, "Treating '$value' as generic/missing - will use ML Kit result")
-            return true
-        }
-        
-        // Check if it's only generic words (multiple words)
-        val words = cleanValue.split(Regex("\\s+"))
-        if (words.isNotEmpty() && words.all { genericWords.contains(it) }) {
-            Log.d(TAG, "Treating '$value' as all generic words - will use ML Kit result")
-            return true
-        }
-        
-        // Check for single digits or very short non-meaningful text
-        if (cleanValue.matches(Regex("\\d{1,2}")) || cleanValue.length <= 2) {
-            Log.d(TAG, "Treating '$value' as too short/meaningless - will use ML Kit result")
-            return true
-        }
-        
-        return false
-    }
 
     /**
      * Combine results from different recognition methods

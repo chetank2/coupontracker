@@ -3,7 +3,7 @@ package com.example.coupontracker.llm
 import android.content.Context
 import android.graphics.Bitmap
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
+import org.robolectric.RobolectricTestRunner
 import com.example.coupontracker.util.LocalLlmOcrService
 import com.example.coupontracker.util.ImageProcessor
 import com.example.coupontracker.util.SecurePreferencesManager
@@ -19,7 +19,7 @@ import java.util.Date
  * End-to-end integration tests for the complete MiniCPM LLM pipeline
  * Tests the full flow from image input to structured coupon extraction
  */
-@RunWith(AndroidJUnit4::class)
+@RunWith(RobolectricTestRunner::class)
 class EndToEndLlmIntegrationTest {
     
     private lateinit var context: Context
@@ -441,7 +441,7 @@ class EndToEndLlmIntegrationTest {
 /**
  * Performance benchmark tests for MiniCPM integration
  */
-@RunWith(AndroidJUnit4::class)
+@RunWith(RobolectricTestRunner::class)
 class LlmPerformanceBenchmarkTest {
     
     private lateinit var context: Context

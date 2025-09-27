@@ -240,13 +240,21 @@ class LocalLlmOcrService(
             
             val json = JSONObject(cleanResponse)
             
-            // Extract fields with fallbacks
+            // Extract fields with fallbacks and generic filtering
             val storeName = json.optString("storeName", "Unknown Store").let {
-                if (it.isBlank() || it == "Unknown") "Unknown Store" else it
+                when {
+                    it.isBlank() || it == "Unknown" -> "Unknown Store"
+                    GenericFieldHeuristics.isGenericOrMissing(it) -> "Unknown Store"
+                    else -> it
+                }
             }
             
             val description = json.optString("description", "Coupon offer").let {
-                if (it.isBlank() || it == "Unknown") "Coupon offer" else it.take(100) // Limit length
+                when {
+                    it.isBlank() || it == "Unknown" -> "Coupon offer"
+                    GenericFieldHeuristics.isGenericOrMissing(it) -> "Coupon offer"
+                    else -> it.take(100) // Limit length
+                }
             }
             
             // Note: 'amount' field is handled by cashbackAmount, keeping for future use
@@ -258,6 +266,7 @@ class LocalLlmOcrService(
             val code = (json.optString("redeemCode").takeIf { it.isNotBlank() && it != "Unknown" }
                 ?: json.optString("code").takeIf { it.isNotBlank() && it != "Unknown" })
                 ?.trim()?.uppercase()
+                ?.takeIf { !GenericFieldHeuristics.isGenericOrMissing(it) }
             
             val expiryDate = json.optString("expiryDate").let {
                 if (it.isBlank() || it == "Unknown") null else it
@@ -271,6 +280,17 @@ class LocalLlmOcrService(
                 if (it.isBlank() || it == "Unknown") null else it
             }
             
+            // Check for duplicate values between fields (common LLM issue)
+            val finalStoreName = if (GenericFieldHeuristics.areDuplicateFields(storeName, code)) {
+                Log.w(TAG, "Detected duplicate store name and redeem code: '$storeName' - downgrading store name")
+                "Unknown Store"
+            } else storeName
+            
+            val finalCode = if (GenericFieldHeuristics.areDuplicateFields(storeName, code)) {
+                Log.w(TAG, "Detected duplicate store name and redeem code: '$code' - clearing redeem code")
+                null
+            } else code
+            
             // Parse expiry date if available
             val parsedExpiryDate = expiryDate?.let { dateStr ->
                 try {
@@ -282,11 +302,11 @@ class LocalLlmOcrService(
             }
             
             CouponInfo(
-                storeName = storeName,
+                storeName = finalStoreName,
                 description = description,
                 expiryDate = parsedExpiryDate,
                 cashbackAmount = parseNumericValue(cashbackAmount),
-                redeemCode = code,
+                redeemCode = finalCode,
                 minimumPurchase = parseNumericValue(minOrderAmount)
             )
             
@@ -364,6 +384,7 @@ class LocalLlmOcrService(
      */
     private fun validateExtractionQuality(couponInfo: CouponInfo) {
         var qualityScore = 0
+        var failureReason: String? = null
         
         // Check essential fields
         if (couponInfo.storeName != "Unknown Store") qualityScore += 30
@@ -372,18 +393,53 @@ class LocalLlmOcrService(
         if (couponInfo.expiryDate != null) qualityScore += 10
         if (couponInfo.description != "Coupon offer") qualityScore += 10
         
-        Log.d(TAG, "Extraction quality score: $qualityScore/100")
+        // Additional quality checks for boilerplate/generic content
+        val hasGenericStoreName = GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)
+        val hasGenericDescription = GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)
+        val hasGenericCode = GenericFieldHeuristics.isGenericOrMissing(couponInfo.redeemCode)
+        val hasMeaninglessAmount = GenericFieldHeuristics.isZeroOrMeaningless(couponInfo.cashbackAmount)
         
-        // Log warning for low quality extractions
-        if (qualityScore < 40) {
-            Log.w(TAG, "Low quality extraction detected (score: $qualityScore)")
+        // Check for duplicate fields (already handled in parsing, but validate here too)
+        val hasDuplicateFields = GenericFieldHeuristics.areDuplicateFields(
+            couponInfo.storeName, couponInfo.redeemCode
+        )
+        
+        Log.d(TAG, "Extraction quality score: $qualityScore/100")
+        Log.d(TAG, "Generic checks - Store: $hasGenericStoreName, Desc: $hasGenericDescription, Code: $hasGenericCode, Amount: $hasMeaninglessAmount, Duplicates: $hasDuplicateFields")
+        
+        // Determine failure reasons for better telemetry
+        when {
+            // Complete failure - no meaningful data at all
+            couponInfo.storeName == "Unknown Store" && 
+            couponInfo.redeemCode.isNullOrBlank() && 
+            hasMeaninglessAmount -> {
+                failureReason = "COMPLETE_EXTRACTION_FAILURE"
+            }
+            
+            // Generic/boilerplate content detected
+            hasGenericStoreName && hasGenericCode && hasGenericDescription -> {
+                failureReason = "ALL_GENERIC_CONTENT"
+            }
+            
+            // Duplicate field values
+            hasDuplicateFields -> {
+                failureReason = "DUPLICATE_FIELD_VALUES"
+            }
+            
+            // Low quality score but some data present
+            qualityScore < 40 -> {
+                failureReason = "LOW_QUALITY_EXTRACTION"
+            }
         }
         
-        // Ensure we have minimum viable information
-        if (couponInfo.storeName == "Unknown Store" && 
-            couponInfo.redeemCode.isNullOrBlank() && 
-            (couponInfo.cashbackAmount == null || couponInfo.cashbackAmount <= 0)) {
-            throw IllegalStateException("Insufficient information extracted from coupon")
+        // Log warning for low quality extractions
+        if (qualityScore < 40 || failureReason != null) {
+            Log.w(TAG, "Low quality extraction detected (score: $qualityScore, reason: $failureReason)")
+        }
+        
+        // Throw exception to trigger fallback OCR if quality is insufficient
+        if (failureReason != null) {
+            throw IllegalStateException("Insufficient extraction quality: $failureReason (score: $qualityScore)")
         }
     }
     

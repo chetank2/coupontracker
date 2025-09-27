@@ -27,7 +27,6 @@ import kotlin.test.assertTrue
  * Integration tests for MiniCPM LLM functionality
  * Tests the end-to-end pipeline from image processing to structured output
  */
-@HiltAndroidTest
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [30])
 class LlmIntegrationTest {
