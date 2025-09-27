@@ -427,10 +427,26 @@ class CouponImageProcessor:
         
         # Random noise
         if np.random.random() < 0.3:
-            noise = np.random.normal(0, 5, augmented.shape).astype(np.uint8)
-            augmented = cv2.add(augmented, noise)
-        
+            noise = np.random.normal(0, 5, augmented.shape).astype(np.float32)
+            augmented = augmented.astype(np.float32)
+            augmented = np.clip(augmented + noise, 0, 255).astype(np.uint8)
+
+        self._sanity_check_brightness(augmented)
+
         return augmented
+
+    def _sanity_check_brightness(self, img):
+        """Log a quick sanity check on image brightness levels."""
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        mean_brightness = float(np.mean(gray))
+        if mean_brightness < 40 or mean_brightness > 215:
+            logger.warning(
+                "Augmented image brightness out of expected range: %.2f", mean_brightness
+            )
+        else:
+            logger.info(
+                "Augmented image brightness within expected range: %.2f", mean_brightness
+            )
 
 def main():
     """Main function."""
