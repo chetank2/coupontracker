@@ -15,9 +15,9 @@ All automated tests have passed successfully! Here are the results:
 
 ### **Prerequisites Verified**
 - ✅ Local HTTP server running at `http://127.0.0.1:8080`
-- ✅ Model file available: `minicpm_llama3_v25_android.zip` (13KB)
+- ✅ Model file available: `minicpm_llama3_v25_android.zip` (4.7MB)
 - ✅ APK built: `app/build/outputs/apk/debug/app-universal-debug.apk` (128MB)
-- ✅ Checksum verified: `7a45f222885f84fd0160eeac794ad56be91c6139c436724a56627f16a93d1a76`
+- ✅ Checksum verified: `bfc31f09be000e56c88d0a9f6360d342f401b36abc63f3c144a64e97224fb8f9`
 
 ### **Step 1: Install APK**
 

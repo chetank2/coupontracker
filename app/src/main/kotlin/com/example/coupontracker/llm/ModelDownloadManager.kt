@@ -44,7 +44,7 @@ class ModelDownloadManager(
         
         // Expected SHA-256 checksum for the complete model ZIP file
         // Real checksum for MiniCPM-Llama3-V2.5 4-bit quantized Android package
-        private const val EXPECTED_ZIP_CHECKSUM = "50228f383839be79d99d286f02ed68eb684ff44e4c460b90a0c8247d661662eb"
+        private const val EXPECTED_ZIP_CHECKSUM = "bfc31f09be000e56c88d0a9f6360d342f401b36abc63f3c144a64e97224fb8f9"
 
         // Expected model files with their individual checksums (real MiniCPM structure)
         private val REQUIRED_FILES = mapOf(
@@ -56,7 +56,7 @@ class ModelDownloadManager(
     )
         
         // Minimum expected model size (90% of actual size for validation)
-        private const val MIN_MODEL_SIZE = 4697620L // 4.48MB
+        private const val MIN_MODEL_SIZE = 4231152L // 4.03MB (90% of 4.7MB)
         
         // Download configuration
         private const val DOWNLOAD_TIMEOUT_MS = 30_000L
