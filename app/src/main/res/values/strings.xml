@@ -28,4 +28,5 @@
     <string name="import_data">Import Data</string>
     <string name="clear_data">Clear All Data</string>
     <string name="llm_verifying_model">Verifying model integrity…</string>
+    <string name="llm_download_error_network">Check your internet connection or update the model URL in Advanced Settings</string>
 </resources>

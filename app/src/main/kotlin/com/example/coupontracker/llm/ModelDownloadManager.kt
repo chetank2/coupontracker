@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.util.Log
 import androidx.annotation.VisibleForTesting
+import com.example.coupontracker.R
 import com.example.coupontracker.util.SecurePreferencesManager
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -12,11 +13,17 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.NoRouteToHostException
+import java.net.SocketException
+import java.net.SocketTimeoutException
 import java.net.URL
+import java.net.UnknownHostException
 import java.security.MessageDigest
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
+import javax.net.ssl.SSLException
 
 /**
  * Manages downloading and verification of MiniCPM-Llama3-V2.5 model files
@@ -140,8 +147,7 @@ class ModelDownloadManager(
 
             downloadResult.getOrElse { error ->
                 tempFile.delete()
-                val reason = error.message?.takeIf { it.isNotBlank() } ?: error::class.java.simpleName
-                return@withContext DownloadResult.Error("Download failed: $reason")
+                return@withContext DownloadResult.Error(resolveErrorMessage(error))
             }
             
             // Verify downloaded file
@@ -186,10 +192,37 @@ class ModelDownloadManager(
             
         } catch (e: Exception) {
             Log.e(TAG, "Model download failed", e)
-            val reason = e.message?.takeIf { it.isNotBlank() } ?: e::class.java.simpleName
-            DownloadResult.Error("Download failed: $reason")
+            DownloadResult.Error(resolveErrorMessage(e))
         }
     }
+
+    private fun resolveErrorMessage(throwable: Throwable): String {
+        return if (isConnectivityIssue(throwable)) {
+            context.getString(R.string.llm_download_error_network)
+        } else {
+            val reason = throwable.message?.takeIf { it.isNotBlank() } ?: throwable::class.java.simpleName
+            "Download failed: $reason"
+        }
+    }
+
+    private fun isConnectivityIssue(throwable: Throwable): Boolean {
+        var current: Throwable? = throwable
+        while (current != null) {
+            when (current) {
+                is ConnectivityException,
+                is UnknownHostException,
+                is SocketTimeoutException,
+                is ConnectException,
+                is NoRouteToHostException,
+                is SocketException,
+                is SSLException -> return true
+            }
+            current = current.cause
+        }
+        return false
+    }
+
+    private class ConnectivityException(cause: Throwable) : IOException(cause)
 
     /**
      * Download a file with progress tracking
@@ -261,7 +294,12 @@ class ModelDownloadManager(
             }
         } catch (e: Exception) {
             Log.e(TAG, "File download failed", e)
-            Result.failure(e)
+            val exception = if (isConnectivityIssue(e)) {
+                ConnectivityException(e)
+            } else {
+                e
+            }
+            Result.failure(exception)
         }
     }
     
