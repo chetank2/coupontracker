@@ -67,6 +67,14 @@ The Android app automatically downloads and verifies this model for on-device AI
 
 ## 🧪 **STEP 2: VERIFY RELEASE**
 
+### **2.0 Validate Settings UI Integration**
+Before publishing, ensure the Settings screen still exposes the required UI and
+dependency bindings by running the automated integration check:
+```bash
+python3 test_settings_ui_integration.py
+```
+**Expected Result**: `All Settings UI integration checks passed.`
+
 ### **2.1 Test Download URL**
 After publishing, test the URL:
 ```bash
