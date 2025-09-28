@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
 import com.example.coupontracker.util.CouponInfo
@@ -158,7 +159,42 @@ class ScannerViewModel @Inject constructor(
             // Create coupon from extracted information
             val coupon = createCouponFromInstance(couponInstance, extractionResult.fields, imageUri)
 
-            _uiState.value = ScannerUiState.Success(coupon, extractionResult.miniCpmStatus)
+            // Check for duplicates using the deduplication helper before saving
+            val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
+            
+            // First check if a duplicate already exists
+            // Note: We need to access the DAO through the repository for this check
+            // For now, we'll use the saveOrMergeCoupon method and check the result
+            val savedCouponId = couponRepository.saveOrMergeCoupon(
+                coupon = coupon,
+                normalizedDescription = normalizedDescription,
+                imagePhash = null, // TODO: Add image hashing if needed
+                imageSignature = null // TODO: Add image signature if needed
+            )
+            
+            // Get the saved/merged coupon to determine if it was a duplicate
+            val savedCoupon = couponRepository.getCouponById(savedCouponId)
+            
+            if (savedCoupon != null) {
+                // Check if this was a duplicate by comparing creation dates
+                // If the saved coupon has an older creation date than our new coupon, it's a duplicate
+                val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt ?: savedCoupon.createdAt)
+                
+                if (isDuplicate) {
+                    // Duplicate detected - show "Already saved" feedback
+                    _uiState.value = ScannerUiState.AlreadySaved(savedCoupon, extractionResult.miniCpmStatus)
+                    Log.d(TAG, "Duplicate coupon detected, existing ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}")
+                } else {
+                    // New coupon saved
+                    _uiState.value = ScannerUiState.Saved(savedCoupon)
+                    Log.d(TAG, "New coupon saved with ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}")
+                }
+            } else {
+                // Fallback - shouldn't happen but handle gracefully
+                val fallbackCoupon = coupon.copy(id = savedCouponId)
+                _uiState.value = ScannerUiState.Saved(fallbackCoupon)
+                Log.d(TAG, "Coupon saved (fallback) with ID: $savedCouponId")
+            }
 
         } catch (e: Exception) {
             Log.e(TAG, "Error processing single coupon", e)
@@ -665,6 +701,7 @@ sealed class ScannerUiState {
     object Scanning : ScannerUiState()
     data class Success(val coupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
     data class Saved(val coupon: Coupon) : ScannerUiState()
+    data class AlreadySaved(val existingCoupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
     data class Error(val message: String) : ScannerUiState()
     
     // New states for multi-coupon support

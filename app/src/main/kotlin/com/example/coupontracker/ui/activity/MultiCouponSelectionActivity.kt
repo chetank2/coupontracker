@@ -142,6 +142,18 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
                         
                         finish()
                     }
+                    is ScannerUiState.AlreadySaved -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.buttonsContainer.visibility = View.VISIBLE
+                        
+                        Toast.makeText(
+                            this@MultiCouponSelectionActivity,
+                            "Coupon already saved: ${state.existingCoupon.redeemCode ?: state.existingCoupon.storeName}",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        
+                        finish()
+                    }
                     is ScannerUiState.Error -> {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE

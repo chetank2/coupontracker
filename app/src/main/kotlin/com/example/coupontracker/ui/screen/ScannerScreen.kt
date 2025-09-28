@@ -431,6 +431,23 @@ fun ScannerScreen(
                                     }
                                 }
 
+                                // Show already saved message
+                                if (uiState is ScannerUiState.AlreadySaved) {
+                                    val alreadySavedState = uiState as ScannerUiState.AlreadySaved
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "Coupon already saved: ${alreadySavedState.existingCoupon.redeemCode ?: alreadySavedState.existingCoupon.storeName}",
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+
+                                    LaunchedEffect(Unit) {
+                                        // Navigate back after a short delay
+                                        kotlinx.coroutines.delay(2000)
+                                        navController.popBackStack()
+                                    }
+                                }
+
                                 // Show error message
                                 if (uiState is ScannerUiState.Error) {
                                     Spacer(modifier = Modifier.height(16.dp))

@@ -148,6 +148,17 @@ class ScannerFragment : Fragment() {
                         ).show()
                         findNavController().navigateUp()
                     }
+                    is ScannerUiState.AlreadySaved -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.captureButton.isEnabled = true
+                        // Handle already saved state
+                        Snackbar.make(
+                            binding.root,
+                            "Coupon already saved: ${state.existingCoupon.redeemCode ?: state.existingCoupon.storeName}",
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                        findNavController().navigateUp()
+                    }
                     is ScannerUiState.MultiCouponDetected -> {
                         binding.progressBar.visibility = View.GONE
                         binding.captureButton.isEnabled = true
