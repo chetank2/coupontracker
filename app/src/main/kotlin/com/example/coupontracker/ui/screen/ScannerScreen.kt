@@ -130,7 +130,7 @@ fun ScannerScreen(
     ) { uri ->
         uri?.let {
             capturedImageUri = it
-            viewModel.scanImage(it)
+            viewModel.scanImage(it, persistImmediately = false)
         }
     }
 
@@ -180,7 +180,7 @@ fun ScannerScreen(
                         onImageCaptured = { uri ->
                             capturedImageUri = uri
                             showCamera = false
-                            viewModel.scanImage(uri)
+                            viewModel.scanImage(uri, persistImmediately = false)
                         },
                         onError = { error ->
                             Log.e("ScannerScreen", "Camera error: $error")
@@ -548,7 +548,7 @@ fun CameraView(
                             override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                                 val savedUri = Uri.fromFile(photoFile)
                                 onImageCaptured(savedUri)
-                                viewModel.scanImage(savedUri)
+                                viewModel.scanImage(savedUri, persistImmediately = false)
                             }
 
                             override fun onError(exception: ImageCaptureException) {
