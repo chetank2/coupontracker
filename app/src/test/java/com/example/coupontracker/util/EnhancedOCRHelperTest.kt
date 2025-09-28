@@ -25,4 +25,15 @@ class EnhancedOCRHelperTest {
 
         assertEquals("On Radiance Kit from beminimalist.co", info["description"])
     }
+
+    @Test
+    fun extractCouponInfo_handlesPunctuationWhenCollapsingDuplicates() {
+        val noisyText = """
+            DESCRIPTION: Save SAVE!!! on kit, kit -- from-store 123
+        """.trimIndent()
+
+        val info = helper.extractCouponInfo(noisyText)
+
+        assertEquals("Save on kit from-store 123", info["description"])
+    }
 }

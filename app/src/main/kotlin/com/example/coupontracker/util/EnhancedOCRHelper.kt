@@ -303,25 +303,20 @@ class EnhancedOCRHelper {
     }
 
     private fun sanitizeDescription(raw: String): String {
-        val tokens = raw.split(Regex("\\s+")).mapNotNull { token ->
-            val trimmed = token.trim()
-            if (trimmed.isEmpty()) {
-                null
-            } else {
-                trimmed
-            }
-        }
-
-        if (tokens.isEmpty()) {
-            return raw.trim()
-        }
-
         val vowels = setOf('a', 'e', 'i', 'o', 'u')
         val cleanedTokens = mutableListOf<String>()
-        var previousNormalized: String? = null
+        var previousKey: String? = null
 
-        tokens.forEach { token ->
-            val strippedToken = token.trim { !it.isLetterOrDigit() && it != '.' && it != '%' && it != '₹' && it != '-' }
+        raw.split(Regex("\\s+")).forEach { token ->
+            val trimmed = token.trim()
+            if (trimmed.isEmpty()) {
+                return@forEach
+            }
+
+            val strippedToken = trimmed.trim { character ->
+                !character.isLetterOrDigit() && character != '.' && character != '%' && character != '₹' && character != '-'
+            }
+
             if (strippedToken.isEmpty()) {
                 return@forEach
             }
@@ -333,20 +328,20 @@ class EnhancedOCRHelper {
                 return@forEach
             }
 
-            val normalized = strippedToken.lowercase()
-            if (previousNormalized == normalized) {
+            val comparisonKey = strippedToken.lowercase().trim { !it.isLetterOrDigit() }
+            if (comparisonKey.isEmpty()) {
+                return@forEach
+            }
+
+            if (previousKey == comparisonKey) {
                 return@forEach
             }
 
             cleanedTokens.add(strippedToken)
-            previousNormalized = normalized
+            previousKey = comparisonKey
         }
 
-        return if (cleanedTokens.isEmpty()) {
-            raw.trim()
-        } else {
-            cleanedTokens.joinToString(" ")
-        }
+        return cleanedTokens.joinToString(" ").trim()
     }
 
     internal fun normalizeCouponCode(rawCode: String): String {
