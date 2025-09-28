@@ -2,9 +2,9 @@ package com.example.coupontracker.util
 
 import android.content.Context
 import android.graphics.Bitmap
-import com.example.coupontracker.data.model.CouponInfo
 import com.example.coupontracker.llm.LlmRuntimeManager
-import com.example.coupontracker.service.TelemetryService
+import com.example.coupontracker.llm.LlmTelemetryService
+import com.example.coupontracker.util.CouponInfo
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -16,9 +16,10 @@ class LocalLlmOcrServiceTest {
     
     private lateinit var mockContext: Context
     private lateinit var mockLlmRuntime: LlmRuntimeManager
-    private lateinit var mockTelemetryService: TelemetryService
+    private lateinit var mockTelemetryService: LlmTelemetryService
     private lateinit var mockBitmap: Bitmap
     private lateinit var localLlmOcrService: LocalLlmOcrService
+    private var currentOcrText: String? = null
     
     @Before
     fun setup() {
@@ -26,6 +27,7 @@ class LocalLlmOcrServiceTest {
         mockLlmRuntime = mockk(relaxed = true)
         mockTelemetryService = mockk(relaxed = true)
         mockBitmap = mockk(relaxed = true)
+        currentOcrText = "Captured text with 20 and 50"
         
         // Mock bitmap properties
         every { mockBitmap.isRecycled } returns false
@@ -38,7 +40,9 @@ class LocalLlmOcrServiceTest {
             every { modelLoadedMemoryMB } returns 512
         }
         
-        localLlmOcrService = LocalLlmOcrService(mockContext, mockLlmRuntime, mockTelemetryService)
+        localLlmOcrService = LocalLlmOcrService(mockContext, mockLlmRuntime, mockTelemetryService) { _: Bitmap ->
+            currentOcrText
+        }
     }
     
     @Test
@@ -202,6 +206,32 @@ class LocalLlmOcrServiceTest {
         assertEquals(50.0, result.cashbackAmount, 0.01)
 
         // Should pass validation since we have meaningful store name and code
+        verify { mockTelemetryService.recordInference(any(), true, any(), any(), null) }
+    }
+
+    @Test
+    fun `should reject cashback amount without OCR support`() = runTest {
+        val response = """
+        {
+            "storeName": "GroceryMart",
+            "description": "Exclusive grocery savings",
+            "redeemCode": "SAVEFOOD",
+            "cashbackAmount": "65%",
+            "expiryDate": null,
+            "minOrderAmount": null
+        }
+        """.trimIndent()
+
+        currentOcrText = "Fresh produce deals available now"
+        every { mockLlmRuntime.runInference(any(), any()) } returns response
+
+        val result = localLlmOcrService.processCouponImage(mockBitmap)
+
+        assertEquals("GroceryMart", result.storeName)
+        assertEquals("Exclusive grocery savings", result.description)
+        assertEquals("SAVEFOOD", result.redeemCode)
+        assertNull(result.cashbackAmount)
+
         verify { mockTelemetryService.recordInference(any(), true, any(), any(), null) }
     }
 

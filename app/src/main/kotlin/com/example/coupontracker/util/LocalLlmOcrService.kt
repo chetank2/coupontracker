@@ -26,7 +26,9 @@ import kotlin.coroutines.resumeWithException
  */
 class LocalLlmOcrService(
     private val context: Context,
-    private val injectedLlmRuntimeManager: LlmRuntimeManager? = null
+    private val injectedLlmRuntimeManager: LlmRuntimeManager? = null,
+    private val injectedTelemetryService: LlmTelemetryService? = null,
+    private val customOcrTextProvider: (suspend (Bitmap) -> String?)? = null
 ) {
     
     companion object {
@@ -106,7 +108,7 @@ class LocalLlmOcrService(
     
     // Dependencies
     private val llmRuntime = injectedLlmRuntimeManager ?: LlmRuntimeManager.getInstance(context)
-    private val telemetryService = LlmTelemetryService.getInstance(context)
+    private val telemetryService = injectedTelemetryService ?: LlmTelemetryService.getInstance(context)
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor() // Fallback
     
@@ -170,10 +172,21 @@ class LocalLlmOcrService(
             val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
                 llmRuntime.runInference(preprocessedBitmap, prompt)
             }
-            
+
             // Step 6: Parse and validate response
             val couponInfo = if (llmResponse != null) {
-                parseLlmResponseToCouponInfo(llmResponse)
+                val rawOcrText = try {
+                    captureRawOcrText(bitmap).also {
+                        if (!it.isNullOrBlank()) {
+                            Log.d(TAG, "Captured OCR text sample: ${it.take(80)}")
+                        }
+                    }
+                } catch (ocrError: Exception) {
+                    Log.w(TAG, "Failed to capture supporting OCR text", ocrError)
+                    null
+                }
+
+                parseLlmResponseToCouponInfo(llmResponse, rawOcrText)
             } else {
                 // Record timeout and throw
                 val duration = System.currentTimeMillis() - startTime
@@ -290,11 +303,42 @@ class LocalLlmOcrService(
         Return ONLY the JSON object, no additional text or formatting.
         """.trimIndent()
     }
-    
+
+    private suspend fun captureRawOcrText(bitmap: Bitmap): String? {
+        customOcrTextProvider?.let { provider ->
+            return runCatching { provider(bitmap) }.onFailure {
+                Log.w(TAG, "Custom OCR text provider failed", it)
+            }.getOrNull()
+        }
+
+        return try {
+            val mlKitText = performMlKitOcr(bitmap)
+            if (mlKitText.isBlank()) {
+                Log.w(TAG, "ML Kit OCR returned blank text during capture")
+                null
+            } else {
+                mlKitText
+            }
+        } catch (mlKitError: Exception) {
+            Log.w(TAG, "ML Kit OCR capture failed, attempting fallback", mlKitError)
+            runCatching {
+                val fallbackService = ModelBasedOCRService(context)
+                val fallbackInfo = fallbackService.processCouponImage(bitmap)
+                listOfNotNull(
+                    fallbackInfo.storeName.takeIf { !it.equals("Unknown Store", ignoreCase = true) && it.isNotBlank() },
+                    fallbackInfo.description.takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) },
+                    fallbackInfo.redeemCode
+                ).joinToString(" ").ifBlank { null }
+            }.onFailure {
+                Log.w(TAG, "Fallback extraction failed for OCR capture", it)
+            }.getOrNull()
+        }
+    }
+
     /**
      * Parse LLM JSON response to CouponInfo object
      */
-    private fun parseLlmResponseToCouponInfo(response: String): CouponInfo {
+    private fun parseLlmResponseToCouponInfo(response: String, rawOcrText: String?): CouponInfo {
         return try {
             // Clean response (remove any markdown formatting)
             val cleanResponse = response.trim()
@@ -314,14 +358,13 @@ class LocalLlmOcrService(
                 }
             }
             
-            val description = json.optString("description", "").let {
-                val cleaned = cleanDescription(it)
-                when {
-                    cleaned.isBlank() -> "Coupon offer"
-                    cleaned.equals("Unknown", ignoreCase = true) -> "Coupon offer"
-                    GenericFieldHeuristics.isGenericOrMissing(cleaned) -> "Coupon offer"
-                    else -> cleaned.take(100)
-                }
+            val rawDescription = json.optString("description", "")
+            val cleanedDescription = cleanDescription(rawDescription)
+            val description = when {
+                cleanedDescription.isBlank() -> "Coupon offer"
+                cleanedDescription.equals("Unknown", ignoreCase = true) -> "Coupon offer"
+                GenericFieldHeuristics.isGenericOrMissing(cleanedDescription) -> "Coupon offer"
+                else -> cleanedDescription.take(100)
             }
             
             // Note: 'amount' field is handled by cashbackAmount, keeping for future use
@@ -339,8 +382,17 @@ class LocalLlmOcrService(
                 if (it.isBlank() || it == "Unknown") null else it
             }
             
-            val cashbackAmount = json.optString("cashbackAmount").let {
+            val cashbackAmountRaw = json.optString("cashbackAmount").let {
                 if (it.isBlank() || it == "Unknown") null else it
+            }
+
+            val validatedCashback = cashbackAmountRaw?.takeIf {
+                hasSupportingDigits(it, rawOcrText, cleanedDescription)
+            } ?: run {
+                if (!cashbackAmountRaw.isNullOrBlank()) {
+                    Log.w(TAG, "Rejecting cashback amount '$cashbackAmountRaw' due to missing OCR support")
+                }
+                null
             }
             
             val minOrderAmount = json.optString("minOrderAmount").let {
@@ -372,7 +424,7 @@ class LocalLlmOcrService(
                 storeName = finalStoreName,
                 description = description,
                 expiryDate = parsedExpiryDate,
-                cashbackAmount = parseNumericValue(cashbackAmount),
+                cashbackAmount = parseNumericValue(validatedCashback),
                 redeemCode = finalCode,
                 minimumPurchase = parseNumericValue(minOrderAmount)
             )
@@ -382,7 +434,64 @@ class LocalLlmOcrService(
             throw IllegalStateException("Invalid JSON response from LLM: ${e.message}")
         }
     }
-    
+
+    private fun hasSupportingDigits(amountText: String, rawOcrText: String?, cleanedDescription: String): Boolean {
+        val numericTokens = Regex("""\d[\d,]*(?:\.\d+)?""").findAll(amountText)
+            .map { it.value }
+            .filter { it.isNotBlank() }
+            .toList()
+
+        if (numericTokens.isEmpty()) {
+            Log.w(TAG, "No digit sequences found in cashback amount '$amountText'")
+            return false
+        }
+
+        val searchSpaces = mutableListOf<String>()
+        rawOcrText?.let { searchSpaces.add(it) }
+        if (cleanedDescription.isNotBlank()) {
+            searchSpaces.add(cleanedDescription)
+        }
+
+        if (searchSpaces.isEmpty()) {
+            Log.w(TAG, "No OCR text available to validate cashback amount '$amountText'")
+            return false
+        }
+
+        val missingTokens = numericTokens.filterNot { token ->
+            searchSpaces.any { text -> containsDigitSequence(text, token) }
+        }
+
+        if (missingTokens.isNotEmpty()) {
+            Log.w(TAG, "Missing numeric support for tokens $missingTokens in amount '$amountText'")
+            return false
+        }
+
+        return true
+    }
+
+    private fun containsDigitSequence(text: String?, token: String): Boolean {
+        if (text.isNullOrBlank() || token.isBlank()) {
+            return false
+        }
+
+        if (text.contains(token)) {
+            return true
+        }
+
+        val normalizedToken = token.replace(Regex("[^0-9]"), "")
+        if (normalizedToken.isBlank()) {
+            return false
+        }
+
+        val normalizedText = text.replace(Regex("[^0-9]"), "")
+        if (normalizedText.contains(normalizedToken)) {
+            return true
+        }
+
+        val trimmedToken = normalizedToken.trimStart('0')
+        return trimmedToken.isNotBlank() && normalizedText.contains(trimmedToken)
+    }
+
     /**
      * Parse numeric value from currency/percentage strings
      * Handles formats like: ₹150, $25, 25%, 150.50, etc.
