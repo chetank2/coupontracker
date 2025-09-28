@@ -245,6 +245,15 @@ class LocalLlmOcrServiceTest {
     }
 
     @Test
+    fun `cleanDescription trims store name prefixes`() {
+        val rawDescription = "AMAZON - EXTRA SAVINGS ON ELECTRONICS"
+
+        val cleaned = LocalLlmOcrService.cleanDescription(rawDescription)
+
+        assertEquals("Extra savings on electronics", cleaned)
+    }
+
+    @Test
     fun `cleanDescription normalizes rupee-like glyphs`() {
         val rawDescription = "LIFETIME CASHBACK T568"
 

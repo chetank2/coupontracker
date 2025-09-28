@@ -42,7 +42,11 @@ class LocalLlmOcrService(
         private const val SUPPORTED_MODEL_VERSION = "v2.5-q4-android"
 
         private val RUPEE_VARIANT_PATTERN = Regex(
-            pattern = """(?i)(^|\s+)(?:₹|rs\.?|t)[\s:=-]*([+-]?\d[\d,]*(?:\.\d+)?)"""
+            pattern = """(?i)(^|\s+|[^\w₹])(?:₹|rs\.?|t)[\s:=-]*([+-]?\d[\d,]*(?:\.\d+)?)"""
+        )
+
+        private val STORE_PREFIX_EXTRACTION_PATTERN = Regex(
+            pattern = """(?i)^([A-Za-z][\w'&@.]*?(?:\s+[A-Za-z][\w'&@.]*){0,3})\s*[:\-\|–—]+\s*(.+)$"""
         )
 
         fun cleanDescription(raw: String?): String {
@@ -89,7 +93,9 @@ class LocalLlmOcrService(
                 .replace(Regex("\\s+"), " ")
                 .trim()
 
-            return normalizeRupeeVariants(joined)
+            val withoutStorePrefix = stripLikelyStorePrefix(joined)
+            val normalizedRupees = normalizeRupeeVariants(withoutStorePrefix)
+            return ensureLeadingCapital(normalizedRupees)
         }
 
         private fun normalizeRupeeVariants(text: String): String {
@@ -102,6 +108,57 @@ class LocalLlmOcrService(
                 val amount = matchResult.groupValues[2]
                 val cleanedAmount = amount.replaceFirst(Regex("^([+-]?)0+(?=\\d)"), "$1")
                 leading + "₹" + cleanedAmount
+            }
+        }
+
+        private fun stripLikelyStorePrefix(text: String): String {
+            if (text.isBlank()) {
+                return text
+            }
+
+            val match = STORE_PREFIX_EXTRACTION_PATTERN.find(text) ?: return text
+            val remainder = match.groupValues[2].trim()
+            if (remainder.isEmpty()) {
+                return text
+            }
+
+            val lowerRemainder = remainder.lowercase(Locale.getDefault())
+            val indicatorKeywords = listOf(
+                "coupon", "coupons", "cashback", "discount", "discounts", "offer", "offers",
+                "deal", "deals", "sale", "save", "savings", "reward", "rewards", "code", "promo",
+                "%", "₹"
+            )
+
+            val hasKeyword = indicatorKeywords.any { keyword ->
+                when (keyword) {
+                    "%" -> remainder.contains('%')
+                    "₹" -> remainder.contains('₹')
+                    else -> lowerRemainder.contains(keyword)
+                }
+            }
+
+            val hasDigits = remainder.any { it.isDigit() }
+
+            return if (hasKeyword || hasDigits) remainder else text
+        }
+
+        private fun ensureLeadingCapital(text: String): String {
+            if (text.isBlank()) {
+                return text
+            }
+
+            val firstLetterIndex = text.indexOfFirst { it.isLetter() }
+            if (firstLetterIndex == -1) {
+                return text
+            }
+
+            val firstLetter = text[firstLetterIndex]
+            return if (firstLetter.isLowerCase()) {
+                val builder = StringBuilder(text)
+                builder.replace(firstLetterIndex, firstLetterIndex + 1, firstLetter.titlecase(Locale.getDefault()))
+                builder.toString()
+            } else {
+                text
             }
         }
     }
