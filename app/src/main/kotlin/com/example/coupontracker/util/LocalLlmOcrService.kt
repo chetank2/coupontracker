@@ -42,7 +42,8 @@ class LocalLlmOcrService(
         private const val SUPPORTED_MODEL_VERSION = "v2.5-q4-android"
 
         private val RUPEE_VARIANT_PATTERN = Regex(
-            pattern = """(?i)(^|\s+|[^\w₹])(?:₹|rs\.?|t)[\s:=-]*([+-]?\d[\d,]*(?:\.\d+)?)"""
+            pattern = """(^|\s+|[^\w₹])((?:₹|₨|૱|रु|रू|rs\.?))[\s:=-]*([+-]?\d[\d,]*(?:\.\d+)?)""",
+            options = setOf(RegexOption.IGNORE_CASE)
         )
 
         private val STORE_PREFIX_EXTRACTION_PATTERN = Regex(
@@ -105,7 +106,22 @@ class LocalLlmOcrService(
 
             return RUPEE_VARIANT_PATTERN.replace(text) { matchResult ->
                 val leading = matchResult.groupValues[1]
-                val amount = matchResult.groupValues[2]
+                val marker = matchResult.groupValues[2]
+                val amount = matchResult.groupValues[3]
+
+                val markerStart = matchResult.range.first + leading.length
+                val markerEnd = markerStart + marker.length
+                val precedingChar = text.getOrNull(markerStart - 1)
+                val followingChar = text.getOrNull(markerEnd)
+
+                if (marker.any { it.isLetter() }) {
+                    val precedingIsLetter = precedingChar?.isLetter() == true
+                    val followingIsLetter = followingChar?.isLetter() == true
+                    if (precedingIsLetter || followingIsLetter) {
+                        return@replace matchResult.value
+                    }
+                }
+
                 val cleanedAmount = amount.replaceFirst(Regex("^([+-]?)0+(?=\\d)"), "$1")
                 leading + "₹" + cleanedAmount
             }

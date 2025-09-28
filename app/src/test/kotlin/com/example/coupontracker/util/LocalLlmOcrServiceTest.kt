@@ -254,12 +254,30 @@ class LocalLlmOcrServiceTest {
     }
 
     @Test
-    fun `cleanDescription normalizes rupee-like glyphs`() {
-        val rawDescription = "LIFETIME CASHBACK T568"
+    fun `cleanDescription leaves plain amounts unchanged`() {
+        val rawDescription = "Flat 100 off"
 
         val cleaned = LocalLlmOcrService.cleanDescription(rawDescription)
 
-        assertEquals("Lifetime cashback ₹568", cleaned)
+        assertEquals("Flat 100 off", cleaned)
+    }
+
+    @Test
+    fun `cleanDescription normalizes textual rupee markers`() {
+        val rawDescription = "Get Rs 100 cashback"
+
+        val cleaned = LocalLlmOcrService.cleanDescription(rawDescription)
+
+        assertEquals("Get ₹100 cashback", cleaned)
+    }
+
+    @Test
+    fun `cleanDescription normalizes rupee glyph variants`() {
+        val rawDescription = "Save ₨ 250 today"
+
+        val cleaned = LocalLlmOcrService.cleanDescription(rawDescription)
+
+        assertEquals("Save ₹250 today", cleaned)
     }
 
     @Test
