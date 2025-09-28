@@ -29,7 +29,7 @@ interface CouponRepository {
     suspend fun saveOrMergeCoupon(
         coupon: Coupon,
         normalizedDescription: String,
-        descriptionHash: String?,
-        descriptionSignature: String?
+        imagePhash: String?,
+        imageSignature: String?
     ): Long
 }

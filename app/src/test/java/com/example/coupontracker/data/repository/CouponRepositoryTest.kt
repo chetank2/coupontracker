@@ -2,6 +2,7 @@ package com.example.coupontracker.data.repository
 
 import com.example.coupontracker.data.local.CouponDao
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.util.CouponDedupUtils
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -94,10 +95,14 @@ class CouponRepositoryTest {
 
     @Test
     fun `saveOrMergeCoupon reuses coupon with existing code`() = runBlocking {
+        val description = "Limited Time Offer!!!"
+        val normalized = CouponDedupUtils.normalizeDescription(description)
+
         val existing = Coupon(
             id = 42,
             storeName = "Store",
-            description = "Limited Time Offer",
+            description = description,
+            normalizedDescription = normalized,
             expiryDate = Date(),
             cashbackAmount = 10.0,
             redeemCode = "CODE123",
@@ -107,10 +112,10 @@ class CouponRepositoryTest {
             createdAt = Date(0),
             updatedAt = Date(0)
         )
-        val normalized = existing.description.lowercase().trim()
 
         val incoming = existing.copy(
             id = 0,
+            normalizedDescription = null,
             redeemCode = null,
             cashbackAmount = 20.0,
             usageCount = 5,
@@ -122,8 +127,8 @@ class CouponRepositoryTest {
             couponDao.findByStoreAndDescription(
                 storeName = existing.storeName,
                 normalizedDescription = normalized,
-                descriptionHash = null,
-                descriptionSignature = null
+                imagePhash = null,
+                imageSignature = null
             )
         } returns existing
         coEvery { couponDao.updateCoupon(any()) } returns Unit
@@ -136,6 +141,7 @@ class CouponRepositoryTest {
             couponDao.updateCoupon(
                 match {
                     it.id == existing.id &&
+                        it.normalizedDescription == normalized &&
                         it.redeemCode == existing.redeemCode &&
                         it.cashbackAmount == incoming.cashbackAmount &&
                         it.usageCount == kotlin.math.max(existing.usageCount, incoming.usageCount) &&

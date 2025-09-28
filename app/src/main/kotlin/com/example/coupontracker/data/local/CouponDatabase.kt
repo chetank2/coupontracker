@@ -6,8 +6,9 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.util.CouponDedupUtils
 
-@Database(entities = [Coupon::class], version = 3)
+@Database(entities = [Coupon::class], version = 4)
 @TypeConverters(Converters::class)
 abstract class CouponDatabase : RoomDatabase() {
     abstract fun couponDao(): CouponDao
@@ -27,6 +28,37 @@ abstract class CouponDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE coupons ADD COLUMN usageCount INTEGER NOT NULL DEFAULT 0")
                 database.execSQL("ALTER TABLE coupons ADD COLUMN reminderDate INTEGER")
                 database.execSQL("ALTER TABLE coupons ADD COLUMN platformType TEXT")
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE coupons ADD COLUMN normalizedDescription TEXT")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN imagePhash TEXT")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN imageSignature TEXT")
+
+                database.query("SELECT id, description FROM coupons").use { cursor ->
+                    val updateStatement = database.compileStatement(
+                        "UPDATE coupons SET normalizedDescription = ? WHERE id = ?"
+                    )
+                    try {
+                        while (cursor.moveToNext()) {
+                            val id = cursor.getLong(0)
+                            val description = cursor.getString(1)
+                            val normalized = CouponDedupUtils.normalizeDescription(description)
+                            updateStatement.bindString(1, normalized)
+                            updateStatement.bindLong(2, id)
+                            updateStatement.executeUpdateDelete()
+                            updateStatement.clearBindings()
+                        }
+                    } finally {
+                        updateStatement.close()
+                    }
+                }
+
+                // The legacy database only stored URIs to coupon images, so we cannot
+                // backfill perceptual hashes or signatures for existing rows. The new
+                // columns remain null until fresh image data is processed.
             }
         }
     }

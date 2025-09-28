@@ -83,30 +83,39 @@ class CouponRepositoryImpl @Inject constructor(
     override suspend fun saveOrMergeCoupon(
         coupon: Coupon,
         normalizedDescription: String,
-        descriptionHash: String?,
-        descriptionSignature: String?
+        imagePhash: String?,
+        imageSignature: String?
     ): Long {
-        val existing = couponDao.findByStoreAndDescription(
-            storeName = coupon.storeName,
+        val normalizedCoupon = coupon.copy(
             normalizedDescription = normalizedDescription,
-            descriptionHash = descriptionHash,
-            descriptionSignature = descriptionSignature
+            imagePhash = imagePhash,
+            imageSignature = imageSignature
+        )
+
+        val existing = couponDao.findByStoreAndDescription(
+            storeName = normalizedCoupon.storeName,
+            normalizedDescription = normalizedDescription,
+            imagePhash = imagePhash,
+            imageSignature = imageSignature
         )
 
         return if (existing != null) {
-            val merged = mergeCoupons(existing, coupon)
+            val merged = mergeCoupons(existing, normalizedCoupon)
             couponDao.updateCoupon(merged)
             existing.id
         } else {
-            couponDao.insertCoupon(coupon)
+            couponDao.insertCoupon(normalizedCoupon)
         }
     }
 
     private fun mergeCoupons(existing: Coupon, incoming: Coupon): Coupon {
         return incoming.copy(
             id = existing.id,
+            normalizedDescription = incoming.normalizedDescription ?: existing.normalizedDescription,
             redeemCode = incoming.redeemCode ?: existing.redeemCode,
             imageUri = incoming.imageUri ?: existing.imageUri,
+            imagePhash = incoming.imagePhash ?: existing.imagePhash,
+            imageSignature = incoming.imageSignature ?: existing.imageSignature,
             category = incoming.category ?: existing.category,
             status = incoming.status ?: existing.status,
             minimumPurchase = incoming.minimumPurchase ?: existing.minimumPurchase,
