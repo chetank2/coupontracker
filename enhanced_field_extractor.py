@@ -35,36 +35,42 @@ class EnhancedCouponFieldExtractor:
         # Store-specific patterns (learned from data)
         self.store_patterns = {
             'amazon': {
+                'display_name': 'Amazon',
                 'identifiers': ['amazon', 'amzn', 'amazon.in'],
                 'code_patterns': [r'[A-Z0-9]{8,12}'],
                 'discount_patterns': [r'(\d+(?:\.\d+)?)%\s*off', r'save\s*₹(\d+)', r'flat\s*(\d+(?:\.\d+)?)%'],
                 'common_terms': ['prime', 'delivery', 'shopping', 'cart']
             },
             'flipkart': {
+                'display_name': 'Flipkart',
                 'identifiers': ['flipkart', 'fkrt', 'flipkart.com'],
                 'code_patterns': [r'[A-Z]{2,4}\d{4,8}', r'FK[A-Z0-9]{6,10}'],
                 'discount_patterns': [r'(\d+(?:\.\d+)?)%\s*off', r'extra\s*(\d+(?:\.\d+)?)%', r'flat\s*₹(\d+)'],
                 'common_terms': ['plus', 'supercoins', 'delivery', 'exchange']
             },
             'myntra': {
+                'display_name': 'Myntra',
                 'identifiers': ['myntra', 'myntra.com'],
                 'code_patterns': [r'[A-Z]{3,5}\d{3,6}', r'MYNTRA[0-9]{4,8}'],
                 'discount_patterns': [r'(\d+(?:\.\d+)?)%\s*off', r'flat\s*(\d+(?:\.\d+)?)%', r'buy\s*\d+\s*get\s*\d+'],
                 'common_terms': ['fashion', 'style', 'brands', 'clothing']
             },
             'swiggy': {
+                'display_name': 'Swiggy',
                 'identifiers': ['swiggy', 'swiggy.com'],
                 'code_patterns': [r'[A-Z]{4,6}\d{2,4}', r'SWIGGY[0-9]{3,6}'],
                 'discount_patterns': [r'(\d+(?:\.\d+)?)%\s*off', r'flat\s*₹(\d+)', r'free\s*delivery'],
                 'common_terms': ['food', 'delivery', 'restaurant', 'order']
             },
             'zomato': {
+                'display_name': 'Zomato',
                 'identifiers': ['zomato', 'zomato.com'],
                 'code_patterns': [r'[A-Z]{4,6}\d{2,4}', r'ZOMATO[0-9]{3,6}'],
                 'discount_patterns': [r'(\d+(?:\.\d+)?)%\s*off', r'flat\s*₹(\d+)', r'free\s*delivery'],
                 'common_terms': ['food', 'delivery', 'dining', 'restaurant']
             },
             'aha': {
+                'display_name': 'Aha',
                 'identifiers': ['aha'],
                 'code_patterns': [],
                 'discount_patterns': [r'flat\s*(\d+(?:\.\d+)?)%'],
@@ -198,7 +204,7 @@ class EnhancedCouponFieldExtractor:
             Dict: Store detection result
         """
         text_lower = text.lower()
-        best_match = {'name': None, 'confidence': 0.0, 'type': 'unknown'}
+        best_match = {'name': None, 'confidence': 0.0, 'type': 'unknown', 'key': None}
         
         for store_name, store_data in self.store_patterns.items():
             confidence = 0.0
@@ -221,9 +227,10 @@ class EnhancedCouponFieldExtractor:
             
             if confidence > best_match['confidence']:
                 best_match = {
-                    'name': store_name,
+                    'name': store_data.get('display_name', store_name),
                     'confidence': confidence,
-                    'type': 'identified'
+                    'type': 'identified',
+                    'key': store_name
                 }
         
         # If no store detected, try to extract any brand-like words
@@ -258,7 +265,8 @@ class EnhancedCouponFieldExtractor:
                 best_match = {
                     'name': location_candidates[0][0].strip(),
                     'confidence': 0.45,
-                    'type': 'extracted'
+                    'type': 'extracted',
+                    'key': None
                 }
             else:
                 brand_patterns = [
@@ -289,7 +297,8 @@ class EnhancedCouponFieldExtractor:
                     best_match = {
                         'name': selected,
                         'confidence': 0.4,
-                        'type': 'extracted'
+                        'type': 'extracted',
+                        'key': None
                     }
                 else:
                     lowercase_stopwords = stopwords | {'purchase', 'details', 'terms', 'condition', 'conditions', 'plan',
@@ -310,7 +319,8 @@ class EnhancedCouponFieldExtractor:
                             best_match = {
                                 'name': name,
                                 'confidence': 0.38,
-                                'type': 'extracted'
+                                'type': 'extracted',
+                                'key': None
                             }
 
         return best_match
@@ -328,8 +338,9 @@ class EnhancedCouponFieldExtractor:
         candidates = []
         
         # Try store-specific patterns first
-        if store_info.get('name') in self.store_patterns:
-            store_patterns = self.store_patterns[store_info['name']]['code_patterns']
+        store_key = store_info.get('key')
+        if store_key and store_key in self.store_patterns:
+            store_patterns = self.store_patterns[store_key]['code_patterns']
             for pattern in store_patterns:
                 matches = re.findall(pattern, text, re.IGNORECASE)
                 for match in matches:

@@ -97,7 +97,7 @@ def test_aha_coupon_fields_are_preserved():
     cleaned_text = extractor._clean_text(ocr_text)
 
     store = extractor._detect_store(cleaned_text)
-    assert store['name'] == 'aha'
+    assert store['name'] == 'Aha'
 
     discount = extractor._extract_discount(cleaned_text)
     assert discount['type'] == 'percentage'
