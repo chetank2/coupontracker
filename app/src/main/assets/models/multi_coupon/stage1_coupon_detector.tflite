@@ -1,0 +1,2 @@
+Placeholder binary for the Stage 1 coupon detector.
+Replace this file with the trained stage1_coupon_detector.tflite artifact before running production builds.

@@ -50,6 +50,8 @@ data/
 models/
 !app/src/test/resources/models/
 !app/src/test/resources/models/**
+!app/src/main/assets/models/
+!app/src/main/assets/models/**
 
 # Local backup files
 *.bak

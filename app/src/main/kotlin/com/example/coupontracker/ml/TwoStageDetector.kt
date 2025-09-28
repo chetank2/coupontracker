@@ -58,6 +58,7 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
     
     // Model configuration
     private var modelManifest: JSONObject? = null
+    private var stubMode: Boolean = false
     private val stage1Classes = arrayOf("coupon_complete", "coupon_partial_top", "coupon_partial_bottom")
     private val stage2Classes = arrayOf("code_region", "benefit_region", "expiry_region", "app_region", "terms_region")
     
@@ -80,15 +81,28 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
             // Load model manifest
             loadModelManifest()
             
+            if (stubMode) {
+                Log.w(
+                    TAG,
+                    "Multi-coupon manifest is marked as stub_mode. Skipping TensorFlow Lite interpreter initialization. " +
+                        "Replace the placeholder assets with trained binaries for production use."
+                )
+                stage1Interpreter = null
+                stage2Interpreter = null
+                initializeImageProcessors()
+                isInitialized = true
+                return
+            }
+
             // Load Stage 1 Model (Coupon Detection)
             loadStage1Model()
-            
-            // Load Stage 2 Model (Field Detection)  
+
+            // Load Stage 2 Model (Field Detection)
             loadStage2Model()
-            
+
             // Initialize image processors
             initializeImageProcessors()
-            
+
             isInitialized = true
             Log.i(TAG, "Two-stage models initialized successfully")
             
@@ -106,7 +120,9 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
             val version = modelManifest?.optString("model_version", "unknown")
             val modelType = modelManifest?.optString("model_type", "unknown")
             
-            Log.d(TAG, "Model manifest loaded - Version: $version, Type: $modelType")
+            stubMode = modelManifest?.optBoolean("stub_mode", false) ?: false
+
+            Log.d(TAG, "Model manifest loaded - Version: $version, Type: $modelType, Stub: $stubMode")
             
         } catch (e: Exception) {
             Log.w(TAG, "Could not load model manifest, using defaults", e)
@@ -160,6 +176,11 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
             return emptyList()
         }
         
+        if (stubMode) {
+            Log.w(TAG, "TwoStageDetector is running in stub mode; multi-coupon detections are disabled.")
+            return emptyList()
+        }
+
         val stage1Interpreter = this.stage1Interpreter
         val stage2Interpreter = this.stage2Interpreter
         
