@@ -291,6 +291,43 @@ class EnhancedOCRHelper {
     }
     
     /**
+     * Sanitize a raw description by removing noisy tokens while preserving
+     * meaningful alphanumeric strings.
+     */
+    internal fun sanitizeDescription(description: String): String {
+        if (description.isBlank()) {
+            return description.trim()
+        }
+
+        val sanitizedSeparators = description
+            .replace("\n", " ")
+            .replace("\r", " ")
+            .replace("\t", " ")
+
+        val tokens = sanitizedSeparators
+            .split(Regex("\\s+"))
+            .filter { it.isNotBlank() }
+
+        if (tokens.isEmpty()) {
+            return ""
+        }
+
+        val vowels = setOf('a', 'e', 'i', 'o', 'u')
+
+        val filteredTokens = tokens.filter { token ->
+            val lettersOnly = token.all { it.isLetter() }
+            if (!lettersOnly) {
+                true
+            } else {
+                val hasVowel = token.any { it.lowercaseChar() in vowels }
+                hasVowel || token.length <= 2
+            }
+        }
+
+        return filteredTokens.joinToString(" ")
+    }
+
+    /**
      * Count words in the recognized text - useful for assessing OCR quality
      */
     fun countWords(text: String): Int {
