@@ -200,11 +200,32 @@ class LocalLlmOcrServiceTest {
         assertEquals("Coupon offer", result.description) // Generic "description" replaced
         assertEquals("FLIP50", result.redeemCode)
         assertEquals(50.0, result.cashbackAmount, 0.01)
-        
+
         // Should pass validation since we have meaningful store name and code
         verify { mockTelemetryService.recordInference(any(), true, any(), any(), null) }
     }
-    
+
+    @Test
+    fun `should sanitize redeem code with whitespace and trailing fragments`() = runTest {
+        val noisyCodeResponse = """
+        {
+            "storeName": "Amazon",
+            "description": "Enjoy a limited time electronics discount",
+            "redeemCode": "Q2SQ74 JS7CK O",
+            "cashbackAmount": "15%",
+            "expiryDate": "2024-12-31",
+            "minOrderAmount": "₹1500"
+        }
+        """.trimIndent()
+
+        every { mockLlmRuntime.runInference(any(), any()) } returns noisyCodeResponse
+
+        val result = localLlmOcrService.processCouponImage(mockBitmap)
+
+        assertEquals("Amazon", result.storeName)
+        assertEquals("Q2SQ74JS7CK", result.redeemCode)
+    }
+
     @Test
     fun `should handle LLM timeout and use fallback`() = runTest {
         // Arrange: LLM times out

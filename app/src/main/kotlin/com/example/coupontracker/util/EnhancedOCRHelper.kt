@@ -131,26 +131,31 @@ class EnhancedOCRHelper {
             while (myntraMatcher.find()) {
                 val potentialCode = myntraMatcher.group(1)
                 // Ensure it has both letters and numbers for higher confidence
-                if (potentialCode.contains(Regex("[A-Z]")) && 
+                if (potentialCode.contains(Regex("[A-Z]")) &&
                     potentialCode.contains(Regex("[0-9]")) &&
                     potentialCode.length >= 10) {
-                    result["code"] = potentialCode.uppercase()
-                    codeFound = true
-                    Log.d(TAG, "Found Myntra coupon code: $potentialCode")
-                    break
+                    val sanitized = CouponCodeSanitizer.sanitize(potentialCode)
+                    if (sanitized != null) {
+                        result["code"] = sanitized
+                        codeFound = true
+                        Log.d(TAG, "Found Myntra coupon code: $sanitized")
+                        break
+                    }
                 }
             }
         }
-        
+
         // If no code found yet, try standard pattern
         if (!codeFound) {
             findMatch(CODE_PATTERN, text)?.let {
-                result["code"] = it.trim().uppercase()
-                codeFound = true
-                Log.d(TAG, "Found standard coupon code: ${it.trim()}")
+                CouponCodeSanitizer.sanitize(it)?.let { sanitized ->
+                    result["code"] = sanitized
+                    codeFound = true
+                    Log.d(TAG, "Found standard coupon code: $sanitized")
+                }
             }
         }
-        
+
         // If still no code found, try looking for isolated alphanumeric strings
         if (!codeFound) {
             // Look for isolated alphanumeric strings that might be codes
@@ -158,12 +163,14 @@ class EnhancedOCRHelper {
             codeRegex.findAll(text).forEach { match ->
                 val potentialCode = match.groupValues[1]
                 // Ensure it has both letters and numbers and isn't just a random sequence
-                if (potentialCode.contains(Regex("[A-Z]")) && 
+                if (potentialCode.contains(Regex("[A-Z]")) &&
                     potentialCode.contains(Regex("[0-9]"))) {
-                    result["code"] = potentialCode.uppercase()
-                    codeFound = true
-                    Log.d(TAG, "Found potential code from isolated string: $potentialCode")
-                    return@forEach
+                    CouponCodeSanitizer.sanitize(potentialCode)?.let { sanitized ->
+                        result["code"] = sanitized
+                        codeFound = true
+                        Log.d(TAG, "Found potential code from isolated string: $sanitized")
+                        return@forEach
+                    }
                 }
             }
         }
