@@ -1,6 +1,0 @@
-2025-05-03 19:27:05,641 - main_process - INFO - Running: /usr/local/bin/python3 /Users/Personal/AndroidStudioProjects/CouponTracker3/coupon-training/data_collection/scripts/test_real_data.py
-2025-05-03 19:27:06,752 - main_process - ERROR - Traceback (most recent call last):
-2025-05-03 19:27:06,752 - main_process - ERROR - File "/Users/Personal/AndroidStudioProjects/CouponTracker3/coupon-training/data_collection/scripts/test_real_data.py", line 18, in <module>
-2025-05-03 19:27:06,752 - main_process - ERROR - from bs4 import BeautifulSoup
-2025-05-03 19:27:06,752 - main_process - ERROR - ModuleNotFoundError: No module named 'bs4'
-2025-05-03 19:27:06,752 - main_process - ERROR - Script test_real_data.py failed with return code 1
