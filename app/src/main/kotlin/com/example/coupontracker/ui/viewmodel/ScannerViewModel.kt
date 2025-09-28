@@ -10,10 +10,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.data.repository.CouponSaveResult
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
 import com.example.coupontracker.ml.FieldType
 import com.example.coupontracker.util.MultiEngineOCR
+import com.example.coupontracker.util.CouponDedupUtils
+import com.example.coupontracker.util.ImageFingerprintUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -143,17 +146,26 @@ class ScannerViewModel @Inject constructor(
     /**
      * Process a single detected coupon instance
      */
-    private suspend fun processSingleCoupon(couponInstance: CouponInstance, imageUri: String?) {
+    private suspend fun processSingleCoupon(
+        couponInstance: CouponInstance,
+        imageUri: String?,
+        shouldPersist: Boolean = false
+    ) {
         try {
             Log.d(TAG, "Processing single coupon with ${couponInstance.fields.size} detected fields")
 
             // Extract text from detected fields using OCR
             val extractedInfo = extractTextFromFields(couponInstance)
-            
+
             // Create coupon from extracted information
             val coupon = createCouponFromInstance(couponInstance, extractedInfo, imageUri)
-            
-            _uiState.value = ScannerUiState.Success(coupon)
+
+            if (shouldPersist) {
+                val result = couponRepository.saveOrMergeCoupon(coupon)
+                emitSaveResult(result)
+            } else {
+                _uiState.value = ScannerUiState.Success(coupon)
+            }
 
         } catch (e: Exception) {
             Log.e(TAG, "Error processing single coupon", e)
@@ -171,7 +183,7 @@ class ScannerViewModel @Inject constructor(
                 Log.d(TAG, "Processing selected coupon: ${selectedInstance.id}")
 
                 // Process the selected coupon
-                processSingleCoupon(selectedInstance, originalImageUri)
+                processSingleCoupon(selectedInstance, originalImageUri, shouldPersist = true)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing selected coupon", e)
@@ -189,27 +201,35 @@ class ScannerViewModel @Inject constructor(
                 _uiState.value = ScannerUiState.Scanning
                 Log.d(TAG, "Processing all ${couponInstances.size} detected coupons")
 
-                val savedCoupons = mutableListOf<Coupon>()
+                val results = mutableListOf<CouponSaveResult>()
 
                 for ((index, instance) in couponInstances.withIndex()) {
                     try {
                         val extractedInfo = extractTextFromFields(instance)
                         val coupon = createCouponFromInstance(instance, extractedInfo, originalImageUri)
-                        
-                        // Save coupon to repository
-                        couponRepository.insertCoupon(coupon)
-                        savedCoupons.add(coupon)
-                        
-                        Log.d(TAG, "Saved coupon ${index + 1}/${couponInstances.size}: ${coupon.redeemCode}")
-                        
+
+                        val result = couponRepository.saveOrMergeCoupon(coupon)
+                        results.add(result)
+
+                        val status = when (result) {
+                            is CouponSaveResult.Inserted -> "inserted"
+                            is CouponSaveResult.Merged -> "updated"
+                            is CouponSaveResult.Duplicate -> "duplicate"
+                        }
+
+                        Log.d(
+                            TAG,
+                            "Processed coupon ${index + 1}/${couponInstances.size} (${status}): ${result.coupon.redeemCode}"
+                        )
+
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing coupon $index", e)
                         // Continue with other coupons
                     }
                 }
 
-                if (savedCoupons.isNotEmpty()) {
-                    _uiState.value = ScannerUiState.AllCouponsSaved(savedCoupons)
+                if (results.isNotEmpty()) {
+                    _uiState.value = ScannerUiState.AllCouponsProcessed(results)
                 } else {
                     _uiState.value = ScannerUiState.Error("Failed to save any coupons")
                 }
@@ -283,21 +303,32 @@ class ScannerViewModel @Inject constructor(
 
         // Note: Quality determination could be used for analytics or sorting
 
+        val store = extractedInfo["storeName"] ?: extractedInfo["app"] ?: "Unknown Store"
+        val description = extractedInfo["description"] ?: extractedInfo["benefit"] ?: "Multi-coupon detected"
+        val terms = extractedInfo["terms"]?.takeIf { it.isNotBlank() }
+        val normalizedDescription = CouponDedupUtils.normalizeDescription(description)
+        val imagePhash = ImageFingerprintUtils.computePerceptualHash(couponInstance.cropBitmap)
+        val imageSignature = ImageFingerprintUtils.computeImageSignature(couponInstance.cropBitmap)
+
         return Coupon(
             id = 0, // Auto-generated by Room
-            storeName = extractedInfo["storeName"] ?: extractedInfo["app"] ?: "Unknown Store",
-            description = extractedInfo["description"] ?: extractedInfo["benefit"] ?: "Multi-coupon detected",
+            storeName = store,
+            description = description,
             expiryDate = expiryDate ?: Date(),
             cashbackAmount = amount,
             redeemCode = extractedInfo["code"] ?: generateFallbackCode(),
             imageUri = imageUri,
             category = determineCategory(extractedInfo),
+            terms = terms,
             rating = null,
             status = when (couponInstance.status) {
                 com.example.coupontracker.ml.CouponStatus.COMPLETE -> "ACTIVE"
                 com.example.coupontracker.ml.CouponStatus.PARTIAL_TOP -> "PARTIAL"
                 com.example.coupontracker.ml.CouponStatus.PARTIAL_BOTTOM -> "PARTIAL"
             },
+            normalizedDescription = normalizedDescription,
+            imagePhash = imagePhash,
+            imageSignature = imageSignature,
             createdAt = Date(),
             updatedAt = Date()
         )
@@ -390,15 +421,21 @@ class ScannerViewModel @Inject constructor(
             numericValue?.toDoubleOrNull() ?: 0.0
         } ?: 0.0
 
+        val description = extractedInfo["description"] ?: "No description"
+        val terms = extractedInfo["terms"]?.takeIf { it.isNotBlank() }
+        val normalizedDescription = CouponDedupUtils.normalizeDescription(description)
+
         return Coupon(
             id = 0, // Auto-generated by Room
             storeName = extractedInfo["storeName"] ?: "Unknown Store",
-            description = extractedInfo["description"] ?: "No description",
+            description = description,
             expiryDate = expiryDate ?: Date(), // Use current date if no expiry provided
             cashbackAmount = amount,
             redeemCode = extractedInfo["code"] ?: generateFallbackCode(),
             imageUri = imageUri,
             category = determineCategory(extractedInfo),
+            terms = terms,
+            normalizedDescription = normalizedDescription,
             rating = null,
             status = "ACTIVE",
             createdAt = Date(),
@@ -442,7 +479,7 @@ class ScannerViewModel @Inject constructor(
      */
     private fun determineCategory(extractedInfo: Map<String, String>): String {
         val text = extractedInfo.values.joinToString(" ").lowercase()
-        
+
         return when {
             text.contains("food") || text.contains("restaurant") || text.contains("zomato") || text.contains("swiggy") -> "Food"
             text.contains("fashion") || text.contains("clothing") || text.contains("myntra") -> "Fashion"
@@ -453,14 +490,22 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    private fun emitSaveResult(result: CouponSaveResult) {
+        when (result) {
+            is CouponSaveResult.Inserted -> _uiState.value = ScannerUiState.Saved(result.coupon)
+            is CouponSaveResult.Merged -> _uiState.value = ScannerUiState.AlreadySaved(result.coupon, result.updatedFields)
+            is CouponSaveResult.Duplicate -> _uiState.value = ScannerUiState.AlreadySaved(result.coupon, emptySet())
+        }
+    }
+
     /**
      * Save the scanned coupon to the repository
      */
     fun saveCoupon(coupon: Coupon) {
         viewModelScope.launch {
             try {
-                couponRepository.insertCoupon(coupon)
-                _uiState.value = ScannerUiState.Saved(coupon)
+                val result = couponRepository.saveOrMergeCoupon(coupon)
+                emitSaveResult(result)
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving coupon", e)
                 _uiState.value = ScannerUiState.Error("Error saving coupon: ${e.message}")
@@ -496,14 +541,15 @@ sealed class ScannerUiState {
     object Scanning : ScannerUiState()
     data class Success(val coupon: Coupon) : ScannerUiState()
     data class Saved(val coupon: Coupon) : ScannerUiState()
+    data class AlreadySaved(val coupon: Coupon, val mergedFields: Set<String> = emptySet()) : ScannerUiState()
     data class Error(val message: String) : ScannerUiState()
-    
+
     // New states for multi-coupon support
     data class MultiCouponDetected(
-        val couponInstances: List<CouponInstance>, 
-        val originalBitmap: Bitmap, 
+        val couponInstances: List<CouponInstance>,
+        val originalBitmap: Bitmap,
         val imageUri: String?
     ) : ScannerUiState()
-    
-    data class AllCouponsSaved(val coupons: List<Coupon>) : ScannerUiState()
+
+    data class AllCouponsProcessed(val results: List<CouponSaveResult>) : ScannerUiState()
 }

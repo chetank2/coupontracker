@@ -24,6 +24,7 @@ import com.example.coupontracker.R
 import com.example.coupontracker.databinding.FragmentScannerBinding
 import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 import com.example.coupontracker.ui.viewmodel.ScannerUiState
+import com.example.coupontracker.data.repository.CouponSaveResult
 import com.example.coupontracker.util.CouponInfo
 import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
@@ -147,10 +148,27 @@ class ScannerFragment : Fragment() {
                         ).show()
                         findNavController().navigateUp()
                     }
+                    is ScannerUiState.AlreadySaved -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.captureButton.isEnabled = true
+
+                        val message = if (state.mergedFields.isNotEmpty()) {
+                            "Coupon already saved – updated ${state.mergedFields.joinToString()}"
+                        } else {
+                            "Coupon already saved"
+                        }
+
+                        Snackbar.make(
+                            binding.root,
+                            message,
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                        findNavController().navigateUp()
+                    }
                     is ScannerUiState.MultiCouponDetected -> {
                         binding.progressBar.visibility = View.GONE
                         binding.captureButton.isEnabled = true
-                        
+
                         // Handle multi-coupon detection
                         Snackbar.make(
                             binding.root,
@@ -161,16 +179,23 @@ class ScannerFragment : Fragment() {
                         // Navigate to multi-coupon selection activity
                         // For now, just show a message - you can implement navigation later
                     }
-                    is ScannerUiState.AllCouponsSaved -> {
+                    is ScannerUiState.AllCouponsProcessed -> {
                         binding.progressBar.visibility = View.GONE
                         binding.captureButton.isEnabled = true
-                        
-                        Snackbar.make(
-                            binding.root,
-                            "Successfully saved ${state.coupons.size} coupons!",
-                            Snackbar.LENGTH_LONG
-                        ).show()
-                        
+
+                        val inserted = state.results.count { it is CouponSaveResult.Inserted }
+                        val merged = state.results.count { it is CouponSaveResult.Merged }
+                        val duplicates = state.results.count { it is CouponSaveResult.Duplicate }
+                        val total = state.results.size
+
+                        val summary = buildString {
+                            append("Processed $total coupons – saved $inserted")
+                            if (merged > 0) append(", updated $merged")
+                            if (duplicates > 0) append(", already saved $duplicates")
+                        }
+
+                        Snackbar.make(binding.root, summary, Snackbar.LENGTH_LONG).show()
+
                         findNavController().navigateUp()
                     }
                 }

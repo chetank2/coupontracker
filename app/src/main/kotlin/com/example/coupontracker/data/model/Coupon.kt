@@ -16,6 +16,7 @@ data class Coupon(
     val imageUri: String?,
     val category: String? = null,
     val status: String? = null,
+    val terms: String? = null,
 
     // New fields
     val minimumPurchase: Double? = null,
@@ -26,6 +27,9 @@ data class Coupon(
     val usageCount: Int = 0,
     val reminderDate: Date? = null,
     val platformType: String? = null,
+    val normalizedDescription: String? = null,
+    val imagePhash: String? = null,
+    val imageSignature: String? = null,
 
     // Existing tracking fields
     val rating: String? = null,

@@ -431,6 +431,26 @@ fun ScannerScreen(
                                     }
                                 }
 
+                                if (uiState is ScannerUiState.AlreadySaved) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    val mergedFields = (uiState as ScannerUiState.AlreadySaved).mergedFields
+                                    val message = if (mergedFields.isNotEmpty()) {
+                                        "Coupon already saved – updated ${mergedFields.joinToString()}"
+                                    } else {
+                                        "Coupon already saved"
+                                    }
+                                    Text(
+                                        text = message,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+
+                                    LaunchedEffect(mergedFields) {
+                                        kotlinx.coroutines.delay(1500)
+                                        navController.popBackStack()
+                                    }
+                                }
+
                                 // Show error message
                                 if (uiState is ScannerUiState.Error) {
                                     Spacer(modifier = Modifier.height(16.dp))

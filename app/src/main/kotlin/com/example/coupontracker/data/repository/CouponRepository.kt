@@ -26,4 +26,12 @@ interface CouponRepository {
     suspend fun updateCouponPriority(couponId: Long, isPriority: Boolean)
     suspend fun updateCouponReminder(couponId: Long, reminderDate: Date?)
     suspend fun updateCouponStatus(couponId: Long, status: String)
+
+    suspend fun saveOrMergeCoupon(coupon: Coupon): CouponSaveResult
+}
+
+sealed class CouponSaveResult(open val coupon: Coupon) {
+    data class Inserted(override val coupon: Coupon) : CouponSaveResult(coupon)
+    data class Merged(override val coupon: Coupon, val updatedFields: Set<String>) : CouponSaveResult(coupon)
+    data class Duplicate(override val coupon: Coupon) : CouponSaveResult(coupon)
 }

@@ -50,4 +50,35 @@ interface CouponDao {
 
     @Query("SELECT * FROM coupons WHERE expiryDate BETWEEN :startDate AND :endDate ORDER BY expiryDate ASC")
     fun getCouponsExpiringBetween(startDate: Date, endDate: Date): Flow<List<Coupon>>
+
+    @Query(
+        """
+        SELECT * FROM coupons
+        WHERE redeemCode IS NOT NULL
+          AND UPPER(storeName) = UPPER(:storeName)
+          AND UPPER(redeemCode) = UPPER(:redeemCode)
+        """
+    )
+    suspend fun findByStoreAndCode(storeName: String, redeemCode: String): List<Coupon>
+
+    @Query(
+        """
+        SELECT * FROM coupons
+        WHERE redeemCode IS NULL
+          AND UPPER(storeName) = UPPER(:storeName)
+          AND normalizedDescription = :normalizedDescription
+          AND (
+              :imagePhash IS NULL
+              OR imagePhash IS NULL
+              OR imagePhash = :imagePhash
+              OR (:imageSignature IS NOT NULL AND imageSignature = :imageSignature)
+          )
+        """
+    )
+    suspend fun findByStoreAndDescription(
+        storeName: String,
+        normalizedDescription: String,
+        imagePhash: String?,
+        imageSignature: String?
+    ): List<Coupon>
 }

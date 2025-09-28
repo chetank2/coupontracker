@@ -24,6 +24,7 @@ import com.example.coupontracker.ml.CouponStatus
 import com.example.coupontracker.ml.FieldType
 import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 import com.example.coupontracker.ui.viewmodel.ScannerUiState
+import com.example.coupontracker.data.repository.CouponSaveResult
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -108,44 +109,74 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
                     is ScannerUiState.Success -> {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE
-                        
+
                         Toast.makeText(
                             this@MultiCouponSelectionActivity,
                             "Coupon processed successfully: ${state.coupon.redeemCode}",
                             Toast.LENGTH_LONG
                         ).show()
-                        
-                        // Save the coupon
-                        viewModel.saveCoupon(state.coupon)
-                    }
-                    is ScannerUiState.AllCouponsSaved -> {
-                        binding.progressBar.visibility = View.GONE
-                        binding.buttonsContainer.visibility = View.VISIBLE
-                        
-                        Toast.makeText(
-                            this@MultiCouponSelectionActivity,
-                            "Successfully saved ${state.coupons.size} coupons",
-                            Toast.LENGTH_LONG
-                        ).show()
-                        
-                        finish()
                     }
                     is ScannerUiState.Saved -> {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE
-                        
+
                         Toast.makeText(
                             this@MultiCouponSelectionActivity,
                             "Coupon saved successfully!",
                             Toast.LENGTH_SHORT
                         ).show()
-                        
+
+                        finish()
+                    }
+                    is ScannerUiState.AlreadySaved -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.buttonsContainer.visibility = View.VISIBLE
+
+                        val message = if (state.mergedFields.isNotEmpty()) {
+                            "Coupon already saved – updated ${state.mergedFields.joinToString()}"
+                        } else {
+                            "Coupon already saved"
+                        }
+
+                        Toast.makeText(
+                            this@MultiCouponSelectionActivity,
+                            message,
+                            Toast.LENGTH_LONG
+                        ).show()
+
+                        finish()
+                    }
+                    is ScannerUiState.AllCouponsProcessed -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.buttonsContainer.visibility = View.VISIBLE
+
+                        val inserted = state.results.count { it is CouponSaveResult.Inserted }
+                        val merged = state.results.count { it is CouponSaveResult.Merged }
+                        val duplicates = state.results.count { it is CouponSaveResult.Duplicate }
+                        val total = state.results.size
+
+                        val summary = buildString {
+                            append("Processed $total coupons – saved $inserted")
+                            if (merged > 0) {
+                                append(", updated $merged")
+                            }
+                            if (duplicates > 0) {
+                                append(", already saved $duplicates")
+                            }
+                        }
+
+                        Toast.makeText(
+                            this@MultiCouponSelectionActivity,
+                            summary,
+                            Toast.LENGTH_LONG
+                        ).show()
+
                         finish()
                     }
                     is ScannerUiState.Error -> {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE
-                        
+
                         Toast.makeText(
                             this@MultiCouponSelectionActivity,
                             "Error: ${state.message}",
