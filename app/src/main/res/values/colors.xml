@@ -57,4 +57,23 @@
     <color name="colorPrimary">#1976D2</color>
     <color name="colorPrimaryDark">#1565C0</color>
     <color name="colorAccent">#03DAC6</color>
+    
+    <!-- Accent Colors (Default - Light Mode) -->
+    <color name="accent_green">#4CAF50</color>
+    <color name="accent_red">#F44336</color>
+    <color name="accent_yellow">#FF9800</color>
+    
+    <!-- Text Colors (Default - Light Mode) -->
+    <color name="text_primary">#000000</color>
+    <color name="text_secondary">#757575</color>
+    <color name="text_tertiary">#9E9E9E</color>
+    <color name="text_on_dark">#FFFFFF</color>
+    <color name="text_on_dark_secondary">#E0E0E0</color>
+    
+    <!-- Card Colors (Default - Light Mode) -->
+    <color name="card">#FFFFFF</color>
+    
+    <!-- Basic Colors -->
+    <color name="black">#000000</color>
+    <color name="white">#FFFFFF</color>
 </resources>
