@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
-import pytesseract
 import sys
 
+try:  # pragma: no cover - optional dependency for OCR validation
+    import pytesseract  # type: ignore
+except ImportError:  # pragma: no cover - handled gracefully during runtime
+    pytesseract = None  # type: ignore[assignment]
+
 def main():
+    if pytesseract is None:
+        print("pytesseract is not installed. Install it with 'pip install pytesseract'.")
+        return 1
+
     try:
         # Print Tesseract version
         print(f"Tesseract Version (via pytesseract): {pytesseract.get_tesseract_version()}")
