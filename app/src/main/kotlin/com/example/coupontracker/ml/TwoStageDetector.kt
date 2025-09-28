@@ -2,11 +2,14 @@ package com.example.coupontracker.ml
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.graphics.RectF
 import android.os.Parcelable
 import android.util.DisplayMetrics
 import android.util.Log
 import androidx.annotation.VisibleForTesting
+import com.example.coupontracker.util.BitmapManager
+import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
@@ -248,12 +251,28 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
             
             couponDetections.forEachIndexed { index, couponDetection ->
                 try {
-                    // Crop coupon from original image
-                    val cropResult = cropBitmap(bitmap, couponDetection.boundingBox)
-                    val couponCrop = cropResult.bitmap
+                    // Create managed crop from original image
+                    val cropRect = Rect(
+                        couponDetection.boundingBox.left.toInt(),
+                        couponDetection.boundingBox.top.toInt(),
+                        couponDetection.boundingBox.right.toInt(),
+                        couponDetection.boundingBox.bottom.toInt()
+                    )
+                    
+                    val managedCrop = runBlocking {
+                        BitmapManager.createManagedCrop(bitmap, cropRect, "coupon_$index")
+                    }
+                    
+                    if (managedCrop == null) {
+                        Log.w(TAG, "Failed to create managed crop for coupon $index")
+                        return@forEachIndexed
+                    }
+                    
+                    val couponCrop = managedCrop.bitmap
                     
                     if (couponCrop.width < 10 || couponCrop.height < 10) {
                         Log.w(TAG, "Coupon crop too small, skipping instance $index")
+                        BitmapManager.releaseBitmap(managedCrop.id)
                         return@forEachIndexed
                     }
                     
@@ -264,7 +283,7 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
                     val adjustedFields = adjustFieldCoordinates(
                         fieldDetections,
                         couponDetection.boundingBox,
-                        cropResult.padding
+                        CropPadding.ZERO // BitmapManager handles padding internally
                     )
 
                     couponInstances.add(
@@ -275,7 +294,7 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
                             confidence = couponDetection.confidence,
                             fields = adjustedFields,
                             cropBitmap = couponCrop,
-                            cropPadding = cropResult.padding
+                            managedBitmapId = managedCrop.id
                         )
                     )
                     
@@ -741,6 +760,21 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
         Log.i(TAG, "Created ${instances.size} demo coupon instances")
         return instances
     }
+    
+    /**
+     * Cleanup all managed bitmap resources
+     */
+    fun cleanup() {
+        BitmapManager.cleanup()
+        Log.d(TAG, "TwoStageDetector cleanup completed")
+    }
+    
+    /**
+     * Get current bitmap memory usage statistics
+     */
+    fun getMemoryStats(): com.example.coupontracker.util.BitmapMemoryStats {
+        return BitmapManager.getMemoryStats()
+    }
 }
 
 /**
@@ -781,7 +815,8 @@ data class CouponInstance(
     val confidence: Float,
     val fields: List<FieldDetection>,
     val cropBitmap: Bitmap,
-    val cropPadding: CropPadding = CropPadding.ZERO
+    val cropPadding: CropPadding = CropPadding.ZERO,
+    val managedBitmapId: String? = null
 ) : Parcelable {
     fun getFieldByType(fieldType: FieldType): FieldDetection? {
         return fields.find { it.fieldType == fieldType }
@@ -791,6 +826,15 @@ data class CouponInstance(
         val requiredTypes = setOf(FieldType.CODE_REGION, FieldType.BENEFIT_REGION)
         return requiredTypes.all { requiredType ->
             fields.any { it.fieldType == requiredType }
+        }
+    }
+    
+    /**
+     * Release managed bitmap resources
+     */
+    fun cleanup() {
+        managedBitmapId?.let { id ->
+            BitmapManager.releaseBitmap(id)
         }
     }
 }
