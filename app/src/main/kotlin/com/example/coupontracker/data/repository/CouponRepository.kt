@@ -28,9 +28,11 @@ interface CouponRepository {
     suspend fun updateCouponStatus(couponId: Long, status: String)
     suspend fun saveOrMergeCoupon(
         coupon: Coupon,
-        normalizedDescription: String,
+        normalizedDescription: String?,
         descriptionHash: String?,
-        descriptionSignature: String?
+        descriptionSignature: String?,
+        imagePhash: String?,
+        imageSignature: String?
     ): CouponSaveResult
 }
 

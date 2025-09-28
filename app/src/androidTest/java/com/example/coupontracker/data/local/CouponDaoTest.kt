@@ -148,7 +148,9 @@ class CouponDaoTest {
             storeName = coupon.storeName,
             normalizedDescription = normalized,
             descriptionHash = null,
-            descriptionSignature = null
+            descriptionSignature = null,
+            imagePhash = null,
+            imageSignature = null
         )
 
         assert(duplicate != null)

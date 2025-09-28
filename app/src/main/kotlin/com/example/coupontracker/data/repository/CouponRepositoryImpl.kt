@@ -82,24 +82,36 @@ class CouponRepositoryImpl @Inject constructor(
 
     override suspend fun saveOrMergeCoupon(
         coupon: Coupon,
-        normalizedDescription: String,
+        normalizedDescription: String?,
         descriptionHash: String?,
-        descriptionSignature: String?
+        descriptionSignature: String?,
+        imagePhash: String?,
+        imageSignature: String?
     ): CouponSaveResult {
-        val existing = couponDao.findByStoreAndDescription(
-            storeName = coupon.storeName,
+        val normalizedCoupon = coupon.copy(
             normalizedDescription = normalizedDescription,
             descriptionHash = descriptionHash,
-            descriptionSignature = descriptionSignature
+            descriptionSignature = descriptionSignature,
+            imagePhash = imagePhash,
+            imageSignature = imageSignature
+        )
+
+        val existing = couponDao.findByStoreAndDescription(
+            storeName = normalizedCoupon.storeName,
+            normalizedDescription = normalizedDescription,
+            descriptionHash = descriptionHash,
+            descriptionSignature = descriptionSignature,
+            imagePhash = imagePhash,
+            imageSignature = imageSignature
         )
 
         return if (existing != null) {
-            val merged = mergeCoupons(existing, coupon)
+            val merged = mergeCoupons(existing, normalizedCoupon)
             couponDao.updateCoupon(merged)
             CouponSaveResult.AlreadySaved(merged)
         } else {
-            val id = couponDao.insertCoupon(coupon)
-            CouponSaveResult.Saved(coupon.copy(id = id))
+            val id = couponDao.insertCoupon(normalizedCoupon)
+            CouponSaveResult.Saved(normalizedCoupon.copy(id = id))
         }
     }
 
@@ -110,6 +122,11 @@ class CouponRepositoryImpl @Inject constructor(
             imageUri = incoming.imageUri ?: existing.imageUri,
             category = incoming.category ?: existing.category,
             status = incoming.status ?: existing.status,
+            normalizedDescription = incoming.normalizedDescription ?: existing.normalizedDescription,
+            descriptionHash = incoming.descriptionHash ?: existing.descriptionHash,
+            descriptionSignature = incoming.descriptionSignature ?: existing.descriptionSignature,
+            imagePhash = incoming.imagePhash ?: existing.imagePhash,
+            imageSignature = incoming.imageSignature ?: existing.imageSignature,
             minimumPurchase = incoming.minimumPurchase ?: existing.minimumPurchase,
             maximumDiscount = incoming.maximumDiscount ?: existing.maximumDiscount,
             isPriority = incoming.isPriority || existing.isPriority,

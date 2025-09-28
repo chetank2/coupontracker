@@ -33,7 +33,9 @@ class SingleScanPersistenceHelperTest {
                 coupon = incoming,
                 normalizedDescription = any(),
                 descriptionHash = any(),
-                descriptionSignature = any()
+                descriptionSignature = any(),
+                imagePhash = any(),
+                imageSignature = any()
             )
         } returns CouponSaveResult.AlreadySaved(existingCoupon)
 

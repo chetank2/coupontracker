@@ -108,6 +108,7 @@ class CouponRepositoryTest {
             updatedAt = Date(0)
         )
         val normalized = existing.description.lowercase().trim()
+        val storedExisting = existing.copy(normalizedDescription = normalized)
 
         val incoming = existing.copy(
             id = 0,
@@ -123,12 +124,14 @@ class CouponRepositoryTest {
                 storeName = existing.storeName,
                 normalizedDescription = normalized,
                 descriptionHash = null,
-                descriptionSignature = null
+                descriptionSignature = null,
+                imagePhash = null,
+                imageSignature = null
             )
-        } returns existing
+        } returns storedExisting
         coEvery { couponDao.updateCoupon(any()) } returns Unit
 
-        val result = repositoryImpl.saveOrMergeCoupon(incoming, normalized, null, null)
+        val result = repositoryImpl.saveOrMergeCoupon(incoming, normalized, null, null, null, null)
 
         assert(result is CouponSaveResult.AlreadySaved)
         val alreadySaved = result as CouponSaveResult.AlreadySaved
@@ -141,7 +144,8 @@ class CouponRepositoryTest {
                         it.redeemCode == existing.redeemCode &&
                         it.cashbackAmount == incoming.cashbackAmount &&
                         it.usageCount == kotlin.math.max(existing.usageCount, incoming.usageCount) &&
-                        it.createdAt == existing.createdAt
+                        it.createdAt == existing.createdAt &&
+                        it.normalizedDescription == normalized
                 }
             )
         }
@@ -165,15 +169,19 @@ class CouponRepositoryTest {
                 storeName = incoming.storeName,
                 normalizedDescription = incoming.description.lowercase().trim(),
                 descriptionHash = any(),
-                descriptionSignature = any()
+                descriptionSignature = any(),
+                imagePhash = any(),
+                imageSignature = any()
             )
         } returns null
 
-        coEvery { couponDao.insertCoupon(incoming) } returns 7L
+        coEvery { couponDao.insertCoupon(any()) } returns 7L
 
         val result = repositoryImpl.saveOrMergeCoupon(
             incoming,
             incoming.description.lowercase().trim(),
+            null,
+            null,
             null,
             null
         )
@@ -181,6 +189,12 @@ class CouponRepositoryTest {
         assert(result is CouponSaveResult.Saved)
         val saved = result as CouponSaveResult.Saved
         assert(saved.coupon.id == 7L)
-        coVerify { couponDao.insertCoupon(incoming) }
+        coVerify {
+            couponDao.insertCoupon(
+                match {
+                    it.normalizedDescription == incoming.description.lowercase().trim()
+                }
+            )
+        }
     }
 }

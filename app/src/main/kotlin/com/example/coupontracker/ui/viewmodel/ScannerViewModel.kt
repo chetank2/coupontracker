@@ -771,11 +771,15 @@ internal class SingleScanPersistenceHelper(
         coupon: Coupon,
         extractedFields: Map<String, String>
     ): CouponSaveResult {
+        val normalizedDescription = normalizeDescription(coupon.description).takeIf { it.isNotBlank() }
+
         return couponRepository.saveOrMergeCoupon(
             coupon = coupon,
-            normalizedDescription = normalizeDescription(coupon.description),
+            normalizedDescription = normalizedDescription,
             descriptionHash = computeDescriptionHash(coupon.description),
-            descriptionSignature = computeDescriptionSignature(coupon, extractedFields)
+            descriptionSignature = computeDescriptionSignature(coupon, extractedFields),
+            imagePhash = null,
+            imageSignature = null
         )
     }
 

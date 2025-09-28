@@ -17,6 +17,13 @@ data class Coupon(
     val category: String? = null,
     val status: String? = null,
 
+    // Normalization metadata for deduplication
+    val normalizedDescription: String? = null,
+    val descriptionHash: String? = null,
+    val descriptionSignature: String? = null,
+    val imagePhash: String? = null,
+    val imageSignature: String? = null,
+
     // New fields
     val minimumPurchase: Double? = null,
     val maximumDiscount: Double? = null,
