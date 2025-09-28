@@ -1,8 +1,12 @@
-names:
-- coupon_complete
-- coupon_partial_top
-- coupon_partial_bottom
-nc: 3
-path: /Users/user/Downloads/CouponTracker3/multi_coupon_training/stage1_coupon_detection
+# Stage 1: Coupon Detection Dataset
+path: .  # Current directory (relative to where training script is run)
 train: images/train
 val: images/val
+
+# Classes
+names:
+  0: coupon_complete
+  1: coupon_partial_top
+  2: coupon_partial_bottom
+
+nc: 3

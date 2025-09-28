@@ -1,10 +1,14 @@
-names:
-- code_region
-- benefit_region
-- expiry_region
-- app_region
-- terms_region
-nc: 5
-path: /Users/user/Downloads/CouponTracker3/multi_coupon_training/stage2_field_detection
+# Stage 2: Field Detection Dataset  
+path: .  # Current directory (relative to where training script is run)
 train: images/train
 val: images/val
+
+# Classes
+names:
+  0: code_region
+  1: benefit_region
+  2: expiry_region
+  3: app_region
+  4: terms_region
+
+nc: 5

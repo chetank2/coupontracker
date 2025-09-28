@@ -101,7 +101,7 @@ class CouponAdapter(
             }
         }
         
-        private fun setExpiryDateText(expiryDate: Date?) {
+        private fun setExpiryDateText(expiryDate: java.util.Date?) {
             val context = binding.root.context
             val status = DateFormatter.getExpiryStatus(expiryDate)
             val badgeColor = when (status) {

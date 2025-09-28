@@ -95,17 +95,43 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
                 return
             }
 
-            // Load Stage 1 Model (Coupon Detection)
-            loadStage1Model()
+            // Try to load models, but fallback gracefully if they're placeholders
+            var modelsLoaded = false
+            try {
+                // Load Stage 1 Model (Coupon Detection)
+                loadStage1Model()
 
-            // Load Stage 2 Model (Field Detection)
-            loadStage2Model()
+                // Load Stage 2 Model (Field Detection)
+                loadStage2Model()
+                
+                modelsLoaded = true
+                Log.i(TAG, "Production models loaded successfully")
+                
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load production models (likely placeholders): ${e.message}")
+                
+                if (demoMode) {
+                    Log.i(TAG, "Demo mode enabled - continuing with placeholder models for synthetic detections")
+                    stage1Interpreter = null
+                    stage2Interpreter = null
+                    modelsLoaded = true // Allow demo mode to work
+                } else {
+                    Log.e(TAG, "No demo mode fallback available, initialization failed")
+                    throw e
+                }
+            }
 
-            // Initialize image processors
-            initializeImageProcessors()
-
-            isInitialized = true
-            Log.i(TAG, "Two-stage models initialized successfully")
+            if (modelsLoaded) {
+                // Initialize image processors
+                initializeImageProcessors()
+                isInitialized = true
+                
+                if (demoMode) {
+                    Log.i(TAG, "Two-stage detector initialized in demo mode")
+                } else {
+                    Log.i(TAG, "Two-stage detector initialized with production models")
+                }
+            }
             
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing models", e)

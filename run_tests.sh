@@ -65,3 +65,4 @@ echo "📋 Remember: Never use 'testClasses' - it doesn't exist in Android proje
 echo "✅ Always use: test, testDebugUnitTest, testReleaseUnitTest, or build"
 
 
+
