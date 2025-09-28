@@ -48,3 +48,37 @@ def test_detect_store_prefers_mixed_case_brand_over_short_all_caps():
 
     assert result['type'] == 'extracted'
     assert result['name'] == 'Minimalist'
+
+
+def test_extract_discount_handles_combined_percentage_phrases():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        Get Upto 50% Off* + Extra 33% Off
+        at PUMA
+        Code: KQSKLBLBIR
+        Expires on 05 May, 2025, 11:59 PM
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+    discount = extractor._extract_discount(cleaned_text)
+
+    assert discount['type'] == 'percentage'
+    assert discount['value'] == 50
+    assert discount['raw_text'] == 'Up to 50% Off + Extra 33% Off'
+    assert discount['components'] == ['Up to 50% Off', 'Extra 33% Off']
+
+
+def test_extract_expiry_date_with_comma_and_time():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        Expires on 05 May, 2025, 11:59 PM
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+    expiry = extractor._extract_expiry_date(cleaned_text)
+
+    assert expiry['raw_text'] == '05 May, 2025, 11:59 PM'
+    assert expiry['confidence'] > 0.9
+    assert expiry['parsed_date'] is not None
