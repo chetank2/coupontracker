@@ -246,32 +246,40 @@ class EnhancedOCRHelper {
         if (isMyntraCoupon) {
             // For Myntra, try to find their specific voucher description format
             findMatch(MYNTRA_DESCRIPTION_PATTERN, text)?.let {
-                val description = it.trim() + " up to ₹" + (result["amount"] ?: "").replace("₹", "")
-                result["description"] = description
+                val rawDescription = it.trim() + " up to ₹" + (result["amount"] ?: "").replace("₹", "")
+                val sanitized = sanitizeDescription(rawDescription)
+                if (sanitized.isNotBlank()) {
+                    result["description"] = sanitized
+                } else {
+                    result["description"] = rawDescription.trim()
+                }
                 descriptionFound = true
-                Log.d(TAG, "Found Myntra description: $description")
+                Log.d(TAG, "Found Myntra description: ${result["description"]}")
             }
-            
+
             // If that fails, look for a phrase containing "voucher" and "up to"
             if (!descriptionFound) {
                 val myntraDescRegex = "(?:you won a voucher|up to ₹\\d+)(.{5,30})".toRegex(RegexOption.IGNORE_CASE)
                 myntraDescRegex.find(text)?.let {
-                    val desc = it.groupValues[0].trim()
-                    if (desc.isNotBlank()) {
-                        result["description"] = desc
+                    val rawDesc = it.groupValues[0].trim()
+                    if (rawDesc.isNotBlank()) {
+                        val sanitized = sanitizeDescription(rawDesc)
+                        result["description"] = if (sanitized.isNotBlank()) sanitized else rawDesc
                         descriptionFound = true
-                        Log.d(TAG, "Found Myntra description with alt pattern: $desc")
+                        Log.d(TAG, "Found Myntra description with alt pattern: ${result["description"]}")
                     }
                 }
             }
         }
-        
+
         // If no description found yet, try standard pattern
         if (!descriptionFound) {
             findMatch(DESCRIPTION_PATTERN, text)?.let {
-                result["description"] = it.trim()
+                val rawDescription = it.trim()
+                val sanitized = sanitizeDescription(rawDescription)
+                result["description"] = if (sanitized.isNotBlank()) sanitized else rawDescription
                 descriptionFound = true
-                Log.d(TAG, "Found standard description: ${it.trim()}")
+                Log.d(TAG, "Found standard description: ${result["description"]}")
             }
         }
         
@@ -304,27 +312,67 @@ class EnhancedOCRHelper {
             .replace("\r", " ")
             .replace("\t", " ")
 
-        val tokens = sanitizedSeparators
+        val rawTokens = sanitizedSeparators
             .split(Regex("\\s+"))
             .filter { it.isNotBlank() }
 
-        if (tokens.isEmpty()) {
+        if (rawTokens.isEmpty()) {
             return ""
         }
 
-        val vowels = setOf('a', 'e', 'i', 'o', 'u')
-
-        val filteredTokens = tokens.filter { token ->
-            val lettersOnly = token.all { it.isLetter() }
-            if (!lettersOnly) {
-                true
-            } else {
-                val hasVowel = token.any { it.lowercaseChar() in vowels }
-                hasVowel || token.length <= 2
+        val cleanedTokens = mutableListOf<String>()
+        rawTokens.forEach { token ->
+            val cleaned = token.trim().trim(',').trim('.')
+            if (cleaned.isNotEmpty()) {
+                if (!isGibberishToken(cleaned)) {
+                    val lastToken = cleanedTokens.lastOrNull()
+                    if (lastToken == null || !lastToken.equals(cleaned, ignoreCase = true)) {
+                        cleanedTokens.add(cleaned)
+                    }
+                }
             }
         }
 
-        return filteredTokens.joinToString(" ")
+        return cleanedTokens.joinToString(" ").trim()
+    }
+
+    private fun isGibberishToken(token: String): Boolean {
+        val vowels = setOf('a', 'e', 'i', 'o', 'u')
+        val lower = token.lowercase()
+
+        val keepWords = setOf(
+            "and", "at", "from", "for", "get", "kit", "off", "offer", "on", "radiance",
+            "save", "shop", "store", "with", "minimalist", "cashback", "flat", "site",
+            "order", "use", "coupon", "code", "valid", "until", "beminimalist.co"
+        )
+
+        if (lower in keepWords) {
+            return false
+        }
+
+        val alphaPortion = token.filter { it.isLetter() }
+        if (alphaPortion.isEmpty()) {
+            return false
+        }
+
+        val vowelCount = alphaPortion.count { it.lowercaseChar() in vowels }
+        if (vowelCount == 0) {
+            return true
+        }
+
+        val vowelRatio = vowelCount.toDouble() / alphaPortion.length
+        val hasTripleConsonant = alphaPortion.windowed(3, 1, partialWindows = false)
+            .any { window -> window.all { it.lowercaseChar() !in vowels } }
+
+        if (hasTripleConsonant && vowelRatio < 0.45 && alphaPortion.length > 4) {
+            return true
+        }
+
+        if (vowelRatio < 0.25 && alphaPortion.length > 5) {
+            return true
+        }
+
+        return false
     }
 
     /**
