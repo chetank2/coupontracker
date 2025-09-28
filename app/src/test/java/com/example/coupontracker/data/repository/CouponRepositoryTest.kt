@@ -197,4 +197,69 @@ class CouponRepositoryTest {
             )
         }
     }
+
+    @Test
+    fun `saveOrMergeCoupon preserves stored metadata when incoming lacks it`() = runBlocking {
+        val existing = Coupon(
+            id = 84,
+            storeName = "Store",
+            description = "Daily Deal",
+            expiryDate = Date(),
+            cashbackAmount = 12.0,
+            redeemCode = "DAILY12",
+            imageUri = null,
+            category = "Test",
+            normalizedDescription = "daily deal",
+            descriptionHash = "hash",
+            descriptionSignature = "sig",
+            imagePhash = "phash",
+            imageSignature = "imgsig"
+        )
+
+        val incoming = existing.copy(
+            id = 0,
+            cashbackAmount = 20.0,
+            normalizedDescription = null,
+            descriptionHash = null,
+            descriptionSignature = null,
+            imagePhash = null,
+            imageSignature = null
+        )
+
+        coEvery {
+            couponDao.findByStoreAndDescription(
+                storeName = existing.storeName,
+                normalizedDescription = existing.normalizedDescription,
+                descriptionHash = null,
+                descriptionSignature = null,
+                imagePhash = null,
+                imageSignature = null
+            )
+        } returns existing
+        coEvery { couponDao.updateCoupon(any()) } returns Unit
+
+        val result = repositoryImpl.saveOrMergeCoupon(
+            coupon = incoming,
+            normalizedDescription = null,
+            descriptionHash = null,
+            descriptionSignature = null,
+            imagePhash = null,
+            imageSignature = null
+        )
+
+        assert(result is CouponSaveResult.AlreadySaved)
+        coVerify {
+            couponDao.updateCoupon(
+                match {
+                    it.id == existing.id &&
+                        it.normalizedDescription == existing.normalizedDescription &&
+                        it.descriptionHash == existing.descriptionHash &&
+                        it.descriptionSignature == existing.descriptionSignature &&
+                        it.imagePhash == existing.imagePhash &&
+                        it.imageSignature == existing.imageSignature &&
+                        it.cashbackAmount == incoming.cashbackAmount
+                }
+            )
+        }
+    }
 }

@@ -4,6 +4,7 @@ import com.example.coupontracker.data.local.CouponDao
 import com.example.coupontracker.data.model.Coupon
 import kotlinx.coroutines.flow.Flow
 import java.util.Date
+import java.util.Locale
 import kotlin.math.max
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -88,21 +89,30 @@ class CouponRepositoryImpl @Inject constructor(
         imagePhash: String?,
         imageSignature: String?
     ): CouponSaveResult {
+        val sanitizedNormalized = normalizedDescription?.takeIf { it.isNotBlank() }
+        val sanitizedHash = descriptionHash?.takeIf { it.isNotBlank() }
+        val sanitizedDescriptionSignature = descriptionSignature?.takeIf { it.isNotBlank() }
+        val sanitizedImagePhash = imagePhash?.takeIf { it.isNotBlank() }
+        val sanitizedImageSignature = imageSignature?.takeIf { it.isNotBlank() }
+
         val normalizedCoupon = coupon.copy(
-            normalizedDescription = normalizedDescription,
-            descriptionHash = descriptionHash,
-            descriptionSignature = descriptionSignature,
-            imagePhash = imagePhash,
-            imageSignature = imageSignature
+            normalizedDescription = sanitizedNormalized ?: coupon.normalizedDescription,
+            descriptionHash = sanitizedHash ?: coupon.descriptionHash,
+            descriptionSignature = sanitizedDescriptionSignature ?: coupon.descriptionSignature,
+            imagePhash = sanitizedImagePhash ?: coupon.imagePhash,
+            imageSignature = sanitizedImageSignature ?: coupon.imageSignature
         )
+
+        val lookupNormalized = normalizedCoupon.normalizedDescription
+            ?: normalizedCoupon.description.lowercase(Locale.getDefault()).trim().takeIf { it.isNotEmpty() }
 
         val existing = couponDao.findByStoreAndDescription(
             storeName = normalizedCoupon.storeName,
-            normalizedDescription = normalizedDescription,
-            descriptionHash = descriptionHash,
-            descriptionSignature = descriptionSignature,
-            imagePhash = imagePhash,
-            imageSignature = imageSignature
+            normalizedDescription = lookupNormalized,
+            descriptionHash = normalizedCoupon.descriptionHash,
+            descriptionSignature = normalizedCoupon.descriptionSignature,
+            imagePhash = normalizedCoupon.imagePhash,
+            imageSignature = normalizedCoupon.imageSignature
         )
 
         return if (existing != null) {

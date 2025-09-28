@@ -185,4 +185,39 @@ class CouponDaoTest {
         assert(duplicate != null)
         assert(duplicate?.redeemCode == coupon.redeemCode)
     }
+
+    @Test
+    fun findByStoreAndDescriptionMatchesWhenIncomingMetadataMissing() = runBlocking {
+        val coupon = Coupon(
+            id = 0,
+            storeName = "Store",
+            description = "Flash Deal",
+            expiryDate = Date(),
+            cashbackAmount = 25.0,
+            redeemCode = "FLASH25",
+            imageUri = null,
+            category = "Test",
+            normalizedDescription = "flash deal",
+            descriptionHash = "hash-value",
+            descriptionSignature = "signature-value",
+            imagePhash = "image-phash",
+            imageSignature = "image-signature"
+        )
+
+        couponDao.insertCoupon(coupon)
+
+        val duplicate = couponDao.findByStoreAndDescription(
+            storeName = coupon.storeName,
+            normalizedDescription = coupon.normalizedDescription,
+            descriptionHash = null,
+            descriptionSignature = null,
+            imagePhash = null,
+            imageSignature = null
+        )
+
+        assert(duplicate != null)
+        assert(duplicate?.redeemCode == coupon.redeemCode)
+        assert(duplicate?.descriptionHash == coupon.descriptionHash)
+        assert(duplicate?.imagePhash == coupon.imagePhash)
+    }
 }
