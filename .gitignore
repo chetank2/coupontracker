@@ -37,6 +37,7 @@ build/
 
 # Logs
 *.log
+logs/
 
 # Data directories
 data/
