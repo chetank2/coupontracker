@@ -15,9 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Store
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -39,10 +37,8 @@ import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.ui.theme.BrandColors
 import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
+import com.example.coupontracker.ui.components.DateFormatter
+import com.example.coupontracker.ui.components.StatusType
 
 @Composable
 fun CouponItem(
@@ -51,16 +47,14 @@ fun CouponItem(
 ) {
     val clipboardManager = LocalClipboardManager.current
 
-    // Determine expiry status
-    val now = Calendar.getInstance().time
-    val daysUntilExpiry = ((coupon.expiryDate.time - now.time) / (1000 * 60 * 60 * 24)).toInt()
-
-    val (statusColor, statusText) = when {
-        coupon.expiryDate.before(now) -> Pair(BrandColors.Error, "Expired")
-        daysUntilExpiry <= 3 -> Pair(BrandColors.Error, "Expires soon")
-        daysUntilExpiry <= 7 -> Pair(BrandColors.Warning, "Expires in $daysUntilExpiry days")
-        else -> Pair(BrandColors.Valid, "Valid")
+    val status = DateFormatter.getExpiryStatus(coupon.expiryDate)
+    val statusColor = when (status) {
+        StatusType.ERROR -> BrandColors.Error
+        StatusType.WARNING -> BrandColors.Warning
+        StatusType.SUCCESS -> BrandColors.Valid
+        StatusType.INFO, StatusType.NEUTRAL -> MaterialTheme.colorScheme.outline
     }
+    val statusText = DateFormatter.getExpiryText(coupon.expiryDate)
 
     Card(
         modifier = Modifier
@@ -190,10 +184,8 @@ fun CouponItem(
                     }
                 }
 
-                // Format date
-                val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
                 Text(
-                    text = dateFormat.format(coupon.expiryDate),
+                    text = DateFormatter.formatShort(coupon.expiryDate),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -34,11 +35,11 @@ import coil.request.ImageRequest
 import com.example.coupontracker.ui.components.ImagePreviewDialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.coupontracker.R
+import com.example.coupontracker.ui.components.DateFormatter
+import com.example.coupontracker.ui.components.StatusType
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.DetailViewModel
-import java.text.SimpleDateFormat
-import java.util.*
-import java.util.concurrent.TimeUnit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -206,22 +207,13 @@ fun CouponDetailScreen(
                     }
 
                     // Expiry date
-                    val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-                    val now = Date()
-                    val diffInMillis = coupon.expiryDate.time - now.time
-                    val daysRemaining = TimeUnit.MILLISECONDS.toDays(diffInMillis)
-
-                    val expiryColor = when {
-                        daysRemaining < 0 -> Color(0xFFE53935) // Expired
-                        daysRemaining <= 3 -> Color(0xFFE53935) // Critical
-                        daysRemaining <= 7 -> Color(0xFFFFA000) // Warning
-                        else -> Color(0xFF43A047) // Valid
-                    }
-
-                    val expiryText = when {
-                        daysRemaining < 0 -> "Expired"
-                        daysRemaining <= 1 -> "Expires tomorrow"
-                        else -> "Expires in $daysRemaining days"
+                    val expiryStatus = DateFormatter.getExpiryStatus(coupon.expiryDate)
+                    val expiryText = DateFormatter.getExpiryText(coupon.expiryDate)
+                    val expiryColor = when (expiryStatus) {
+                        StatusType.ERROR -> Color(0xFFE53935)
+                        StatusType.WARNING -> Color(0xFFFFA000)
+                        StatusType.SUCCESS -> Color(0xFF43A047)
+                        StatusType.INFO, StatusType.NEUTRAL -> Color(0xFF2196F3)
                     }
 
                     Row(
@@ -236,7 +228,8 @@ fun CouponDetailScreen(
                         Spacer(modifier = Modifier.width(BrandSpacing.Small))
 
                         Text(
-                            text = dateFormat.format(coupon.expiryDate),
+                            text = coupon.expiryDate?.let { DateFormatter.formatShort(it) }
+                                ?: stringResource(id = R.string.no_expiry_provided),
                             style = MaterialTheme.typography.bodyLarge
                         )
 

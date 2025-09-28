@@ -30,7 +30,7 @@ class AddCouponViewModel @Inject constructor(
         private set
 
     private var currentImageUri: Uri? = null
-    private var currentExpiryDate: Date = Date()
+    private var currentExpiryDate: Date? = null
     private var currentReminderDate: Date? = null
     private var isPriority: Boolean = false
 
@@ -38,7 +38,7 @@ class AddCouponViewModel @Inject constructor(
         currentImageUri = uri
     }
 
-    fun setExpiryDate(date: Date) {
+    fun setExpiryDate(date: Date?) {
         currentExpiryDate = date
     }
 

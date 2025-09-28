@@ -534,31 +534,33 @@ object DateFormatter {
     private val shortDateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
     private val monthDayFormat = SimpleDateFormat("MMM dd", Locale.getDefault())
 
-    fun formatFull(date: Date): String = fullDateFormat.format(date)
-    fun formatShort(date: Date): String = shortDateFormat.format(date)
-    fun formatMonthDay(date: Date): String = monthDayFormat.format(date)
+    fun formatFull(date: Date?): String = date?.let(fullDateFormat::format) ?: "No expiry provided"
+    fun formatShort(date: Date?): String = date?.let(shortDateFormat::format) ?: "No expiry provided"
+    fun formatMonthDay(date: Date?): String = date?.let(monthDayFormat::format) ?: "No expiry provided"
 
-    fun getExpiryStatus(expiryDate: Date): StatusType {
+    fun getExpiryStatus(expiryDate: Date?): StatusType {
+        val date = expiryDate ?: return StatusType.INFO
         val now = Calendar.getInstance().time
-        val daysUntilExpiry = ((expiryDate.time - now.time) / (1000 * 60 * 60 * 24)).toInt()
+        val daysUntilExpiry = ((date.time - now.time) / (1000 * 60 * 60 * 24)).toInt()
 
         return when {
-            expiryDate.before(now) -> StatusType.ERROR
+            date.before(now) -> StatusType.ERROR
             daysUntilExpiry <= 7 -> StatusType.WARNING
             else -> StatusType.SUCCESS
         }
     }
 
-    fun getExpiryText(expiryDate: Date): String {
+    fun getExpiryText(expiryDate: Date?): String {
+        val date = expiryDate ?: return "No expiry provided"
         val now = Calendar.getInstance().time
-        val daysUntilExpiry = ((expiryDate.time - now.time) / (1000 * 60 * 60 * 24)).toInt()
+        val daysUntilExpiry = ((date.time - now.time) / (1000 * 60 * 60 * 24)).toInt()
 
         return when {
-            expiryDate.before(now) -> "Expired"
+            date.before(now) -> "Expired"
             daysUntilExpiry == 0 -> "Expires today"
             daysUntilExpiry == 1 -> "Expires tomorrow"
             daysUntilExpiry <= 7 -> "Expires in $daysUntilExpiry days"
-            else -> "Expires ${formatShort(expiryDate)}"
+            else -> "Expires ${formatShort(date)}"
         }
     }
 }
@@ -570,7 +572,7 @@ object DateFormatter {
 fun EnhancedCouponCard(
     storeName: String,
     description: String,
-    expiryDate: Date,
+    expiryDate: Date?,
     amount: Double? = null,
     code: String? = null,
     imageUri: String? = null,
@@ -722,7 +724,7 @@ fun EnhancedCouponCard(
 fun EnhancedCouponCard(
     storeName: String,
     description: String,
-    expiryDate: Date,
+    expiryDate: Date?,
     amount: Double? = null,
     code: String? = null,
     onClick: () -> Unit,

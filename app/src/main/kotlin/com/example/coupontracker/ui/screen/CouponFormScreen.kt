@@ -30,8 +30,6 @@ import com.example.coupontracker.ui.viewmodel.CouponFormViewModel
 import com.example.coupontracker.ui.viewmodel.CouponSaveResult
 import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
 import java.util.Locale
 
 /**
@@ -136,16 +134,10 @@ fun CouponFormScreen(
                         val format = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
                         format.parse(expiryDateString)
                     } else {
-                        // Default to 30 days from now
-                        val calendar = Calendar.getInstance()
-                        calendar.add(Calendar.DAY_OF_YEAR, 30)
-                        calendar.time
+                        null
                     }
                 } catch (e: Exception) {
-                    // Default to 30 days from now
-                    val calendar = Calendar.getInstance()
-                    calendar.add(Calendar.DAY_OF_YEAR, 30)
-                    calendar.time
+                    null
                 }
 
                 viewModel.saveCoupon(
