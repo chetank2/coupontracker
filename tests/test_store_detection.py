@@ -29,6 +29,39 @@ def test_detect_store_prefers_mixed_case_brand_over_short_all_caps():
     assert result['name'] == 'Minimalist'
 
 
+def test_detect_store_ignores_trailing_code_token_for_known_brand():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        Exclusive coupon launch
+        Redeem at PUMA
+        Code: KQSKLBLBIR
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+    result = extractor._detect_store(cleaned_text)
+
+    assert result['type'] == 'identified'
+    assert result['name'] == 'PUMA'
+    assert result['confidence'] >= 0.9
+
+
+def test_detect_store_trims_trailing_code_word_when_brand_unknown():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        Redeem now at Glow Code
+        Use code GLOW2025 today
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+    result = extractor._detect_store(cleaned_text)
+
+    assert result['type'] == 'extracted'
+    assert result['name'] == 'Glow'
+    assert result['confidence'] >= 0.4
+
+
 def test_extract_discount_handles_combined_percentage_phrases():
     extractor = EnhancedCouponFieldExtractor()
 

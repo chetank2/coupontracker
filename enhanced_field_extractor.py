@@ -137,6 +137,16 @@ class EnhancedCouponFieldExtractor:
                 'discount_patterns': [r'(\d+(?:\.\d+)?)%\s*off', r'flat\s*(\d+(?:\.\d+)?)%', r'buy\s*\d+\s*get\s*\d+'],
                 'common_terms': ['fashion', 'style', 'brands', 'clothing']
             },
+            'puma': {
+                'display_name': 'PUMA',
+                'identifiers': ['puma', 'puma.com', 'puma.in'],
+                'code_patterns': [r'[A-Z0-9]{6,12}'],
+                'discount_patterns': [
+                    r'(?:up\s*to|upto)\s*(\d+(?:\.\d+)?)%\s*(?:off|discount)',
+                    r'extra\s*(\d+(?:\.\d+)?)%\s*(?:off|discount)'
+                ],
+                'common_terms': ['sneakers', 'sports', 'athleisure', 'store']
+            },
             'swiggy': {
                 'display_name': 'Swiggy',
                 'identifiers': ['swiggy', 'swiggy.com'],
@@ -322,7 +332,16 @@ class EnhancedCouponFieldExtractor:
                 r'(?:from)\s+([A-Z][A-Za-z&]*(?:\s+[A-Z][A-Za-z&]*){0,2})',
             ]
             location_candidates: List[Tuple[str, int]] = []
-            generic_suffixes = re.compile(r'\b(store|stores|shop|shops|outlet|outlets|mall|malls|retail|online|sale|offer)s?\b', re.IGNORECASE)
+            generic_suffixes = re.compile(
+                r'\b(store|stores|shop|shops|outlet|outlets|mall|malls|retail|online|sale|offer)s?\b',
+                re.IGNORECASE
+            )
+
+            trailing_tokens = {
+                'code', 'codes', 'coupon', 'coupons', 'promo', 'promocode',
+                'deal', 'deals', 'offer', 'offers', 'use'
+            }
+            skip_tokens = {'the', 'at', 'and'} | trailing_tokens
 
             for pattern in location_patterns:
                 for match in re.finditer(pattern, text):
@@ -333,9 +352,13 @@ class EnhancedCouponFieldExtractor:
                         words = candidate.split()
                         cleaned_words = []
                         for word in words:
-                            if word.lower() in {'the', 'at', 'and'}:
+                            cleaned_word = word.rstrip(':,.')
+                            if cleaned_word.lower() in skip_tokens:
                                 continue
-                            cleaned_words.append(word)
+                            cleaned_words.append(cleaned_word)
+
+                        while cleaned_words and cleaned_words[-1].lower() in trailing_tokens:
+                            cleaned_words.pop()
                         if cleaned_words:
                             cleaned = ' '.join(cleaned_words)
                             location_candidates.append((cleaned, match.start()))
@@ -355,8 +378,8 @@ class EnhancedCouponFieldExtractor:
                     r'\b[A-Z]{2,8}\b'  # All caps words
                 ]
 
-                stopwords = {'redeem', 'super', 'mega', 'offer', 'offers', 'coupon', 'coupons', 'multi', 'valid', 'expires',
-                             'get', 'save', 'extra', 'flat', 'cashback', 'discount'}
+                stopwords = {'redeem', 'super', 'mega', 'offer', 'offers', 'coupon', 'coupons', 'code', 'codes', 'use', 'multi',
+                             'valid', 'expires', 'get', 'save', 'extra', 'flat', 'cashback', 'discount'}
 
                 selected = None
                 for pattern in brand_patterns:
