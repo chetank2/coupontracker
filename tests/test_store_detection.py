@@ -69,7 +69,24 @@ def test_extract_discount_handles_combined_percentage_phrases():
     assert discount['components'] == ['Up to 50% Off', 'Extra 33% Off']
 
 
-def test_extract_expiry_date_with_comma_and_time():
+@pytest.fixture
+def frozen_datetime_now(monkeypatch):
+    fixed_now = datetime(2026, 1, 1, 0, 0, 0)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return fixed_now
+            if fixed_now.tzinfo is None:
+                return fixed_now.replace(tzinfo=tz)
+            return fixed_now.astimezone(tz)
+
+    monkeypatch.setattr("enhanced_field_extractor.datetime", FrozenDateTime)
+    return fixed_now
+
+
+def test_extract_expiry_date_with_comma_and_time(frozen_datetime_now):
     extractor = EnhancedCouponFieldExtractor()
 
     ocr_text = """
