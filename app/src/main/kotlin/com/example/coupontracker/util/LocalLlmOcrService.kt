@@ -83,6 +83,21 @@ class LocalLlmOcrService(
                 .replace(Regex("\\s+"), " ")
                 .trim()
         }
+
+        fun normalizeStoreName(raw: String?): String {
+            if (raw.isNullOrBlank()) {
+                return ""
+            }
+
+            val tokens = raw.trim().split(Regex("\\s+"))
+            val filteredTokens = tokens.dropWhile { token ->
+                GenericFieldHeuristics.shouldDiscardStorePrefix(token)
+            }
+
+            return filteredTokens.joinToString(" ") { it.trim() }
+                .replace(Regex("\\s+"), " ")
+                .trim()
+        }
     }
     
     // Dependencies
@@ -287,11 +302,12 @@ class LocalLlmOcrService(
             val json = JSONObject(cleanResponse)
             
             // Extract fields with fallbacks and generic filtering
-            val storeName = json.optString("storeName", "Unknown Store").let {
+            val storeName = json.optString("storeName", "Unknown Store").let { raw ->
+                val normalized = normalizeStoreName(raw)
                 when {
-                    it.isBlank() || it == "Unknown" -> "Unknown Store"
-                    GenericFieldHeuristics.isGenericOrMissing(it) -> "Unknown Store"
-                    else -> it
+                    normalized.isBlank() || normalized.equals("Unknown", ignoreCase = true) -> "Unknown Store"
+                    GenericFieldHeuristics.isGenericOrMissing(normalized) -> "Unknown Store"
+                    else -> normalized
                 }
             }
             
@@ -522,7 +538,12 @@ class LocalLlmOcrService(
             }
             
             Log.d(TAG, "Traditional OCR fallback result: $extractedInfo")
-            return@withContext extractedInfo
+            val normalizedInfo = extractedInfo.copy(
+                storeName = normalizeStoreName(extractedInfo.storeName).ifBlank { "Unknown Store" },
+                description = cleanDescription(extractedInfo.description)
+            )
+
+            return@withContext normalizedInfo
             
         } catch (e: Exception) {
             Log.e(TAG, "ML Kit OCR fallback failed: ${e.message}", e)
@@ -531,7 +552,10 @@ class LocalLlmOcrService(
             try {
                 val modelBasedService = ModelBasedOCRService(context)
                 val result = modelBasedService.processCouponImage(bitmap)
-                val cleanedResult = result.copy(description = cleanDescription(result.description))
+                val cleanedResult = result.copy(
+                    storeName = normalizeStoreName(result.storeName).ifBlank { "Unknown Store" },
+                    description = cleanDescription(result.description)
+                )
                 Log.d(TAG, "Model-based OCR fallback result: $cleanedResult")
                 return@withContext cleanedResult
             } catch (e2: Exception) {

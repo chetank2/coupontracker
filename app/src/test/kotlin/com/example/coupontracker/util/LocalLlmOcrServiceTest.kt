@@ -215,6 +215,13 @@ class LocalLlmOcrServiceTest {
     }
 
     @Test
+    fun `normalizeStoreName removes short alphanumeric prefixes`() {
+        val normalized = LocalLlmOcrService.normalizeStoreName("F2 Souvenir")
+
+        assertEquals("Souvenir", normalized)
+    }
+
+    @Test
     fun `should handle LLM timeout and use fallback`() = runTest {
         // Arrange: LLM times out
         every { mockLlmRuntime.runInference(any(), any()) } returns null

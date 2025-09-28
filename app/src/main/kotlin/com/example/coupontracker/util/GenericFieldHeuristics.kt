@@ -8,6 +8,42 @@ import android.util.Log
  */
 object GenericFieldHeuristics {
     private const val TAG = "GenericFieldHeuristics"
+
+    /**
+     * Detect leading store name tokens that should be discarded during normalization.
+     * Used to drop numeric/symbol noise like "F2" or "9X" prefixes before validation.
+     */
+    fun shouldDiscardStorePrefix(token: String): Boolean {
+        if (token.isBlank()) return true
+
+        val trimmed = token.trim()
+        val cleaned = trimmed.trim { !it.isLetterOrDigit() }
+        if (cleaned.isEmpty()) return true
+
+        val hasDigit = cleaned.any { it.isDigit() }
+        val hasLetter = cleaned.any { it.isLetter() }
+        val hasSymbol = trimmed.any { !it.isLetterOrDigit() }
+
+        // Pure numbering or punctuation prefixes ("01", "#", "-", etc.)
+        if (!hasLetter && (hasDigit || hasSymbol)) {
+            Log.d(TAG, "Discarding store prefix '$token' - contains no letters")
+            return true
+        }
+
+        // Short alphanumeric noise like "F2" or "9X" should be removed
+        if (hasDigit && hasLetter && cleaned.length <= 3) {
+            Log.d(TAG, "Discarding store prefix '$token' - short alphanumeric noise")
+            return true
+        }
+
+        // Tokens with symbols but only a couple of characters ("*A", "@B")
+        if (hasSymbol && cleaned.length <= 2) {
+            Log.d(TAG, "Discarding store prefix '$token' - short symbol noise")
+            return true
+        }
+
+        return false
+    }
     
     /**
      * Check if a field contains generic/boilerplate text that should be treated as missing
