@@ -215,6 +215,15 @@ class LocalLlmOcrServiceTest {
     }
 
     @Test
+    fun `cleanDescription normalizes rupee-like glyphs`() {
+        val rawDescription = "LIFETIME CASHBACK T568"
+
+        val cleaned = LocalLlmOcrService.cleanDescription(rawDescription)
+
+        assertEquals("Lifetime cashback ₹568", cleaned)
+    }
+
+    @Test
     fun `should handle LLM timeout and use fallback`() = runTest {
         // Arrange: LLM times out
         every { mockLlmRuntime.runInference(any(), any()) } returns null
