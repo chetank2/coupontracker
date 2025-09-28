@@ -45,6 +45,9 @@ models/
 !app/src/test/resources/models/
 !app/src/test/resources/models/**
 
+# Local backup files
+*.bak
+
 # Large files
 *.dylib
 *.so
