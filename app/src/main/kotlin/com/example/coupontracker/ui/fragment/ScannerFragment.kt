@@ -20,7 +20,9 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import com.example.coupontracker.R
 import com.example.coupontracker.databinding.FragmentScannerBinding
@@ -144,13 +146,14 @@ class ScannerFragment : Fragment() {
         }
         
         // Observe processing state
-        lifecycleScope.launch {
-            viewModel.uiState.collect { state ->
-                when (state) {
-                    is ScannerUiState.Initial -> {
-                        binding.progressBar.visibility = View.GONE
-                        binding.captureButton.isEnabled = true
-                    }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    when (state) {
+                        is ScannerUiState.Initial -> {
+                            binding.progressBar.visibility = View.GONE
+                            binding.captureButton.isEnabled = true
+                        }
                     is ScannerUiState.Scanning -> {
                         binding.progressBar.visibility = View.VISIBLE
                         binding.captureButton.isEnabled = false

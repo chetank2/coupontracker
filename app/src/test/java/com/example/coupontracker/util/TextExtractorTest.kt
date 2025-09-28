@@ -195,10 +195,23 @@ class TextExtractorTest {
             Code: SWGGS01BO719GFHS
             Claim Now
         """.trimIndent()
-        
+
         val cashbackAmount = extractor.extractCashbackAmount(text)
         assertNotNull("Cashback amount should not be null", cashbackAmount)
         assertEquals(30.0, cashbackAmount!!, 0.01)
+    }
+
+    @Test
+    fun `extractStoreName prefers repeated proper nouns over generic all caps words`() {
+        val text = """
+            Minimalist Skincare
+            Minimalist… MULTI PRODUCT KIT
+            Save 10% on your first order
+        """.trimIndent()
+
+        val storeName = extractor.extractStoreName(text)
+
+        assertEquals("Minimalist", storeName)
     }
     
     @Test
