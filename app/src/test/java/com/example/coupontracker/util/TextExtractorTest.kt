@@ -2,6 +2,8 @@ package com.example.coupontracker.util
 
 import org.junit.Assert.*
 import org.junit.Test
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class TextExtractorTest {
 
@@ -240,8 +242,19 @@ class TextExtractorTest {
             Code: ABSGYWVAJ1D0A8
             Claim Now
         """.trimIndent()
-        
+
         val expiryDate = extractor.parseExpiryDate(text)
         assertNotNull("Expiry date should not be null", expiryDate)
     }
-} 
+
+    @Test
+    fun `test parseExpiryDate with month name and trailing time`() {
+        val text = "05 May, 2025 at 11:59 PM"
+
+        val expiryDate = extractor.parseExpiryDate(text)
+        assertNotNull("Expiry date should not be null", expiryDate)
+
+        val expected = SimpleDateFormat("dd MMM, yyyy", Locale.getDefault()).parse("05 May, 2025")
+        assertEquals("Parsed date should match expected value", expected, expiryDate)
+    }
+}
