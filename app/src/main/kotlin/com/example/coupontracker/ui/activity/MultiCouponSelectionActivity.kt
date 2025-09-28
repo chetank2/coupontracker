@@ -22,6 +22,8 @@ import com.example.coupontracker.databinding.ItemCouponSelectionBinding
 import com.example.coupontracker.ml.CouponInstance
 import com.example.coupontracker.ml.CouponStatus
 import com.example.coupontracker.ml.FieldType
+import com.example.coupontracker.ui.viewmodel.CouponExtractionStatus
+import com.example.coupontracker.ui.viewmodel.CouponProcessingStage
 import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 import com.example.coupontracker.ui.viewmodel.ScannerUiState
 import dagger.hilt.android.AndroidEntryPoint
@@ -118,13 +120,28 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
                         // Save the coupon
                         viewModel.saveCoupon(state.coupon)
                     }
+                    is ScannerUiState.ProcessingCoupons -> {
+                        binding.progressBar.visibility = View.VISIBLE
+                        binding.buttonsContainer.visibility = View.GONE
+                        adapter.updateProcessingStatuses(state.statuses)
+                    }
                     is ScannerUiState.AllCouponsSaved -> {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE
-                        
+
+                        adapter.updateProcessingStatuses(state.statuses)
+
+                        val failedCount = state.statuses.count { it.stage == CouponProcessingStage.FALLBACK }
+                        val savedCount = state.coupons.size
+                        val message = if (failedCount > 0) {
+                            "Saved $savedCount coupons, $failedCount failed"
+                        } else {
+                            "Successfully saved $savedCount coupons"
+                        }
+
                         Toast.makeText(
                             this@MultiCouponSelectionActivity,
-                            "Successfully saved ${state.coupons.size} coupons",
+                            message,
                             Toast.LENGTH_LONG
                         ).show()
                         
@@ -281,12 +298,19 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
 class CouponSelectionAdapter(
     private val onCouponClick: (CouponInstance, Int) -> Unit
 ) : RecyclerView.Adapter<CouponSelectionAdapter.CouponViewHolder>() {
-    
+
     private var coupons: List<CouponInstance> = emptyList()
     private val selectedPositions = mutableSetOf<Int>()
-    
+    private var processingStatuses: Map<Int, CouponExtractionStatus> = emptyMap()
+
     fun updateCoupons(newCoupons: List<CouponInstance>) {
         coupons = newCoupons
+        processingStatuses = emptyMap()
+        notifyDataSetChanged()
+    }
+
+    fun updateProcessingStatuses(statuses: List<CouponExtractionStatus>) {
+        processingStatuses = statuses.associateBy { it.index }
         notifyDataSetChanged()
     }
     
@@ -321,17 +345,36 @@ class CouponSelectionAdapter(
         
         fun bind(coupon: CouponInstance, position: Int, isSelected: Boolean) {
             binding.couponImageView.setImageBitmap(coupon.cropBitmap)
-            
+
             binding.couponNumberText.text = "Coupon ${position + 1}"
-            
-            binding.statusText.text = when (coupon.status) {
-                CouponStatus.COMPLETE -> "Complete"
-                CouponStatus.PARTIAL_TOP -> "Partial (Top)"
-                CouponStatus.PARTIAL_BOTTOM -> "Partial (Bottom)"
+
+            val extractionStatus = processingStatuses[position]
+            if (extractionStatus != null) {
+                val message = extractionStatus.message?.takeIf { it.isNotBlank() }
+                binding.statusText.text = buildString {
+                    append(extractionStatus.stage.label)
+                    if (message != null) {
+                        append(": ")
+                        append(message)
+                    }
+                }
+                val enabled = extractionStatus.stage == CouponProcessingStage.QUEUED
+                binding.processButton.isEnabled = enabled
+                binding.selectionCheckbox.isEnabled = enabled
+                binding.root.isEnabled = enabled
+            } else {
+                binding.statusText.text = when (coupon.status) {
+                    CouponStatus.COMPLETE -> "Complete"
+                    CouponStatus.PARTIAL_TOP -> "Partial (Top)"
+                    CouponStatus.PARTIAL_BOTTOM -> "Partial (Bottom)"
+                }
+                binding.processButton.isEnabled = true
+                binding.selectionCheckbox.isEnabled = true
+                binding.root.isEnabled = true
             }
-            
+
             binding.fieldsCountText.text = "${coupon.fields.size} fields detected"
-            
+
             binding.confidenceText.text = "Confidence: ${String.format("%.1f%%", coupon.confidence * 100)}"
             
             // Show detected fields

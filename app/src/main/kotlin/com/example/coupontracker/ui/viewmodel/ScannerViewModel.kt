@@ -16,12 +16,20 @@ import com.example.coupontracker.ml.FieldType
 import com.example.coupontracker.util.MultiEngineOCR
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -185,35 +193,117 @@ class ScannerViewModel @Inject constructor(
      */
     fun processAllCoupons(couponInstances: List<CouponInstance>, originalImageUri: String?) {
         viewModelScope.launch {
-            try {
-                _uiState.value = ScannerUiState.Scanning
-                Log.d(TAG, "Processing all ${couponInstances.size} detected coupons")
+            if (couponInstances.isEmpty()) {
+                _uiState.value = ScannerUiState.Error("No coupons to process")
+                return@launch
+            }
 
+            try {
+                Log.d(TAG, "Processing all ${couponInstances.size} detected coupons with concurrency")
+
+                val semaphore = Semaphore(4)
+                val statusMutex = Mutex()
+                val savedCouponsMutex = Mutex()
                 val savedCoupons = mutableListOf<Coupon>()
 
-                for ((index, instance) in couponInstances.withIndex()) {
-                    try {
-                        val extractedInfo = extractTextFromFields(instance)
-                        val coupon = createCouponFromInstance(instance, extractedInfo, originalImageUri)
-                        
-                        // Save coupon to repository
-                        couponRepository.insertCoupon(coupon)
-                        savedCoupons.add(coupon)
-                        
-                        Log.d(TAG, "Saved coupon ${index + 1}/${couponInstances.size}: ${coupon.redeemCode}")
-                        
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error processing coupon $index", e)
-                        // Continue with other coupons
+                val statuses = couponInstances.mapIndexed { index, instance ->
+                    CouponExtractionStatus(
+                        index = index,
+                        instanceId = instance.id,
+                        stage = CouponProcessingStage.QUEUED
+                    )
+                }.toMutableList()
+
+                suspend fun publishStatuses() {
+                    statusMutex.withLock {
+                        _uiState.value = ScannerUiState.ProcessingCoupons(statuses.map { it.copy() })
                     }
                 }
 
-                if (savedCoupons.isNotEmpty()) {
-                    _uiState.value = ScannerUiState.AllCouponsSaved(savedCoupons)
+                suspend fun updateStatus(
+                    index: Int,
+                    stage: CouponProcessingStage,
+                    coupon: Coupon? = null,
+                    message: String? = null
+                ) {
+                    statusMutex.withLock {
+                        val current = statuses[index]
+                        statuses[index] = current.copy(stage = stage, coupon = coupon, message = message)
+                        _uiState.value = ScannerUiState.ProcessingCoupons(statuses.map { it.copy() })
+                    }
+                }
+
+                suspend fun markFallback(index: Int, reason: String?) {
+                    updateStatus(index, CouponProcessingStage.FALLBACK, message = reason)
+                }
+
+                publishStatuses()
+
+                val jobs = couponInstances.mapIndexed { index, instance ->
+                    viewModelScope.async {
+                        semaphore.withPermit {
+                            updateStatus(index, CouponProcessingStage.RUNNING_MINI_CPM)
+                            try {
+                                val extractedInfo = extractTextFromFields(instance)
+
+                                updateStatus(index, CouponProcessingStage.VALIDATING)
+
+                                if (!instance.hasRequiredFields()) {
+                                    markFallback(index, "Missing required fields")
+                                    return@withPermit
+                                }
+
+                                if (extractedInfo.isEmpty()) {
+                                    markFallback(index, "No text extracted")
+                                    return@withPermit
+                                }
+
+                                val coupon = createCouponFromInstance(instance, extractedInfo, originalImageUri)
+
+                                withContext(Dispatchers.IO) {
+                                    couponRepository.insertCoupon(coupon)
+                                }
+
+                                savedCouponsMutex.withLock {
+                                    savedCoupons.add(coupon)
+                                }
+
+                                updateStatus(index, CouponProcessingStage.SAVED, coupon = coupon, message = coupon.redeemCode)
+                            } catch (e: CancellationException) {
+                                withContext(NonCancellable) {
+                                    markFallback(index, "Cancelled")
+                                }
+                                throw e
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error processing coupon ${instance.id}", e)
+                                markFallback(index, e.message)
+                            }
+                        }
+                    }
+                }
+
+                try {
+                    jobs.awaitAll()
+                } catch (e: CancellationException) {
+                    Log.w(TAG, "Coupon processing cancelled", e)
+                    throw e
+                }
+
+                val finalStatuses = statusMutex.withLock {
+                    statuses.map { it.copy() }
+                }
+
+                val processedCoupons = savedCouponsMutex.withLock {
+                    savedCoupons.toList()
+                }
+
+                if (processedCoupons.isNotEmpty()) {
+                    _uiState.value = ScannerUiState.AllCouponsSaved(processedCoupons, finalStatuses)
                 } else {
                     _uiState.value = ScannerUiState.Error("Failed to save any coupons")
                 }
-
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing all coupons", e)
                 _uiState.value = ScannerUiState.Error("Error processing coupons: ${e.message}")
@@ -459,7 +549,9 @@ class ScannerViewModel @Inject constructor(
     fun saveCoupon(coupon: Coupon) {
         viewModelScope.launch {
             try {
-                couponRepository.insertCoupon(coupon)
+                withContext(Dispatchers.IO) {
+                    couponRepository.insertCoupon(coupon)
+                }
                 _uiState.value = ScannerUiState.Saved(coupon)
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving coupon", e)
@@ -497,13 +589,36 @@ sealed class ScannerUiState {
     data class Success(val coupon: Coupon) : ScannerUiState()
     data class Saved(val coupon: Coupon) : ScannerUiState()
     data class Error(val message: String) : ScannerUiState()
-    
+
     // New states for multi-coupon support
     data class MultiCouponDetected(
-        val couponInstances: List<CouponInstance>, 
-        val originalBitmap: Bitmap, 
+        val couponInstances: List<CouponInstance>,
+        val originalBitmap: Bitmap,
         val imageUri: String?
     ) : ScannerUiState()
-    
-    data class AllCouponsSaved(val coupons: List<Coupon>) : ScannerUiState()
+
+    data class ProcessingCoupons(
+        val statuses: List<CouponExtractionStatus>
+    ) : ScannerUiState()
+
+    data class AllCouponsSaved(
+        val coupons: List<Coupon>,
+        val statuses: List<CouponExtractionStatus>
+    ) : ScannerUiState()
+}
+
+data class CouponExtractionStatus(
+    val index: Int,
+    val instanceId: String,
+    val stage: CouponProcessingStage,
+    val coupon: Coupon? = null,
+    val message: String? = null
+)
+
+enum class CouponProcessingStage(val label: String) {
+    QUEUED("Queued"),
+    RUNNING_MINI_CPM("Running MiniCPM"),
+    VALIDATING("Validating"),
+    SAVED("Saved"),
+    FALLBACK("Fallback")
 }

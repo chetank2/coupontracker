@@ -216,7 +216,7 @@ fun ScannerScreen(
                     }
                 }
 
-                uiState is ScannerUiState.Scanning -> {
+                uiState is ScannerUiState.Scanning || uiState is ScannerUiState.ProcessingCoupons -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
