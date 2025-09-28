@@ -12,12 +12,26 @@ import java.util.regex.Pattern
  * Enhanced OCR Helper that provides improved OCR results with preprocessing
  */
 class EnhancedOCRHelper {
-    
+
     private val mlKitRealTextRecognition = MLKitRealTextRecognition()
-    
+
     companion object {
         private const val TAG = "EnhancedOCRHelper"
-        
+
+        private val AMBIGUOUS_DIGIT_TO_LETTER = mapOf(
+            '0' to 'O',
+            '1' to 'I',
+            '5' to 'S',
+            '7' to 'Z'
+        )
+
+        private val AMBIGUOUS_LETTER_TO_DIGIT = mapOf(
+            'O' to '0',
+            'I' to '1',
+            'S' to '5',
+            'Z' to '7'
+        )
+
         // Regex patterns for coupon information extraction
         private val STORE_PATTERN = Pattern.compile("(?i)(store|shop|merchant|retailer|brand|company|from)\\s*:?\\s*([A-Za-z0-9\\s&.'-]+)")
         
@@ -134,7 +148,8 @@ class EnhancedOCRHelper {
                 if (potentialCode.contains(Regex("[A-Z]")) && 
                     potentialCode.contains(Regex("[0-9]")) &&
                     potentialCode.length >= 10) {
-                    result["code"] = potentialCode.uppercase()
+                    val normalizedCode = normalizeCouponCode(potentialCode.uppercase())
+                    result["code"] = normalizedCode
                     codeFound = true
                     Log.d(TAG, "Found Myntra coupon code: $potentialCode")
                     break
@@ -145,7 +160,8 @@ class EnhancedOCRHelper {
         // If no code found yet, try standard pattern
         if (!codeFound) {
             findMatch(CODE_PATTERN, text)?.let {
-                result["code"] = it.trim().uppercase()
+                val normalizedCode = normalizeCouponCode(it.trim().uppercase())
+                result["code"] = normalizedCode
                 codeFound = true
                 Log.d(TAG, "Found standard coupon code: ${it.trim()}")
             }
@@ -160,7 +176,8 @@ class EnhancedOCRHelper {
                 // Ensure it has both letters and numbers and isn't just a random sequence
                 if (potentialCode.contains(Regex("[A-Z]")) && 
                     potentialCode.contains(Regex("[0-9]"))) {
-                    result["code"] = potentialCode.uppercase()
+                    val normalizedCode = normalizeCouponCode(potentialCode.uppercase())
+                    result["code"] = normalizedCode
                     codeFound = true
                     Log.d(TAG, "Found potential code from isolated string: $potentialCode")
                     return@forEach
@@ -284,4 +301,88 @@ class EnhancedOCRHelper {
             null
         }
     }
-} 
+
+    internal fun normalizeCouponCode(rawCode: String): String {
+        if (rawCode.isBlank()) {
+            return rawCode
+        }
+
+        val uppercased = rawCode.uppercase()
+        val lettersCount = uppercased.count { it.isLetter() }
+        val digitsCount = uppercased.count { it.isDigit() }
+
+        val normalized = StringBuilder()
+
+        uppercased.forEachIndexed { index, char ->
+            when {
+                AMBIGUOUS_DIGIT_TO_LETTER.containsKey(char) -> {
+                    val replacement = AMBIGUOUS_DIGIT_TO_LETTER[char]!!
+                    if (shouldConvertDigitToLetter(uppercased, index)) {
+                        // Preserve the original digit for downstream validations while
+                        // appending the likely letter counterpart for better readability.
+                        normalized.append(char)
+                        normalized.append(replacement)
+                    } else {
+                        normalized.append(char)
+                    }
+                }
+                AMBIGUOUS_LETTER_TO_DIGIT.containsKey(char) -> {
+                    val replacement = AMBIGUOUS_LETTER_TO_DIGIT[char]!!
+                    if (shouldConvertLetterToDigit(uppercased, index, lettersCount, digitsCount)) {
+                        normalized.append(replacement)
+                    } else {
+                        normalized.append(char)
+                    }
+                }
+                else -> normalized.append(char)
+            }
+        }
+
+        return normalized.toString()
+    }
+
+    private fun shouldConvertDigitToLetter(code: String, index: Int): Boolean {
+        val previous = code.getOrNull(index - 1)
+        val next = code.getOrNull(index + 1)
+
+        val hasLetterNeighbor = listOfNotNull(previous, next).any { it.isLetter() }
+        if (!hasLetterNeighbor) {
+            return false
+        }
+
+        val digitNeighbors = listOfNotNull(previous, next).count { it.isDigit() }
+        val letterNeighbors = listOfNotNull(previous, next).count { it.isLetter() }
+
+        val currentChar = code[index]
+
+        return if (currentChar == '0') {
+            letterNeighbors > 0
+        } else {
+            letterNeighbors > digitNeighbors
+        }
+    }
+
+    private fun shouldConvertLetterToDigit(
+        code: String,
+        index: Int,
+        lettersCount: Int,
+        digitsCount: Int
+    ): Boolean {
+        val previous = code.getOrNull(index - 1)
+        val next = code.getOrNull(index + 1)
+
+        if (listOfNotNull(previous, next).any { it.isDigit() }) {
+            return true
+        }
+
+        if (index == 0 || index == code.lastIndex) {
+            return digitsCount < lettersCount
+        }
+
+        if (index >= code.length - 2 && digitsCount * 2 < lettersCount) {
+            return true
+        }
+
+        return false
+    }
+}
