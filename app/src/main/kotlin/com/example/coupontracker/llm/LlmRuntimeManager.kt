@@ -2,16 +2,12 @@ package com.example.coupontracker.llm
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -49,11 +45,10 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     
     // Native interface and model state
     private val nativeInterface = SafeMlcLlmNative()
-    private val mainHandler = Handler(Looper.getMainLooper())
-    private var modelHandle: Long = 0
-    private val isModelLoaded = AtomicBoolean(false)
+    private var modelHandle: Long? = null
     private val referenceCount = AtomicInteger(0)
-    private val loadMutex = Mutex()
+    private val lifecycleMutex = Mutex()
+    private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
     // Model paths
     private val modelDir = File(context.filesDir, "models")
@@ -61,9 +56,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     private val configPath = File(modelDir, CONFIG_FILE)
     private val tokenizerPath = File(modelDir, TOKENIZER_FILE)
     
-    // Auto-unload timer
-    private var lastUsedTime = System.currentTimeMillis()
-    private val autoUnloadRunnable = Runnable { checkAndUnloadModel() }
+    // Auto-unload job
+    private var autoUnloadJob: Job? = null
     
     /**
      * Check if the model is available on device
@@ -110,7 +104,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             name = MODEL_NAME,
             version = "v2.5-q4-android",
             isAvailable = isAvailable,
-            isLoaded = isModelLoaded.get(),
+            isLoaded = modelHandle != null,
             sizeBytes = sizeBytes,
             sizeMB = sizeBytes / (1024f * 1024f),
             referenceCount = referenceCount.get()
@@ -118,111 +112,127 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     }
     
     /**
-     * Load the model with reference counting
+     * Acquire model with reference counting and mutex protection
      */
-    suspend fun loadModel(): Boolean = withContext(Dispatchers.IO) {
-        loadMutex.withLock {
-            // If already loaded, just increment reference count
-            if (isModelLoaded.get()) {
-                referenceCount.incrementAndGet()
-                lastUsedTime = System.currentTimeMillis()
-                Log.d(TAG, "Model already loaded, reference count: ${referenceCount.get()}")
-                return@withContext true
-            }
-            
-            // Check if model files exist
-            if (!isModelAvailable()) {
-                Log.e(TAG, "Model files not found. Please download the model first.")
-                return@withContext false
-            }
-            
-            // Load native library
-            if (!MlcLlmNative.loadLibrary()) {
-                Log.e(TAG, "Failed to load MLC-LLM native library")
-                return@withContext false
-            }
-            
-            try {
-                Log.d(TAG, "Loading MiniCPM-Llama3-V2.5 model...")
-                
-                // Initialize model through native interface
-                modelHandle = nativeInterface.initializeModel(
-                    modelPath.absolutePath,
-                    configPath.absolutePath
-                )
-                
-                if (modelHandle != 0L) {
-                    // Warm up the model for faster inference
-                    nativeInterface.warmupModel(modelHandle)
-                    
-                    // Set inference parameters
-                    nativeInterface.setInferenceParams(
-                        modelHandle,
-                        temperature = 0.3f,
-                        maxTokens = MAX_TOKENS,
-                        topP = 0.9f
-                    )
-                    
-                    isModelLoaded.set(true)
-                    referenceCount.set(1)
-                    lastUsedTime = System.currentTimeMillis()
-                    
-                    // Schedule auto-unload check
-                    scheduleAutoUnloadCheck()
-                    
-                    Log.d(TAG, "MiniCPM model loaded successfully (handle: $modelHandle)")
-                    return@withContext true
-                } else {
-                    Log.e(TAG, "Failed to initialize MiniCPM model")
-                    return@withContext false
+    suspend fun acquireModel(): Unit = lifecycleMutex.withLock {
+        if (referenceCount.incrementAndGet() == 1) {
+            // First reference - load the model
+            modelHandle = loadModelOrThrow()
+            Log.d(TAG, "Model loaded on first acquire (handle: $modelHandle)")
+        }
+        // Cancel any pending auto-unload
+        autoUnloadJob?.cancel()
+        autoUnloadJob = null
+        Log.d(TAG, "Model acquired, reference count: ${referenceCount.get()}")
+    }
+    
+    /**
+     * Release model with reference counting and delayed unload
+     */
+    suspend fun releaseModel(): Unit = lifecycleMutex.withLock {
+        if (referenceCount.decrementAndGet() == 0) {
+            // No more references - schedule auto-unload
+            autoUnloadJob = ioScope.launch {
+                delay(AUTO_UNLOAD_DELAY_MS)
+                lifecycleMutex.withLock {
+                    if (referenceCount.get() == 0) {
+                        unloadModelInternal(modelHandle)
+                        modelHandle = null
+                        Log.d(TAG, "Model auto-unloaded after inactivity")
+                    }
                 }
-                
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load MiniCPM model", e)
-                if (modelHandle != 0L) {
-                    nativeInterface.releaseModel(modelHandle)
-                    modelHandle = 0L
-                }
-                isModelLoaded.set(false)
-                referenceCount.set(0)
-                return@withContext false
             }
         }
+        Log.d(TAG, "Model released, reference count: ${referenceCount.get()}")
+    }
+    
+    /**
+     * Load model or throw exception (internal method)
+     */
+    private suspend fun loadModelOrThrow(): Long {
+        // Check if model files exist
+        if (!isModelAvailable()) {
+            throw IllegalStateException("Model files not found. Please download the model first.")
+        }
+        
+        // Load native library
+        if (!MlcLlmNative.loadLibrary()) {
+            throw IllegalStateException("Failed to load MLC-LLM native library")
+        }
+        
+        Log.d(TAG, "Loading MiniCPM-Llama3-V2.5 model...")
+        
+        // Initialize model through native interface
+        val handle = nativeInterface.initializeModel(
+            modelPath.absolutePath,
+            configPath.absolutePath
+        )
+        
+        if (handle == 0L) {
+            throw IllegalStateException("Failed to initialize MiniCPM model")
+        }
+        
+        // Warm up the model for faster inference
+        nativeInterface.warmupModel(handle)
+        
+        // Set inference parameters
+        nativeInterface.setInferenceParams(
+            handle,
+            temperature = 0.3f,
+            maxTokens = MAX_TOKENS,
+            topP = 0.9f
+        )
+        
+        Log.d(TAG, "MiniCPM model loaded successfully (handle: $handle)")
+        return handle
+    }
+    
+    /**
+     * Legacy method for backward compatibility
+     */
+    suspend fun loadModel(): Boolean = try {
+        acquireModel()
+        true
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to load model", e)
+        false
     }
     
     /**
      * Run inference on an image with structured prompt
      */
     suspend fun runInference(bitmap: Bitmap, prompt: String): String? = withContext(Dispatchers.IO) {
-        if (!isModelLoaded.get()) {
-            Log.w(TAG, "Model not loaded, attempting to load...")
-            if (!loadModel()) {
-                return@withContext null
-            }
-        }
-        
-        lastUsedTime = System.currentTimeMillis()
-        
         try {
-            Log.d(TAG, "Running MiniCPM inference...")
+            // Acquire model (loads if needed)
+            acquireModel()
             
-            // Preprocess image for model requirements
-            val processedImage = preprocessImageForMiniCPM(bitmap)
-            
-            // Convert bitmap to byte array for native interface
-            val imageData = bitmapToByteArray(processedImage)
-            
-            // Run inference through native interface
-            val response = nativeInterface.runVisionInference(
-                modelHandle,
-                imageData,
-                processedImage.width,
-                processedImage.height,
-                prompt
-            )
-            
-            Log.d(TAG, "Inference completed, response length: ${response?.length ?: 0}")
-            return@withContext response
+            try {
+                val currentHandle = modelHandle ?: throw IllegalStateException("Model handle is null after acquire")
+                
+                Log.d(TAG, "Running MiniCPM inference...")
+                
+                // Preprocess image for model requirements
+                val processedImage = preprocessImageForMiniCPM(bitmap)
+                
+                // Convert bitmap to byte array for native interface
+                val imageData = bitmapToByteArray(processedImage)
+                
+                // Run inference through native interface
+                val response = nativeInterface.runVisionInference(
+                    currentHandle,
+                    imageData,
+                    processedImage.width,
+                    processedImage.height,
+                    prompt
+                )
+                
+                Log.d(TAG, "Inference completed, response length: ${response?.length ?: 0}")
+                return@withContext response
+                
+            } finally {
+                // Always release model after use
+                releaseModel()
+            }
             
         } catch (e: Exception) {
             Log.e(TAG, "Inference failed", e)
@@ -231,61 +241,33 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     }
     
     /**
-     * Release model reference, unload if no more references
+     * Internal method to unload model (called under mutex)
      */
-    fun releaseModel() {
-        mainHandler.removeCallbacks(autoUnloadRunnable)
-
-        val newCount = referenceCount.decrementAndGet()
-        Log.d(TAG, "Released model reference, count: $newCount")
-
-        if (newCount <= 0) {
-            unloadModel()
-        }
-    }
-    
-    /**
-     * Force unload the model
-     */
-    private fun unloadModel() {
-        synchronized(this) {
-            mainHandler.removeCallbacks(autoUnloadRunnable)
-
-            if (isModelLoaded.get() && modelHandle != 0L) {
-                try {
-                    nativeInterface.releaseModel(modelHandle)
-                    modelHandle = 0L
-                    isModelLoaded.set(false)
-                    referenceCount.set(0)
-                    Log.d(TAG, "MiniCPM model unloaded")
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error unloading model", e)
-                }
+    private fun unloadModelInternal(handle: Long?) {
+        if (handle != null && handle != 0L) {
+            try {
+                nativeInterface.releaseModel(handle)
+                Log.d(TAG, "Model unloaded (handle: $handle)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Error unloading model", e)
             }
         }
     }
     
     /**
-     * Check if model should be auto-unloaded due to inactivity
+     * Force unload the model (for cleanup)
      */
-    private fun checkAndUnloadModel() {
-        val timeSinceLastUse = System.currentTimeMillis() - lastUsedTime
-        
-        if (timeSinceLastUse > AUTO_UNLOAD_DELAY_MS && referenceCount.get() == 0) {
-            Log.d(TAG, "Auto-unloading model due to inactivity")
-            unloadModel()
-        } else if (isModelLoaded.get()) {
-            // Schedule next check
-            scheduleAutoUnloadCheck()
+    fun forceUnload() {
+        ioScope.launch {
+            lifecycleMutex.withLock {
+                autoUnloadJob?.cancel()
+                autoUnloadJob = null
+                unloadModelInternal(modelHandle)
+                modelHandle = null
+                referenceCount.set(0)
+                Log.d(TAG, "Model force unloaded")
+            }
         }
-    }
-    
-    /**
-     * Schedule auto-unload check
-     */
-    private fun scheduleAutoUnloadCheck() {
-        mainHandler.removeCallbacks(autoUnloadRunnable)
-        mainHandler.postDelayed(autoUnloadRunnable, AUTO_UNLOAD_DELAY_MS)
     }
     
     /**
