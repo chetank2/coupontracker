@@ -156,4 +156,33 @@ class CouponDaoTest {
         assert(duplicate != null)
         assert(duplicate?.redeemCode == coupon.redeemCode)
     }
+
+    @Test
+    fun findByStoreAndDescriptionIgnoresMissingStoredSignatures() = runBlocking {
+        val coupon = Coupon(
+            id = 0,
+            storeName = "Store",
+            description = "Holiday Savings",
+            expiryDate = Date(),
+            cashbackAmount = 20.0,
+            redeemCode = "HOLIDAY20",
+            imageUri = null,
+            category = "Test"
+        )
+
+        couponDao.insertCoupon(coupon)
+
+        val normalized = coupon.description.lowercase(Locale.getDefault()).trim()
+        val duplicate = couponDao.findByStoreAndDescription(
+            storeName = coupon.storeName,
+            normalizedDescription = normalized,
+            descriptionHash = "hash-value",
+            descriptionSignature = "signature-value",
+            imagePhash = "image-phash",
+            imageSignature = "image-signature"
+        )
+
+        assert(duplicate != null)
+        assert(duplicate?.redeemCode == coupon.redeemCode)
+    }
 }
