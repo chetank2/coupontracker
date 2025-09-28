@@ -144,16 +144,65 @@ class TextExtractor {
             return brand
         }
 
-        // Look for all caps words that are likely to be store names
-        val allCapsPattern = Pattern.compile("\\b([A-Z]{3,}\\b)")
-        val matcher = allCapsPattern.matcher(text)
+        val lowerText = text.lowercase(Locale.getDefault())
+        val wordFrequency = mutableMapOf<String, Int>()
+        val wordMatcher = Pattern.compile("\\b([A-Za-z][A-Za-z'\\-]*)\\b").matcher(text)
+        while (wordMatcher.find()) {
+            val word = wordMatcher.group(1)?.lowercase(Locale.getDefault()) ?: continue
+            wordFrequency[word] = wordFrequency.getOrDefault(word, 0) + 1
+        }
 
-        while (matcher.find()) {
-            val potentialName = matcher.group(1)
-            // Skip common words that might be in all caps but aren't store names
-            if (potentialName != null && !COMMON_WORDS.contains(potentialName.lowercase())) {
-                Log.d(TAG, "Found store name from all caps: $potentialName")
-                return potentialName
+        val candidateScores = mutableMapOf<String, Double>()
+        val candidateOriginal = mutableMapOf<String, String>()
+        val lines = text.lines()
+
+        fun addCandidate(raw: String?, isTitleCase: Boolean, lineIndex: Int) {
+            val candidate = raw?.trim()?.takeIf { it.length >= 3 } ?: return
+            val normalized = candidate.lowercase(Locale.getDefault())
+            if (COMMON_WORDS.contains(normalized)) {
+                return
+            }
+
+            val baseScore = if (isTitleCase) 4.0 else 2.0
+            val frequency = wordFrequency[normalized] ?: 1
+            val frequencyScore = if (frequency > 1) frequency * 2.5 else frequency.toDouble()
+            val lineBonus = (lines.size - lineIndex).coerceAtLeast(1)
+            val firstIndex = lowerText.indexOf(normalized)
+            val positionScore = if (firstIndex >= 0 && text.isNotEmpty()) {
+                (text.length - firstIndex).toDouble() / text.length.toDouble() * 3.0
+            } else {
+                0.0
+            }
+
+            val totalScore = baseScore + frequencyScore + lineBonus + positionScore
+            val currentScore = candidateScores[normalized]
+            if (currentScore == null || totalScore > currentScore) {
+                candidateScores[normalized] = totalScore
+                candidateOriginal[normalized] = candidate
+            }
+        }
+
+        val titlePattern = Pattern.compile("\\b([A-Z][a-z]{2,})\\b")
+        val allCapsPattern = Pattern.compile("\\b([A-Z]{3,})\\b")
+
+        lines.forEachIndexed { index, line ->
+            val titleMatcher = titlePattern.matcher(line)
+            while (titleMatcher.find()) {
+                addCandidate(titleMatcher.group(1), true, index)
+            }
+
+            val capsMatcher = allCapsPattern.matcher(line)
+            while (capsMatcher.find()) {
+                addCandidate(capsMatcher.group(1), false, index)
+            }
+        }
+
+        if (candidateScores.isNotEmpty()) {
+            val bestKey = candidateScores.maxByOrNull { it.value }!!.key
+            val bestCandidate = candidateOriginal[bestKey]
+            if (bestCandidate != null) {
+                Log.d(TAG, "Selected store name candidate: $bestCandidate")
+                return bestCandidate
             }
         }
 
@@ -919,7 +968,8 @@ class TextExtractor {
     companion object {
         private val COMMON_WORDS = setOf(
             "the", "and", "for", "with", "off", "use", "get", "code", "coupon",
-            "offer", "valid", "till", "from", "upto", "free", "save", "discount"
+            "offer", "valid", "till", "from", "upto", "free", "save", "discount",
+            "multi", "product", "products", "kit", "combo", "pack", "value", "special"
         )
 
         private val CATEGORIES = listOf(
