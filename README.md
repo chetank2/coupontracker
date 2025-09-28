@@ -6,7 +6,12 @@ A comprehensive coupon recognition system featuring both mobile Android app and 
 
 This repository contains a complete production-ready coupon recognition system with:
 
-### 📱 **Android Mobile App**
+### 📱 **Android Mobile App** ⭐ **NEW: LLM Integration**
+- **🧠 MiniCPM-Llama3-V2.5 Vision Model**: On-device LLM for intelligent coupon extraction
+- **🎯 Two-Stage Multi-Coupon Detection**: YOLO-based detection with interactive boundary adjustment
+- **🔄 Smart Fallback Chain**: LLM → Model-Based → Pattern → MLKit OCR with quality validation
+- **📝 Deferred Persistence**: Preview-before-save workflow with duplicate detection
+- **🎨 Enhanced UI/UX**: Comprehensive state management and user feedback
 - Advanced OCR with Phase 4 ROI integration
 - Multi-engine text recognition (ML Kit, Tesseract, Custom models)
 - Intelligent coupon field extraction
