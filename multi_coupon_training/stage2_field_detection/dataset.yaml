@@ -1,0 +1,10 @@
+names:
+- code_region
+- benefit_region
+- expiry_region
+- app_region
+- terms_region
+nc: 5
+path: /Users/user/Downloads/CouponTracker3/multi_coupon_training/stage2_field_detection
+train: images/train
+val: images/val

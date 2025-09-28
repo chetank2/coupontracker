@@ -1,0 +1,8 @@
+names:
+- coupon_complete
+- coupon_partial_top
+- coupon_partial_bottom
+nc: 3
+path: /Users/user/Downloads/CouponTracker3/multi_coupon_training/stage1_coupon_detection
+train: images/train
+val: images/val

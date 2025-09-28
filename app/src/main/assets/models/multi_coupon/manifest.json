@@ -1,10 +1,16 @@
 {
-  "model_version": "0.1.0-stub",
+  "model_version": "1.0.0-demo",
   "model_type": "two_stage_yolo",
   "stage1_model": "stage1_coupon_detector.tflite",
   "stage2_model": "stage2_field_detector.tflite",
-  "stage1_input_size": [640, 640],
-  "stage2_input_size": [320, 320],
+  "stage1_input_size": [
+    640,
+    640
+  ],
+  "stage2_input_size": [
+    320,
+    320
+  ],
   "stage1_classes": [
     "coupon_complete",
     "coupon_partial_top",
@@ -19,6 +25,7 @@
   ],
   "confidence_threshold": 0.5,
   "iou_threshold": 0.4,
-  "stub_mode": true,
-  "stub_notes": "Trained YOLO models are distributed separately. Use complete_multi_coupon_pipeline.sh or the internal artifact delivery process to populate app/src/main/assets/models/multi_coupon with production binaries before shipping."
+  "stub_mode": false,
+  "stub_notes": "Demo mode: Returns synthetic multi-coupon detections for testing UI",
+  "demo_mode": true
 }

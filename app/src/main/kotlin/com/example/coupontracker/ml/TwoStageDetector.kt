@@ -59,6 +59,7 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
     // Model configuration
     private var modelManifest: JSONObject? = null
     private var stubMode: Boolean = false
+    private var demoMode: Boolean = false
     private val stage1Classes = arrayOf("coupon_complete", "coupon_partial_top", "coupon_partial_bottom")
     private val stage2Classes = arrayOf("code_region", "benefit_region", "expiry_region", "app_region", "terms_region")
     
@@ -121,8 +122,9 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
             val modelType = modelManifest?.optString("model_type", "unknown")
             
             stubMode = modelManifest?.optBoolean("stub_mode", false) ?: false
+            demoMode = modelManifest?.optBoolean("demo_mode", false) ?: false
 
-            Log.d(TAG, "Model manifest loaded - Version: $version, Type: $modelType, Stub: $stubMode")
+            Log.d(TAG, "Model manifest loaded - Version: $version, Type: $modelType, Stub: $stubMode, Demo: $demoMode")
             
         } catch (e: Exception) {
             Log.w(TAG, "Could not load model manifest, using defaults", e)
@@ -179,6 +181,11 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
         if (stubMode) {
             Log.w(TAG, "TwoStageDetector is running in stub mode; multi-coupon detections are disabled.")
             return emptyList()
+        }
+        
+        if (demoMode) {
+            Log.i(TAG, "TwoStageDetector is running in demo mode; returning synthetic detections.")
+            return createDemoDetections(bitmap)
         }
 
         val stage1Interpreter = this.stage1Interpreter
@@ -626,6 +633,80 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
         } catch (e: Exception) {
             Log.e(TAG, "Error during cleanup", e)
         }
+    }
+    
+    /**
+     * Create demo multi-coupon detections for testing
+     */
+    private fun createDemoDetections(bitmap: Bitmap): List<CouponInstance> {
+        Log.d(TAG, "Creating demo multi-coupon detections")
+        
+        val instances = mutableListOf<CouponInstance>()
+        val imageWidth = bitmap.width.toFloat()
+        val imageHeight = bitmap.height.toFloat()
+        
+        // Create 2-3 demo coupon instances
+        val couponCount = if (imageWidth > imageHeight) 3 else 2
+        
+        for (i in 0 until couponCount) {
+            val couponWidth = imageWidth / couponCount
+            val x1 = i * couponWidth
+            val y1 = imageHeight * 0.1f
+            val x2 = x1 + couponWidth * 0.9f
+            val y2 = imageHeight * 0.9f
+            
+            val boundingBox = RectF(x1, y1, x2, y2)
+            
+            // Create demo fields within the coupon
+            val fields = listOf(
+                FieldDetection(
+                    fieldType = FieldType.CODE_REGION,
+                    boundingBox = RectF(x1 + 20, y1 + 20, x2 - 20, y1 + 60),
+                    confidence = 0.9f,
+                    text = "DEMO${i + 1}"
+                ),
+                FieldDetection(
+                    fieldType = FieldType.BENEFIT_REGION,
+                    boundingBox = RectF(x1 + 20, y1 + 80, x2 - 20, y1 + 120),
+                    confidence = 0.85f,
+                    text = "${(i + 1) * 10}% OFF"
+                ),
+                FieldDetection(
+                    fieldType = FieldType.EXPIRY_REGION,
+                    boundingBox = RectF(x1 + 20, y2 - 60, x2 - 20, y2 - 20),
+                    confidence = 0.8f,
+                    text = "2025-12-31"
+                )
+            )
+            
+            // Create cropped bitmap for this coupon
+            val cropBitmap = try {
+                Bitmap.createBitmap(
+                    bitmap,
+                    x1.roundToInt().coerceAtLeast(0),
+                    y1.roundToInt().coerceAtLeast(0),
+                    (x2 - x1).roundToInt().coerceAtMost(bitmap.width),
+                    (y2 - y1).roundToInt().coerceAtMost(bitmap.height)
+                )
+            } catch (e: Exception) {
+                // Fallback to scaled version of original
+                Bitmap.createScaledBitmap(bitmap, 300, 200, false)
+            }
+            
+            val instance = CouponInstance(
+                id = "demo_coupon_${i + 1}",
+                boundingBox = boundingBox,
+                status = CouponStatus.COMPLETE,
+                confidence = 0.9f - (i * 0.05f),
+                fields = fields,
+                cropBitmap = cropBitmap
+            )
+            
+            instances.add(instance)
+        }
+        
+        Log.i(TAG, "Created ${instances.size} demo coupon instances")
+        return instances
     }
 }
 
