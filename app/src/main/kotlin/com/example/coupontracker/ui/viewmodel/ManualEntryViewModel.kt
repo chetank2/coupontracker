@@ -87,7 +87,7 @@ class ManualEntryViewModel @Inject constructor(
         description: String,
         amount: Double,
         code: String?,
-        expiryDate: Date,
+        expiryDate: Date?,
         category: String?
     ) {
         if (storeName.isBlank()) {

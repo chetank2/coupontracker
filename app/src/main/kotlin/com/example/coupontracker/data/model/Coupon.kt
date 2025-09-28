@@ -11,7 +11,7 @@ data class Coupon(
     val storeName: String,
     val description: String,
     val normalizedDescription: String? = null,
-    val expiryDate: Date,
+    val expiryDate: Date? = null,
     val cashbackAmount: Double,
     val redeemCode: String?,
     val imageUri: String?,

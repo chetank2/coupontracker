@@ -746,6 +746,9 @@ class AddFragment : Fragment() {
             couponInfo.expiryDate?.let { date ->
                 expiryDateInput.setText(SimpleDateFormat("MM/dd/yyyy", Locale.US).format(date))
                 viewModel.setExpiryDate(date)
+            } ?: run {
+                expiryDateInput.setText("")
+                viewModel.setExpiryDate(null)
             }
 
             couponInfo.cashbackAmount?.let { amount ->

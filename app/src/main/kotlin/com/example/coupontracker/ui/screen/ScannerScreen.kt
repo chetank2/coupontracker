@@ -385,9 +385,11 @@ fun ScannerScreen(
                                     onClick = {
                                         val parsedAmount = amount.toDoubleOrNull() ?: 0.0
                                         val parsedDate = try {
-                                            SimpleDateFormat("MM/dd/yyyy", Locale.getDefault()).parse(expiryDateString) ?: Date()
+                                            expiryDateString.takeIf { it.isNotBlank() }?.let {
+                                                SimpleDateFormat("MM/dd/yyyy", Locale.getDefault()).parse(it)
+                                            }
                                         } catch (e: Exception) {
-                                            Date()
+                                            null
                                         }
 
                                         val coupon = Coupon(

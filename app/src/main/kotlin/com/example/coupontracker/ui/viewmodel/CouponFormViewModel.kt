@@ -88,7 +88,7 @@ class CouponFormViewModel @Inject constructor(
         description: String,
         amount: Double,
         code: String,
-        expiryDate: Date,
+        expiryDate: Date?,
         category: String,
         imageUri: String?
     ) {
@@ -148,7 +148,7 @@ class CouponFormViewModel @Inject constructor(
         description: String,
         amount: Double,
         code: String,
-        expiryDate: Date,
+        expiryDate: Date?,
         category: String,
         imageUri: String?
     ): Coupon {

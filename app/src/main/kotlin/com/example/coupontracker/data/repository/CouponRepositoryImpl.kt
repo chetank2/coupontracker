@@ -111,6 +111,7 @@ class CouponRepositoryImpl @Inject constructor(
     private fun mergeCoupons(existing: Coupon, incoming: Coupon): Coupon {
         return incoming.copy(
             id = existing.id,
+            expiryDate = incoming.expiryDate ?: existing.expiryDate,
             normalizedDescription = incoming.normalizedDescription ?: existing.normalizedDescription,
             redeemCode = incoming.redeemCode ?: existing.redeemCode,
             imageUri = incoming.imageUri ?: existing.imageUri,
