@@ -258,6 +258,11 @@ class TextExtractor {
      * @return The parsed date or null if not found
      */
     fun parseExpiryDate(text: String): Date? {
+        val timeRegex = Regex("\\s*(?:at\\s*)?\\d{1,2}:\\d{2}(?:\\s*[AaPp][Mm])?(?:\\s*[A-Za-z]+)?$")
+        fun sanitizeDateString(raw: String): String {
+            return timeRegex.replace(raw.trim().replace("\u202F", " ")) { _ -> "" }.trim().trimEnd(',')
+        }
+
         // Check for "Expires in X hours" format
         val expiresInHoursPattern = Pattern.compile("(?i)expires?\\s+in\\s+(\\d+)\\s+hours?")
         val expiresInHoursMatcher = expiresInHoursPattern.matcher(text)
@@ -274,7 +279,8 @@ class TextExtractor {
         val expiryMatcher = expiryPattern.matcher(text)
         if (expiryMatcher.find()) {
             val expiryText = expiryMatcher.group(1)?.trim() ?: return null
-            
+            val sanitizedExpiryText = sanitizeDateString(expiryText)
+
             // Check if it contains "Expires in X hours/days"
             val expiresInPattern = Pattern.compile("(?i)Expires\\s+in\\s+(\\d+)\\s+(hours?|days?)")
             val expiresInMatcher = expiresInPattern.matcher(expiryText)
@@ -301,13 +307,17 @@ class TextExtractor {
                     "yyyy-MM-dd",
                     "dd-MM-yyyy",
                     "dd MMM yyyy",
-                    "MMM dd, yyyy"
+                    "MMM dd, yyyy",
+                    "dd MMMM yyyy",
+                    "dd MMM, yyyy",
+                    "dd MMMM, yyyy"
                 )
-                
+
                 for (pattern in datePatterns) {
                     try {
                         val sdf = SimpleDateFormat(pattern, Locale.getDefault())
-                        val date = sdf.parse(expiryText)
+                        sdf.isLenient = false
+                        val date = sdf.parse(sanitizedExpiryText)
                         if (date != null) {
                             Log.d(TAG, "Parsed expiry date from 'Expiry:' field: $expiryText")
                             return date
@@ -354,23 +364,28 @@ class TextExtractor {
             "yyyy-MM-dd",
             "dd-MM-yyyy",
             "dd MMM yyyy",
-            "MMM dd, yyyy"
+            "MMM dd, yyyy",
+            "dd MMMM yyyy",
+            "dd MMM, yyyy",
+            "dd MMMM, yyyy"
         )
-        
+
         val dateRegexes = listOf(
             Pattern.compile("(?i)(?:valid|expires?|expiry|valid until|valid till)\\s+(?:on|by|until|till)?\\s+(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})"),
             Pattern.compile("(?i)(?:valid|expires?|expiry|valid until|valid till)\\s+(?:on|by|until|till)?\\s+(\\d{1,2}\\s+[A-Za-z]{3}\\s+\\d{2,4})"),
             Pattern.compile("(?i)(?:valid|expires?|expiry|valid until|valid till)\\s+(?:on|by|until|till)?\\s+([A-Za-z]{3}\\s+\\d{1,2},\\s+\\d{2,4})")
         )
-        
+
         for (regex in dateRegexes) {
             val matcher = regex.matcher(text)
             if (matcher.find()) {
                 val dateStr = matcher.group(1) ?: continue
+                val sanitizedDateStr = sanitizeDateString(dateStr)
                 for (pattern in datePatterns) {
                     try {
                         val sdf = SimpleDateFormat(pattern, Locale.getDefault())
-                        val date = sdf.parse(dateStr)
+                        sdf.isLenient = false
+                        val date = sdf.parse(sanitizedDateStr)
                         Log.d(TAG, "Found expiry date from standard format: $dateStr")
                         return date
                     } catch (e: ParseException) {
@@ -379,12 +394,14 @@ class TextExtractor {
                 }
             }
         }
-        
+
         // Try to parse the text directly as a date
+        val sanitizedText = sanitizeDateString(text)
         for (pattern in datePatterns) {
             try {
                 val sdf = SimpleDateFormat(pattern, Locale.getDefault())
-                val date = sdf.parse(text)
+                sdf.isLenient = false
+                val date = sdf.parse(sanitizedText)
                 Log.d(TAG, "Parsed text directly as date: $text")
                 return date
             } catch (e: ParseException) {
