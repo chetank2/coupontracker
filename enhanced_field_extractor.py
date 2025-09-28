@@ -9,11 +9,85 @@ and context-aware algorithms for better coupon information extraction.
 import re
 import json
 import logging
-import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
+from difflib import SequenceMatcher
 from typing import Dict, List, Tuple, Optional
-import dateutil.parser as date_parser
-from fuzzywuzzy import fuzz, process
+
+
+MONTH_NORMALIZATION = {
+    'jan.': 'Jan',
+    'feb.': 'Feb',
+    'mar.': 'Mar',
+    'apr.': 'Apr',
+    'jun.': 'Jun',
+    'jul.': 'Jul',
+    'aug.': 'Aug',
+    'sep.': 'Sep',
+    'sep': 'Sep',
+    'sept': 'Sep',
+    'sept.': 'Sep',
+    'oct.': 'Oct',
+    'nov.': 'Nov',
+    'dec.': 'Dec',
+}
+
+
+EXPIRY_DATE_FORMATS = [
+    '%d/%m/%Y',
+    '%d/%m/%y',
+    '%d-%m-%Y',
+    '%d-%m-%y',
+    '%Y-%m-%d',
+    '%d %m %Y',
+    '%d %b %Y',
+    '%d %b, %Y',
+    '%d %B %Y',
+    '%d %B, %Y',
+    '%d %b %Y %H:%M',
+    '%d %b, %Y %H:%M',
+    '%d %B %Y %H:%M',
+    '%d %B, %Y %H:%M',
+    '%d %b %Y, %H:%M',
+    '%d %b, %Y, %H:%M',
+    '%d %B %Y, %H:%M',
+    '%d %B, %Y, %H:%M',
+    '%d %b %Y %I:%M %p',
+    '%d %b, %Y %I:%M %p',
+    '%d %B %Y %I:%M %p',
+    '%d %B, %Y %I:%M %p',
+    '%d %b %Y, %I:%M %p',
+    '%d %b, %Y, %I:%M %p',
+    '%d %B %Y, %I:%M %p',
+    '%d %B, %Y, %I:%M %p',
+]
+
+
+def _partial_ratio(needle: str, haystack: str) -> int:
+    """Lightweight partial ratio implementation without external dependencies."""
+
+    if not needle or not haystack:
+        return 0
+
+    needle = needle.lower()
+    haystack = haystack.lower()
+
+    if needle in haystack:
+        return 100
+
+    matcher = SequenceMatcher()
+    matcher.set_seq2(needle)
+
+    best = 0.0
+    window = len(needle)
+
+    for start in range(0, len(haystack) - window + 1):
+        segment = haystack[start:start + window]
+        matcher.set_seq1(segment)
+        best = max(best, matcher.ratio())
+        if best >= 0.99:
+            break
+
+    return int(round(best * 100))
 
 # Configure logging
 logging.basicConfig(
@@ -160,7 +234,7 @@ class EnhancedCouponFieldExtractor:
         
         # Calculate overall confidence
         confidences = [field.get('confidence', 0) for field in fields.values() if isinstance(field, dict)]
-        overall_confidence = np.mean(confidences) if confidences else 0.0
+        overall_confidence = sum(confidences) / len(confidences) if confidences else 0.0
         
         fields['overall_confidence'] = overall_confidence
         fields['extraction_metadata'] = {
@@ -221,7 +295,7 @@ class EnhancedCouponFieldExtractor:
             
             # Use fuzzy matching for partial matches
             for identifier in store_data['identifiers']:
-                ratio = fuzz.partial_ratio(identifier, text_lower)
+                ratio = _partial_ratio(identifier, text_lower)
                 if ratio > 80:
                     confidence = max(confidence, ratio / 100.0 * 0.8)
             
@@ -344,7 +418,7 @@ class EnhancedCouponFieldExtractor:
             for pattern in store_patterns:
                 matches = re.findall(pattern, text, re.IGNORECASE)
                 for match in matches:
-                    if not any(char.isdigit() for char in match):
+                    if not self._is_plausible_code(match):
                         continue
                     candidates.append({
                         'code': match,
@@ -356,8 +430,7 @@ class EnhancedCouponFieldExtractor:
         for pattern in self.general_code_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             for match in matches:
-                # Filter out common false positives
-                if not any(char.isdigit() for char in match):
+                if not self._is_plausible_code(match):
                     continue
                 if not self._is_likely_false_positive(match):
                     candidates.append({
@@ -376,6 +449,10 @@ class EnhancedCouponFieldExtractor:
         for pattern in code_indicator_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             for match in matches:
+                if not self._is_plausible_code(match):
+                    continue
+                if self._is_likely_false_positive(match):
+                    continue
                 candidates.append({
                     'code': match,
                     'confidence': 0.95,
@@ -535,36 +612,76 @@ class EnhancedCouponFieldExtractor:
         Returns:
             Dict: Expiry date extraction result
         """
-        best_match = {'date': None, 'confidence': 0.0, 'raw_text': None, 'parsed_date': None}
+        best_match = {'date': None, 'confidence': 0.0, 'raw_text': None, 'parsed_date': None, 'is_expired': None}
         
         for pattern, confidence in self.expiry_patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             for match in matches:
-                try:
-                    # Try to parse the date
-                    parsed_date = date_parser.parse(match, fuzzy=True)
-                    
-                    # Check if date is in the future (reasonable for expiry)
-                    if parsed_date.date() >= datetime.now().date():
-                        if confidence > best_match['confidence']:
-                            best_match = {
-                                'date': match,
-                                'confidence': confidence,
-                                'raw_text': match,
-                                'parsed_date': parsed_date.isoformat()
-                            }
-                    
-                except (ValueError, TypeError):
-                    # If parsing fails, still record with lower confidence
+                parsed_date = self._parse_expiry_candidate(match)
+
+                if parsed_date:
+                    is_expired = parsed_date.date() < datetime.now().date()
+                    effective_confidence = confidence
+
+                    if effective_confidence > best_match['confidence']:
+                        best_match = {
+                            'date': match,
+                            'confidence': effective_confidence,
+                            'raw_text': match,
+                            'parsed_date': parsed_date.isoformat(),
+                            'is_expired': is_expired
+                        }
+                else:
                     if confidence * 0.5 > best_match['confidence']:
                         best_match = {
                             'date': match,
                             'confidence': confidence * 0.5,
                             'raw_text': match,
-                            'parsed_date': None
+                            'parsed_date': None,
+                            'is_expired': None
                         }
-        
+
         return best_match
+
+    def _parse_expiry_candidate(self, value: str) -> Optional[datetime]:
+        """Parse a matched expiry string using known date formats."""
+
+        if not value:
+            return None
+
+        normalized = value.strip()
+        normalized = re.sub(r'(\d{1,2})(st|nd|rd|th)', r'\1', normalized, flags=re.IGNORECASE)
+        normalized = re.sub(r'\s+', ' ', normalized)
+
+        lowered = normalized.lower()
+        for source, target in MONTH_NORMALIZATION.items():
+            lowered = re.sub(r'\b' + re.escape(source) + r'\b', target.lower(), lowered)
+
+        # Restore title case for month tokens
+        lowered = re.sub(
+            r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b',
+            lambda m: m.group(0).title(),
+            lowered,
+            flags=re.IGNORECASE
+        )
+        lowered = re.sub(
+            r'\b(january|february|march|april|may|june|july|august|september|october|november|december)\b',
+            lambda m: m.group(0).title(),
+            lowered,
+            flags=re.IGNORECASE
+        )
+
+        # Remove stray periods after normalization
+        normalized = re.sub(r'\.(?=\s|$)', '', lowered)
+
+        for fmt in EXPIRY_DATE_FORMATS:
+            try:
+                parsed = datetime.strptime(normalized, fmt)
+                return parsed
+            except ValueError:
+                continue
+
+        return None
     
     def _extract_min_order(self, text: str) -> Dict:
         """Extract minimum order amount with confidence.
@@ -698,33 +815,66 @@ class EnhancedCouponFieldExtractor:
 
         return {'text': None, 'confidence': 0.0, 'source': 'none'}
     
-    def _is_likely_false_positive(self, code: str) -> bool:
-        """Check if a potential code is likely a false positive.
-        
-        Args:
-            code (str): Potential coupon code
-            
-        Returns:
-            bool: True if likely false positive
-        """
-        false_positive_patterns = [
-            r'^\d+$',  # Only numbers
-            r'^[A-Z]+$',  # Only letters
-            r'(AMAZON|FLIPKART|MYNTRA|SWIGGY|ZOMATO)',  # Store names
-            r'(INDIA|DELHI|MUMBAI|BANGALORE)',  # City names
-            r'(MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY)',  # Days
-            r'(JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER)',  # Months
-        ]
-        
-        for pattern in false_positive_patterns:
-            if re.match(pattern, code, re.IGNORECASE):
-                return True
-        
-        # Check for common English words
-        common_words = ['CODE', 'COUPON', 'OFFER', 'DEAL', 'SAVE', 'FREE', 'EXTRA']
-        if code.upper() in common_words:
+    def _is_plausible_code(self, code: str) -> bool:
+        """Determine if a detected token looks like a real coupon code."""
+
+        cleaned = code.strip()
+        if not cleaned:
+            return False
+
+        if any(char.isdigit() for char in cleaned):
             return True
-        
+
+        if cleaned.isalpha() and len(cleaned) >= 6:
+            return True
+
+        return False
+
+    def _is_likely_false_positive(self, code: str) -> bool:
+        """Check if a potential code is likely a false positive."""
+
+        cleaned = code.strip()
+        if not cleaned:
+            return True
+
+        upper_code = cleaned.upper()
+
+        if cleaned.isdigit():
+            return True
+
+        generic_words = {
+            'CODE', 'COUPON', 'OFFER', 'DEAL', 'SAVE', 'FREE', 'EXTRA',
+            'FLAT', 'DISCOUNT', 'SHOP', 'STORE', 'SUPER', 'SPECIAL'
+        }
+
+        if upper_code in generic_words:
+            return True
+
+        store_names = {'AMAZON', 'FLIPKART', 'MYNTRA', 'SWIGGY', 'ZOMATO', 'AHA', 'PUMA'}
+        if upper_code in store_names:
+            return True
+
+        cities = {'INDIA', 'DELHI', 'MUMBAI', 'BANGALORE', 'CHENNAI', 'HYDERABAD'}
+        if upper_code in cities:
+            return True
+
+        weekdays = {
+            'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'
+        }
+        if upper_code in weekdays:
+            return True
+
+        months = {
+            'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+            'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
+            'JAN', 'FEB', 'MAR', 'APR', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'
+        }
+        if upper_code in months:
+            return True
+
+        if cleaned.isalpha() and len(cleaned) <= 4:
+            return True
+
         return False
     
     def validate_extracted_fields(self, fields: Dict) -> Dict:

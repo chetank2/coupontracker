@@ -5,27 +5,6 @@ from pathlib import Path
 
 import pytest
 
-# Provide lightweight stubs for optional heavy dependencies so the module can be imported
-if 'numpy' not in sys.modules:
-    sys.modules['numpy'] = types.SimpleNamespace(mean=lambda values: sum(values) / len(values) if values else 0.0)
-
-if 'fuzzywuzzy' not in sys.modules:
-    fuzz_module = types.SimpleNamespace(partial_ratio=lambda a, b: 0)
-    process_module = types.SimpleNamespace()
-    fuzzy_module = types.ModuleType('fuzzywuzzy')
-    fuzzy_module.fuzz = fuzz_module
-    fuzzy_module.process = process_module
-    sys.modules['fuzzywuzzy'] = fuzzy_module
-    sys.modules['fuzzywuzzy.fuzz'] = fuzz_module
-    sys.modules['fuzzywuzzy.process'] = process_module
-
-if 'dateutil' not in sys.modules:
-    parser_module = types.SimpleNamespace(parse=lambda value, fuzzy=False: datetime.now())
-    dateutil_module = types.ModuleType('dateutil')
-    dateutil_module.parser = parser_module
-    sys.modules['dateutil'] = dateutil_module
-    sys.modules['dateutil.parser'] = parser_module
-
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from enhanced_field_extractor import EnhancedCouponFieldExtractor
@@ -82,6 +61,7 @@ def test_extract_expiry_date_with_comma_and_time():
     assert expiry['raw_text'] == '05 May, 2025, 11:59 PM'
     assert expiry['confidence'] > 0.9
     assert expiry['parsed_date'] is not None
+    assert expiry['is_expired'] is True
 
 
 def test_aha_coupon_fields_are_preserved():
@@ -114,3 +94,25 @@ def test_aha_coupon_fields_are_preserved():
     assert '₹499' in terms['text']
     assert '₹699' in terms['text']
     assert '₹999' in terms['text']
+
+
+def test_extract_fields_with_confidence_handles_combined_offer():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        PUMA Coupon Up to 50.0% off + Extra 33% Off
+        Redeem at PUMA outlets today
+        Use code KQSKLBLBIR before it expires
+        Expires on 05 May, 2025, 11:59 PM
+    """
+
+    fields = extractor.extract_fields_with_confidence(ocr_text)
+
+    assert fields['store']['name'] == 'PUMA'
+    assert fields['discount']['type'] == 'percentage'
+    assert fields['discount']['raw_text'] == 'Up to 50% Off + Extra 33% Off'
+    assert fields['discount']['components'] == ['Up to 50% Off', 'Extra 33% Off']
+    assert fields['coupon_code']['code'] == 'KQSKLBLBIR'
+    assert fields['expiry_date']['raw_text'] == '05 May, 2025, 11:59 PM'
+    assert fields['expiry_date']['is_expired'] is True
+    assert fields['overall_confidence'] > 0
