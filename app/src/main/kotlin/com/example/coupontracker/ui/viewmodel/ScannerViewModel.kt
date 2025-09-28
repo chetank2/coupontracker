@@ -667,16 +667,15 @@ class ScannerViewModel @Inject constructor(
     fun saveCoupon(coupon: Coupon, miniCpmStatus: MiniCpmProgress = MiniCpmProgress.SUCCESS) {
         viewModelScope.launch {
             try {
-                val state = singleScanPersistenceHelper.persist(
-                    coupon,
-                    mapOf(
+                val result = singleScanPersistenceHelper.persistCoupon(
+                    coupon = coupon,
+                    extractedFields = mapOf(
                         "storeName" to coupon.storeName,
                         "description" to coupon.description,
                         "code" to (coupon.redeemCode ?: "")
-                    ),
-                    miniCpmStatus
+                    )
                 )
-                _uiState.value = state
+                _uiState.value = result.toScannerState(miniCpmStatus)
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving coupon", e)
                 _uiState.value = ScannerUiState.Error("Error saving coupon: ${e.message}")
