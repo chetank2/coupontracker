@@ -200,11 +200,20 @@ class LocalLlmOcrServiceTest {
         assertEquals("Coupon offer", result.description) // Generic "description" replaced
         assertEquals("FLIP50", result.redeemCode)
         assertEquals(50.0, result.cashbackAmount, 0.01)
-        
+
         // Should pass validation since we have meaningful store name and code
         verify { mockTelemetryService.recordInference(any(), true, any(), any(), null) }
     }
-    
+
+    @Test
+    fun `cleanDescription removes noise and normalizes casing`() {
+        val rawDescription = "12:40 9 X\nfree body mist OF YOUR CHOICE"
+
+        val cleaned = LocalLlmOcrService.cleanDescription(rawDescription)
+
+        assertEquals("Free body mist of your choice", cleaned)
+    }
+
     @Test
     fun `should handle LLM timeout and use fallback`() = runTest {
         // Arrange: LLM times out

@@ -16,6 +16,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
 import org.json.JSONObject
 import java.util.Date
+import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -30,13 +31,58 @@ class LocalLlmOcrService(
     
     companion object {
         private const val TAG = "LocalLlmOcrService"
-        
+
         // Inference timeout (30 seconds)
         private const val INFERENCE_TIMEOUT_MS = 30000L
-        
+
         // Model version tracking
         private const val SERVICE_VERSION = "1.0.0"
         private const val SUPPORTED_MODEL_VERSION = "v2.5-q4-android"
+
+        fun cleanDescription(raw: String?): String {
+            if (raw.isNullOrBlank()) {
+                return ""
+            }
+
+            val timestampPattern = Regex("^\\d{1,2}:\\d{2}")
+            val singleLetterPattern = Regex("""^[A-Za-z]$""")
+
+            val cleanedLines = raw.lines().mapNotNull { line ->
+                val trimmed = line.trim()
+                if (trimmed.isBlank()) {
+                    return@mapNotNull null
+                }
+
+                if (timestampPattern.containsMatchIn(trimmed)) {
+                    return@mapNotNull null
+                }
+
+                if (singleLetterPattern.matches(trimmed)) {
+                    return@mapNotNull null
+                }
+
+                if (trimmed.equals("x", ignoreCase = true)) {
+                    return@mapNotNull null
+                }
+
+                val uppercaseLetters = trimmed.count { it.isLetter() && it.isUpperCase() }
+                val lowercaseLetters = trimmed.count { it.isLetter() && it.isLowerCase() }
+
+                val normalized = if (uppercaseLetters > 0 && uppercaseLetters >= lowercaseLetters && trimmed.contains(' ')) {
+                    trimmed.lowercase(Locale.getDefault()).replaceFirstChar { char ->
+                        if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
+                    }
+                } else {
+                    trimmed
+                }
+
+                normalized
+            }
+
+            return cleanedLines.joinToString(" ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+        }
     }
     
     // Dependencies
@@ -249,11 +295,13 @@ class LocalLlmOcrService(
                 }
             }
             
-            val description = json.optString("description", "Coupon offer").let {
+            val description = json.optString("description", "").let {
+                val cleaned = cleanDescription(it)
                 when {
-                    it.isBlank() || it == "Unknown" -> "Coupon offer"
-                    GenericFieldHeuristics.isGenericOrMissing(it) -> "Coupon offer"
-                    else -> it.take(100) // Limit length
+                    cleaned.isBlank() -> "Coupon offer"
+                    cleaned.equals("Unknown", ignoreCase = true) -> "Coupon offer"
+                    GenericFieldHeuristics.isGenericOrMissing(cleaned) -> "Coupon offer"
+                    else -> cleaned.take(100)
                 }
             }
             
@@ -301,7 +349,7 @@ class LocalLlmOcrService(
                 }
             }
             
-            CouponInfo(
+            return CouponInfo(
                 storeName = finalStoreName,
                 description = description,
                 expiryDate = parsedExpiryDate,
@@ -462,6 +510,9 @@ class LocalLlmOcrService(
             // Use existing TextExtractor to parse the OCR text
             val textExtractor = TextExtractor()
             val extractedInfo = textExtractor.extractCouponInfoSync(mlKitText, captureTimestamp)
+                .let { info ->
+                    info.copy(description = cleanDescription(info.description))
+                }
             
             // Validate that we got meaningful extraction results
             if (extractedInfo.storeName == "Unknown Store" && 
@@ -480,15 +531,16 @@ class LocalLlmOcrService(
             try {
                 val modelBasedService = ModelBasedOCRService(context)
                 val result = modelBasedService.processCouponImage(bitmap)
-                Log.d(TAG, "Model-based OCR fallback result: $result")
-                return@withContext result
+                val cleanedResult = result.copy(description = cleanDescription(result.description))
+                Log.d(TAG, "Model-based OCR fallback result: $cleanedResult")
+                return@withContext cleanedResult
             } catch (e2: Exception) {
                 Log.e(TAG, "All OCR methods failed", e2)
-                
+
                 // Return minimal CouponInfo as last resort
                 CouponInfo(
                     storeName = "Unknown Store",
-                    description = "All OCR methods failed - please try again"
+                    description = cleanDescription("All OCR methods failed - please try again")
                 )
             }
         }
