@@ -115,12 +115,13 @@ class ScannerFragment : Fragment() {
                     is ScannerUiState.Success -> {
                         binding.progressBar.visibility = View.GONE
                         binding.captureButton.isEnabled = true
-                        
+
                         // Show success message with coupon details
                         val coupon = state.coupon
+                        val progressLabel = state.miniCpmStatus.displayName()
                         Snackbar.make(
                             binding.root,
-                            "Successfully scanned coupon: ${coupon.redeemCode ?: ""}",
+                            "Successfully scanned coupon: ${coupon.redeemCode ?: ""} ($progressLabel)",
                             Snackbar.LENGTH_LONG
                         ).show()
                         
@@ -164,10 +165,10 @@ class ScannerFragment : Fragment() {
                     is ScannerUiState.AllCouponsSaved -> {
                         binding.progressBar.visibility = View.GONE
                         binding.captureButton.isEnabled = true
-                        
+
                         Snackbar.make(
                             binding.root,
-                            "Successfully saved ${state.coupons.size} coupons!",
+                            "Successfully saved ${state.processedCoupons.size} coupons!",
                             Snackbar.LENGTH_LONG
                         ).show()
                         

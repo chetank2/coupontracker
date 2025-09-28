@@ -12,7 +12,9 @@ import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
-import com.example.coupontracker.ml.FieldType
+import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.util.GenericFieldHeuristics
+import com.example.coupontracker.util.LocalLlmOcrService
 import com.example.coupontracker.util.MultiEngineOCR
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -32,7 +34,8 @@ import javax.inject.Inject
 class ScannerViewModel @Inject constructor(
     application: Application,
     @ApplicationContext private val context: Context,
-    private val couponRepository: CouponRepository
+    private val couponRepository: CouponRepository,
+    private val localLlmOcrService: LocalLlmOcrService
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -40,6 +43,7 @@ class ScannerViewModel @Inject constructor(
 
     private val multiEngineOCR: MultiEngineOCR = MultiEngineOCR(context)
     private val twoStageDetector: TwoStageDetector = TwoStageDetector(context)
+    private val fieldHeuristics: GenericFieldHeuristics = GenericFieldHeuristics
 
     companion object {
         private const val TAG = "ScannerViewModel"
@@ -148,12 +152,12 @@ class ScannerViewModel @Inject constructor(
             Log.d(TAG, "Processing single coupon with ${couponInstance.fields.size} detected fields")
 
             // Extract text from detected fields using OCR
-            val extractedInfo = extractTextFromFields(couponInstance)
-            
+            val extractionResult = extractTextFromFields(couponInstance)
+
             // Create coupon from extracted information
-            val coupon = createCouponFromInstance(couponInstance, extractedInfo, imageUri)
-            
-            _uiState.value = ScannerUiState.Success(coupon)
+            val coupon = createCouponFromInstance(couponInstance, extractionResult.fields, imageUri)
+
+            _uiState.value = ScannerUiState.Success(coupon, extractionResult.miniCpmStatus)
 
         } catch (e: Exception) {
             Log.e(TAG, "Error processing single coupon", e)
@@ -189,18 +193,18 @@ class ScannerViewModel @Inject constructor(
                 _uiState.value = ScannerUiState.Scanning
                 Log.d(TAG, "Processing all ${couponInstances.size} detected coupons")
 
-                val savedCoupons = mutableListOf<Coupon>()
+                val processedResults = mutableListOf<CouponProcessingSummary>()
 
                 for ((index, instance) in couponInstances.withIndex()) {
                     try {
-                        val extractedInfo = extractTextFromFields(instance)
-                        val coupon = createCouponFromInstance(instance, extractedInfo, originalImageUri)
-                        
+                        val extractionResult = extractTextFromFields(instance)
+                        val coupon = createCouponFromInstance(instance, extractionResult.fields, originalImageUri)
+
                         // Save coupon to repository
                         couponRepository.insertCoupon(coupon)
-                        savedCoupons.add(coupon)
-                        
-                        Log.d(TAG, "Saved coupon ${index + 1}/${couponInstances.size}: ${coupon.redeemCode}")
+                        processedResults.add(CouponProcessingSummary(coupon, extractionResult.miniCpmStatus))
+
+                        Log.d(TAG, "Saved coupon ${processedResults.size}/${couponInstances.size}: ${coupon.redeemCode}")
                         
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing coupon $index", e)
@@ -208,8 +212,8 @@ class ScannerViewModel @Inject constructor(
                     }
                 }
 
-                if (savedCoupons.isNotEmpty()) {
-                    _uiState.value = ScannerUiState.AllCouponsSaved(savedCoupons)
+                if (processedResults.isNotEmpty()) {
+                    _uiState.value = ScannerUiState.AllCouponsSaved(processedResults)
                 } else {
                     _uiState.value = ScannerUiState.Error("Failed to save any coupons")
                 }
@@ -224,43 +228,140 @@ class ScannerViewModel @Inject constructor(
     /**
      * Extract text from detected fields using OCR
      */
-    private suspend fun extractTextFromFields(couponInstance: CouponInstance): Map<String, String> {
+    private suspend fun extractTextFromFields(couponInstance: CouponInstance): FieldExtractionResult {
         return withContext(Dispatchers.IO) {
             val extractedInfo = mutableMapOf<String, String>()
+            var progress = MiniCpmProgress.SUCCESS
+
+            extractedInfo["minicpmConfidence"] = couponInstance.confidence.toString()
+            extractedInfo["minicpmDetectionStatus"] = couponInstance.status.name
 
             try {
-                // Use the cropped coupon bitmap for OCR
-                when (val result = multiEngineOCR.processImage(couponInstance.cropBitmap)) {
-                    is MultiEngineOCR.OCRResult.Success -> {
-                        // Merge OCR results with field detection results
-                        extractedInfo.putAll(result.extractedInfo)
-                        
-                        // Map detected fields to their types
-                        couponInstance.fields.forEach { field ->
-                            val fieldKey = when (field.fieldType) {
-                                FieldType.CODE_REGION -> "code"
-                                FieldType.BENEFIT_REGION -> "description"
-                                FieldType.EXPIRY_REGION -> "expiryDate"
-                                FieldType.APP_REGION -> "storeName"
-                                FieldType.TERMS_REGION -> "terms"
-                            }
-                            
-                            // If we have text from the field detection, use it
-                            field.text?.let { text ->
-                                extractedInfo[fieldKey] = text
-                            }
-                        }
-                    }
-                    is MultiEngineOCR.OCRResult.Error -> {
-                        Log.w(TAG, "OCR failed for coupon instance: ${result.message}")
-                    }
-                }
+                val couponInfo = localLlmOcrService.processCouponImage(couponInstance.cropBitmap)
+                extractedInfo.putAll(mapCouponInfoToFields(couponInfo))
 
+                val needsReview = shouldFlagForReview(couponInfo, extractedInfo)
+                if (needsReview) {
+                    progress = MiniCpmProgress.NEEDS_REVIEW
+                    val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
+                    mergeValidatedFields(extractedInfo, fallbackFields)
+                }
             } catch (e: Exception) {
-                Log.e(TAG, "Error extracting text from fields", e)
+                Log.e(TAG, "MiniCPM processing failed, using fallback", e)
+                progress = MiniCpmProgress.FALLBACK
+                val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
+                extractedInfo.putAll(fallbackFields)
             }
 
-            extractedInfo
+            extractedInfo["minicpmProcessing"] = progress.name
+
+            FieldExtractionResult(extractedInfo, progress)
+        }
+    }
+
+    private fun mapCouponInfoToFields(couponInfo: CouponInfo): MutableMap<String, String> {
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val fields = mutableMapOf<String, String>()
+
+        val storeName = couponInfo.storeName
+        if (storeName.isNotBlank() && !fieldHeuristics.isGenericOrMissing(storeName)) {
+            fields["storeName"] = storeName
+        }
+
+        val description = couponInfo.description
+        if (description.isNotBlank() && !fieldHeuristics.isGenericOrMissing(description)) {
+            fields["description"] = description
+        }
+
+        couponInfo.redeemCode?.takeIf { it.isNotBlank() }?.let { fields["code"] = it }
+
+        couponInfo.expiryDate?.let { date ->
+            fields["expiryDate"] = formatter.format(date)
+        }
+
+        couponInfo.cashbackAmount?.takeIf { !GenericFieldHeuristics.isZeroOrMeaningless(it) }?.let {
+            fields["amount"] = formatNumeric(it)
+        }
+
+        couponInfo.minimumPurchase?.takeIf { !GenericFieldHeuristics.isZeroOrMeaningless(it) }?.let {
+            fields["minOrderAmount"] = formatNumeric(it)
+        }
+
+        couponInfo.paymentMethod?.takeIf { it.isNotBlank() }?.let { fields["paymentMethod"] = it }
+        couponInfo.platformType?.takeIf { it.isNotBlank() }?.let { fields["platformType"] = it }
+        couponInfo.status?.takeIf { it.isNotBlank() }?.let { status ->
+            fields["status"] = status
+        }
+
+        return fields
+    }
+
+    private fun shouldFlagForReview(couponInfo: CouponInfo, fields: Map<String, String>): Boolean {
+        val storeWeak = fieldHeuristics.isGenericOrMissing(fields["storeName"])
+        val descriptionWeak = fieldHeuristics.isGenericOrMissing(fields["description"])
+        val duplicateStoreAndCode = fieldHeuristics.areDuplicateFields(fields["storeName"], fields["code"])
+        val codeMissing = couponInfo.redeemCode.isNullOrBlank()
+        val amountWeak = GenericFieldHeuristics.isZeroOrMeaningless(couponInfo.cashbackAmount)
+
+        return storeWeak || descriptionWeak || duplicateStoreAndCode || (codeMissing && amountWeak)
+    }
+
+    private suspend fun runFallbackOcr(bitmap: Bitmap): Map<String, String> {
+        return when (val result = multiEngineOCR.processImage(bitmap)) {
+            is MultiEngineOCR.OCRResult.Success -> result.extractedInfo
+            is MultiEngineOCR.OCRResult.Error -> {
+                Log.w(TAG, "Fallback OCR failed: ${result.message}")
+                emptyMap()
+            }
+        }
+    }
+
+    private fun mergeValidatedFields(primary: MutableMap<String, String>, fallback: Map<String, String>) {
+        fallback.forEach { (key, value) ->
+            val sanitized = value.trim()
+            if (sanitized.isEmpty()) {
+                return@forEach
+            }
+
+            val existing = primary[key]
+            if (shouldReplaceExisting(existing, sanitized, key)) {
+                primary[key] = sanitized
+            }
+        }
+    }
+
+    private fun shouldReplaceExisting(existing: String?, candidate: String, key: String): Boolean {
+        if (candidate.isBlank()) {
+            return false
+        }
+
+        if (existing.isNullOrBlank()) {
+            return true
+        }
+
+        return when (key) {
+            "amount", "minOrderAmount" -> {
+                val currentValue = extractNumericValue(existing)
+                GenericFieldHeuristics.isZeroOrMeaningless(currentValue)
+            }
+            else -> fieldHeuristics.isGenericOrMissing(existing)
+        }
+    }
+
+    private fun extractNumericValue(value: String?): Double? {
+        if (value.isNullOrBlank()) {
+            return null
+        }
+
+        val match = Regex("[-+]?\\d+(?:\\.\\d+)?").find(value)?.value ?: return null
+        return match.toDoubleOrNull()
+    }
+
+    private fun formatNumeric(value: Double): String {
+        return if (value % 1.0 == 0.0) {
+            value.toInt().toString()
+        } else {
+            String.format(Locale.getDefault(), "%.2f", value)
         }
     }
 
@@ -319,7 +420,7 @@ class ScannerViewModel @Inject constructor(
                         _uiState.value = ScannerUiState.Error("Could not extract any coupon information from the image")
                     } else {
                         val coupon = createCouponFromExtractedInfo(extractedInfo, imageUri.toString())
-                        _uiState.value = ScannerUiState.Success(coupon)
+                        _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.FALLBACK)
                     }
                 }
                 is MultiEngineOCR.OCRResult.Error -> {
@@ -348,7 +449,7 @@ class ScannerViewModel @Inject constructor(
                         _uiState.value = ScannerUiState.Error("Could not extract any coupon information from the image")
                     } else {
                         val coupon = createCouponFromExtractedInfo(extractedInfo, imageUri?.toString())
-                        _uiState.value = ScannerUiState.Success(coupon)
+                        _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.FALLBACK)
                     }
                 }
                 is MultiEngineOCR.OCRResult.Error -> {
@@ -441,7 +542,10 @@ class ScannerViewModel @Inject constructor(
      * Determine category from extracted information
      */
     private fun determineCategory(extractedInfo: Map<String, String>): String {
-        val text = extractedInfo.values.joinToString(" ").lowercase()
+        val relevantKeys = listOf("storeName", "description", "terms", "benefit", "app")
+        val text = relevantKeys.mapNotNull { key -> extractedInfo[key] }
+            .joinToString(" ")
+            .lowercase()
         
         return when {
             text.contains("food") || text.contains("restaurant") || text.contains("zomato") || text.contains("swiggy") -> "Food"
@@ -494,7 +598,7 @@ class ScannerViewModel @Inject constructor(
 sealed class ScannerUiState {
     object Initial : ScannerUiState()
     object Scanning : ScannerUiState()
-    data class Success(val coupon: Coupon) : ScannerUiState()
+    data class Success(val coupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
     data class Saved(val coupon: Coupon) : ScannerUiState()
     data class Error(val message: String) : ScannerUiState()
     
@@ -505,5 +609,28 @@ sealed class ScannerUiState {
         val imageUri: String?
     ) : ScannerUiState()
     
-    data class AllCouponsSaved(val coupons: List<Coupon>) : ScannerUiState()
+    data class AllCouponsSaved(val processedCoupons: List<CouponProcessingSummary>) : ScannerUiState()
 }
+
+data class CouponProcessingSummary(
+    val coupon: Coupon,
+    val miniCpmStatus: MiniCpmProgress
+)
+
+enum class MiniCpmProgress {
+    SUCCESS,
+    NEEDS_REVIEW,
+    FALLBACK;
+
+    fun displayName(): String {
+        val lower = name.lowercase(Locale.getDefault()).replace('_', ' ')
+        return lower.replaceFirstChar { char ->
+            if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
+        }
+    }
+}
+
+data class FieldExtractionResult(
+    val fields: Map<String, String>,
+    val miniCpmStatus: MiniCpmProgress
+)
