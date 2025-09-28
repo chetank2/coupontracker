@@ -240,6 +240,7 @@ class ScannerFragment : Fragment() {
                         
                         findNavController().navigateUp()
                     }
+                    }
                 }
             }
         }
