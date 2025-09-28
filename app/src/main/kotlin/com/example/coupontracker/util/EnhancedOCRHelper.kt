@@ -223,7 +223,7 @@ class EnhancedOCRHelper {
             // For Myntra, try to find their specific voucher description format
             findMatch(MYNTRA_DESCRIPTION_PATTERN, text)?.let {
                 val description = it.trim() + " up to ₹" + (result["amount"] ?: "").replace("₹", "")
-                result["description"] = description
+                setDescription(result, description)
                 descriptionFound = true
                 Log.d(TAG, "Found Myntra description: $description")
             }
@@ -234,18 +234,18 @@ class EnhancedOCRHelper {
                 myntraDescRegex.find(text)?.let {
                     val desc = it.groupValues[0].trim()
                     if (desc.isNotBlank()) {
-                        result["description"] = desc
+                        setDescription(result, desc)
                         descriptionFound = true
                         Log.d(TAG, "Found Myntra description with alt pattern: $desc")
                     }
                 }
             }
         }
-        
+
         // If no description found yet, try standard pattern
         if (!descriptionFound) {
             findMatch(DESCRIPTION_PATTERN, text)?.let {
-                result["description"] = it.trim()
+                setDescription(result, it.trim())
                 descriptionFound = true
                 Log.d(TAG, "Found standard description: ${it.trim()}")
             }
@@ -254,7 +254,7 @@ class EnhancedOCRHelper {
         // If we couldn't extract any information, provide some defaults
         if (result.isEmpty()) {
             result["storeName"] = if (isMyntraCoupon) "Myntra" else "Unknown Store"
-            result["description"] = "Scanned coupon"
+            setDescription(result, "Scanned coupon")
         }
         
         // Set default amount if not found
@@ -264,6 +264,13 @@ class EnhancedOCRHelper {
         
         Log.d(TAG, "Final extracted coupon info: $result")
         return result
+    }
+
+    private fun setDescription(result: MutableMap<String, String>, description: String) {
+        val cleaned = LocalLlmOcrService.cleanDescription(description)
+        if (cleaned.isNotBlank()) {
+            result["description"] = cleaned
+        }
     }
     
     /**

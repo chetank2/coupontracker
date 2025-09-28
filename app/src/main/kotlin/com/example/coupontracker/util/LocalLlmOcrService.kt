@@ -39,6 +39,10 @@ class LocalLlmOcrService(
         private const val SERVICE_VERSION = "1.0.0"
         private const val SUPPORTED_MODEL_VERSION = "v2.5-q4-android"
 
+        private val RUPEE_VARIANT_PATTERN = Regex(
+            pattern = """(?i)(^|\s+)(?:₹|rs\.?|t)[\s:=-]*([+-]?\d[\d,]*(?:\.\d+)?)"""
+        )
+
         fun cleanDescription(raw: String?): String {
             if (raw.isNullOrBlank()) {
                 return ""
@@ -79,9 +83,24 @@ class LocalLlmOcrService(
                 normalized
             }
 
-            return cleanedLines.joinToString(" ")
+            val joined = cleanedLines.joinToString(" ")
                 .replace(Regex("\\s+"), " ")
                 .trim()
+
+            return normalizeRupeeVariants(joined)
+        }
+
+        private fun normalizeRupeeVariants(text: String): String {
+            if (text.isEmpty()) {
+                return text
+            }
+
+            return RUPEE_VARIANT_PATTERN.replace(text) { matchResult ->
+                val leading = matchResult.groupValues[1]
+                val amount = matchResult.groupValues[2]
+                val cleanedAmount = amount.replaceFirst(Regex("^([+-]?)0+(?=\\d)"), "$1")
+                leading + "₹" + cleanedAmount
+            }
         }
     }
     
