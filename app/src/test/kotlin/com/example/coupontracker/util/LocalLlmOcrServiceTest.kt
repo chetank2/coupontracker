@@ -281,6 +281,28 @@ class LocalLlmOcrServiceTest {
     }
 
     @Test
+    fun `cleanDescription removes symbol dominated tokens and duplicate words`() {
+        val rawDescription = "Mega Deal ### ### save 50%!!!"
+
+        val cleaned = LocalLlmOcrService.cleanDescription(rawDescription)
+
+        assertEquals("Mega Deal save 50%", cleaned)
+    }
+
+    @Test
+    fun `cleanDescription filters noisy lines while keeping readable content`() {
+        val rawDescription = """
+            ### ### ###
+            Pastm Minimalist Minimalist… lioht fuid sof
+            @@!!@@ 0000
+        """.trimIndent()
+
+        val cleaned = LocalLlmOcrService.cleanDescription(rawDescription)
+
+        assertEquals("Pastm Minimalist lioht fuid sof", cleaned)
+    }
+
+    @Test
     fun `should handle LLM timeout and use fallback`() = runTest {
         // Arrange: LLM times out
         every { mockLlmRuntime.runInference(any(), any()) } returns null

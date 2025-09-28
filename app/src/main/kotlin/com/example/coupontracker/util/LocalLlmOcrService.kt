@@ -76,6 +76,10 @@ class LocalLlmOcrService(
                     return@mapNotNull null
                 }
 
+                if (isNoisyLine(trimmed)) {
+                    return@mapNotNull null
+                }
+
                 val uppercaseLetters = trimmed.count { it.isLetter() && it.isUpperCase() }
                 val lowercaseLetters = trimmed.count { it.isLetter() && it.isLowerCase() }
 
@@ -90,7 +94,27 @@ class LocalLlmOcrService(
                 normalized
             }
 
-            val joined = cleanedLines.joinToString(" ")
+            val tokens = mutableListOf<String>()
+            var previousTokenKey: String? = null
+
+            cleanedLines.forEach { cleanedLine ->
+                cleanedLine.split(Regex("\\s+")).forEach { rawToken ->
+                    val candidate = normalizeTokenForOutput(rawToken)
+                    if (candidate.isEmpty() || !shouldKeepToken(candidate)) {
+                        return@forEach
+                    }
+
+                    val key = buildTokenKey(candidate)
+                    if (key.isEmpty() || key == previousTokenKey) {
+                        return@forEach
+                    }
+
+                    previousTokenKey = key
+                    tokens.add(candidate)
+                }
+            }
+
+            val joined = tokens.joinToString(" ")
                 .replace(Regex("\\s+"), " ")
                 .trim()
 
@@ -98,6 +122,105 @@ class LocalLlmOcrService(
             val normalizedRupees = normalizeRupeeVariants(withoutStorePrefix)
             return ensureLeadingCapital(normalizedRupees)
         }
+
+        private fun shouldKeepToken(token: String): Boolean {
+            val letters = token.count { it.isLetter() }
+            val digits = token.count { it.isDigit() }
+            val effectiveLength = token.count { !it.isWhitespace() }
+
+            if (letters + digits == 0) {
+                return false
+            }
+
+            if (letters > 0) {
+                val nonLetter = effectiveLength - letters - digits
+                if (nonLetter >= letters) {
+                    return false
+                }
+            }
+
+            return true
+        }
+
+        private fun buildTokenKey(token: String): String {
+            val alphanumeric = token.filter { it.isLetterOrDigit() }
+            if (alphanumeric.isNotEmpty()) {
+                return alphanumeric.lowercase(Locale.getDefault())
+            }
+            return token.lowercase(Locale.getDefault())
+        }
+
+        private fun normalizeTokenForOutput(token: String): String {
+            val trimmed = token.trim()
+            if (trimmed.isEmpty()) {
+                return ""
+            }
+
+            val sanitized = trimmed.trim(*TRIMMABLE_TOKEN_CHARS)
+            return if (sanitized.isNotEmpty()) sanitized else trimmed
+        }
+
+        private fun isNoisyLine(line: String): Boolean {
+            val compact = line.filterNot { it.isWhitespace() }
+            if (compact.isEmpty()) {
+                return true
+            }
+
+            val letters = compact.count { it.isLetter() }
+            val digits = compact.count { it.isDigit() }
+            val symbols = compact.length - letters - digits
+
+            if (letters == 0 && digits == 0) {
+                return true
+            }
+
+            if (symbols.toDouble() > compact.length * 0.45) {
+                return true
+            }
+
+            if (letters == 0 && digits > 0) {
+                return false
+            }
+
+            val vowels = line.count { it.lowercaseChar() in VOWELS }
+            if (letters >= 6 && vowels == 0) {
+                return true
+            }
+
+            val tokens = line.split(Regex("\\s+")).filter { it.isNotEmpty() }
+            if (tokens.isEmpty()) {
+                return true
+            }
+
+            val gibberishTokens = tokens.count { token ->
+                val tokenLetters = token.count { it.isLetter() }
+                if (tokenLetters == 0) {
+                    return@count token.count { it.isDigit() } == 0
+                }
+
+                val tokenVowels = token.count { it.lowercaseChar() in VOWELS }
+                val alphaNumeric = token.count { it.isLetterOrDigit() }
+
+                tokenLetters < alphaNumeric / 2 || (tokenVowels == 0 && tokenLetters >= 4)
+            }
+
+            if (gibberishTokens == tokens.size) {
+                return true
+            }
+
+            val letterRatio = letters.toDouble() / compact.length
+            if (letterRatio < 0.3 && digits.toDouble() / compact.length < 0.2) {
+                return true
+            }
+
+            return false
+        }
+
+        private val TRIMMABLE_TOKEN_CHARS = charArrayOf(
+            '.', ',', ';', ':', '!', '?', '\'', '"', '-', '_', '•', '·', '–', '—', '…', '*', '#', '|', '/', '\\'
+        )
+
+        private val VOWELS = setOf('a', 'e', 'i', 'o', 'u')
 
         private fun normalizeRupeeVariants(text: String): String {
             if (text.isEmpty()) {
