@@ -216,20 +216,61 @@ class EnhancedCouponFieldExtractor:
         # If no store detected, try to extract any brand-like words
         if best_match['confidence'] < 0.5:
             brand_patterns = [
-                r'\b[A-Z][a-z]+\s*(?:\.com|\.in)?\b',  # Domain-like
+                r'\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*(?:\.com|\.in)?\b',  # Domain or title case words
                 r'\b[A-Z]{2,8}\b'  # All caps words
             ]
-            
+
+            candidate_stats = {}
+
             for pattern in brand_patterns:
                 matches = re.findall(pattern, text)
-                if matches:
-                    best_match = {
-                        'name': matches[0].strip(),
-                        'confidence': 0.4,
-                        'type': 'extracted'
-                    }
-                    break
-        
+                for raw_match in matches:
+                    token = raw_match.strip()
+                    if not token:
+                        continue
+
+                    stats = candidate_stats.setdefault(token, {'count': 0, 'patterns': set()})
+                    stats['count'] += 1
+                    stats['patterns'].add(pattern)
+
+            if candidate_stats:
+                scored_candidates: List[Tuple[str, float]] = []
+
+                for token, stats in candidate_stats.items():
+                    letters_only = re.sub(r'[^A-Za-z]', '', token)
+                    length = len(letters_only)
+
+                    # Frequency of occurrence
+                    frequency_score = min(stats['count'] * 0.15, 0.35)
+
+                    # Longer tokens are more likely to be brand names
+                    length_score = min(length * 0.04, 0.3)
+
+                    # Case pattern analysis – boost mixed or title case words
+                    has_upper = any(char.isupper() for char in token)
+                    has_lower = any(char.islower() for char in token)
+                    if has_upper and has_lower:
+                        case_score = 0.25
+                    elif token.isupper():
+                        case_score = 0.1 + min(max(length - 3, 0) * 0.02, 0.15)
+                    else:
+                        case_score = 0.1
+
+                    # Presence of domain-like suffix can hint at a brand
+                    domain_score = 0.2 if '.' in token else 0.0
+
+                    score = 0.2 + frequency_score + length_score + case_score + domain_score
+                    scored_candidates.append((token, score))
+
+                best_candidate, best_score = max(scored_candidates, key=lambda item: item[1])
+                confidence = min(0.6, 0.3 + (best_score * 0.2))
+
+                best_match = {
+                    'name': best_candidate,
+                    'confidence': confidence,
+                    'type': 'extracted'
+                }
+
         return best_match
     
     def _extract_coupon_code(self, text: str, store_info: Dict) -> Dict:
