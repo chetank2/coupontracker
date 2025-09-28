@@ -16,6 +16,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
 import org.json.JSONObject
 import java.util.Date
+import java.util.Locale
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -30,13 +31,78 @@ class LocalLlmOcrService(
     
     companion object {
         private const val TAG = "LocalLlmOcrService"
-        
+
         // Inference timeout (30 seconds)
         private const val INFERENCE_TIMEOUT_MS = 30000L
-        
+
         // Model version tracking
         private const val SERVICE_VERSION = "1.0.0"
         private const val SUPPORTED_MODEL_VERSION = "v2.5-q4-android"
+
+        private val LEADING_TOKEN_ALLOWED_PUNCTUATION = setOf('\'', '&', '-', '.')
+
+        internal fun normalizeStoreName(rawStoreName: String?): String {
+            if (rawStoreName.isNullOrBlank()) {
+                return "Unknown Store"
+            }
+
+            val trimmed = rawStoreName.trim()
+            if (trimmed.equals("Unknown", ignoreCase = true)) {
+                return "Unknown Store"
+            }
+
+            val filteredTokens = trimmed.split(Regex("\\s+")).dropWhile { token ->
+                shouldDropLeadingToken(token)
+            }
+
+            val cleaned = filteredTokens.joinToString(" ").ifBlank { trimmed }
+            val normalized = cleaned.trim().replace(Regex("\\s+"), " ")
+            if (normalized.isBlank()) {
+                return "Unknown Store"
+            }
+
+            if (GenericFieldHeuristics.isGenericOrMissing(normalized)) {
+                return "Unknown Store"
+            }
+
+            MerchantCatalog.findBestMatch(normalized)?.let { return it }
+
+            val displayName = normalized.split(Regex("\\s+")).joinToString(" ") { token ->
+                if (token.all { it.isUpperCase() || !it.isLetter() }) {
+                    token.lowercase(Locale.ROOT).replaceFirstChar { ch ->
+                        if (ch.isLowerCase()) ch.titlecase(Locale.ROOT) else ch.toString()
+                    }
+                } else {
+                    token.replaceFirstChar { ch ->
+                        if (ch.isLowerCase()) ch.titlecase(Locale.ROOT) else ch.toString()
+                    }
+                }
+            }
+
+            return displayName
+        }
+
+        private fun shouldDropLeadingToken(token: String): Boolean {
+            if (token.isBlank()) return true
+
+            val trimmedToken = token.trim()
+            if (trimmedToken.isEmpty()) return true
+
+            val firstChar = trimmedToken.first()
+            if (!firstChar.isLetter()) {
+                return true
+            }
+
+            if (trimmedToken.any { it.isDigit() }) {
+                return true
+            }
+
+            if (trimmedToken.any { !it.isLetter() && it !in LEADING_TOKEN_ALLOWED_PUNCTUATION }) {
+                return true
+            }
+
+            return false
+        }
     }
     
     // Dependencies
@@ -241,13 +307,7 @@ class LocalLlmOcrService(
             val json = JSONObject(cleanResponse)
             
             // Extract fields with fallbacks and generic filtering
-            val storeName = json.optString("storeName", "Unknown Store").let {
-                when {
-                    it.isBlank() || it == "Unknown" -> "Unknown Store"
-                    GenericFieldHeuristics.isGenericOrMissing(it) -> "Unknown Store"
-                    else -> it
-                }
-            }
+            val storeName = normalizeStoreName(json.optString("storeName"))
             
             val description = json.optString("description", "Coupon offer").let {
                 when {

@@ -48,6 +48,15 @@ object GenericFieldHeuristics {
             return true
         }
         
+        // Treat two-character alphanumeric tokens (F2, 9X) as noise
+        if (cleanValue.length == 2 &&
+            cleanValue.any { it.isDigit() } &&
+            cleanValue.any { it.isLetter() }
+        ) {
+            Log.d(TAG, "Treating '$value' as alphanumeric noise - two-character token")
+            return true
+        }
+
         // Check for single digits or very short non-meaningful text
         if (cleanValue.matches(Regex("\\d{1,2}")) || cleanValue.length <= 2) {
             Log.d(TAG, "Treating '$value' as too short/meaningless - length: ${cleanValue.length}")

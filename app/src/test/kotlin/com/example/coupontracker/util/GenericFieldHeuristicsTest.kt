@@ -51,6 +51,8 @@ class GenericFieldHeuristicsTest {
         assertTrue(GenericFieldHeuristics.isGenericOrMissing("22"))
         assertTrue(GenericFieldHeuristics.isGenericOrMissing("a"))
         assertTrue(GenericFieldHeuristics.isGenericOrMissing("ab"))
+        assertTrue(GenericFieldHeuristics.isGenericOrMissing("F2"))
+        assertTrue(GenericFieldHeuristics.isGenericOrMissing("9X"))
     }
     
     @Test

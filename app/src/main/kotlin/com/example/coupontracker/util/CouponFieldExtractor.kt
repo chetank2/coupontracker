@@ -19,7 +19,7 @@ class CouponFieldExtractor {
             // Common explicit "from [merchant]" format
             Pattern.compile("(?i)(?:from|at|by|shop)\\s+([A-Z][A-Za-z0-9\\s&.'-]{2,25})\\b"),
             // Common merchant names - high confidence
-            Pattern.compile("(?i)\\b(myntra|amazon|flipkart|swiggy|zomato|uber|ola|makemytrip|paytm|phonepe|google|microsoft|apple|netflix|spotify)\\b"),
+            Pattern.compile("(?i)\\b(${MerchantCatalog.popularMerchantPattern})\\b"),
             // Payment apps that issue coupons
             Pattern.compile("(?i)\\b(gpay|googlepay|amazonpay|paytm|phonepe|mobikwik|freecharge)\\b")
         )
