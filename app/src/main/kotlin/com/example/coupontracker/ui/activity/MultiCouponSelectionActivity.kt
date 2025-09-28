@@ -256,7 +256,7 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
         }
         
         Log.d(TAG, "Processing ${selectedCoupons.size} selected coupons")
-        viewModel.processAllCoupons(selectedCoupons, imageUri)
+        viewModel.processSelectedCoupons(selectedCoupons, imageUri)
     }
     
     private fun processAllCoupons() {

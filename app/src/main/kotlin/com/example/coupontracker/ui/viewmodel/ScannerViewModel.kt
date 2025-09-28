@@ -44,6 +44,7 @@ class ScannerViewModel @Inject constructor(
     private val multiEngineOCR: MultiEngineOCR = MultiEngineOCR(context)
     private val twoStageDetector: TwoStageDetector = TwoStageDetector(context)
     private val fieldHeuristics: GenericFieldHeuristics = GenericFieldHeuristics
+    private val manualOverrides = mutableMapOf<String, CouponInstance>()
 
     companion object {
         private const val TAG = "ScannerViewModel"
@@ -191,37 +192,101 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _uiState.value = ScannerUiState.Scanning
-                Log.d(TAG, "Processing all ${couponInstances.size} detected coupons")
+                val adjustedInstances = getManualAdjustedInstances(couponInstances, includeManualExtras = true)
+                Log.d(
+                    TAG,
+                    "Processing all ${adjustedInstances.size} detected coupons (requested ${couponInstances.size})"
+                )
 
-                val processedResults = mutableListOf<CouponProcessingSummary>()
-
-                for ((index, instance) in couponInstances.withIndex()) {
-                    try {
-                        val extractionResult = extractTextFromFields(instance)
-                        val coupon = createCouponFromInstance(instance, extractionResult.fields, originalImageUri)
-
-                        // Save coupon to repository
-                        couponRepository.insertCoupon(coupon)
-                        processedResults.add(CouponProcessingSummary(coupon, extractionResult.miniCpmStatus))
-
-                        Log.d(TAG, "Saved coupon ${processedResults.size}/${couponInstances.size}: ${coupon.redeemCode}")
-                        
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Error processing coupon $index", e)
-                        // Continue with other coupons
-                    }
-                }
-
-                if (processedResults.isNotEmpty()) {
-                    _uiState.value = ScannerUiState.AllCouponsSaved(processedResults)
-                } else {
-                    _uiState.value = ScannerUiState.Error("Failed to save any coupons")
-                }
+                processCouponBatch(adjustedInstances, originalImageUri)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing all coupons", e)
                 _uiState.value = ScannerUiState.Error("Error processing coupons: ${e.message}")
             }
+        }
+    }
+
+    fun processSelectedCoupons(couponInstances: List<CouponInstance>, originalImageUri: String?) {
+        viewModelScope.launch {
+            try {
+                _uiState.value = ScannerUiState.Scanning
+                val adjustedInstances = getManualAdjustedInstances(couponInstances, includeManualExtras = false)
+                Log.d(
+                    TAG,
+                    "Processing ${adjustedInstances.size} selected coupons (requested ${couponInstances.size})"
+                )
+
+                processCouponBatch(adjustedInstances, originalImageUri)
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing selected coupons", e)
+                _uiState.value = ScannerUiState.Error("Error processing coupons: ${e.message}")
+            }
+        }
+    }
+
+    private fun getManualAdjustedInstances(
+        instances: List<CouponInstance>,
+        includeManualExtras: Boolean
+    ): List<CouponInstance> {
+        if (manualOverrides.isEmpty()) {
+            return instances
+        }
+
+        if (instances.isEmpty()) {
+            return if (includeManualExtras) {
+                manualOverrides.values.toList()
+            } else {
+                emptyList()
+            }
+        }
+
+        val selectedIds = instances.mapTo(mutableSetOf()) { it.id }
+        val adjusted = instances.map { instance ->
+            manualOverrides[instance.id] ?: instance
+        }.toMutableList()
+
+        if (includeManualExtras) {
+            manualOverrides.forEach { (id, override) ->
+                if (selectedIds.add(id)) {
+                    adjusted.add(override)
+                }
+            }
+        }
+
+        return adjusted
+    }
+
+    private suspend fun processCouponBatch(
+        couponInstances: List<CouponInstance>,
+        originalImageUri: String?
+    ) {
+        val processedResults = mutableListOf<CouponProcessingSummary>()
+
+        for ((index, instance) in couponInstances.withIndex()) {
+            try {
+                val extractionResult = extractTextFromFields(instance)
+                val coupon = createCouponFromInstance(instance, extractionResult.fields, originalImageUri)
+
+                couponRepository.insertCoupon(coupon)
+                processedResults.add(CouponProcessingSummary(coupon, extractionResult.miniCpmStatus))
+
+                Log.d(
+                    TAG,
+                    "Saved coupon ${processedResults.size}/${couponInstances.size}: ${coupon.redeemCode}"
+                )
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing coupon $index", e)
+                // Continue with other coupons
+            }
+        }
+
+        if (processedResults.isNotEmpty()) {
+            _uiState.value = ScannerUiState.AllCouponsSaved(processedResults)
+        } else {
+            _uiState.value = ScannerUiState.Error("Failed to save any coupons")
         }
     }
 
