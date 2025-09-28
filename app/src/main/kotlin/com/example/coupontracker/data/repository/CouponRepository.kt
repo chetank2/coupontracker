@@ -26,4 +26,10 @@ interface CouponRepository {
     suspend fun updateCouponPriority(couponId: Long, isPriority: Boolean)
     suspend fun updateCouponReminder(couponId: Long, reminderDate: Date?)
     suspend fun updateCouponStatus(couponId: Long, status: String)
+    suspend fun saveOrMergeCoupon(
+        coupon: Coupon,
+        normalizedDescription: String,
+        descriptionHash: String?,
+        descriptionSignature: String?
+    ): Long
 }

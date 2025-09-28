@@ -13,6 +13,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.Date
+import java.util.Locale
 
 @RunWith(AndroidJUnit4::class)
 class CouponDaoTest {
@@ -126,4 +127,31 @@ class CouponDaoTest {
         // Then
         assert(coupons.isEmpty())
     }
-} 
+
+    @Test
+    fun findByStoreAndDescriptionMatchesCouponsWithCodes() = runBlocking {
+        val coupon = Coupon(
+            id = 0,
+            storeName = "Store",
+            description = "Limited Time Offer",
+            expiryDate = Date(),
+            cashbackAmount = 15.0,
+            redeemCode = "CODE123",
+            imageUri = null,
+            category = "Test"
+        )
+
+        couponDao.insertCoupon(coupon)
+
+        val normalized = coupon.description.lowercase(Locale.getDefault()).trim()
+        val duplicate = couponDao.findByStoreAndDescription(
+            storeName = coupon.storeName,
+            normalizedDescription = normalized,
+            descriptionHash = null,
+            descriptionSignature = null
+        )
+
+        assert(duplicate != null)
+        assert(duplicate?.redeemCode == coupon.redeemCode)
+    }
+}
