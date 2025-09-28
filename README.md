@@ -4,6 +4,8 @@ A comprehensive coupon recognition system featuring both mobile Android app and 
 
 ## 🚀 System Overview
 
+**Current Branch**: `main` ✅ **Production Ready**
+
 This repository contains a complete production-ready coupon recognition system with:
 
 ### 📱 **Android Mobile App** ⭐ **NEW: LLM Integration**
