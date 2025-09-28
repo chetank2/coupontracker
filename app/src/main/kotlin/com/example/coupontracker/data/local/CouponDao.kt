@@ -55,9 +55,9 @@ interface CouponDao {
         """
         SELECT * FROM coupons
         WHERE storeName = :storeName
-          AND LOWER(TRIM(description)) = :normalizedDescription
-          AND (:descriptionHash IS NULL OR :descriptionHash IS NOT NULL)
-          AND (:descriptionSignature IS NULL OR :descriptionSignature IS NOT NULL)
+          AND normalizedDescription = :normalizedDescription
+          AND (:imagePhash IS NULL OR imagePhash = :imagePhash)
+          AND (:imageSignature IS NULL OR imageSignature = :imageSignature)
         ORDER BY updatedAt DESC
         LIMIT 1
         """
@@ -65,7 +65,7 @@ interface CouponDao {
     suspend fun findByStoreAndDescription(
         storeName: String,
         normalizedDescription: String,
-        descriptionHash: String?,
-        descriptionSignature: String?
+        imagePhash: String?,
+        imageSignature: String?
     ): Coupon?
 }

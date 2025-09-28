@@ -10,10 +10,13 @@ data class Coupon(
     val id: Long = 0,
     val storeName: String,
     val description: String,
+    val normalizedDescription: String? = null,
     val expiryDate: Date,
     val cashbackAmount: Double,
     val redeemCode: String?,
     val imageUri: String?,
+    val imagePhash: String? = null,
+    val imageSignature: String? = null,
     val category: String? = null,
     val status: String? = null,
 
