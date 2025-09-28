@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
@@ -46,6 +47,7 @@ class ScannerViewModel @Inject constructor(
     private val twoStageDetector: TwoStageDetector = TwoStageDetector(context)
     private val fieldHeuristics: GenericFieldHeuristics = GenericFieldHeuristics
     private val manualOverrides = mutableMapOf<String, CouponInstance>()
+    private var pendingPreview: PendingPreview? = null
 
     companion object {
         private const val TAG = "ScannerViewModel"
@@ -63,7 +65,7 @@ class ScannerViewModel @Inject constructor(
     /**
      * Enhanced scan method that uses two-stage detection for multi-coupon support
      */
-    fun scanImage(imageUri: Uri) {
+    fun scanImage(imageUri: Uri, persistImmediately: Boolean = true) {
         viewModelScope.launch {
             try {
                 _uiState.value = ScannerUiState.Scanning
@@ -91,7 +93,11 @@ class ScannerViewModel @Inject constructor(
                     couponInstances.size == 1 -> {
                         // Single coupon detected - process directly
                         val couponInstance = couponInstances.first()
-                        processSingleCoupon(couponInstance, imageUri.toString())
+                        processSingleCoupon(
+                            couponInstance = couponInstance,
+                            imageUri = imageUri.toString(),
+                            persistImmediately = persistImmediately
+                        )
                     }
                     else -> {
                         // Multiple coupons detected - show selection interface
@@ -109,7 +115,11 @@ class ScannerViewModel @Inject constructor(
     /**
      * Process a captured bitmap to extract coupon information
      */
-    fun processCapturedImage(bitmap: Bitmap, imageUri: Uri? = null) {
+    fun processCapturedImage(
+        bitmap: Bitmap,
+        imageUri: Uri? = null,
+        persistImmediately: Boolean = true
+    ) {
         viewModelScope.launch {
             try {
                 _uiState.value = ScannerUiState.Scanning
@@ -131,7 +141,11 @@ class ScannerViewModel @Inject constructor(
                     couponInstances.size == 1 -> {
                         // Single coupon detected
                         val couponInstance = couponInstances.first()
-                        processSingleCoupon(couponInstance, imageUri?.toString())
+                        processSingleCoupon(
+                            couponInstance = couponInstance,
+                            imageUri = imageUri?.toString(),
+                            persistImmediately = persistImmediately
+                        )
                     }
                     else -> {
                         // Multiple coupons detected
@@ -149,7 +163,11 @@ class ScannerViewModel @Inject constructor(
     /**
      * Process a single detected coupon instance
      */
-    private suspend fun processSingleCoupon(couponInstance: CouponInstance, imageUri: String?) {
+    private suspend fun processSingleCoupon(
+        couponInstance: CouponInstance,
+        imageUri: String?,
+        persistImmediately: Boolean
+    ) {
         try {
             Log.d(TAG, "Processing single coupon with ${couponInstance.fields.size} detected fields")
 
@@ -159,47 +177,98 @@ class ScannerViewModel @Inject constructor(
             // Create coupon from extracted information
             val coupon = createCouponFromInstance(couponInstance, extractionResult.fields, imageUri)
 
-            // Check for duplicates using the deduplication helper before saving
             val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
-            
-            // First check if a duplicate already exists
-            // Note: We need to access the DAO through the repository for this check
-            // For now, we'll use the saveOrMergeCoupon method and check the result
-            val savedCouponId = couponRepository.saveOrMergeCoupon(
-                coupon = coupon,
-                normalizedDescription = normalizedDescription,
-                imagePhash = null, // TODO: Add image hashing if needed
-                imageSignature = null // TODO: Add image signature if needed
-            )
-            
-            // Get the saved/merged coupon to determine if it was a duplicate
-            val savedCoupon = couponRepository.getCouponById(savedCouponId)
-            
-            if (savedCoupon != null) {
-                // Check if this was a duplicate by comparing creation dates
-                // If the saved coupon has an older creation date than our new coupon, it's a duplicate
-                val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt ?: savedCoupon.createdAt)
-                
-                if (isDuplicate) {
-                    // Duplicate detected - show "Already saved" feedback
-                    _uiState.value = ScannerUiState.AlreadySaved(savedCoupon, extractionResult.miniCpmStatus)
-                    Log.d(TAG, "Duplicate coupon detected, existing ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}")
-                } else {
-                    // New coupon saved
-                    _uiState.value = ScannerUiState.Saved(savedCoupon)
-                    Log.d(TAG, "New coupon saved with ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}")
-                }
+            pendingPreview = null
+
+            if (persistImmediately) {
+                persistCoupon(
+                    coupon = coupon,
+                    normalizedDescription = normalizedDescription,
+                    miniCpmStatus = extractionResult.miniCpmStatus
+                )
             } else {
-                // Fallback - shouldn't happen but handle gracefully
-                val fallbackCoupon = coupon.copy(id = savedCouponId)
-                _uiState.value = ScannerUiState.Saved(fallbackCoupon)
-                Log.d(TAG, "Coupon saved (fallback) with ID: $savedCouponId")
+                pendingPreview = PendingPreview(
+                    coupon = coupon,
+                    normalizedDescription = normalizedDescription,
+                    miniCpmStatus = extractionResult.miniCpmStatus
+                )
+                _uiState.value = ScannerUiState.Success(coupon, extractionResult.miniCpmStatus)
+                Log.d(TAG, "Preview ready for review without immediate persistence")
             }
 
         } catch (e: Exception) {
             Log.e(TAG, "Error processing single coupon", e)
             _uiState.value = ScannerUiState.Error("Error processing coupon: ${e.message}")
         }
+    }
+
+    private suspend fun persistCoupon(
+        coupon: Coupon,
+        normalizedDescription: String,
+        miniCpmStatus: MiniCpmProgress
+    ) {
+        // First check if a duplicate already exists using the saveOrMerge helper
+        val savedCouponId = couponRepository.saveOrMergeCoupon(
+            coupon = coupon,
+            normalizedDescription = normalizedDescription,
+            imagePhash = null, // TODO: Add image hashing if needed
+            imageSignature = null // TODO: Add image signature if needed
+        )
+
+        val savedCoupon = couponRepository.getCouponById(savedCouponId)
+
+        if (savedCoupon != null) {
+            val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt ?: savedCoupon.createdAt)
+
+            if (isDuplicate) {
+                _uiState.value = ScannerUiState.AlreadySaved(savedCoupon, miniCpmStatus)
+                Log.d(
+                    TAG,
+                    "Duplicate coupon detected, existing ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}"
+                )
+            } else {
+                _uiState.value = ScannerUiState.Saved(savedCoupon)
+                Log.d(TAG, "New coupon saved with ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}")
+            }
+        } else {
+            val fallbackCoupon = coupon.copy(id = savedCouponId)
+            _uiState.value = ScannerUiState.Saved(fallbackCoupon)
+            Log.d(TAG, "Coupon saved (fallback) with ID: $savedCouponId")
+        }
+    }
+
+    fun confirmPreviewSave(updatedCoupon: Coupon? = null) {
+        val preview = pendingPreview ?: return
+        val couponToPersist = updatedCoupon ?: preview.coupon
+        val normalizedDescription = CouponDedupUtils.normalizeDescription(couponToPersist.description)
+
+        viewModelScope.launch {
+            try {
+                persistCoupon(
+                    coupon = couponToPersist,
+                    normalizedDescription = normalizedDescription,
+                    miniCpmStatus = preview.miniCpmStatus
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving preview coupon", e)
+                _uiState.value = ScannerUiState.Error("Error saving coupon: ${e.message}")
+            } finally {
+                pendingPreview = null
+            }
+        }
+    }
+
+    fun clearPendingPreview() {
+        pendingPreview = null
+    }
+
+    @VisibleForTesting
+    internal fun setPendingPreviewForTest(coupon: Coupon, miniCpmStatus: MiniCpmProgress) {
+        pendingPreview = PendingPreview(
+            coupon = coupon,
+            normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description),
+            miniCpmStatus = miniCpmStatus
+        )
     }
 
     /**
@@ -212,7 +281,11 @@ class ScannerViewModel @Inject constructor(
                 Log.d(TAG, "Processing selected coupon: ${selectedInstance.id}")
 
                 // Process the selected coupon
-                processSingleCoupon(selectedInstance, originalImageUri)
+                processSingleCoupon(
+                    couponInstance = selectedInstance,
+                    imageUri = originalImageUri,
+                    persistImmediately = true
+                )
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing selected coupon", e)
@@ -677,6 +750,7 @@ class ScannerViewModel @Inject constructor(
      * Reset the UI state
      */
     fun resetState() {
+        clearPendingPreview()
         _uiState.value = ScannerUiState.Initial
     }
 
@@ -716,6 +790,12 @@ sealed class ScannerUiState {
 
 data class CouponProcessingSummary(
     val coupon: Coupon,
+    val miniCpmStatus: MiniCpmProgress
+)
+
+private data class PendingPreview(
+    val coupon: Coupon,
+    val normalizedDescription: String,
     val miniCpmStatus: MiniCpmProgress
 )
 

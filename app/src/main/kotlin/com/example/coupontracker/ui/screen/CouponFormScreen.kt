@@ -27,6 +27,8 @@ import androidx.navigation.NavController
 import com.example.coupontracker.ui.components.UnifiedCouponForm
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.viewmodel.CouponFormViewModel
+import com.example.coupontracker.ui.viewmodel.CouponSaveResult
+import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -41,7 +43,8 @@ fun CouponFormScreen(
     navController: NavController,
     imageUri: String?,
     isBatchMode: Boolean = false,
-    viewModel: CouponFormViewModel = hiltViewModel()
+    viewModel: CouponFormViewModel = hiltViewModel(),
+    scannerViewModel: ScannerViewModel? = null
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
@@ -80,20 +83,22 @@ fun CouponFormScreen(
     }
 
     // Handle save result
-    LaunchedEffect(uiState.isSaved) {
-        if (uiState.isSaved) {
-            Toast.makeText(context, "Coupon saved successfully", Toast.LENGTH_SHORT).show()
+    LaunchedEffect(uiState.saveResult) {
+        val result = uiState.saveResult ?: return@LaunchedEffect
+        val message = when (result) {
+            CouponSaveResult.SAVED -> "Coupon saved successfully"
+            CouponSaveResult.ALREADY_SAVED -> "Coupon already saved"
+        }
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        scannerViewModel?.clearPendingPreview()
 
-            if (isBatchMode) {
-                // Return to batch scanner
-                navController.navigate(Screen.BatchScanner.route) {
-                    popUpTo(Screen.BatchScanner.route) { inclusive = true }
-                }
-            } else {
-                // Return to home
-                navController.navigate(Screen.Home.route) {
-                    popUpTo(Screen.Home.route) { inclusive = true }
-                }
+        if (isBatchMode) {
+            navController.navigate(Screen.BatchScanner.route) {
+                popUpTo(Screen.BatchScanner.route) { inclusive = true }
+            }
+        } else {
+            navController.navigate(Screen.Home.route) {
+                popUpTo(Screen.Home.route) { inclusive = true }
             }
         }
     }
