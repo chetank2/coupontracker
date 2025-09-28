@@ -1,6 +1,7 @@
 package com.example.coupontracker.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class EnhancedOCRHelperTest {
@@ -28,5 +29,15 @@ class EnhancedOCRHelperTest {
         val result = helper.extractCouponInfo(text)
 
         assertEquals("₹100", result["amount"])
+    }
+
+    @Test
+    fun sanitizeDescription_preservesMixedAlphanumericTokens() {
+        val description = "New arrivals: B12 energy shots with SPF50 protection"
+
+        val sanitized = helper.sanitizeDescription(description)
+
+        assertTrue("Expected B12 to remain in sanitized description", sanitized.contains("B12"))
+        assertTrue("Expected SPF50 to remain in sanitized description", sanitized.contains("SPF50"))
     }
 }
