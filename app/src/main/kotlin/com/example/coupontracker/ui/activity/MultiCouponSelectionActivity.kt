@@ -105,7 +105,7 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
                         binding.progressBar.visibility = View.VISIBLE
                         binding.buttonsContainer.visibility = View.GONE
                     }
-                    is ScannerUiState.Success -> {
+                    is ScannerUiState.Preview -> {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE
 
@@ -114,9 +114,6 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
                             "Coupon processed successfully: ${state.coupon.redeemCode} (${state.miniCpmStatus.displayName()})",
                             Toast.LENGTH_LONG
                         ).show()
-
-                        // Save the coupon
-                        viewModel.saveCoupon(state.coupon)
                     }
                     is ScannerUiState.AllCouponsSaved -> {
                         binding.progressBar.visibility = View.GONE
@@ -133,13 +130,25 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
                     is ScannerUiState.Saved -> {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE
-                        
+
                         Toast.makeText(
                             this@MultiCouponSelectionActivity,
                             "Coupon saved successfully!",
                             Toast.LENGTH_SHORT
                         ).show()
-                        
+
+                        finish()
+                    }
+                    is ScannerUiState.AlreadySaved -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.buttonsContainer.visibility = View.VISIBLE
+
+                        Toast.makeText(
+                            this@MultiCouponSelectionActivity,
+                            "Coupon already exists. Details updated.",
+                            Toast.LENGTH_SHORT
+                        ).show()
+
                         finish()
                     }
                     is ScannerUiState.Error -> {

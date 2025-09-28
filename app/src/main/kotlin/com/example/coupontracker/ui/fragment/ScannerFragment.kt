@@ -112,7 +112,7 @@ class ScannerFragment : Fragment() {
                         binding.progressBar.visibility = View.VISIBLE
                         binding.captureButton.isEnabled = false
                     }
-                    is ScannerUiState.Success -> {
+                    is ScannerUiState.Preview -> {
                         binding.progressBar.visibility = View.GONE
                         binding.captureButton.isEnabled = true
 
@@ -124,9 +124,8 @@ class ScannerFragment : Fragment() {
                             "Successfully scanned coupon: ${coupon.redeemCode ?: ""} ($progressLabel)",
                             Snackbar.LENGTH_LONG
                         ).show()
-                        
-                        // In a real app, you might want to navigate to a details screen or edit screen
-                        // For now, just show the success message
+
+                        // Preview emitted before persistence; Saved/AlreadySaved states will follow
                     }
                     is ScannerUiState.Error -> {
                         binding.progressBar.visibility = View.GONE
@@ -144,6 +143,16 @@ class ScannerFragment : Fragment() {
                         Snackbar.make(
                             binding.root,
                             "Coupon saved successfully!",
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                        findNavController().navigateUp()
+                    }
+                    is ScannerUiState.AlreadySaved -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.captureButton.isEnabled = true
+                        Snackbar.make(
+                            binding.root,
+                            "Coupon already saved. Details have been refreshed.",
                             Snackbar.LENGTH_LONG
                         ).show()
                         findNavController().navigateUp()

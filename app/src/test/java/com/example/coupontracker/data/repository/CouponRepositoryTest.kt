@@ -130,7 +130,9 @@ class CouponRepositoryTest {
 
         val result = repositoryImpl.saveOrMergeCoupon(incoming, normalized, null, null)
 
-        assert(result == existing.id)
+        assert(result is CouponSaveResult.AlreadySaved)
+        val alreadySaved = result as CouponSaveResult.AlreadySaved
+        assert(alreadySaved.coupon.id == existing.id)
         coVerify(exactly = 0) { couponDao.insertCoupon(any()) }
         coVerify {
             couponDao.updateCoupon(
@@ -143,5 +145,42 @@ class CouponRepositoryTest {
                 }
             )
         }
+    }
+
+    @Test
+    fun `saveOrMergeCoupon inserts new coupon when no match exists`() = runBlocking {
+        val incoming = Coupon(
+            id = 0,
+            storeName = "New Store",
+            description = "Fresh Offer",
+            expiryDate = Date(),
+            cashbackAmount = 15.0,
+            redeemCode = "FRESH15",
+            imageUri = null,
+            category = "Promo"
+        )
+
+        coEvery {
+            couponDao.findByStoreAndDescription(
+                storeName = incoming.storeName,
+                normalizedDescription = incoming.description.lowercase().trim(),
+                descriptionHash = any(),
+                descriptionSignature = any()
+            )
+        } returns null
+
+        coEvery { couponDao.insertCoupon(incoming) } returns 7L
+
+        val result = repositoryImpl.saveOrMergeCoupon(
+            incoming,
+            incoming.description.lowercase().trim(),
+            null,
+            null
+        )
+
+        assert(result is CouponSaveResult.Saved)
+        val saved = result as CouponSaveResult.Saved
+        assert(saved.coupon.id == 7L)
+        coVerify { couponDao.insertCoupon(incoming) }
     }
 }

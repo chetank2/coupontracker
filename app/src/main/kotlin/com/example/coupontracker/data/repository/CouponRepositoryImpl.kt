@@ -85,7 +85,7 @@ class CouponRepositoryImpl @Inject constructor(
         normalizedDescription: String,
         descriptionHash: String?,
         descriptionSignature: String?
-    ): Long {
+    ): CouponSaveResult {
         val existing = couponDao.findByStoreAndDescription(
             storeName = coupon.storeName,
             normalizedDescription = normalizedDescription,
@@ -96,9 +96,10 @@ class CouponRepositoryImpl @Inject constructor(
         return if (existing != null) {
             val merged = mergeCoupons(existing, coupon)
             couponDao.updateCoupon(merged)
-            existing.id
+            CouponSaveResult.AlreadySaved(merged)
         } else {
-            couponDao.insertCoupon(coupon)
+            val id = couponDao.insertCoupon(coupon)
+            CouponSaveResult.Saved(coupon.copy(id = id))
         }
     }
 

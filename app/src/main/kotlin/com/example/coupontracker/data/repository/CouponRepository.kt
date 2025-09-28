@@ -31,5 +31,10 @@ interface CouponRepository {
         normalizedDescription: String,
         descriptionHash: String?,
         descriptionSignature: String?
-    ): Long
+    ): CouponSaveResult
+}
+
+sealed class CouponSaveResult {
+    data class Saved(val coupon: Coupon) : CouponSaveResult()
+    data class AlreadySaved(val coupon: Coupon) : CouponSaveResult()
 }

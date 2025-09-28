@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.data.repository.CouponSaveResult
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
 import com.example.coupontracker.util.CouponInfo
@@ -45,6 +46,9 @@ class ScannerViewModel @Inject constructor(
     private val twoStageDetector: TwoStageDetector = TwoStageDetector(context)
     private val fieldHeuristics: GenericFieldHeuristics = GenericFieldHeuristics
     private val manualOverrides = mutableMapOf<String, CouponInstance>()
+    private val singleScanPersistenceHelper = SingleScanPersistenceHelper(couponRepository)
+
+    private var latestPreview: PreviewSnapshot? = null
 
     companion object {
         private const val TAG = "ScannerViewModel"
@@ -148,7 +152,11 @@ class ScannerViewModel @Inject constructor(
     /**
      * Process a single detected coupon instance
      */
-    private suspend fun processSingleCoupon(couponInstance: CouponInstance, imageUri: String?) {
+    private suspend fun processSingleCoupon(
+        couponInstance: CouponInstance,
+        imageUri: String?,
+        persistImmediately: Boolean = true
+    ) {
         try {
             Log.d(TAG, "Processing single coupon with ${couponInstance.fields.size} detected fields")
 
@@ -158,7 +166,11 @@ class ScannerViewModel @Inject constructor(
             // Create coupon from extracted information
             val coupon = createCouponFromInstance(couponInstance, extractionResult.fields, imageUri)
 
-            _uiState.value = ScannerUiState.Success(coupon, extractionResult.miniCpmStatus)
+            emitPreview(coupon, extractionResult)
+
+            if (persistImmediately) {
+                persistLatestPreview()
+            }
 
         } catch (e: Exception) {
             Log.e(TAG, "Error processing single coupon", e)
@@ -175,8 +187,8 @@ class ScannerViewModel @Inject constructor(
                 _uiState.value = ScannerUiState.Scanning
                 Log.d(TAG, "Processing selected coupon: ${selectedInstance.id}")
 
-                // Process the selected coupon
-                processSingleCoupon(selectedInstance, originalImageUri)
+                // Process the selected coupon and persist automatically
+                processSingleCoupon(selectedInstance, originalImageUri, persistImmediately = true)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing selected coupon", e)
@@ -269,8 +281,17 @@ class ScannerViewModel @Inject constructor(
                 val extractionResult = extractTextFromFields(instance)
                 val coupon = createCouponFromInstance(instance, extractionResult.fields, originalImageUri)
 
-                couponRepository.insertCoupon(coupon)
-                processedResults.add(CouponProcessingSummary(coupon, extractionResult.miniCpmStatus))
+                when (val result = singleScanPersistenceHelper.persistCoupon(
+                    coupon,
+                    extractionResult.fields
+                )) {
+                    is CouponSaveResult.Saved -> processedResults.add(
+                        CouponProcessingSummary(result.coupon, extractionResult.miniCpmStatus)
+                    )
+                    is CouponSaveResult.AlreadySaved -> processedResults.add(
+                        CouponProcessingSummary(result.coupon, extractionResult.miniCpmStatus)
+                    )
+                }
 
                 Log.d(
                     TAG,
@@ -485,7 +506,8 @@ class ScannerViewModel @Inject constructor(
                         _uiState.value = ScannerUiState.Error("Could not extract any coupon information from the image")
                     } else {
                         val coupon = createCouponFromExtractedInfo(extractedInfo, imageUri.toString())
-                        _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.FALLBACK)
+                        emitPreview(coupon, FieldExtractionResult(extractedInfo, MiniCpmProgress.FALLBACK))
+                        persistLatestPreview()
                     }
                 }
                 is MultiEngineOCR.OCRResult.Error -> {
@@ -514,7 +536,8 @@ class ScannerViewModel @Inject constructor(
                         _uiState.value = ScannerUiState.Error("Could not extract any coupon information from the image")
                     } else {
                         val coupon = createCouponFromExtractedInfo(extractedInfo, imageUri?.toString())
-                        _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.FALLBACK)
+                        emitPreview(coupon, FieldExtractionResult(extractedInfo, MiniCpmProgress.FALLBACK))
+                        persistLatestPreview()
                     }
                 }
                 is MultiEngineOCR.OCRResult.Error -> {
@@ -611,7 +634,7 @@ class ScannerViewModel @Inject constructor(
         val text = relevantKeys.mapNotNull { key -> extractedInfo[key] }
             .joinToString(" ")
             .lowercase()
-        
+
         return when {
             text.contains("food") || text.contains("restaurant") || text.contains("zomato") || text.contains("swiggy") -> "Food"
             text.contains("fashion") || text.contains("clothing") || text.contains("myntra") -> "Fashion"
@@ -622,16 +645,51 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    private fun emitPreview(coupon: Coupon, extractionResult: FieldExtractionResult) {
+        latestPreview = PreviewSnapshot(
+            coupon = coupon,
+            extractedFields = extractionResult.fields,
+            miniCpmStatus = extractionResult.miniCpmStatus
+        )
+        _uiState.value = ScannerUiState.Preview(coupon, extractionResult.miniCpmStatus)
+    }
+
+    private suspend fun persistLatestPreview() {
+        val snapshot = latestPreview ?: return
+        val result = singleScanPersistenceHelper.persistCoupon(snapshot.coupon, snapshot.extractedFields)
+        latestPreview = null
+        _uiState.value = result.toScannerState(snapshot.miniCpmStatus)
+    }
+
     /**
      * Save the scanned coupon to the repository
      */
-    fun saveCoupon(coupon: Coupon) {
+    fun saveCoupon(coupon: Coupon, miniCpmStatus: MiniCpmProgress = MiniCpmProgress.SUCCESS) {
         viewModelScope.launch {
             try {
-                couponRepository.insertCoupon(coupon)
-                _uiState.value = ScannerUiState.Saved(coupon)
+                val state = singleScanPersistenceHelper.persist(
+                    coupon,
+                    mapOf(
+                        "storeName" to coupon.storeName,
+                        "description" to coupon.description,
+                        "code" to (coupon.redeemCode ?: "")
+                    ),
+                    miniCpmStatus
+                )
+                _uiState.value = state
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving coupon", e)
+                _uiState.value = ScannerUiState.Error("Error saving coupon: ${e.message}")
+            }
+        }
+    }
+
+    fun confirmPreviewSave() {
+        viewModelScope.launch {
+            try {
+                persistLatestPreview()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error confirming preview save", e)
                 _uiState.value = ScannerUiState.Error("Error saving coupon: ${e.message}")
             }
         }
@@ -663,8 +721,9 @@ class ScannerViewModel @Inject constructor(
 sealed class ScannerUiState {
     object Initial : ScannerUiState()
     object Scanning : ScannerUiState()
-    data class Success(val coupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
-    data class Saved(val coupon: Coupon) : ScannerUiState()
+    data class Preview(val coupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
+    data class Saved(val coupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
+    data class AlreadySaved(val coupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
     data class Error(val message: String) : ScannerUiState()
     
     // New states for multi-coupon support
@@ -679,6 +738,12 @@ sealed class ScannerUiState {
 
 data class CouponProcessingSummary(
     val coupon: Coupon,
+    val miniCpmStatus: MiniCpmProgress
+)
+
+private data class PreviewSnapshot(
+    val coupon: Coupon,
+    val extractedFields: Map<String, String>,
     val miniCpmStatus: MiniCpmProgress
 )
 
@@ -699,3 +764,56 @@ data class FieldExtractionResult(
     val fields: Map<String, String>,
     val miniCpmStatus: MiniCpmProgress
 )
+
+internal class SingleScanPersistenceHelper(
+    private val couponRepository: CouponRepository
+) {
+    suspend fun persistCoupon(
+        coupon: Coupon,
+        extractedFields: Map<String, String>
+    ): CouponSaveResult {
+        return couponRepository.saveOrMergeCoupon(
+            coupon = coupon,
+            normalizedDescription = normalizeDescription(coupon.description),
+            descriptionHash = computeDescriptionHash(coupon.description),
+            descriptionSignature = computeDescriptionSignature(coupon, extractedFields)
+        )
+    }
+
+    fun normalizeDescription(description: String): String {
+        return description.lowercase(Locale.getDefault()).trim()
+    }
+
+    fun computeDescriptionHash(description: String): String? {
+        val normalized = normalizeDescription(description)
+        return if (normalized.isBlank()) null else normalized.hashCode().toString()
+    }
+
+    fun computeDescriptionSignature(
+        coupon: Coupon,
+        extractedFields: Map<String, String>
+    ): String? {
+        fun sanitize(value: String?): String? {
+            val trimmed = value?.trim()
+            return if (trimmed.isNullOrEmpty()) null else trimmed
+        }
+
+        val store = sanitize(extractedFields["storeName"]) ?: sanitize(coupon.storeName)
+        val description = sanitize(extractedFields["description"]) ?: sanitize(coupon.description)
+        val code = sanitize(extractedFields["code"]) ?: sanitize(coupon.redeemCode)
+
+        val components = listOfNotNull(store, description, code)
+        return if (components.isEmpty()) {
+            null
+        } else {
+            components.joinToString(separator = "|") { it.lowercase(Locale.getDefault()) }
+        }
+    }
+}
+
+internal fun CouponSaveResult.toScannerState(status: MiniCpmProgress): ScannerUiState {
+    return when (this) {
+        is CouponSaveResult.Saved -> ScannerUiState.Saved(coupon, status)
+        is CouponSaveResult.AlreadySaved -> ScannerUiState.AlreadySaved(coupon, status)
+    }
+}

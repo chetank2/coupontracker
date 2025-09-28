@@ -136,8 +136,7 @@ fun ScannerScreen(
 
     // Handle scan result and navigate to CouponFormScreen
     LaunchedEffect(uiState) {
-        if (uiState is ScannerUiState.Success) {
-            val coupon = (uiState as ScannerUiState.Success).coupon
+        if (uiState is ScannerUiState.Preview) {
             capturedImageUri?.let { uri ->
                 // Navigate to the new CouponFormScreen
                 navController.navigate(
@@ -416,15 +415,15 @@ fun ScannerScreen(
                                 }
 
                                 // Show success message
-                                if (uiState is ScannerUiState.Saved) {
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text(
-                                        text = "Coupon saved successfully!",
-                                        color = MaterialTheme.colorScheme.primary,
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
+                if (uiState is ScannerUiState.Saved) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Coupon saved successfully!",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
 
-                                    LaunchedEffect(Unit) {
+                    LaunchedEffect(Unit) {
                                         // Navigate back after a short delay
                                         kotlinx.coroutines.delay(1500)
                                         navController.popBackStack()
@@ -432,18 +431,31 @@ fun ScannerScreen(
                                 }
 
                                 // Show error message
-                                if (uiState is ScannerUiState.Error) {
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Text(
-                                        text = (uiState as ScannerUiState.Error).message,
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                            }
-                        }
+                if (uiState is ScannerUiState.Error) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = (uiState as ScannerUiState.Error).message,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                if (uiState is ScannerUiState.AlreadySaved) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Coupon was already saved. Latest details updated.",
+                        color = MaterialTheme.colorScheme.secondary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    LaunchedEffect(Unit) {
+                        kotlinx.coroutines.delay(1500)
+                        navController.popBackStack()
                     }
                 }
+            }
+        }
+    }
+}
             }
         }
     }
