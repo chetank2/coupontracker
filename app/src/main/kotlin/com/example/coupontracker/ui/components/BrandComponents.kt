@@ -534,9 +534,11 @@ object DateFormatter {
     private val shortDateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
     private val monthDayFormat = SimpleDateFormat("MMM dd", Locale.getDefault())
 
-    fun formatFull(date: Date?): String = date?.let(fullDateFormat::format) ?: "No expiry provided"
-    fun formatShort(date: Date?): String = date?.let(shortDateFormat::format) ?: "No expiry provided"
-    fun formatMonthDay(date: Date?): String = date?.let(monthDayFormat::format) ?: "No expiry provided"
+    private const val UNKNOWN_EXPIRY_TEXT = "Unknown"
+
+    fun formatFull(date: Date?): String = date?.let(fullDateFormat::format) ?: UNKNOWN_EXPIRY_TEXT
+    fun formatShort(date: Date?): String = date?.let(shortDateFormat::format) ?: UNKNOWN_EXPIRY_TEXT
+    fun formatMonthDay(date: Date?): String = date?.let(monthDayFormat::format) ?: UNKNOWN_EXPIRY_TEXT
 
     fun getExpiryStatus(expiryDate: Date?): StatusType {
         val date = expiryDate ?: return StatusType.INFO
@@ -551,7 +553,7 @@ object DateFormatter {
     }
 
     fun getExpiryText(expiryDate: Date?): String {
-        val date = expiryDate ?: return "No expiry provided"
+        val date = expiryDate ?: return UNKNOWN_EXPIRY_TEXT
         val now = Calendar.getInstance().time
         val daysUntilExpiry = ((date.time - now.time) / (1000 * 60 * 60 * 24)).toInt()
 

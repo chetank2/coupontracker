@@ -13,7 +13,7 @@
     <string name="description">Description</string>
     <string name="cashback_amount">Cashback Amount</string>
     <string name="expiry_date">Expiry Date</string>
-    <string name="no_expiry_provided">No expiry provided</string>
+    <string name="no_expiry_provided">Unknown</string>
     <string name="redeem_code">Redeem Code</string>
     <string name="category">Category</string>
     <string name="save">Save</string>

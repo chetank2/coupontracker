@@ -34,8 +34,36 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import kotlin.math.abs
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+
+internal const val EXPIRY_FALLBACK_TOLERANCE_MS = 5_000L
+
+internal fun normalizeExpiryDate(extractedExpiry: Date?, captureTimestamp: Date?): Date? {
+    if (extractedExpiry == null) {
+        return null
+    }
+
+    captureTimestamp?.let { timestamp ->
+        if (areWithinTolerance(extractedExpiry, timestamp)) {
+            return null
+        }
+    }
+
+    if (captureTimestamp == null) {
+        val now = Date()
+        if (areWithinTolerance(extractedExpiry, now)) {
+            return null
+        }
+    }
+
+    return extractedExpiry
+}
+
+private fun areWithinTolerance(first: Date, second: Date): Boolean {
+    return abs(first.time - second.time) <= EXPIRY_FALLBACK_TOLERANCE_MS
+}
 
 /**
  * Manager class for handling various coupon input methods
@@ -150,13 +178,17 @@ class CouponInputManager(private val context: Context) {
 
                 // Process with OCR using capture timestamp
                 val couponInfo = imageProcessor.processImage(bitmap, captureTimestamp)
+                val normalizedExpiry = normalizeExpiryDate(couponInfo.expiryDate, captureTimestamp)
+                if (couponInfo.expiryDate != null && normalizedExpiry == null) {
+                    Log.d(TAG, "Discarding fallback expiry date; treating as unknown")
+                }
 
                 // Convert CouponInfo to Coupon
                 return@withContext Coupon(
                     id = 0,
                     storeName = couponInfo.storeName.ifBlank { "Unknown Store" },
                     description = couponInfo.description.ifBlank { "No description" },
-                    expiryDate = couponInfo.expiryDate,
+                    expiryDate = normalizedExpiry,
                     cashbackAmount = couponInfo.cashbackAmount ?: 0.0,
                     redeemCode = couponInfo.redeemCode,
                     imageUri = null, // We'll set this later in the ViewModel
