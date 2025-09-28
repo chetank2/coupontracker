@@ -255,6 +255,8 @@ class LocalLlmOcrService(
                     GenericFieldHeuristics.isGenericOrMissing(it) -> "Coupon offer"
                     else -> it.take(100) // Limit length
                 }
+            }.let { normalized ->
+                CurrencySanitizer.sanitizeRupeeTokens(normalized) ?: normalized
             }
             
             // Note: 'amount' field is handled by cashbackAmount, keeping for future use
@@ -274,7 +276,7 @@ class LocalLlmOcrService(
             
             val cashbackAmount = json.optString("cashbackAmount").let {
                 if (it.isBlank() || it == "Unknown") null else it
-            }
+            }?.let { CurrencySanitizer.sanitizeRupeeTokens(it) }
             
             val minOrderAmount = json.optString("minOrderAmount").let {
                 if (it.isBlank() || it == "Unknown") null else it

@@ -80,28 +80,30 @@ class TextExtractor {
      * @return CouponInfo object containing extracted information
      */
     fun extractCouponInfoSync(text: String, baseDate: Date? = null): CouponInfo {
-        Log.d(TAG, "Extracting coupon info from text: ${text.take(100)}...")
+        val normalizedText = CurrencySanitizer.sanitizeRupeeTokens(text) ?: text
 
-        val storeName = extractStoreName(text)
-        val description = extractDescription(text)
-        val expiryDate = extractExpiryDate(text, baseDate)
-        val cashbackAmount = extractCashbackAmount(text)
-        val redeemCode = extractRedeemCode(text)
-        val category = extractCategory(text)
-        val rating = extractRating(text)
-        val status = extractStatus(text)
-        val discountType = extractDiscountType(text)
+        Log.d(TAG, "Extracting coupon info from text: ${normalizedText.take(100)}...")
+
+        val storeName = extractStoreName(normalizedText)
+        val description = extractDescription(normalizedText)
+        val expiryDate = extractExpiryDate(normalizedText, baseDate)
+        val cashbackAmount = extractCashbackAmount(normalizedText)
+        val redeemCode = extractRedeemCode(normalizedText)
+        val category = extractCategory(normalizedText)
+        val rating = extractRating(normalizedText)
+        val status = extractStatus(normalizedText)
+        val discountType = extractDiscountType(normalizedText)
 
         // Extract new fields
-        val minimumPurchase = extractMinimumPurchase(text)
-        val maximumDiscount = extractMaximumDiscount(text)
-        val paymentMethod = extractPaymentMethod(text)
-        val platformType = extractPlatformType(text)
-        val usageLimit = extractUsageLimit(text)
+        val minimumPurchase = extractMinimumPurchase(normalizedText)
+        val maximumDiscount = extractMaximumDiscount(normalizedText)
+        val paymentMethod = extractPaymentMethod(normalizedText)
+        val platformType = extractPlatformType(normalizedText)
+        val usageLimit = extractUsageLimit(normalizedText)
 
         val result = CouponInfo(
             storeName = storeName ?: "",
-            description = description ?: "",
+            description = description?.let { CurrencySanitizer.sanitizeRupeeTokens(it) } ?: "",
             expiryDate = expiryDate,
             cashbackAmount = cashbackAmount,
             redeemCode = redeemCode,
@@ -183,10 +185,12 @@ class TextExtractor {
      * @return The extracted description or null if not found
      */
     fun extractDescription(text: String): String? {
+        val normalizedText = CurrencySanitizer.sanitizeRupeeTokens(text) ?: text
+
         // First, try to form a clean description using store name and discount info
-        val storeName = extractStoreName(text) ?: ""
-        val discountType = extractDiscountType(text)
-        val cashbackAmount = extractCashbackAmount(text)
+        val storeName = extractStoreName(normalizedText) ?: ""
+        val discountType = extractDiscountType(normalizedText)
+        val cashbackAmount = extractCashbackAmount(normalizedText)
 
         if (storeName.isNotBlank() && cashbackAmount != null) {
             val amountStr = if (discountType == "PERCENTAGE") {
@@ -196,62 +200,62 @@ class TextExtractor {
             }
 
             val discountPhrase = when {
-                text.contains("cashback", ignoreCase = true) -> "$amountStr cashback"
-                text.contains("flat", ignoreCase = true) -> "Flat $amountStr off"
+                normalizedText.contains("cashback", ignoreCase = true) -> "$amountStr cashback"
+                normalizedText.contains("flat", ignoreCase = true) -> "Flat $amountStr off"
                 discountType == "PERCENTAGE" -> "Up to $amountStr off"
                 else -> "$amountStr off"
             }
 
             val cleanDescription = "$storeName Coupon - $discountPhrase"
             Log.d(TAG, "Created clean description: $cleanDescription")
-            return cleanDescription
+            return CurrencySanitizer.sanitizeRupeeTokens(cleanDescription)
         }
 
         // If we couldn't create a clean description, fall back to pattern matching
 
         // Look for "Offer:" pattern
         val offerPattern = Pattern.compile("(?i)Offer:\\s*(.+?)(?=\\n|$)")
-        val offerMatcher = offerPattern.matcher(text)
+        val offerMatcher = offerPattern.matcher(normalizedText)
         if (offerMatcher.find()) {
             val offer = offerMatcher.group(1)?.trim()
             Log.d(TAG, "Found description from 'Offer:' pattern: $offer")
-            return offer
+            return CurrencySanitizer.sanitizeRupeeTokens(offer)
         }
 
         // Look for "You won X products at ₹Y + ₹Z cashback" pattern
         val wonProductsPattern = Pattern.compile("(?i)(You\\s+won\\s+\\d+\\s+products.+?cashback.+?)(?=\\n|$)")
-        val wonProductsMatcher = wonProductsPattern.matcher(text)
+        val wonProductsMatcher = wonProductsPattern.matcher(normalizedText)
         if (wonProductsMatcher.find()) {
             val desc = wonProductsMatcher.group(1)?.trim()
             Log.d(TAG, "Found description from 'You won products' pattern: $desc")
-            return desc
+            return CurrencySanitizer.sanitizeRupeeTokens(desc)
         }
 
         // Special case for coupons with "Get upto ₹X" pattern
         val getUptoPattern = Pattern.compile("(?i)(Get\\s+(?:up\\s+to|upto)\\s+(?:Rs\\.?|₹)\\d+(?:\\s+off)?)\\b")
-        val getUptoMatcher = getUptoPattern.matcher(text)
+        val getUptoMatcher = getUptoPattern.matcher(normalizedText)
         if (getUptoMatcher.find()) {
             val desc = getUptoMatcher.group(1)
             Log.d(TAG, "Found description from 'Get upto' pattern: $desc")
-            return desc
+            return CurrencySanitizer.sanitizeRupeeTokens(desc)
         }
 
         // Look for "Up to X% off" pattern
         val upToPattern = Pattern.compile("(?i)((?:Up|Get) to \\d+%\\s+off.*?)(?=\\n|$)")
-        val upToMatcher = upToPattern.matcher(text)
+        val upToMatcher = upToPattern.matcher(normalizedText)
         if (upToMatcher.find()) {
             val desc = upToMatcher.group(1)?.trim()
             Log.d(TAG, "Found description from 'Up to X%' pattern: $desc")
-            return desc
+            return CurrencySanitizer.sanitizeRupeeTokens(desc)
         }
 
         // Look for "Flat ₹X OFF" pattern
         val flatOffPattern = Pattern.compile("(?i)(Flat\\s+(?:Rs\\.?|₹)\\d+\\s+(?:off|OFF).*?)(?=\\n|$)")
-        val flatOffMatcher = flatOffPattern.matcher(text)
+        val flatOffMatcher = flatOffPattern.matcher(normalizedText)
         if (flatOffMatcher.find()) {
             val desc = flatOffMatcher.group(1)?.trim()
             Log.d(TAG, "Found description from 'Flat ₹X OFF' pattern: $desc")
-            return desc
+            return CurrencySanitizer.sanitizeRupeeTokens(desc)
         }
 
         // Look for discount descriptions
@@ -264,20 +268,20 @@ class TextExtractor {
         )
 
         for (pattern in discountPatterns) {
-            val matcher = pattern.matcher(text)
+            val matcher = pattern.matcher(normalizedText)
             if (matcher.find()) {
                 val desc = matcher.group(1)
                 Log.d(TAG, "Found description from discount pattern: $desc")
-                return desc
+                return CurrencySanitizer.sanitizeRupeeTokens(desc)
             }
         }
 
         // If no specific discount pattern is found, return the first sentence
-        val sentences = text.split(Pattern.compile("[.!?]"))
+        val sentences = normalizedText.split(Pattern.compile("[.!?]"))
         if (sentences.isNotEmpty() && sentences[0].length > 10) {
             val desc = sentences[0].trim()
             Log.d(TAG, "Using first sentence as description: $desc")
-            return desc
+            return CurrencySanitizer.sanitizeRupeeTokens(desc)
         }
 
         return null
@@ -456,6 +460,8 @@ class TextExtractor {
      * @return The extracted cashback amount or null if not found
      */
     fun extractCashbackAmount(text: String): Double? {
+        val normalizedText = CurrencySanitizer.sanitizeRupeeTokens(text) ?: text
+
         // Look for specific percentage patterns first
         val percentagePatterns = listOf(
             Pattern.compile("(?i)(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:off|cashback|discount)"),
@@ -463,7 +469,7 @@ class TextExtractor {
         )
 
         for (pattern in percentagePatterns) {
-            val matcher = pattern.matcher(text)
+            val matcher = pattern.matcher(normalizedText)
             if (matcher.find()) {
                 try {
                     val amount = matcher.group(1)?.toDoubleOrNull()
@@ -486,7 +492,7 @@ class TextExtractor {
         )
 
         for (pattern in amountPatterns) {
-            val matcher = pattern.matcher(text)
+            val matcher = pattern.matcher(normalizedText)
             if (matcher.find()) {
                 try {
                     val amount = matcher.group(1)?.toDoubleOrNull()
@@ -501,9 +507,9 @@ class TextExtractor {
         }
 
         // Myntra specific pattern
-        if (text.contains("myntra", ignoreCase = true)) {
+        if (normalizedText.contains("myntra", ignoreCase = true)) {
             val myntraAmountPattern = Pattern.compile("(?i)(?:up to |voucher up to )(?:Rs\\.?|₹)\\s*(\\d+(?:\\.\\d+)?)")
-            val myntraAmountMatcher = myntraAmountPattern.matcher(text)
+            val myntraAmountMatcher = myntraAmountPattern.matcher(normalizedText)
             if (myntraAmountMatcher.find()) {
                 try {
                     val amount = myntraAmountMatcher.group(1)?.toDoubleOrNull()
@@ -519,7 +525,7 @@ class TextExtractor {
 
         // Look for simple currency amounts
         val simpleAmountPattern = Pattern.compile("(?i)(?:Rs\\.?|₹)\\s*(\\d+(?:\\.\\d+)?)")
-        val simpleAmountMatcher = simpleAmountPattern.matcher(text)
+        val simpleAmountMatcher = simpleAmountPattern.matcher(normalizedText)
         if (simpleAmountMatcher.find()) {
             try {
                 val amount = simpleAmountMatcher.group(1)?.toDoubleOrNull()

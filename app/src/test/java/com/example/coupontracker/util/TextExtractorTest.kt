@@ -116,10 +116,22 @@ class TextExtractorTest {
             Code: NEWMEE250SW
             Claim Now
         """.trimIndent()
-        
+
         val cashbackAmount = extractor.extractCashbackAmount(text)
         assertNotNull("Cashback amount should not be null", cashbackAmount)
         assertEquals(250.0, cashbackAmount!!, 0.01)
+    }
+
+    @Test
+    fun `currency sanitizer normalizes rupee like tokens`() {
+        val text = "LIFETIME CASHBACK T568"
+
+        val sanitized = CurrencySanitizer.sanitizeRupeeTokens(text)
+        assertEquals("LIFETIME CASHBACK ₹568", sanitized)
+
+        val cashbackAmount = extractor.extractCashbackAmount(text)
+        assertNotNull("Cashback amount should be detected even with OCR variations", cashbackAmount)
+        assertEquals(568.0, cashbackAmount!!, 0.01)
     }
     
     @Test
