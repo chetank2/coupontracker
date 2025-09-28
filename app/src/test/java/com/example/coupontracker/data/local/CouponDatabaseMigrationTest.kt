@@ -7,6 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.core.app.ApplicationProvider
+import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.CouponDedupUtils
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -29,14 +30,17 @@ class CouponDatabaseMigrationTest {
     }
 
     @Test
-    fun migrate3To4_populatesNormalizedDescription_andSupportsDedupLookup() = runBlocking {
+    fun migrate3To5_populatesNormalizedDescription_andSupportsDedupLookup() = runBlocking {
         val storeName = "Legacy Store"
         val description = "SAVE $10!!! Limited time"
         createLegacyDatabase(storeName, description)
         val normalized = CouponDedupUtils.normalizeDescription(description)
 
         val database = Room.databaseBuilder(context, CouponDatabase::class.java, databaseName)
-            .addMigrations(CouponDatabase.MIGRATION_3_4)
+            .addMigrations(
+                CouponDatabase.MIGRATION_3_4,
+                CouponDatabase.MIGRATION_4_5
+            )
             .allowMainThreadQueries()
             .build()
 
@@ -51,6 +55,34 @@ class CouponDatabaseMigrationTest {
         assertEquals(normalized, migratedCoupon?.normalizedDescription)
         assertNull(migratedCoupon?.imagePhash)
         assertNull(migratedCoupon?.imageSignature)
+
+        database.close()
+    }
+
+    @Test
+    fun migrate4To5_allowsNullExpiryDates() = runBlocking {
+        createVersion4Database()
+
+        val database = Room.databaseBuilder(context, CouponDatabase::class.java, databaseName)
+            .addMigrations(CouponDatabase.MIGRATION_4_5)
+            .allowMainThreadQueries()
+            .build()
+
+        val couponId = database.couponDao().insertCoupon(
+            Coupon(
+                storeName = "Null Expiry Store",
+                description = "No expiry provided",
+                expiryDate = null,
+                cashbackAmount = 0.0,
+                redeemCode = null,
+                imageUri = null,
+                status = "Active"
+            )
+        )
+
+        val inserted = database.couponDao().getCouponById(couponId)
+        assertNotNull(inserted)
+        assertNull(inserted?.expiryDate)
 
         database.close()
     }
@@ -118,6 +150,87 @@ class CouponDatabaseMigrationTest {
             put("paymentMethod", null as String?)
             put("usageLimit", null as Int?)
             put("usageCount", 1)
+            put("reminderDate", null as Long?)
+            put("platformType", null as String?)
+            put("rating", null as String?)
+            put("createdAt", now)
+            put("updatedAt", now)
+        }
+
+        db.insert("coupons", SupportSQLiteDatabase.CONFLICT_ABORT, values)
+        db.close()
+        openHelper.close()
+    }
+
+    private fun createVersion4Database() {
+        context.deleteDatabase(databaseName)
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(databaseName)
+            .callback(object : SupportSQLiteOpenHelper.Callback(4) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        """
+                        CREATE TABLE IF NOT EXISTS `coupons` (
+                            `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                            `storeName` TEXT NOT NULL,
+                            `description` TEXT NOT NULL,
+                            `normalizedDescription` TEXT,
+                            `expiryDate` INTEGER NOT NULL,
+                            `cashbackAmount` REAL NOT NULL,
+                            `redeemCode` TEXT,
+                            `imageUri` TEXT,
+                            `imagePhash` TEXT,
+                            `imageSignature` TEXT,
+                            `category` TEXT,
+                            `status` TEXT,
+                            `minimumPurchase` REAL,
+                            `maximumDiscount` REAL,
+                            `isPriority` INTEGER NOT NULL,
+                            `paymentMethod` TEXT,
+                            `usageLimit` INTEGER,
+                            `usageCount` INTEGER NOT NULL,
+                            `reminderDate` INTEGER,
+                            `platformType` TEXT,
+                            `rating` TEXT,
+                            `createdAt` INTEGER NOT NULL,
+                            `updatedAt` INTEGER NOT NULL
+                        )
+                        """
+                    )
+                }
+
+                override fun onUpgrade(
+                    db: SupportSQLiteDatabase,
+                    oldVersion: Int,
+                    newVersion: Int
+                ) {
+                    // No-op for the test schema
+                }
+            })
+            .build()
+
+        val openHelper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        val db = openHelper.writableDatabase
+        val now = System.currentTimeMillis()
+
+        val values = ContentValues().apply {
+            put("storeName", "Version 4 Store")
+            put("description", "Existing expiry date")
+            put("normalizedDescription", "existing-expiry-date")
+            put("expiryDate", now)
+            put("cashbackAmount", 10.0)
+            put("redeemCode", "V4CODE")
+            put("imageUri", null as String?)
+            put("imagePhash", null as String?)
+            put("imageSignature", null as String?)
+            put("category", "Legacy")
+            put("status", "Active")
+            put("minimumPurchase", null as Double?)
+            put("maximumDiscount", null as Double?)
+            put("isPriority", 0)
+            put("paymentMethod", null as String?)
+            put("usageLimit", null as Int?)
+            put("usageCount", 0)
             put("reminderDate", null as Long?)
             put("platformType", null as String?)
             put("rating", null as String?)

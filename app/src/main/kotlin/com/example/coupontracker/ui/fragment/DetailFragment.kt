@@ -198,7 +198,11 @@ class DetailFragment : Fragment() {
                                 cashbackAmount.visibility = View.GONE
                             }
 
-                            expiryDate.text = "Expires: ${dateFormat.format(coupon.expiryDate)}"
+                            expiryDate.text = if (coupon.expiryDate != null) {
+                                "Expires: ${dateFormat.format(coupon.expiryDate)}"
+                            } else {
+                                getString(R.string.no_expiry_provided)
+                            }
 
                             // Show category if available
                             coupon.category?.let { category ->

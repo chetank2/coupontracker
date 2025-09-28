@@ -172,6 +172,20 @@ class TextExtractorTest {
 
         assertEquals("Q2SQ74JS7CK", redeemCode)
     }
+
+    @Test
+    fun `extractRedeemCode handles dash separators`() {
+        val variants = listOf(
+            "Use code- MISSEDYOU",
+            "Use code– MISSEDYOU",
+            "Use code—MISSEDYOU"
+        )
+
+        variants.forEach { sample ->
+            val redeemCode = extractor.extractRedeemCode(sample)
+            assertEquals("MISSEDYOU", redeemCode)
+        }
+    }
     
     @Test
     fun `test extractCashbackAmount from IXIGO coupon`() {

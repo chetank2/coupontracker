@@ -119,6 +119,7 @@ class CouponRepositoryTest {
             redeemCode = null,
             cashbackAmount = 20.0,
             usageCount = 5,
+            expiryDate = null,
             createdAt = Date(),
             updatedAt = Date()
         )
@@ -143,6 +144,7 @@ class CouponRepositoryTest {
                     it.id == existing.id &&
                         it.normalizedDescription == normalized &&
                         it.redeemCode == existing.redeemCode &&
+                        it.expiryDate == existing.expiryDate &&
                         it.cashbackAmount == incoming.cashbackAmount &&
                         it.usageCount == kotlin.math.max(existing.usageCount, incoming.usageCount) &&
                         it.createdAt == existing.createdAt

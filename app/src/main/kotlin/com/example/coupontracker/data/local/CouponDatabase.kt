@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.CouponDedupUtils
 
-@Database(entities = [Coupon::class], version = 4)
+@Database(entities = [Coupon::class], version = 5)
 @TypeConverters(Converters::class)
 abstract class CouponDatabase : RoomDatabase() {
     abstract fun couponDao(): CouponDao
@@ -59,6 +59,62 @@ abstract class CouponDatabase : RoomDatabase() {
                 // The legacy database only stored URIs to coupon images, so we cannot
                 // backfill perceptual hashes or signatures for existing rows. The new
                 // columns remain null until fresh image data is processed.
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `coupons_new` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `storeName` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `normalizedDescription` TEXT,
+                        `expiryDate` INTEGER,
+                        `cashbackAmount` REAL NOT NULL,
+                        `redeemCode` TEXT,
+                        `imageUri` TEXT,
+                        `imagePhash` TEXT,
+                        `imageSignature` TEXT,
+                        `category` TEXT,
+                        `status` TEXT,
+                        `minimumPurchase` REAL,
+                        `maximumDiscount` REAL,
+                        `isPriority` INTEGER NOT NULL DEFAULT 0,
+                        `paymentMethod` TEXT,
+                        `usageLimit` INTEGER,
+                        `usageCount` INTEGER NOT NULL DEFAULT 0,
+                        `reminderDate` INTEGER,
+                        `platformType` TEXT,
+                        `rating` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+
+                database.execSQL(
+                    """
+                    INSERT INTO `coupons_new` (
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `imageUri`, `imagePhash`, `imageSignature`,
+                        `category`, `status`, `minimumPurchase`, `maximumDiscount`, `isPriority`,
+                        `paymentMethod`, `usageLimit`, `usageCount`, `reminderDate`, `platformType`,
+                        `rating`, `createdAt`, `updatedAt`
+                    )
+                    SELECT
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `imageUri`, `imagePhash`, `imageSignature`,
+                        `category`, `status`, `minimumPurchase`, `maximumDiscount`, `isPriority`,
+                        `paymentMethod`, `usageLimit`, `usageCount`, `reminderDate`, `platformType`,
+                        `rating`, `createdAt`, `updatedAt`
+                    FROM `coupons`
+                    """.trimIndent()
+                )
+
+                database.execSQL("DROP TABLE `coupons`")
+                database.execSQL("ALTER TABLE `coupons_new` RENAME TO `coupons`")
             }
         }
     }
