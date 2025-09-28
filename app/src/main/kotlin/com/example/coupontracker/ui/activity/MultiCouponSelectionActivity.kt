@@ -1,9 +1,14 @@
 package com.example.coupontracker.ui.activity
 
+import android.app.Activity
+import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -27,6 +32,7 @@ import com.example.coupontracker.ui.viewmodel.ScannerUiState
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
+import java.io.IOException
 
 @AndroidEntryPoint
 class MultiCouponSelectionActivity : AppCompatActivity() {
@@ -44,21 +50,29 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
         const val EXTRA_COUPON_INSTANCES = "coupon_instances"
         const val EXTRA_ORIGINAL_BITMAP = "original_bitmap"
         const val EXTRA_IMAGE_URI = "image_uri"
+        const val EXTRA_RESULT_TYPE = "result_type"
+        const val EXTRA_RESULT_PROCESSED_COUNT = "processed_count"
+        const val EXTRA_RESULT_MESSAGE = "result_message"
+
+        const val RESULT_TYPE_ALL_PROCESSED = "all_processed"
+        const val RESULT_TYPE_SINGLE_PROCESSED = "single_processed"
+        const val RESULT_TYPE_ALREADY_SAVED = "already_saved"
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMultiCouponSelectionBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        
+
         setupUI()
-        extractIntentData()
         setupRecyclerView()
+        extractIntentData()
         observeViewModel()
     }
     
     private fun setupUI() {
         binding.toolbar.setNavigationOnClickListener {
+            setResult(Activity.RESULT_CANCELED)
             finish()
         }
         
@@ -76,11 +90,42 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
     }
     
     private fun extractIntentData() {
-        // In a real implementation, you would pass data through Intent extras
-        // For now, we'll use a simple approach
-        
-        // This is a simplified approach - in practice, you might use Parcelable or pass data differently
         Log.d(TAG, "Extracting intent data for multi-coupon selection")
+
+        val instances: ArrayList<CouponInstance>? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableArrayListExtra(EXTRA_COUPON_INSTANCES, CouponInstance::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableArrayListExtra(EXTRA_COUPON_INSTANCES)
+        }
+
+        val bitmap: Bitmap? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(EXTRA_ORIGINAL_BITMAP, Bitmap::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(EXTRA_ORIGINAL_BITMAP)
+        }
+
+        val uriString = intent.getStringExtra(EXTRA_IMAGE_URI)
+
+        if (instances.isNullOrEmpty()) {
+            Log.w(TAG, "No coupon instances found in intent extras")
+            Toast.makeText(this, R.string.multi_coupon_missing_data, Toast.LENGTH_LONG).show()
+            finish()
+            return
+        }
+
+        couponInstances = instances
+        imageUri = uriString
+
+        originalBitmap = bitmap ?: uriString?.let { loadBitmapSafely(Uri.parse(it)) }
+
+        if (originalBitmap == null) {
+            Log.w(TAG, "Original bitmap missing; proceeding without overlay image")
+            Toast.makeText(this, R.string.multi_coupon_missing_image, Toast.LENGTH_SHORT).show()
+        }
+
+        displayCoupons(couponInstances, originalBitmap)
     }
     
     private fun setupRecyclerView() {
@@ -122,36 +167,59 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE
 
+                        val processedCount = state.processedCoupons.size
                         Toast.makeText(
                             this@MultiCouponSelectionActivity,
-                            "Successfully saved ${state.processedCoupons.size} coupons",
+                            "Successfully saved $processedCount coupons",
                             Toast.LENGTH_LONG
                         ).show()
-                        
+
+                        val resultIntent = Intent().apply {
+                            putExtra(EXTRA_RESULT_TYPE, RESULT_TYPE_ALL_PROCESSED)
+                            putExtra(EXTRA_RESULT_PROCESSED_COUNT, processedCount)
+                        }
+                        setResult(Activity.RESULT_OK, resultIntent)
                         finish()
                     }
                     is ScannerUiState.Saved -> {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE
-                        
+
+                        val message = "Coupon saved successfully!"
                         Toast.makeText(
                             this@MultiCouponSelectionActivity,
-                            "Coupon saved successfully!",
+                            message,
                             Toast.LENGTH_SHORT
                         ).show()
-                        
+
+                        val resultIntent = Intent().apply {
+                            putExtra(EXTRA_RESULT_TYPE, RESULT_TYPE_SINGLE_PROCESSED)
+                            putExtra(EXTRA_RESULT_PROCESSED_COUNT, 1)
+                            putExtra(EXTRA_RESULT_MESSAGE, message)
+                            putExtra(EXTRA_IMAGE_URI, imageUri)
+                        }
+                        setResult(Activity.RESULT_OK, resultIntent)
                         finish()
                     }
                     is ScannerUiState.AlreadySaved -> {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE
-                        
+
+                        val existing = state.existingCoupon
+                        val message = "Coupon already saved: ${existing.redeemCode ?: existing.storeName}"
                         Toast.makeText(
                             this@MultiCouponSelectionActivity,
-                            "Coupon already saved: ${state.existingCoupon.redeemCode ?: state.existingCoupon.storeName}",
+                            message,
                             Toast.LENGTH_LONG
                         ).show()
-                        
+
+                        val resultIntent = Intent().apply {
+                            putExtra(EXTRA_RESULT_TYPE, RESULT_TYPE_ALREADY_SAVED)
+                            putExtra(EXTRA_RESULT_PROCESSED_COUNT, 1)
+                            putExtra(EXTRA_RESULT_MESSAGE, message)
+                            putExtra(EXTRA_IMAGE_URI, imageUri)
+                        }
+                        setResult(Activity.RESULT_OK, resultIntent)
                         finish()
                     }
                     is ScannerUiState.Error -> {
@@ -177,16 +245,20 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
         }
     }
     
-    private fun displayCoupons(instances: List<CouponInstance>, bitmap: Bitmap) {
+    private fun displayCoupons(instances: List<CouponInstance>, bitmap: Bitmap?) {
         Log.d(TAG, "Displaying ${instances.size} detected coupons")
-        
+
         // Update header info
         binding.detectedCountText.text = "Detected ${instances.size} coupons"
-        
-        // Show original image with overlays
-        val overlayBitmap = createOverlayBitmap(bitmap, instances)
-        binding.originalImageView.setImageBitmap(overlayBitmap)
-        
+
+        // Show original image with overlays when available
+        if (bitmap != null) {
+            val overlayBitmap = createOverlayBitmap(bitmap, instances)
+            binding.originalImageView.setImageBitmap(overlayBitmap)
+        } else {
+            binding.originalImageView.setImageDrawable(null)
+        }
+
         // Update adapter
         adapter.updateCoupons(instances)
         
@@ -195,7 +267,7 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
         binding.processSelectedButton.visibility = View.VISIBLE
         binding.processAllButton.visibility = View.VISIBLE
     }
-    
+
     private fun createOverlayBitmap(originalBitmap: Bitmap, instances: List<CouponInstance>): Bitmap {
         val overlayBitmap = originalBitmap.copy(Bitmap.Config.ARGB_8888, true)
         val canvas = Canvas(overlayBitmap)
@@ -261,19 +333,30 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
     
     private fun processSelectedCoupons() {
         val selectedCoupons = adapter.getSelectedCoupons()
-        
+
         if (selectedCoupons.isEmpty()) {
             Toast.makeText(this, "Please select at least one coupon", Toast.LENGTH_SHORT).show()
             return
         }
-        
+
         Log.d(TAG, "Processing ${selectedCoupons.size} selected coupons")
         viewModel.processSelectedCoupons(selectedCoupons, imageUri)
     }
-    
+
     private fun processAllCoupons() {
         Log.d(TAG, "Processing all ${couponInstances.size} detected coupons")
         viewModel.processAllCoupons(couponInstances, imageUri)
+    }
+
+    private fun loadBitmapSafely(uri: Uri): Bitmap? {
+        return try {
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+                BitmapFactory.decodeStream(inputStream)
+            }
+        } catch (ioException: IOException) {
+            Log.e(TAG, "Failed to load bitmap from $uri", ioException)
+            null
+        }
     }
     
     /**
