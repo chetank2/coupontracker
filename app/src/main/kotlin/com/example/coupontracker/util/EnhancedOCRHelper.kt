@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.regex.Matcher
 import java.util.regex.Pattern
 
 /**
@@ -43,7 +44,13 @@ class EnhancedOCRHelper {
         // Add specific pattern for Myntra coupon codes which are typically longer
         private val MYNTRA_CODE_PATTERN = Pattern.compile("\\b([A-Z0-9]{10,})\\b")
         
-        private val AMOUNT_PATTERN = Pattern.compile("(?i)(₹|Rs\\.?|\\$)?(\\d+(\\.\\d{1,2})?|\\d+(\\.\\d{1,2})?)\\s*%?\\s*(off|cashback|discount|reward|save)")
+        private val AMOUNT_PATTERN = Pattern.compile(
+            "(?i)(₹|Rs\\.?|\\$)?(\\d+(\\.\\d{1,2})?|\\d+(\\.\\d{1,2})?)\\s*%?\\s*(off|cashback|discount|reward|save)"
+        )
+
+        private val STRICT_AMOUNT_WITH_SYMBOL_PATTERN = Pattern.compile(
+            "(?i)(₹|Rs\\.?|\\$)\\s*(\\d+(?:\\.\\d{1,2})?)"
+        )
         
         // Myntra-specific amount pattern with "up to" format
         private val MYNTRA_AMOUNT_PATTERN = Pattern.compile("(?i)(up to|flat|get)\\s+(₹|Rs\\.?)(\\d+)")
@@ -201,16 +208,16 @@ class EnhancedOCRHelper {
         
         // If no amount found yet, try standard pattern
         if (!amountFound) {
-            findMatch(AMOUNT_PATTERN, text)?.let {
-                // Add ₹ symbol if it doesn't already have one
-                val amount = if (it.trim().startsWith("₹") || it.trim().startsWith("Rs") || it.trim().startsWith("$")) {
-                    it.trim().replace("$", "₹").replace("Rs", "₹")
-                } else {
-                    "₹$it"
+            val matcher = AMOUNT_PATTERN.matcher(text)
+            while (matcher.find()) {
+                val interpretation = interpretAmountMatch(text, matcher)
+                if (interpretation != null) {
+                    val amount = formatAmount(interpretation.currencySymbol, interpretation.digits)
+                    result["amount"] = amount
+                    amountFound = true
+                    Log.d(TAG, "Found standard amount: $amount")
+                    break
                 }
-                result["amount"] = amount.trim()
-                amountFound = true
-                Log.d(TAG, "Found standard amount: $amount")
             }
         }
         
@@ -289,7 +296,106 @@ class EnhancedOCRHelper {
     fun countWords(text: String): Int {
         return text.split(Regex("\\s+")).count()
     }
-    
+
+    private data class AmountInterpretation(
+        val currencySymbol: String?,
+        val digits: String
+    )
+
+    private fun interpretAmountMatch(text: String, matcher: Matcher): AmountInterpretation? {
+        var currencySymbol = matcher.group(1)
+        var digits = matcher.group(2)?.trim() ?: return null
+
+        val hasCurrencySymbol = !currencySymbol.isNullOrBlank()
+        val numericValue = digits.replace(",", "").toDoubleOrNull()
+
+        if (digits.startsWith("7") && digits.length > 1) {
+            val trimmedDigits = digits.drop(1)
+            val trimmedNumeric = trimmedDigits.toIntOrNull()
+            val precedingContextStart = maxOf(0, matcher.start(2) - 5)
+            val precedingContext = text.substring(precedingContextStart, matcher.start(2))
+            val trailingContextEnd = minOf(text.length, matcher.end(2) + 5)
+            val trailingContext = text.substring(matcher.end(2), trailingContextEnd)
+            val precedingDigits = precedingContext.filter { it.isDigit() }
+            val trailingDigits = trailingContext.filter { it.isDigit() }
+            val hasSplitIndicator = precedingContext.contains('/') || precedingContext.contains('|') ||
+                trailingContext.contains('/') || trailingContext.contains('|')
+            val neighborsSuggestSmallOffer = precedingDigits.endsWith("100") || precedingDigits.endsWith("50") ||
+                trailingDigits.startsWith("100") || trailingDigits.startsWith("50")
+
+            if (trimmedNumeric != null && trimmedNumeric <= 500 && hasSplitIndicator && neighborsSuggestSmallOffer) {
+                val candidates = mutableListOf<Pair<String, Int>>()
+                candidates.add(trimmedDigits to trimmedNumeric)
+
+                val precedingNumberMatch = Regex("(\\d{2,})$").find(precedingDigits)
+                precedingNumberMatch?.value?.let { candidate ->
+                    val cleanedCandidate = if (candidate.startsWith("7") && candidate.length > 1) {
+                        candidate.drop(1)
+                    } else {
+                        candidate
+                    }
+                    val candidateValue = cleanedCandidate.toIntOrNull()
+                    if (candidateValue != null && candidateValue <= 500) {
+                        candidates.add(cleanedCandidate to candidateValue)
+                    }
+                }
+
+                val bestCandidate = candidates.maxByOrNull { it.second } ?: (trimmedDigits to trimmedNumeric)
+                return AmountInterpretation(currencySymbol ?: "₹", bestCandidate.first)
+            }
+        }
+
+        if (!hasCurrencySymbol && numericValue != null && numericValue > 999 && digits.startsWith("7")) {
+            val matchText = matcher.group(0) ?: ""
+            val contextStart = maxOf(0, matcher.start() - 2)
+            val contextEnd = minOf(text.length, matcher.end() + 6)
+            val contextWindow = text.substring(contextStart, contextEnd)
+            val strictContextMatch = STRICT_AMOUNT_WITH_SYMBOL_PATTERN.matcher(contextWindow).find()
+
+            if (!strictContextMatch) {
+                val altDigits = if (digits.length > 1) digits.drop(1) else digits
+                val altNumeric = altDigits.toIntOrNull()
+                val nextChar = text.getOrNull(matcher.end(2))
+                val hasSplitIndicator = nextChar == '/' || nextChar == '|' || nextChar == '\\'
+                val splitContext = if (hasSplitIndicator) {
+                    val contextSliceEnd = minOf(text.length, matcher.end(2) + 6)
+                    text.substring(matcher.end(2), contextSliceEnd)
+                } else {
+                    ""
+                }
+                val trailingDigits = splitContext.filter { it.isDigit() }
+                val hasSmallSplitTarget = trailingDigits.startsWith("50") || trailingDigits.startsWith("100")
+                val spacedStray = matchText.startsWith("7 $altDigits")
+                val isLikelyStray = altNumeric != null && altNumeric <= 500 &&
+                    (spacedStray || (hasSplitIndicator && hasSmallSplitTarget))
+
+                if (isLikelyStray) {
+                    digits = altDigits
+                    currencySymbol = currencySymbol ?: "₹"
+                } else {
+                    val altStrictMatch = STRICT_AMOUNT_WITH_SYMBOL_PATTERN.matcher("₹$digits").find()
+                    if (!altStrictMatch) {
+                        return null
+                    }
+                    currencySymbol = currencySymbol ?: "₹"
+                }
+            }
+        }
+
+        return AmountInterpretation(currencySymbol, digits)
+    }
+
+    private fun formatAmount(currencySymbol: String?, digits: String): String {
+        val normalizedSymbol = when {
+            currencySymbol.isNullOrBlank() -> "₹"
+            currencySymbol.startsWith("Rs", ignoreCase = true) -> "₹"
+            currencySymbol == "$" -> "₹"
+            else -> currencySymbol
+        }
+
+        return "$normalizedSymbol${digits.trim()}"
+    }
+
     /**
      * Find a match using a regex pattern
      */
