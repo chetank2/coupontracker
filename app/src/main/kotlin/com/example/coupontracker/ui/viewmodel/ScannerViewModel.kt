@@ -771,25 +771,26 @@ internal class SingleScanPersistenceHelper(
         coupon: Coupon,
         extractedFields: Map<String, String>
     ): CouponSaveResult {
-        val normalizedDescription = normalizeDescription(coupon.description).takeIf { it.isNotBlank() }
+        val normalizedSource = extractedFields["description"]?.takeUnless { it.isBlank() }
+            ?: coupon.description
+        val normalizedDescription = normalizeDescription(normalizedSource)
 
         return couponRepository.saveOrMergeCoupon(
             coupon = coupon,
             normalizedDescription = normalizedDescription,
-            descriptionHash = computeDescriptionHash(coupon.description),
+            descriptionHash = computeDescriptionHash(normalizedDescription),
             descriptionSignature = computeDescriptionSignature(coupon, extractedFields),
             imagePhash = null,
             imageSignature = null
         )
     }
 
-    fun normalizeDescription(description: String): String {
-        return description.lowercase(Locale.getDefault()).trim()
+    fun normalizeDescription(description: String?): String? {
+        return description?.lowercase(Locale.getDefault())?.trim()?.takeIf { it.isNotEmpty() }
     }
 
-    fun computeDescriptionHash(description: String): String? {
-        val normalized = normalizeDescription(description)
-        return if (normalized.isBlank()) null else normalized.hashCode().toString()
+    fun computeDescriptionHash(normalizedDescription: String?): String? {
+        return normalizedDescription?.hashCode()?.toString()
     }
 
     fun computeDescriptionSignature(

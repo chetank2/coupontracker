@@ -262,4 +262,49 @@ class CouponRepositoryTest {
             )
         }
     }
+
+    @Test
+    fun `saveOrMergeCoupon normalizes description when none provided`() = runBlocking {
+        val incoming = Coupon(
+            id = 0,
+            storeName = "Store",
+            description = "  Mixed Case Deal  ",
+            expiryDate = Date(),
+            cashbackAmount = 9.99,
+            redeemCode = "MIXED",
+            imageUri = null,
+            category = "Test"
+        )
+
+        coEvery {
+            couponDao.findByStoreAndDescription(
+                storeName = incoming.storeName,
+                normalizedDescription = "mixed case deal",
+                descriptionHash = null,
+                descriptionSignature = null,
+                imagePhash = null,
+                imageSignature = null
+            )
+        } returns null
+
+        coEvery { couponDao.insertCoupon(any()) } returns 11L
+
+        val result = repositoryImpl.saveOrMergeCoupon(
+            coupon = incoming,
+            normalizedDescription = null,
+            descriptionHash = null,
+            descriptionSignature = null,
+            imagePhash = null,
+            imageSignature = null
+        )
+
+        assert(result is CouponSaveResult.Saved)
+        coVerify {
+            couponDao.insertCoupon(
+                match {
+                    it.normalizedDescription == "mixed case deal"
+                }
+            )
+        }
+    }
 }

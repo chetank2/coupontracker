@@ -56,9 +56,8 @@ interface CouponDao {
         SELECT * FROM coupons
         WHERE storeName = :storeName
           AND (
-                LOWER(TRIM(description)) = :normalizedDescription
-             OR normalizedDescription = :normalizedDescription
-             OR (:normalizedDescription IS NULL AND normalizedDescription IS NULL)
+                :normalizedDescription IS NULL
+             OR COALESCE(normalizedDescription, LOWER(TRIM(description))) = :normalizedDescription
           )
           AND (
                 descriptionHash IS NULL

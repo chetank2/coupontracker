@@ -89,26 +89,31 @@ class CouponRepositoryImpl @Inject constructor(
         imagePhash: String?,
         imageSignature: String?
     ): CouponSaveResult {
-        val sanitizedNormalized = normalizedDescription?.takeIf { it.isNotBlank() }
-        val sanitizedHash = descriptionHash?.takeIf { it.isNotBlank() }
-        val sanitizedDescriptionSignature = descriptionSignature?.takeIf { it.isNotBlank() }
-        val sanitizedImagePhash = imagePhash?.takeIf { it.isNotBlank() }
-        val sanitizedImageSignature = imageSignature?.takeIf { it.isNotBlank() }
+        fun sanitize(value: String?): String? {
+            return value?.trim()?.takeIf { it.isNotEmpty() }
+        }
+
+        val sanitizedNormalized = sanitize(normalizedDescription)?.lowercase(Locale.getDefault())
+        val fallbackNormalized = sanitizedNormalized
+            ?: sanitize(coupon.normalizedDescription)?.lowercase(Locale.getDefault())
+            ?: coupon.description.lowercase(Locale.getDefault()).trim().takeIf { it.isNotEmpty() }
+
+        val sanitizedHash = sanitize(descriptionHash)
+        val sanitizedDescriptionSignature = sanitize(descriptionSignature)
+        val sanitizedImagePhash = sanitize(imagePhash)
+        val sanitizedImageSignature = sanitize(imageSignature)
 
         val normalizedCoupon = coupon.copy(
-            normalizedDescription = sanitizedNormalized ?: coupon.normalizedDescription,
+            normalizedDescription = fallbackNormalized,
             descriptionHash = sanitizedHash ?: coupon.descriptionHash,
             descriptionSignature = sanitizedDescriptionSignature ?: coupon.descriptionSignature,
             imagePhash = sanitizedImagePhash ?: coupon.imagePhash,
             imageSignature = sanitizedImageSignature ?: coupon.imageSignature
         )
 
-        val lookupNormalized = normalizedCoupon.normalizedDescription
-            ?: normalizedCoupon.description.lowercase(Locale.getDefault()).trim().takeIf { it.isNotEmpty() }
-
         val existing = couponDao.findByStoreAndDescription(
             storeName = normalizedCoupon.storeName,
-            normalizedDescription = lookupNormalized,
+            normalizedDescription = fallbackNormalized,
             descriptionHash = normalizedCoupon.descriptionHash,
             descriptionSignature = normalizedCoupon.descriptionSignature,
             imagePhash = normalizedCoupon.imagePhash,
