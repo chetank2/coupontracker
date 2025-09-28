@@ -59,6 +59,14 @@ EXPIRY_DATE_FORMATS = [
     '%d %b, %Y, %I:%M %p',
     '%d %B %Y, %I:%M %p',
     '%d %B, %Y, %I:%M %p',
+    '%d %b %Y %I:%M%p',
+    '%d %b, %Y %I:%M%p',
+    '%d %B %Y %I:%M%p',
+    '%d %B, %Y %I:%M%p',
+    '%d %b %Y, %I:%M%p',
+    '%d %b, %Y, %I:%M%p',
+    '%d %B %Y, %I:%M%p',
+    '%d %B, %Y, %I:%M%p',
 ]
 
 
@@ -187,9 +195,9 @@ class EnhancedCouponFieldExtractor:
             (r'valid\s*(?:till|until)\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', 0.9),
             (r'expires?\s*(?:on|at)?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', 0.9),
             (r'expiry\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', 0.9),
-            (r'valid\s*(?:till|until)\s*(\d{1,2}\s+\w+,?\s+\d{2,4}(?:,\s*\d{1,2}:\d{2}\s*(?:am|pm))?)', 0.95),
-            (r'expires?\s*(?:on|at)?\s*(\d{1,2}\s+\w+,?\s+\d{2,4}(?:,\s*\d{1,2}:\d{2}\s*(?:am|pm))?)', 0.95),
-            (r'(\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{2,4})', 0.85),
+            (r'valid\s*(?:till|until)\s*(\d{1,2}(?:st|nd|rd|th)?\s+\w+,?\s+\d{2,4}(?:,?\s*\d{1,2}:\d{2}\s*(?:am|pm))?)', 0.95),
+            (r'expires?\s*(?:on|at)?\s*(\d{1,2}(?:st|nd|rd|th)?\s+\w+,?\s+\d{2,4}(?:,?\s*\d{1,2}:\d{2}\s*(?:am|pm))?)', 0.95),
+            (r'(\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{2,4})', 0.85),
         ]
         
         # Minimum order patterns
@@ -215,7 +223,6 @@ class EnhancedCouponFieldExtractor:
         Returns:
             Dict: Extracted fields with confidence scores
         """
-        text_lower = text.lower()
         text_clean = self._clean_text(text)
         
         # Detect store first to apply store-specific patterns
@@ -652,6 +659,7 @@ class EnhancedCouponFieldExtractor:
         normalized = value.strip()
         normalized = re.sub(r'(\d{1,2})(st|nd|rd|th)', r'\1', normalized, flags=re.IGNORECASE)
         normalized = re.sub(r'\s+', ' ', normalized)
+        normalized = re.sub(r'(\d)(am|pm)\b', r'\1 \2', normalized, flags=re.IGNORECASE)
 
         lowered = normalized.lower()
         for source, target in MONTH_NORMALIZATION.items():
@@ -670,6 +678,7 @@ class EnhancedCouponFieldExtractor:
             lowered,
             flags=re.IGNORECASE
         )
+        lowered = re.sub(r'\b(am|pm)\b', lambda m: m.group(0).upper(), lowered, flags=re.IGNORECASE)
 
         # Remove stray periods after normalization
         normalized = re.sub(r'\.(?=\s|$)', '', lowered)

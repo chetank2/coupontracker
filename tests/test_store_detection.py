@@ -64,6 +64,22 @@ def test_extract_expiry_date_with_comma_and_time():
     assert expiry['is_expired'] is True
 
 
+def test_extract_expiry_date_handles_ordinals_and_compact_meridiem():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        Expires 30th Sept 2025 11:59pm
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+    expiry = extractor._extract_expiry_date(cleaned_text)
+
+    assert expiry['raw_text'] == '30th Sept 2025 11:59pm'
+    assert expiry['parsed_date'] is not None
+    assert expiry['parsed_date'].startswith('2025-09-30T23:59:00')
+    assert expiry['confidence'] >= 0.9
+
+
 def test_aha_coupon_fields_are_preserved():
     extractor = EnhancedCouponFieldExtractor()
 
