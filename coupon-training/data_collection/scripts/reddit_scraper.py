@@ -7,13 +7,17 @@ This script collects coupon images from specified subreddits using the Reddit AP
 
 import os
 import json
-import requests
 import time
 import logging
 import argparse
 from datetime import datetime
 import hashlib
 from urllib.parse import urlparse
+
+try:  # pragma: no cover - optional dependency for HTTP operations
+    import requests  # type: ignore
+except ImportError:  # pragma: no cover - handled gracefully during runtime
+    requests = None  # type: ignore[assignment]
 
 # Set up logging
 logging.basicConfig(
@@ -53,6 +57,17 @@ def ensure_directories_exist():
     
     logger.info("Directory structure verified")
 
+def _require_dependency(module, package_name: str):
+    """Ensure an optional dependency is available before performing network operations."""
+
+    if module is None:
+        raise RuntimeError(
+            f"Optional dependency '{package_name}' is required for this script. "
+            f"Install it with 'pip install {package_name}'."
+        )
+    return module
+
+
 def determine_source(title, url):
     """Determine the source of the coupon based on title and URL."""
     title_lower = title.lower()
@@ -72,8 +87,10 @@ def determine_source(title, url):
 
 def download_image(url, source, title):
     """Download an image from a URL and save it to the appropriate directory."""
+    requests_module = _require_dependency(requests, "requests")
+
     try:
-        response = requests.get(url, stream=True, timeout=10)
+        response = requests_module.get(url, stream=True, timeout=10)
         response.raise_for_status()
         
         # Generate a unique filename
@@ -139,8 +156,10 @@ def search_reddit(subreddit, search_term, limit=25):
         'User-Agent': 'CouponTracker Data Collection Script v1.0'
     }
     
+    requests_module = _require_dependency(requests, "requests")
+
     try:
-        response = requests.get(url, params=params, headers=headers)
+        response = requests_module.get(url, params=params, headers=headers)
         response.raise_for_status()
         
         # Extract image URLs from response

@@ -1,6 +1,5 @@
 package com.example.coupontracker.ui.adapter
 
-import android.content.res.ColorStateList
 import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
@@ -15,11 +14,8 @@ import com.bumptech.glide.request.RequestOptions
 import com.example.coupontracker.R
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.databinding.ItemCouponBinding
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Date
-import java.util.Locale
-import java.util.concurrent.TimeUnit
+import com.example.coupontracker.ui.components.DateFormatter
+import com.example.coupontracker.ui.components.StatusType
 
 class CouponAdapter(
     private val onItemClick: (Long) -> Unit,
@@ -42,8 +38,6 @@ class CouponAdapter(
     inner class CouponViewHolder(
         private val binding: ItemCouponBinding
     ) : RecyclerView.ViewHolder(binding.root) {
-
-        private val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
 
         init {
             binding.root.setOnClickListener {
@@ -107,40 +101,18 @@ class CouponAdapter(
             }
         }
         
-        private fun setExpiryDateText(expiryDate: Date) {
-            val today = Calendar.getInstance().time
-            val diffInMillis = expiryDate.time - today.time
-            val daysRemaining = TimeUnit.MILLISECONDS.toDays(diffInMillis)
-            
+        private fun setExpiryDateText(expiryDate: java.util.Date?) {
             val context = binding.root.context
-            val badgeColor: Int
-            val badgeText: String
-            
-            when {
-                daysRemaining < 0 -> {
-                    // Expired
-                    badgeColor = ContextCompat.getColor(context, R.color.expired)
-                    badgeText = "Expired"
-                }
-                daysRemaining <= 3 -> {
-                    // Critical - expires in 3 days or less
-                    badgeColor = ContextCompat.getColor(context, R.color.expired)
-                    badgeText = "Expires in $daysRemaining days"
-                }
-                daysRemaining <= 7 -> {
-                    // Warning - expires in a week or less
-                    badgeColor = ContextCompat.getColor(context, R.color.expiring_soon)
-                    badgeText = "Expires in $daysRemaining days"
-                }
-                else -> {
-                    // Normal - expires in more than a week
-                    badgeColor = ContextCompat.getColor(context, R.color.valid)
-                    badgeText = "Expires in $daysRemaining days"
-                }
+            val status = DateFormatter.getExpiryStatus(expiryDate)
+            val badgeColor = when (status) {
+                StatusType.ERROR -> ContextCompat.getColor(context, R.color.expired)
+                StatusType.WARNING -> ContextCompat.getColor(context, R.color.expiring_soon)
+                StatusType.SUCCESS -> ContextCompat.getColor(context, R.color.valid)
+                StatusType.INFO, StatusType.NEUTRAL -> ContextCompat.getColor(context, R.color.info)
             }
-            
+
             binding.expiryText.apply {
-                text = badgeText
+                text = DateFormatter.getExpiryText(expiryDate)
                 background.setTint(badgeColor)
             }
         }

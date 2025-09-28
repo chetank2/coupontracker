@@ -178,13 +178,14 @@ class CouponScraper:
         
         coupons = []
         
+        driver = None
         try:
             # Use Selenium for JavaScript-heavy sites
             chrome_options = Options()
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument(f"user-agent={self.user_agent}")
-            
+
             driver = webdriver.Chrome(options=chrome_options)
             driver.get(url)
             
@@ -258,12 +259,14 @@ class CouponScraper:
                 
                 # Respect rate limits
                 time.sleep(self.delay)
-            
-            driver.quit()
-        
+
         except Exception as e:
             logger.error(f"Error scraping e-commerce site: {e}")
-        
+
+        finally:
+            if driver is not None:
+                driver.quit()
+
         logger.info(f"Scraped {len(coupons)} coupons from e-commerce site")
         return coupons
     

@@ -11,6 +11,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.coupontracker.ui.screen.AnalyticsScreen
 import com.example.coupontracker.ui.screen.ApiTestScreen
 import com.example.coupontracker.ui.screen.BatchScannerScreen
@@ -27,6 +28,7 @@ import com.example.coupontracker.ui.screen.SmartCaptureScreen
 import com.example.coupontracker.ui.screen.UnifiedCameraScreen
 import com.example.coupontracker.ui.screen.UnifiedUploadScreen
 import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 
 sealed class Screen(val route: String) {
     object Onboarding : Screen("onboarding")
@@ -200,10 +202,17 @@ fun AppNavigation(
         ) { backStackEntry ->
             val imageUri = backStackEntry.arguments?.getString("imageUri")
             val isBatchMode = backStackEntry.arguments?.getBoolean("isBatchMode") ?: false
+            val scannerBackStackEntry = remember(backStackEntry) {
+                navController.previousBackStackEntry?.takeIf {
+                    it.destination.route == Screen.Scanner.route
+                }
+            }
+            val scannerViewModel: ScannerViewModel? = scannerBackStackEntry?.let { hiltViewModel(it) }
             CouponFormScreen(
                 navController = navController,
                 imageUri = imageUri,
-                isBatchMode = isBatchMode
+                isBatchMode = isBatchMode,
+                scannerViewModel = scannerViewModel
             )
         }
     }

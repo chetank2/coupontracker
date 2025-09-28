@@ -2,6 +2,7 @@ package com.example.coupontracker.data.repository
 
 import com.example.coupontracker.data.local.CouponDao
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.util.CouponDedupUtils
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -15,11 +16,13 @@ class CouponRepositoryTest {
 
     private lateinit var couponDao: CouponDao
     private lateinit var repository: CouponRepository
+    private lateinit var repositoryImpl: CouponRepositoryImpl
 
     @Before
     fun setup() {
         couponDao = mockk(relaxed = true)
-        repository = CouponRepositoryImpl(couponDao)
+        repositoryImpl = CouponRepositoryImpl(couponDao)
+        repository = repositoryImpl
     }
 
     @Test
@@ -89,4 +92,64 @@ class CouponRepositoryTest {
         // Then
         coVerify { couponDao.deleteCoupon(coupon) }
     }
-} 
+
+    @Test
+    fun `saveOrMergeCoupon reuses coupon with existing code`() = runBlocking {
+        val description = "Limited Time Offer!!!"
+        val normalized = CouponDedupUtils.normalizeDescription(description)
+
+        val existing = Coupon(
+            id = 42,
+            storeName = "Store",
+            description = description,
+            normalizedDescription = normalized,
+            expiryDate = Date(),
+            cashbackAmount = 10.0,
+            redeemCode = "CODE123",
+            imageUri = null,
+            category = "Test",
+            usageCount = 1,
+            createdAt = Date(0),
+            updatedAt = Date(0)
+        )
+
+        val incoming = existing.copy(
+            id = 0,
+            normalizedDescription = null,
+            redeemCode = null,
+            cashbackAmount = 20.0,
+            usageCount = 5,
+            expiryDate = null,
+            createdAt = Date(),
+            updatedAt = Date()
+        )
+
+        coEvery {
+            couponDao.findByStoreAndDescription(
+                storeName = existing.storeName,
+                normalizedDescription = normalized,
+                imagePhash = null,
+                imageSignature = null
+            )
+        } returns existing
+        coEvery { couponDao.updateCoupon(any()) } returns Unit
+
+        val result = repositoryImpl.saveOrMergeCoupon(incoming, normalized, null, null)
+
+        assert(result == existing.id)
+        coVerify(exactly = 0) { couponDao.insertCoupon(any()) }
+        coVerify {
+            couponDao.updateCoupon(
+                match {
+                    it.id == existing.id &&
+                        it.normalizedDescription == normalized &&
+                        it.redeemCode == existing.redeemCode &&
+                        it.expiryDate == existing.expiryDate &&
+                        it.cashbackAmount == incoming.cashbackAmount &&
+                        it.usageCount == kotlin.math.max(existing.usageCount, incoming.usageCount) &&
+                        it.createdAt == existing.createdAt
+                }
+            )
+        }
+    }
+}

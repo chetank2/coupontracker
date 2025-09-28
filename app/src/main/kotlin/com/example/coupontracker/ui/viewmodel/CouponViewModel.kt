@@ -79,6 +79,9 @@ class CouponViewModel @Inject constructor(
 
     fun getExpiringCoupons(days: Int): List<Coupon> {
         val expiryDate = Date(System.currentTimeMillis() + (days * 24 * 60 * 60 * 1000L))
-        return _coupons.value.filter { it.expiryDate <= expiryDate }
+        return _coupons.value.filter { coupon ->
+            val expiry = coupon.expiryDate ?: return@filter false
+            expiry <= expiryDate
+        }
     }
-} 
+}

@@ -130,7 +130,7 @@ fun ScannerScreen(
     ) { uri ->
         uri?.let {
             capturedImageUri = it
-            viewModel.scanImage(it)
+            viewModel.scanImage(it, persistImmediately = false)
         }
     }
 
@@ -180,7 +180,7 @@ fun ScannerScreen(
                         onImageCaptured = { uri ->
                             capturedImageUri = uri
                             showCamera = false
-                            viewModel.scanImage(uri)
+                            viewModel.scanImage(uri, persistImmediately = false)
                         },
                         onError = { error ->
                             Log.e("ScannerScreen", "Camera error: $error")
@@ -385,9 +385,11 @@ fun ScannerScreen(
                                     onClick = {
                                         val parsedAmount = amount.toDoubleOrNull() ?: 0.0
                                         val parsedDate = try {
-                                            SimpleDateFormat("MM/dd/yyyy", Locale.getDefault()).parse(expiryDateString) ?: Date()
+                                            expiryDateString.takeIf { it.isNotBlank() }?.let {
+                                                SimpleDateFormat("MM/dd/yyyy", Locale.getDefault()).parse(it)
+                                            }
                                         } catch (e: Exception) {
-                                            Date()
+                                            null
                                         }
 
                                         val coupon = Coupon(
@@ -427,6 +429,23 @@ fun ScannerScreen(
                                     LaunchedEffect(Unit) {
                                         // Navigate back after a short delay
                                         kotlinx.coroutines.delay(1500)
+                                        navController.popBackStack()
+                                    }
+                                }
+
+                                // Show already saved message
+                                if (uiState is ScannerUiState.AlreadySaved) {
+                                    val alreadySavedState = uiState as ScannerUiState.AlreadySaved
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "Coupon already saved: ${alreadySavedState.existingCoupon.redeemCode ?: alreadySavedState.existingCoupon.storeName}",
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+
+                                    LaunchedEffect(Unit) {
+                                        // Navigate back after a short delay
+                                        kotlinx.coroutines.delay(2000)
                                         navController.popBackStack()
                                     }
                                 }
@@ -531,7 +550,7 @@ fun CameraView(
                             override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                                 val savedUri = Uri.fromFile(photoFile)
                                 onImageCaptured(savedUri)
-                                viewModel.scanImage(savedUri)
+                                viewModel.scanImage(savedUri, persistImmediately = false)
                             }
 
                             override fun onError(exception: ImageCaptureException) {

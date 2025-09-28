@@ -2,7 +2,10 @@ package com.example.coupontracker.util
 
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class TextExtractorTest {
 
     private val extractor = TextExtractor()
@@ -32,7 +35,7 @@ class TextExtractorTest {
         
         val description = extractor.extractDescription(text)
         assertNotNull("Description should not be null", description)
-        assertEquals("Get upto ₹500 off", description)
+        assertEquals("ABHIBUS Coupon - ₹500.0 off", description)
     }
     
     @Test
@@ -88,7 +91,7 @@ class TextExtractorTest {
         
         val description = extractor.extractDescription(text)
         assertNotNull("Description should not be null", description)
-        assertEquals("Flat ₹250 OFF", description)
+        assertEquals("NEWMEE Coupon - Flat ₹250.0 off", description)
     }
     
     @Test
@@ -144,7 +147,7 @@ class TextExtractorTest {
         
         val description = extractor.extractDescription(text)
         assertNotNull("Description should not be null", description)
-        assertEquals("Get upto 30% off", description)
+        assertEquals("IXIGO Coupon - Up to 30.0% off", description)
     }
     
     @Test
@@ -155,10 +158,33 @@ class TextExtractorTest {
             Code: SWGGS01BO719GFHS
             Claim Now
         """.trimIndent()
-        
+
         val redeemCode = extractor.extractRedeemCode(text)
         assertNotNull("Redeem code should not be null", redeemCode)
         assertEquals("SWGGS01BO719GFHS", redeemCode)
+    }
+
+    @Test
+    fun `extractRedeemCode collapses whitespace and trims trailing noise`() {
+        val text = "Use code Q2SQ74 JS7CK O today"
+
+        val redeemCode = extractor.extractRedeemCode(text)
+
+        assertEquals("Q2SQ74JS7CK", redeemCode)
+    }
+
+    @Test
+    fun `extractRedeemCode handles dash separators`() {
+        val variants = listOf(
+            "Use code- MISSEDYOU",
+            "Use code– MISSEDYOU",
+            "Use code—MISSEDYOU"
+        )
+
+        variants.forEach { sample ->
+            val redeemCode = extractor.extractRedeemCode(sample)
+            assertEquals("MISSEDYOU", redeemCode)
+        }
     }
     
     @Test
@@ -169,10 +195,23 @@ class TextExtractorTest {
             Code: SWGGS01BO719GFHS
             Claim Now
         """.trimIndent()
-        
+
         val cashbackAmount = extractor.extractCashbackAmount(text)
         assertNotNull("Cashback amount should not be null", cashbackAmount)
         assertEquals(30.0, cashbackAmount!!, 0.01)
+    }
+
+    @Test
+    fun `extractStoreName prefers repeated proper nouns over generic all caps words`() {
+        val text = """
+            Minimalist Skincare
+            Minimalist… MULTI PRODUCT KIT
+            Save 10% on your first order
+        """.trimIndent()
+
+        val storeName = extractor.extractStoreName(text)
+
+        assertEquals("Minimalist", storeName)
     }
     
     @Test
@@ -200,7 +239,7 @@ class TextExtractorTest {
         
         val description = extractor.extractDescription(text)
         assertNotNull("Description should not be null", description)
-        assertEquals("Up to 80% Off", description)
+        assertEquals("BOAT Coupon - Up to 80.0% off", description)
     }
     
     @Test

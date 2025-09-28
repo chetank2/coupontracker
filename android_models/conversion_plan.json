@@ -1,0 +1,73 @@
+{
+  "conversion_steps": [
+    {
+      "step": 1,
+      "name": "Download Base Model",
+      "description": "Download MiniCPM-Llama3-V-2.5 from Hugging Face",
+      "estimated_time": "10-30 minutes",
+      "estimated_size": "8 GB",
+      "command": "python -c \"from transformers import AutoModel; AutoModel.from_pretrained('openbmb/MiniCPM-Llama3-V-2_5')\""
+    },
+    {
+      "step": 2,
+      "name": "Apply Mobile Optimizations",
+      "description": "Configure model for mobile deployment",
+      "estimated_time": "5 minutes",
+      "modifications": [
+        "Reduce context length to 2048 tokens",
+        "Cap image resolution to 768x768",
+        "Enable memory-efficient attention",
+        "Configure KV cache for mobile"
+      ]
+    },
+    {
+      "step": 3,
+      "name": "4-bit Quantization",
+      "description": "Quantize model weights to 4-bit precision",
+      "estimated_time": "30-60 minutes",
+      "estimated_size_reduction": "75% (8GB -> 2GB)",
+      "method": "q4f16_1 quantization"
+    },
+    {
+      "step": 4,
+      "name": "MLC-LLM Export",
+      "description": "Export to MLC-LLM format for Android",
+      "estimated_time": "15-30 minutes",
+      "outputs": [
+        "minicpm_llm_q4f16_1.so",
+        "mlc-chat-config.json",
+        "tokenizer.json",
+        "params_shard_*.bin"
+      ]
+    },
+    {
+      "step": 5,
+      "name": "Android Packaging",
+      "description": "Package for Android deployment",
+      "estimated_time": "5 minutes",
+      "outputs": [
+        "Android asset files",
+        "JNI library bindings",
+        "Model manifest with checksums"
+      ]
+    }
+  ],
+  "requirements": {
+    "python_version": "3.8+",
+    "packages": [
+      "torch>=2.0.0",
+      "transformers>=4.30.0",
+      "mlc-llm>=0.12.0",
+      "numpy>=1.21.0"
+    ],
+    "disk_space_gb": 20,
+    "ram_gb": 16,
+    "estimated_total_time": "1-3 hours"
+  },
+  "output_specifications": {
+    "final_model_size_mb": 2400,
+    "target_devices": "Android 8.0+, 4GB+ RAM",
+    "inference_time": "2-4 seconds per image",
+    "supported_image_size": "768x768 max"
+  }
+}

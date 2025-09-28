@@ -27,7 +27,11 @@ object DatabaseModule {
             CouponDatabase::class.java,
             CouponDatabase.DATABASE_NAME
         )
-            .addMigrations(CouponDatabase.MIGRATION_2_3)
+            .addMigrations(
+                CouponDatabase.MIGRATION_2_3,
+                CouponDatabase.MIGRATION_3_4,
+                CouponDatabase.MIGRATION_4_5
+            )
             .fallbackToDestructiveMigration()
             .build()
     }

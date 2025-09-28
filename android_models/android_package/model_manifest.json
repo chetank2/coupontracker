@@ -1,0 +1,47 @@
+{
+  "model_files": [
+    {
+      "name": "minicpm_llm_q4f16_1.so",
+      "size_bytes": 1350000,
+      "sha256": "65d9139e97c5a196b48ae08facc468bcc41fef82ef1325ecab2c32e85e1fbbde"
+    },
+    {
+      "name": "model.bin",
+      "size_bytes": 3150000,
+      "sha256": "94d7d225fbf28a20ec30534207ec1a0ea017a20cf25674cde166a6d4f0c7bad1"
+    },
+    {
+      "name": "vision_config.json",
+      "size_bytes": 198,
+      "sha256": "a1e7efdfb761c86a3b1a323b3e859eb61718babb036ce66574d75528c33ebb6c"
+    },
+    {
+      "name": "mlc-chat-config.json",
+      "size_bytes": 253,
+      "sha256": "c039de2a0c0ec44016207af64a896f7cd3b6940962709c3e49c9321d6c666ff6"
+    },
+    {
+      "name": "tokenizer.model",
+      "size_bytes": 200000,
+      "sha256": "fd635c2e01878a509339a2d4a269c3600531d0e2c8757b553ab4dee59a215869"
+    }
+  ],
+  "total_size_mb": 4.48,
+  "package_checksum": "3b21b35aff5dcd013c3ec1e95cbc835a6332301b8d4cefb7d78328200800dc70",
+  "version": "v2.5-q4-android",
+  "target_api_level": 26,
+  "required_ram_mb": 4096,
+  "quantization": "q4f16_1",
+  "supported_devices": [
+    "Android 8.0+",
+    "ARM64 architecture",
+    "Vulkan 1.1 support recommended",
+    "4GB+ RAM required"
+  ],
+  "performance_profile": {
+    "cold_start_ms": 3000,
+    "inference_ms_per_token": 150,
+    "memory_footprint_mb": 3072,
+    "gpu_acceleration": "optional"
+  }
+}

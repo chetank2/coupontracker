@@ -1,6 +1,8 @@
 package com.example.coupontracker.ui.fragment
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
@@ -18,10 +20,13 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
 import com.example.coupontracker.R
 import com.example.coupontracker.databinding.FragmentScannerBinding
+import com.example.coupontracker.ui.activity.MultiCouponSelectionActivity
 import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 import com.example.coupontracker.ui.viewmodel.ScannerUiState
 import com.example.coupontracker.util.CouponInfo
@@ -46,9 +51,9 @@ class ScannerFragment : Fragment() {
     private var imageCapture: ImageCapture? = null
     private lateinit var outputDirectory: File
     private lateinit var cameraExecutor: ExecutorService
-    
+
     private val TAG = "ScannerFragment"
-    
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -62,6 +67,46 @@ class ScannerFragment : Fragment() {
             ).show()
             findNavController().navigateUp()
         }
+    }
+
+    private val multiCouponSelectionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val currentBinding = _binding
+
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val processedCount = data?.getIntExtra(
+                MultiCouponSelectionActivity.EXTRA_RESULT_PROCESSED_COUNT,
+                0
+            ) ?: 0
+            val resultType = data?.getStringExtra(MultiCouponSelectionActivity.EXTRA_RESULT_TYPE)
+            val explicitMessage = data?.getStringExtra(MultiCouponSelectionActivity.EXTRA_RESULT_MESSAGE)
+
+            val fallbackMessage = when (resultType) {
+                MultiCouponSelectionActivity.RESULT_TYPE_ALL_PROCESSED ->
+                    getString(R.string.multi_coupon_all_saved_snackbar, processedCount)
+
+                MultiCouponSelectionActivity.RESULT_TYPE_SINGLE_PROCESSED ->
+                    getString(R.string.multi_coupon_single_saved_snackbar)
+
+                MultiCouponSelectionActivity.RESULT_TYPE_ALREADY_SAVED ->
+                    getString(R.string.multi_coupon_already_saved_snackbar)
+
+                else -> if (processedCount > 0) {
+                    getString(R.string.multi_coupon_all_saved_snackbar, processedCount)
+                } else {
+                    null
+                }
+            }
+
+            val messageToShow = explicitMessage ?: fallbackMessage
+            if (!messageToShow.isNullOrBlank() && currentBinding != null) {
+                Snackbar.make(currentBinding.root, messageToShow, Snackbar.LENGTH_LONG).show()
+            }
+        }
+
+        viewModel.resetState()
     }
     
     override fun onCreateView(
@@ -101,13 +146,14 @@ class ScannerFragment : Fragment() {
         }
         
         // Observe processing state
-        lifecycleScope.launch {
-            viewModel.uiState.collect { state ->
-                when (state) {
-                    is ScannerUiState.Initial -> {
-                        binding.progressBar.visibility = View.GONE
-                        binding.captureButton.isEnabled = true
-                    }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.uiState.collect { state ->
+                    when (state) {
+                        is ScannerUiState.Initial -> {
+                            binding.progressBar.visibility = View.GONE
+                            binding.captureButton.isEnabled = true
+                        }
                     is ScannerUiState.Scanning -> {
                         binding.progressBar.visibility = View.VISIBLE
                         binding.captureButton.isEnabled = false
@@ -115,12 +161,13 @@ class ScannerFragment : Fragment() {
                     is ScannerUiState.Success -> {
                         binding.progressBar.visibility = View.GONE
                         binding.captureButton.isEnabled = true
-                        
+
                         // Show success message with coupon details
                         val coupon = state.coupon
+                        val progressLabel = state.miniCpmStatus.displayName()
                         Snackbar.make(
                             binding.root,
-                            "Successfully scanned coupon: ${coupon.redeemCode ?: ""}",
+                            "Successfully scanned coupon: ${coupon.redeemCode ?: ""} ($progressLabel)",
                             Snackbar.LENGTH_LONG
                         ).show()
                         
@@ -146,6 +193,53 @@ class ScannerFragment : Fragment() {
                             Snackbar.LENGTH_LONG
                         ).show()
                         findNavController().navigateUp()
+                    }
+                    is ScannerUiState.AlreadySaved -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.captureButton.isEnabled = true
+                        // Handle already saved state
+                        Snackbar.make(
+                            binding.root,
+                            "Coupon already saved: ${state.existingCoupon.redeemCode ?: state.existingCoupon.storeName}",
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                        findNavController().navigateUp()
+                    }
+                    is ScannerUiState.MultiCouponDetected -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.captureButton.isEnabled = true
+
+                        val selectionIntent = Intent(
+                            requireContext(),
+                            MultiCouponSelectionActivity::class.java
+                        ).apply {
+                            putParcelableArrayListExtra(
+                                MultiCouponSelectionActivity.EXTRA_COUPON_INSTANCES,
+                                ArrayList(state.couponInstances)
+                            )
+                            putExtra(
+                                MultiCouponSelectionActivity.EXTRA_ORIGINAL_BITMAP,
+                                state.originalBitmap
+                            )
+                            state.imageUri?.let {
+                                putExtra(MultiCouponSelectionActivity.EXTRA_IMAGE_URI, it)
+                            }
+                        }
+
+                        multiCouponSelectionLauncher.launch(selectionIntent)
+                    }
+                    is ScannerUiState.AllCouponsSaved -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.captureButton.isEnabled = true
+
+                        Snackbar.make(
+                            binding.root,
+                            "Successfully saved ${state.processedCoupons.size} coupons!",
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                        
+                        findNavController().navigateUp()
+                    }
                     }
                 }
             }

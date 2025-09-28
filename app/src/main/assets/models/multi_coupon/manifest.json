@@ -1,0 +1,31 @@
+{
+  "model_version": "1.0.0-demo",
+  "model_type": "two_stage_yolo",
+  "stage1_model": "stage1_coupon_detector.tflite",
+  "stage2_model": "stage2_field_detector.tflite",
+  "stage1_input_size": [
+    640,
+    640
+  ],
+  "stage2_input_size": [
+    320,
+    320
+  ],
+  "stage1_classes": [
+    "coupon_complete",
+    "coupon_partial_top",
+    "coupon_partial_bottom"
+  ],
+  "stage2_classes": [
+    "code_region",
+    "benefit_region",
+    "expiry_region",
+    "app_region",
+    "terms_region"
+  ],
+  "confidence_threshold": 0.5,
+  "iou_threshold": 0.4,
+  "stub_mode": true,
+  "stub_notes": "Demo mode: Returns synthetic multi-coupon detections for testing UI",
+  "demo_mode": true
+}

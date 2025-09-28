@@ -269,7 +269,7 @@ class SmartCaptureViewModel @Inject constructor(
                 // Process the optimized image to extract coupon information
                 val processingStartTime = System.currentTimeMillis()
                 val couponInfo = withContext(Dispatchers.IO) {
-                    imageProcessor.processImage(optimizedUri)
+                    imageProcessor.processImage(optimizedUri) // URI-based processing includes metadata extraction
                 }
                 val processingTime = System.currentTimeMillis() - processingStartTime
 

@@ -34,8 +34,36 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import kotlin.math.abs
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+
+internal const val EXPIRY_FALLBACK_TOLERANCE_MS = 5_000L
+
+internal fun normalizeExpiryDate(extractedExpiry: Date?, captureTimestamp: Date?): Date? {
+    if (extractedExpiry == null) {
+        return null
+    }
+
+    captureTimestamp?.let { timestamp ->
+        if (areWithinTolerance(extractedExpiry, timestamp)) {
+            return null
+        }
+    }
+
+    if (captureTimestamp == null) {
+        val now = Date()
+        if (areWithinTolerance(extractedExpiry, now)) {
+            return null
+        }
+    }
+
+    return extractedExpiry
+}
+
+private fun areWithinTolerance(first: Date, second: Date): Boolean {
+    return abs(first.time - second.time) <= EXPIRY_FALLBACK_TOLERANCE_MS
+}
 
 /**
  * Manager class for handling various coupon input methods
@@ -81,9 +109,17 @@ class CouponInputManager(private val context: Context) {
                     return@withContext processPdfUri(imageUri)
                 }
 
-                // Process as a regular image
+                // Extract capture timestamp before processing
+                val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
+                if (captureTimestamp != null) {
+                    Log.d(TAG, "Extracted capture timestamp: $captureTimestamp")
+                } else {
+                    Log.w(TAG, "No capture timestamp found, using fallback")
+                }
+                
+                // Process as a regular image with capture timestamp
                 val bitmap = loadBitmapFromUri(imageUri)
-                return@withContext processCouponFromBitmap(bitmap)
+                return@withContext processCouponFromBitmap(bitmap, captureTimestamp)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon from image URI", e)
                 throw e
@@ -94,9 +130,10 @@ class CouponInputManager(private val context: Context) {
     /**
      * Process a bitmap and extract coupon information
      * @param bitmap The bitmap to process
+     * @param captureTimestamp The timestamp when the image was captured (for relative date calculations)
      * @return The extracted coupon information
      */
-    suspend fun processCouponFromBitmap(bitmap: Bitmap): Coupon {
+    suspend fun processCouponFromBitmap(bitmap: Bitmap, captureTimestamp: Date? = null): Coupon {
         return withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Processing coupon from bitmap")
@@ -128,7 +165,7 @@ class CouponInputManager(private val context: Context) {
                                 storeName = "Unknown Store",
                                 description = "Scanned from QR code",
                                 cashbackAmount = 0.0,
-                                expiryDate = Date(),
+                                expiryDate = null,
                                 redeemCode = code,
                                 imageUri = null,
                                 status = "Active",
@@ -139,15 +176,19 @@ class CouponInputManager(private val context: Context) {
                     }
                 }
 
-                // Process with OCR
-                val couponInfo = imageProcessor.processImage(bitmap)
+                // Process with OCR using capture timestamp
+                val couponInfo = imageProcessor.processImage(bitmap, captureTimestamp)
+                val normalizedExpiry = normalizeExpiryDate(couponInfo.expiryDate, captureTimestamp)
+                if (couponInfo.expiryDate != null && normalizedExpiry == null) {
+                    Log.d(TAG, "Discarding fallback expiry date; treating as unknown")
+                }
 
                 // Convert CouponInfo to Coupon
                 return@withContext Coupon(
                     id = 0,
                     storeName = couponInfo.storeName.ifBlank { "Unknown Store" },
                     description = couponInfo.description.ifBlank { "No description" },
-                    expiryDate = couponInfo.expiryDate ?: Date(),
+                    expiryDate = normalizedExpiry,
                     cashbackAmount = couponInfo.cashbackAmount ?: 0.0,
                     redeemCode = couponInfo.redeemCode,
                     imageUri = null, // We'll set this later in the ViewModel
@@ -194,7 +235,7 @@ class CouponInputManager(private val context: Context) {
                     page.close()
 
                     // Process the bitmap
-                    val coupon = processCouponFromBitmap(bitmap)
+                    val coupon = processCouponFromBitmap(bitmap, null) // PDF doesn't have capture timestamp
 
                     // Close the renderer
                     pdfRenderer.close()
@@ -240,7 +281,7 @@ class CouponInputManager(private val context: Context) {
                         inputStream.close()
                         connection.disconnect()
 
-                        return@withContext processCouponFromBitmap(bitmap)
+                        return@withContext processCouponFromBitmap(bitmap, null) // URL-based image doesn't have capture timestamp
                     }
                     contentType.startsWith("application/pdf") -> {
                         // Download PDF to temporary file
@@ -272,7 +313,7 @@ class CouponInputManager(private val context: Context) {
                                 storeName = extractDomainFromUrl(urlString),
                                 description = "Coupon from URL",
                                 cashbackAmount = 0.0,
-                                expiryDate = Date(),
+                                expiryDate = null,
                                 redeemCode = code,
                                 imageUri = null,
                                 status = "Active",
@@ -312,7 +353,7 @@ class CouponInputManager(private val context: Context) {
                     storeName = "Unknown Store",
                     description = "Manual entry",
                     cashbackAmount = 0.0,
-                    expiryDate = Date(),
+                    expiryDate = null,
                     redeemCode = text,
                     imageUri = null,
                     status = "Active",

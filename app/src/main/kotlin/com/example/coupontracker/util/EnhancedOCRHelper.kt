@@ -131,26 +131,32 @@ class EnhancedOCRHelper {
             while (myntraMatcher.find()) {
                 val potentialCode = myntraMatcher.group(1)
                 // Ensure it has both letters and numbers for higher confidence
-                if (potentialCode.contains(Regex("[A-Z]")) && 
+                if (potentialCode.contains(Regex("[A-Z]")) &&
                     potentialCode.contains(Regex("[0-9]")) &&
                     potentialCode.length >= 10) {
-                    result["code"] = potentialCode.uppercase()
-                    codeFound = true
-                    Log.d(TAG, "Found Myntra coupon code: $potentialCode")
-                    break
+                    val sanitized = RedeemCodeSanitizer.sanitize(potentialCode)
+                    if (sanitized != null) {
+                        result["code"] = sanitized
+                        codeFound = true
+                        Log.d(TAG, "Found Myntra coupon code: $potentialCode")
+                        break
+                    }
                 }
             }
         }
-        
+
         // If no code found yet, try standard pattern
         if (!codeFound) {
             findMatch(CODE_PATTERN, text)?.let {
-                result["code"] = it.trim().uppercase()
-                codeFound = true
-                Log.d(TAG, "Found standard coupon code: ${it.trim()}")
+                val sanitized = RedeemCodeSanitizer.sanitize(it)
+                if (sanitized != null) {
+                    result["code"] = sanitized
+                    codeFound = true
+                    Log.d(TAG, "Found standard coupon code: ${it.trim()}")
+                }
             }
         }
-        
+
         // If still no code found, try looking for isolated alphanumeric strings
         if (!codeFound) {
             // Look for isolated alphanumeric strings that might be codes
@@ -158,12 +164,15 @@ class EnhancedOCRHelper {
             codeRegex.findAll(text).forEach { match ->
                 val potentialCode = match.groupValues[1]
                 // Ensure it has both letters and numbers and isn't just a random sequence
-                if (potentialCode.contains(Regex("[A-Z]")) && 
+                if (potentialCode.contains(Regex("[A-Z]")) &&
                     potentialCode.contains(Regex("[0-9]"))) {
-                    result["code"] = potentialCode.uppercase()
-                    codeFound = true
-                    Log.d(TAG, "Found potential code from isolated string: $potentialCode")
-                    return@forEach
+                    val sanitized = RedeemCodeSanitizer.sanitize(potentialCode)
+                    if (sanitized != null) {
+                        result["code"] = sanitized
+                        codeFound = true
+                        Log.d(TAG, "Found potential code from isolated string: $potentialCode")
+                        return@forEach
+                    }
                 }
             }
         }
@@ -223,7 +232,7 @@ class EnhancedOCRHelper {
             // For Myntra, try to find their specific voucher description format
             findMatch(MYNTRA_DESCRIPTION_PATTERN, text)?.let {
                 val description = it.trim() + " up to ₹" + (result["amount"] ?: "").replace("₹", "")
-                result["description"] = description
+                setDescription(result, description)
                 descriptionFound = true
                 Log.d(TAG, "Found Myntra description: $description")
             }
@@ -234,18 +243,18 @@ class EnhancedOCRHelper {
                 myntraDescRegex.find(text)?.let {
                     val desc = it.groupValues[0].trim()
                     if (desc.isNotBlank()) {
-                        result["description"] = desc
+                        setDescription(result, desc)
                         descriptionFound = true
                         Log.d(TAG, "Found Myntra description with alt pattern: $desc")
                     }
                 }
             }
         }
-        
+
         // If no description found yet, try standard pattern
         if (!descriptionFound) {
             findMatch(DESCRIPTION_PATTERN, text)?.let {
-                result["description"] = it.trim()
+                setDescription(result, it.trim())
                 descriptionFound = true
                 Log.d(TAG, "Found standard description: ${it.trim()}")
             }
@@ -254,7 +263,7 @@ class EnhancedOCRHelper {
         // If we couldn't extract any information, provide some defaults
         if (result.isEmpty()) {
             result["storeName"] = if (isMyntraCoupon) "Myntra" else "Unknown Store"
-            result["description"] = "Scanned coupon"
+            setDescription(result, "Scanned coupon")
         }
         
         // Set default amount if not found
@@ -264,6 +273,13 @@ class EnhancedOCRHelper {
         
         Log.d(TAG, "Final extracted coupon info: $result")
         return result
+    }
+
+    private fun setDescription(result: MutableMap<String, String>, description: String) {
+        val cleaned = LocalLlmOcrService.cleanDescription(description)
+        if (cleaned.isNotBlank()) {
+            result["description"] = cleaned
+        }
     }
     
     /**

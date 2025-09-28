@@ -24,6 +24,7 @@ import androidx.navigation.NavController
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.util.ModelMetadataReader
 import com.example.coupontracker.util.SecurePreferencesManager
+import com.example.coupontracker.util.ApiType
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Analytics
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -35,6 +36,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.coupontracker.ui.components.PasswordDialog
 import com.example.coupontracker.ui.components.ThemeSelector
 import com.example.coupontracker.ui.viewmodel.SettingsViewModel
+import com.example.coupontracker.llm.LlmRuntimeManager
+import com.example.coupontracker.llm.ModelDownloadManager
+import com.example.coupontracker.util.LlmServiceStatus
+import com.example.coupontracker.util.LocalLlmOcrService
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Memory
 
 // Using keys from SecurePreferencesManager
 
@@ -47,16 +56,37 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val securePreferencesManager = remember { SecurePreferencesManager(context) }
-    val modelMetadataReader = remember { ModelMetadataReader(context) }
-
-    // Initialize secure preferences manager
-    LaunchedEffect(Unit) {
-        securePreferencesManager.initialize()
+    
+    // Use a lazy initialization to avoid ANR
+    val securePreferencesManager = remember { 
+        SecurePreferencesManager(context)
     }
-
-    // Get model version
-    val (modelVersion, numPatterns) = remember { modelMetadataReader.getModelVersion() }
+    
+    // Get model version in background to avoid ANR
+    var modelVersion by remember { mutableStateOf("Loading...") }
+    var numPatterns by remember { mutableStateOf(0) }
+    
+    LaunchedEffect(Unit) {
+        // Move expensive operations to background thread
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                // Initialize SecurePreferencesManager in background
+                securePreferencesManager.initialize()
+                
+                val modelMetadataReader = ModelMetadataReader(context)
+                val (version, patterns) = modelMetadataReader.getModelVersion()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    modelVersion = version
+                    numPatterns = patterns
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    modelVersion = "1.0.1"
+                    numPatterns = 25
+                }
+            }
+        }
+    }
 
     // Get theme mode
     val themeMode by viewModel.themeMode.collectAsState()
@@ -122,6 +152,9 @@ fun SettingsScreen(
                     }
                 )
             }
+
+            // OCR Engine Selector
+            ApiTypeSelector(securePreferencesManager = securePreferencesManager)
 
             // Model Info
             Card(
@@ -239,6 +272,9 @@ fun SettingsScreen(
                     }
                 }
             }
+            
+            // LLM Status Info
+            LlmStatusCard(securePreferencesManager = securePreferencesManager)
 
             // Protected features button (only shown if features are not unlocked)
             if (!protectedFeaturesUnlocked) {
@@ -327,6 +363,566 @@ fun SettingsScreen(
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun LlmStatusCard(securePreferencesManager: SecurePreferencesManager) {
+    val context = LocalContext.current
+    var llmStatus by remember { mutableStateOf<LlmServiceStatus?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
+    var modelDownloadStatus by remember { mutableStateOf("Unknown") }
+    var modelSize by remember { mutableStateOf(0f) }
+    var isDownloading by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableStateOf(0) }
+    var downloadStatusMessage by remember { mutableStateOf("") }
+    val coroutineScope = rememberCoroutineScope()
+    
+    // Load LLM status and download info in background
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val llmRuntimeManager = LlmRuntimeManager.getInstance(context)
+                val localLlmOcrService = LocalLlmOcrService(context, llmRuntimeManager)
+                
+                val status = localLlmOcrService.getServiceStatus()
+                val downloadStatus = if (securePreferencesManager.getLlmModelDownloaded()) {
+                    "Downloaded"
+                } else {
+                    "Not Downloaded"
+                }
+                val sizeMB = securePreferencesManager.getLlmModelSizeMB()
+                
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    llmStatus = status
+                    modelDownloadStatus = downloadStatus
+                    modelSize = sizeMB
+                    isLoading = false
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    isLoading = false
+                }
+            }
+        }
+    }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Memory,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = "Local LLM Status",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            if (isLoading) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "Loading status...",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            } else {
+                llmStatus?.let { status ->
+                    // Model availability status
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Model Available:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (status.isAvailable) Icons.Default.CheckCircle else Icons.Default.Error,
+                                contentDescription = null,
+                                tint = if (status.isAvailable) androidx.compose.ui.graphics.Color.Green else androidx.compose.ui.graphics.Color.Red,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (status.isAvailable) "Yes" else "No",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (status.isAvailable) androidx.compose.ui.graphics.Color.Green else androidx.compose.ui.graphics.Color.Red
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Model loaded status
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Model Loaded:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (status.isModelLoaded) Icons.Default.CheckCircle else Icons.Default.CloudDownload,
+                                contentDescription = null,
+                                tint = if (status.isModelLoaded) androidx.compose.ui.graphics.Color.Green else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (status.isModelLoaded) "Loaded" else "Not Loaded",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Model version
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Model Version:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = status.modelVersion,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Memory usage
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Memory Usage:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = "${status.memoryUsageMB}MB",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+
+                    if (status.referenceCount > 0) {
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Active References:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                text = status.referenceCount.toString(),
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                    
+                    // Model Download Management Section
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    HorizontalDivider()
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Text(
+                        text = "Model Management",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // Download Status
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Download Status:",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (modelDownloadStatus == "Downloaded") Icons.Default.CheckCircle else Icons.Default.CloudDownload,
+                                contentDescription = null,
+                                tint = if (modelDownloadStatus == "Downloaded") androidx.compose.ui.graphics.Color.Green else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = modelDownloadStatus,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (modelDownloadStatus == "Downloaded") androidx.compose.ui.graphics.Color.Green else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                    
+                    if (modelSize > 0) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Model Size:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                text = "${modelSize.toInt()}MB",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                    
+                    // Download Button
+                    if (modelDownloadStatus != "Downloaded") {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Button(
+                            onClick = {
+                                if (!isDownloading) {
+                                    isDownloading = true
+                                    downloadProgress = 0
+                                    downloadStatusMessage = "Starting download..."
+                                    
+                                    coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                        try {
+                                            val modelDownloadManager = ModelDownloadManager(context)
+                                            
+                                            // Start download with progress callback
+                                            val result = modelDownloadManager.downloadModel { progress ->
+                                                // Update UI on main thread
+                                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                                                    downloadProgress = progress.progressPercent
+                                                    downloadStatusMessage = progress.statusMessage
+                                                }
+                                            }
+                                            
+                                            // Handle result on main thread
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                when (result) {
+                                                    is com.example.coupontracker.llm.DownloadResult.Success -> {
+                                                        Toast.makeText(context, "Model downloaded successfully!", Toast.LENGTH_LONG).show()
+                                                        modelDownloadStatus = "Downloaded"
+                                                        modelSize = result.modelSizeMB
+                                                        // Update preferences
+                                                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                                            securePreferencesManager.setLlmModelDownloaded(true)
+                                                            securePreferencesManager.setLlmModelSizeMB(result.modelSizeMB)
+                                                        }
+                                                    }
+                                                    is com.example.coupontracker.llm.DownloadResult.Error -> {
+                                                        Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                                                        downloadStatusMessage = "Download failed"
+                                                    }
+                                                }
+                                                isDownloading = false
+                                                downloadProgress = 0
+                                            }
+                                        } catch (e: Exception) {
+                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                                Toast.makeText(context, "Download error: ${e.message}", Toast.LENGTH_LONG).show()
+                                                downloadStatusMessage = "Download error"
+                                                isDownloading = false
+                                                downloadProgress = 0
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            enabled = !isDownloading,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (isDownloading) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        CircularProgressIndicator(
+                                            progress = { if (downloadProgress > 0) downloadProgress / 100f else 0f },
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = if (downloadProgress > 0) "Downloading... ${downloadProgress}%" else "Downloading...",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                    
+                                    if (downloadStatusMessage.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = downloadStatusMessage,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            } else {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudDownload,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Download MiniCPM Model (~4.5MB)")
+                                }
+                            }
+                        }
+                        
+                        // Progress bar for download
+                        if (isDownloading && downloadProgress > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            LinearProgressIndicator(
+                                progress = { downloadProgress / 100f },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                            
+                            Spacer(modifier = Modifier.height(4.dp))
+                            
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "${downloadProgress}%",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                
+                                if (downloadStatusMessage.isNotEmpty()) {
+                                    Text(
+                                        text = downloadStatusMessage,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
+                } ?: run {
+                    Text(
+                        text = "Unable to load LLM status",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = androidx.compose.ui.graphics.Color.Red
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ApiTypeSelector(securePreferencesManager: SecurePreferencesManager) {
+    var selectedApiType by remember { mutableStateOf(ApiType.MODEL_BASED) }
+    var expanded by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+    
+    // Load current selection
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val currentType = securePreferencesManager.getSelectedApiType()
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                selectedApiType = currentType
+            }
+        }
+    }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Memory,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                
+                Spacer(modifier = Modifier.width(8.dp))
+                
+                Text(
+                    text = "OCR Engine",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Dropdown for API type selection
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = !expanded }
+            ) {
+                OutlinedTextField(
+                    value = selectedApiType.displayName,
+                    onValueChange = { },
+                    readOnly = true,
+                    label = { Text("Select OCR Engine") },
+                    trailingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.ArrowDropDown,
+                            contentDescription = null
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor()
+                )
+                
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    ApiType.getAvailableTypes().forEach { apiType ->
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(
+                                        text = apiType.displayName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = apiType.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            onClick = {
+                                selectedApiType = apiType
+                                expanded = false
+                                
+                                // Save selection in background
+                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                    securePreferencesManager.setSelectedApiType(apiType)
+                                }
+                            },
+                            leadingIcon = {
+                                if (selectedApiType == apiType) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+            
+            // Show additional info for LOCAL_LLM
+            if (selectedApiType == ApiType.LOCAL_LLM) {
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.tertiary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Local AI Model",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(4.dp))
+                        
+                        Text(
+                            text = "Uses MiniCPM-Llama3-V2.5 for advanced structured extraction. Requires model download (~3GB). Fully offline and privacy-focused.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
+                }
             }
         }
     }

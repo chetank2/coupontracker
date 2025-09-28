@@ -186,16 +186,21 @@ class RegionBasedExtractor(
                     while (matcher.find()) {
                         val potentialCode = matcher.group(1)
 
-                        // Validate code format - must have both letters and numbers
-                        // and not be a common word or too short
-                        if (potentialCode != null &&
-                            potentialCode.length >= 5 &&
-                            potentialCode.matches(".*[A-Za-z].*".toRegex()) &&
-                            potentialCode.matches(".*[0-9].*".toRegex()) &&
-                            !isCommonWord(potentialCode)) {
+                        // Validate code format - require letters, allow optional digits,
+                        // ensure sufficient length, and skip common instruction words
+                        if (potentialCode != null) {
+                            val hasLetter = potentialCode.any { it.isLetter() }
+                            val hasDigit = potentialCode.any { it.isDigit() }
+                            val isAlphabetic = potentialCode.all { it.isLetter() }
 
-                            Log.d(TAG, "Found standalone coupon code: $potentialCode")
-                            return potentialCode.uppercase()
+                            if (potentialCode.length >= 5 &&
+                                hasLetter &&
+                                (hasDigit || isAlphabetic) &&
+                                !isCommonWord(potentialCode)) {
+
+                                Log.d(TAG, "Found standalone coupon code: $potentialCode")
+                                return potentialCode.uppercase()
+                            }
                         }
                     }
                 }
@@ -502,7 +507,8 @@ class RegionBasedExtractor(
         val commonWords = setOf(
             "the", "and", "for", "with", "off", "use", "get", "code", "coupon",
             "offer", "valid", "till", "from", "upto", "free", "save", "discount",
-            "cashback", "expires", "days", "hours", "flat", "extra", "today"
+            "cashback", "expires", "days", "hours", "flat", "extra", "today",
+            "redeem", "apply", "terms", "conditions"
         )
         return commonWords.contains(word.lowercase())
     }

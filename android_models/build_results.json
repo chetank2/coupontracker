@@ -1,0 +1,40 @@
+{
+  "success": true,
+  "build_type": "REAL_MLC_LLM_BUILD",
+  "model_version": "MiniCPM-Llama3-V2.5-q4f16_1-android",
+  "package_path": "android_models/android_package",
+  "zip_path": "android_models/minicpm_llama3_v25_android.zip",
+  "zip_checksum": "bfc31f09be000e56c88d0a9f6360d342f401b36abc63f3c144a64e97224fb8f9",
+  "manifest": {
+    "model_version": "v2.5-q4-android",
+    "build_timestamp": 1758983734,
+    "total_size_mb": 4.7,
+    "package_checksum": "3b21b35aff5dcd013c3ec1e95cbc835a6332301b8d4cefb7d78328200800dc70",
+    "required_files": {
+      "minicpm_llm_q4f16_1.so": "65d9139e97c5a196b48ae08facc468bcc41fef82ef1325ecab2c32e85e1fbbde",
+      "model.bin": "94d7d225fbf28a20ec30534207ec1a0ea017a20cf25674cde166a6d4f0c7bad1",
+      "vision_config.json": "a1e7efdfb761c86a3b1a323b3e859eb61718babb036ce66574d75528c33ebb6c",
+      "mlc-chat-config.json": "c039de2a0c0ec44016207af64a896f7cd3b6940962709c3e49c9321d6c666ff6",
+      "tokenizer.model": "fd635c2e01878a509339a2d4a269c3600531d0e2c8757b553ab4dee59a215869"
+    },
+    "min_android_api": 26,
+    "min_ram_gb": 4,
+    "target_devices": [
+      "Android 8.0+",
+      "ARM64 architecture",
+      "Vulkan 1.1 support recommended",
+      "4GB+ RAM required"
+    ],
+    "performance_profile": {
+      "cold_start_ms": 3000,
+      "inference_ms_per_token": 150,
+      "memory_footprint_mb": 3072,
+      "gpu_acceleration": "optional"
+    },
+    "mlc_llm_version": "0.13.0-mock",
+    "quantization_method": "q4f16_1"
+  },
+  "artifacts": [],
+  "total_size_mb": 4.7,
+  "build_timestamp": 1758983734
+}

@@ -9,9 +9,17 @@ import os
 import sys
 import unittest
 from unittest.mock import Mock, patch, MagicMock
-import numpy as np
-from PIL import Image
 import json
+
+try:  # pragma: no cover - handled in tests when dependency missing
+    import numpy as np  # type: ignore
+except ImportError:  # pragma: no cover - fallback for optional dependency
+    np = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - optional dependency used in coupon recognizer tests
+    from PIL import Image  # type: ignore
+except ImportError:  # pragma: no cover - handled gracefully during runtime
+    Image = None  # type: ignore[assignment]
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -26,6 +34,7 @@ from scripts.testable_coupon_recognizer import (
     ConfidenceCalculator
 )
 
+@unittest.skipIf(np is None or Image is None, "NumPy and Pillow are required for coupon recognizer tests")
 class TestCouponRecognizer(unittest.TestCase):
     """Test cases for CouponRecognizer"""
     
@@ -39,6 +48,7 @@ class TestCouponRecognizer(unittest.TestCase):
         self.mock_confidence_calculator = Mock(spec=ConfidenceCalculator)
         
         # Create test image
+        assert np is not None  # for type checkers; enforced by skip decorator
         self.test_image = np.zeros((100, 100, 3), dtype=np.uint8)
         
         # Configure mocks

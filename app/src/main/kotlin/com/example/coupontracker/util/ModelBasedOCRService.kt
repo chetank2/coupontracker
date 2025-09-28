@@ -10,6 +10,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.Date
 
 /**
  * Model-based OCR Service that uses the trained model for coupon recognition
@@ -51,7 +52,7 @@ class ModelBasedOCRService(private val context: Context) {
     /**
      * Process an image to extract coupon information
      */
-    suspend fun processCouponImage(bitmap: Bitmap): CouponInfo = coroutineScope {
+    suspend fun processCouponImage(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo = coroutineScope {
         try {
             Log.d(TAG, "Processing coupon image with model $modelName v$modelVersion")
 
@@ -79,7 +80,7 @@ class ModelBasedOCRService(private val context: Context) {
                 fillMissingFields(directInfo, mlKitText)
             } else {
                 // Fall back to traditional OCR approach
-                combineResults(mlKitText, patternResults)
+                combineResults(mlKitText, patternResults, captureTimestamp)
             }
 
             Log.d(TAG, "Coupon processing complete: $combinedInfo")
@@ -99,34 +100,47 @@ class ModelBasedOCRService(private val context: Context) {
 
     /**
      * Fill in missing fields in CouponInfo using OCR results
+     * Now treats generic UI words as "missing" so ML Kit can provide real data
      */
     private fun fillMissingFields(info: CouponInfo, mlKitText: String): CouponInfo {
         return info.copy(
-            storeName = if (info.storeName.isBlank()) extractStoreName(mlKitText) ?: "" else info.storeName,
-            description = if (info.description.isBlank()) extractDescription(mlKitText) ?: "" else info.description,
-            redeemCode = if (info.redeemCode.isNullOrBlank()) extractCouponCode(mlKitText) else info.redeemCode,
+            storeName = if (GenericFieldHeuristics.isGenericOrMissing(info.storeName)) {
+                extractStoreName(mlKitText) ?: info.storeName
+            } else info.storeName,
+            
+            description = if (GenericFieldHeuristics.isGenericOrMissing(info.description)) {
+                extractDescription(mlKitText) ?: info.description
+            } else info.description,
+            
+            redeemCode = if (info.redeemCode.isNullOrBlank()) {
+                extractCouponCode(mlKitText)
+            } else info.redeemCode,
+            
             expiryDate = if (info.expiryDate == null) {
                 val dateStr = extractExpiryDate(mlKitText)
                 if (dateStr != null) DateParser.parseDate(dateStr) else null
             } else info.expiryDate,
+            
             cashbackAmount = if (info.cashbackAmount == null) {
                 val amountStr = extractAmount(mlKitText)
                 parseAmount(amountStr)
             } else info.cashbackAmount
         )
     }
+    
 
     /**
      * Combine results from different recognition methods
      */
     private fun combineResults(
         mlKitText: String,
-        patternResults: Map<String, String>
+        patternResults: Map<String, String>,
+        captureTimestamp: Date? = null
     ): CouponInfo {
         // Start with pattern results as they're most reliable
         val storeName = patternResults["store"] ?: extractStoreName(mlKitText)
         val code = patternResults["code"] ?: extractCouponCode(mlKitText)
-        val expiryDateStr = patternResults["expiry"] ?: extractExpiryDate(mlKitText)
+        val expiryDateStr = patternResults["expiry"] ?: extractExpiryDate(mlKitText, captureTimestamp)
         val amountStr = patternResults["amount"] ?: extractAmount(mlKitText)
 
         // Extract description from the full text
@@ -136,7 +150,7 @@ class ModelBasedOCRService(private val context: Context) {
         val amount = parseAmount(amountStr)
 
         // Parse expiry date if available
-        val expiryDate = DateParser.parseDate(expiryDateStr)
+        val expiryDate = DateParser.parseDate(expiryDateStr, captureTimestamp)
 
         return CouponInfo(
             storeName = storeName ?: "",
@@ -166,9 +180,9 @@ class ModelBasedOCRService(private val context: Context) {
     /**
      * Extract expiry date from text
      */
-    private fun extractExpiryDate(mlKitText: String): String? {
+    private fun extractExpiryDate(mlKitText: String, captureTimestamp: Date? = null): String? {
         // Use TextExtractor to get expiry date
-        val date = textExtractor.extractExpiryDate(mlKitText)
+        val date = textExtractor.extractExpiryDate(mlKitText, captureTimestamp)
         return if (date != null) {
             val sdf = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
             sdf.format(date)

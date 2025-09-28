@@ -1,0 +1,11 @@
+{
+  "model_type": "minicpm-llama3-v2.5",
+  "quantization": "q4f16_1",
+  "context_window_size": 2048,
+  "prefill_chunk_size": 2048,
+  "tensor_parallel_shards": 1,
+  "max_batch_size": 1,
+  "temperature": 0.3,
+  "top_p": 0.9,
+  "conv_template": "minicpm"
+}

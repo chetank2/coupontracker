@@ -16,7 +16,7 @@ import androidx.navigation.NavController
 import com.example.coupontracker.ui.components.UnifiedCouponForm
 import com.example.coupontracker.ui.viewmodel.ManualEntryViewModel
 import java.text.SimpleDateFormat
-import java.util.*
+import java.util.Locale
 
 /**
  * Screen for manual entry of coupon details
@@ -100,16 +100,10 @@ fun ManualEntryScreen(
                             val format = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
                             format.parse(expiryDateString)
                         } else {
-                            // Default to 30 days from now
-                            val calendar = Calendar.getInstance()
-                            calendar.add(Calendar.DAY_OF_YEAR, 30)
-                            calendar.time
+                            null
                         }
                     } catch (e: Exception) {
-                        // Default to 30 days from now
-                        val calendar = Calendar.getInstance()
-                        calendar.add(Calendar.DAY_OF_YEAR, 30)
-                        calendar.time
+                        null
                     }
 
                     viewModel.saveCoupon(

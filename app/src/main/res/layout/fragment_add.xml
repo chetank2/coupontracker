@@ -190,6 +190,154 @@
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
+            <!-- Local LLM OCR Settings -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardElevation="2dp"
+                app:cardCornerRadius="8dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Use Local AI OCR"
+                            android:textAppearance="?attr/textAppearanceBodyLarge"
+                            android:textColor="@color/text_primary" />
+
+                        <ImageButton
+                            android:id="@+id/llmInfoButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:src="@drawable/ic_info"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="Information about Local LLM OCR"
+                            android:padding="8dp" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/llmOcrSwitch"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content" />
+                    </LinearLayout>
+
+                    <!-- LLM Status and Controls -->
+                    <LinearLayout
+                        android:id="@+id/llmControlsLayout"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginTop="8dp"
+                        android:visibility="gone">
+
+                        <!-- Model Status -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginBottom="8dp">
+
+                            <TextView
+                                android:id="@+id/llmStatusText"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Model not downloaded"
+                                android:textAppearance="?attr/textAppearanceBodyMedium"
+                                android:textColor="@color/text_secondary" />
+
+                            <TextView
+                                android:id="@+id/llmSizeText"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text=""
+                                android:textAppearance="?attr/textAppearanceCaption"
+                                android:textColor="@color/text_secondary" />
+                        </LinearLayout>
+
+                        <!-- Download Progress -->
+                        <com.google.android.material.progressindicator.LinearProgressIndicator
+                            android:id="@+id/llmDownloadProgress"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginBottom="8dp"
+                            android:visibility="gone"
+                            app:indicatorColor="@color/primary"
+                            app:trackColor="@color/primary_variant" />
+
+                        <TextView
+                            android:id="@+id/llmProgressText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text=""
+                            android:textAppearance="?attr/textAppearanceCaption"
+                            android:textColor="@color/text_secondary"
+                            android:layout_marginBottom="8dp"
+                            android:visibility="gone" />
+
+                        <!-- Action Buttons -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="end">
+
+                            <Button
+                                android:id="@+id/llmDeleteButton"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Delete Model"
+                                android:layout_marginEnd="8dp"
+                                android:visibility="gone"
+                                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+
+                            <Button
+                                android:id="@+id/llmDownloadButton"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Download Model"
+                                style="@style/Widget.MaterialComponents.Button" />
+                        </LinearLayout>
+
+                        <!-- WiFi Only Option -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:layout_marginTop="8dp">
+
+                            <TextView
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="Download over WiFi only"
+                                android:textAppearance="?attr/textAppearanceBodyMedium"
+                                android:textColor="@color/text_primary" />
+
+                            <com.google.android.material.switchmaterial.SwitchMaterial
+                                android:id="@+id/llmWifiOnlySwitch"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:checked="true" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

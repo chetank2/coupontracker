@@ -237,17 +237,17 @@ class ModelManager:
                 {
                     'version': '1.0.1',
                     'accuracy': 0.8741,
-                    'date': (datetime.now() - datetime.timedelta(days=3)).strftime('%Y-%m-%d')
+                    'date': (datetime.now() - timedelta(days=3)).strftime('%Y-%m-%d')
                 },
                 {
                     'version': '0.9.5',
                     'accuracy': 0.8432,
-                    'date': (datetime.now() - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
+                    'date': (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
                 },
                 {
                     'version': '0.9.0',
                     'accuracy': 0.8123,
-                    'date': (datetime.now() - datetime.timedelta(days=14)).strftime('%Y-%m-%d')
+                    'date': (datetime.now() - timedelta(days=14)).strftime('%Y-%m-%d')
                 }
             ]
         except Exception as e:

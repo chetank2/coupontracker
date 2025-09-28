@@ -8,6 +8,7 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 .DS_Store
+# Keep the root Gradle build outputs out of version control
 /build
 /captures
 .externalNativeBuild
@@ -36,10 +37,24 @@ build/
 
 # Logs
 *.log
+logs/
 
 # Data directories
 data/
+!app/src/main/kotlin/com/example/coupontracker/data/
+!app/src/main/kotlin/com/example/coupontracker/data/**
+!app/src/test/java/com/example/coupontracker/data/
+!app/src/test/java/com/example/coupontracker/data/**
+!app/src/androidTest/java/com/example/coupontracker/data/
+!app/src/androidTest/java/com/example/coupontracker/data/**
 models/
+!app/src/test/resources/models/
+!app/src/test/resources/models/**
+!app/src/main/assets/models/
+!app/src/main/assets/models/**
+
+# Local backup files
+*.bak
 
 # Large files
 *.dylib

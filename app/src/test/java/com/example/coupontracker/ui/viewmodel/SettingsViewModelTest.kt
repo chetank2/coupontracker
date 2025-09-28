@@ -25,6 +25,7 @@ class SettingsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var couponRepository: CouponRepository
+    private lateinit var themeManager: com.example.coupontracker.util.ThemeManager
     private lateinit var viewModel: SettingsViewModel
 
     @Before
@@ -32,6 +33,7 @@ class SettingsViewModelTest {
         Dispatchers.setMain(testDispatcher)
         settingsRepository = mockk(relaxed = true)
         couponRepository = mockk(relaxed = true)
+        themeManager = mockk(relaxed = true)
         
         every { settingsRepository.getSettings() } returns flowOf(
             Settings(
@@ -42,7 +44,10 @@ class SettingsViewModelTest {
             )
         )
         
-        viewModel = SettingsViewModel(settingsRepository, couponRepository)
+        every { themeManager.themeMode } returns kotlinx.coroutines.flow.MutableStateFlow(com.example.coupontracker.util.ThemeMode.SYSTEM)
+        every { themeManager.getCurrentThemeMode() } returns com.example.coupontracker.util.ThemeMode.SYSTEM
+        
+        viewModel = SettingsViewModel(settingsRepository, couponRepository, themeManager)
     }
 
     @After

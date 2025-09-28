@@ -1,0 +1,12 @@
+# Stage 1: Coupon Detection Dataset
+path: .  # Current directory (relative to where training script is run)
+train: images/train
+val: images/val
+
+# Classes
+names:
+  0: coupon_complete
+  1: coupon_partial_top
+  2: coupon_partial_bottom
+
+nc: 3

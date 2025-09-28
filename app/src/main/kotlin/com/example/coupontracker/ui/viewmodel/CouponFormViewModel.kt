@@ -9,6 +9,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.util.CouponInputManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -57,7 +58,7 @@ class CouponFormViewModel @Inject constructor(
     fun processImageUri(uri: Uri) {
         viewModelScope.launch {
             try {
-                updateState { it.copy(isProcessing = true, error = null) }
+                updateState { it.copy(isProcessing = true, error = null, saveResult = null) }
 
                 // Process the image
                 val coupon = couponInputManager.processCouponFromImageUri(uri)
@@ -87,7 +88,7 @@ class CouponFormViewModel @Inject constructor(
         description: String,
         amount: Double,
         code: String,
-        expiryDate: Date,
+        expiryDate: Date?,
         category: String,
         imageUri: String?
     ) {
@@ -99,16 +100,40 @@ class CouponFormViewModel @Inject constructor(
                     return@launch
                 }
 
-                updateState { it.copy(isSaving = true, error = null) }
+                updateState {
+                    it.copy(
+                        isSaving = true,
+                        error = null,
+                        saveResult = null,
+                        isSaved = false
+                    )
+                }
 
                 // Create and save coupon object
                 val coupon = createCoupon(
                     storeName, description, amount, code,
                     expiryDate, category, imageUri
                 )
-                couponRepository.insertCoupon(coupon)
+                val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
+                val savedCouponId = couponRepository.saveOrMergeCoupon(
+                    coupon = coupon,
+                    normalizedDescription = normalizedDescription,
+                    imagePhash = null,
+                    imageSignature = null
+                )
 
-                updateState { it.copy(isSaving = false, isSaved = true) }
+                val savedCoupon = couponRepository.getCouponById(savedCouponId) ?: coupon.copy(id = savedCouponId)
+                val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt ?: savedCoupon.createdAt)
+                val result = if (isDuplicate) CouponSaveResult.ALREADY_SAVED else CouponSaveResult.SAVED
+
+                updateState {
+                    it.copy(
+                        isSaving = false,
+                        isSaved = true,
+                        saveResult = result,
+                        savedCoupon = savedCoupon
+                    )
+                }
             } catch (e: Exception) {
                 handleError(e, "Error saving coupon")
             }
@@ -123,7 +148,7 @@ class CouponFormViewModel @Inject constructor(
         description: String,
         amount: Double,
         code: String,
-        expiryDate: Date,
+        expiryDate: Date?,
         category: String,
         imageUri: String?
     ): Coupon {
@@ -169,7 +194,8 @@ class CouponFormViewModel @Inject constructor(
             it.copy(
                 isProcessing = false,
                 isSaving = false,
-                error = "$message: ${e.message}"
+                error = "$message: ${e.message}",
+                saveResult = null
             )
         }
     }
@@ -188,5 +214,12 @@ data class CouponFormUiState(
     val isSaving: Boolean = false,
     val isSaved: Boolean = false,
     val couponInfo: CouponInfo? = null,
-    val error: String? = null
+    val error: String? = null,
+    val saveResult: CouponSaveResult? = null,
+    val savedCoupon: Coupon? = null
 )
+
+enum class CouponSaveResult {
+    SAVED,
+    ALREADY_SAVED
+}

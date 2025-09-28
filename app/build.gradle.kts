@@ -2,6 +2,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("kotlin-kapt")
+    id("kotlin-parcelize")
     id("androidx.navigation.safeargs.kotlin")
     id("com.google.dagger.hilt.android")
 }
@@ -18,6 +19,24 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // Native library configuration
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
+
+        // CMake configuration for MLC-LLM
+        externalNativeBuild {
+            cmake {
+                cppFlags += listOf("-std=c++17", "-frtti", "-fexceptions")
+                arguments += listOf(
+                    "-DANDROID_STL=c++_shared",
+                    "-DANDROID_PLATFORM=android-26",
+                    "-DBUILD_MOCK_JNI=ON"
+                    // Note: Remove BUILD_MOCK_JNI=ON when real MLC-LLM libraries are available
+                )
+            }
+        }
 
         // Room schema export location
         javaCompileOptions {
@@ -145,6 +164,14 @@ android {
         }
     }
 
+    // CMake build configuration
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
     // Note: Modern Android applications use the renderscript-toolkit library
     // instead of the deprecated renderscript support mode
 }
@@ -206,6 +233,8 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("app.cash.turbine:turbine:1.0.0")
+    testImplementation("org.robolectric:robolectric:4.11.1")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 
     // Android Testing
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

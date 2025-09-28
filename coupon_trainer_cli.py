@@ -207,7 +207,7 @@ class CouponTrainer:
                 model_history = json.load(f)
             
             if model_history:
-                report["model"] = model_history[0]
+                report["model"] = model_history[-1]
         
         # Save the report
         output_path = os.path.join(self.base_dir, output_file)

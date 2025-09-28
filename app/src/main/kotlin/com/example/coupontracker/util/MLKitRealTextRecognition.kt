@@ -53,8 +53,7 @@ class MLKitRealTextRecognition {
                     return@withContext recognizeTextFromBitmap(bitmap)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error loading bitmap from URI", e)
-                    // Fall back to dummy text when bitmap loading fails
-                    return@withContext createFallbackText()
+                    throw e
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing image from URI with ML Kit", e)
@@ -90,14 +89,13 @@ class MLKitRealTextRecognition {
                         if (text.text.isNotBlank()) {
                             continuation.resume(text.text)
                         } else {
-                            Log.w(TAG, "ML Kit returned empty text, using fallback")
-                            continuation.resume(createFallbackText())
+                            Log.w(TAG, "ML Kit returned empty text")
+                            continuation.resumeWithException(Exception("ML Kit OCR returned empty text"))
                         }
                     }
                     .addOnFailureListener { e ->
                         Log.e(TAG, "ML Kit text recognition failed", e)
-                        // Instead of failing, provide fallback text
-                        continuation.resume(createFallbackText())
+                        continuation.resumeWithException(e)
                     }
                 
                 continuation.invokeOnCancellation {
@@ -105,21 +103,11 @@ class MLKitRealTextRecognition {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error setting up ML Kit", e)
-                continuation.resume(createFallbackText())
+                continuation.resumeWithException(e)
             }
         }
     }
     
-    /**
-     * Create fallback text when OCR fails
-     */
-    private fun createFallbackText(): String {
-        return """
-            Store: MLKit Fallback Store
-            Coupon: MLKIT15
-            Get 15% off your next purchase
-            Expires: 12/31/2023
-            Description: This is a fallback coupon when OCR fails
-        """.trimIndent()
-    }
+    // Removed createFallbackText() - we now properly propagate failures
+    // instead of injecting fake coupon content
 } 

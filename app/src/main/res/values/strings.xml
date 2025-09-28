@@ -13,6 +13,7 @@
     <string name="description">Description</string>
     <string name="cashback_amount">Cashback Amount</string>
     <string name="expiry_date">Expiry Date</string>
+    <string name="no_expiry_provided">Unknown</string>
     <string name="redeem_code">Redeem Code</string>
     <string name="category">Category</string>
     <string name="save">Save</string>
@@ -27,4 +28,11 @@
     <string name="export_data">Export Data</string>
     <string name="import_data">Import Data</string>
     <string name="clear_data">Clear All Data</string>
+    <string name="llm_verifying_model">Verifying model integrity…</string>
+    <string name="llm_download_error_network">Check your internet connection or update the model URL in Advanced Settings</string>
+    <string name="multi_coupon_missing_data">Unable to open detected coupons. Please try scanning again.</string>
+    <string name="multi_coupon_missing_image">Original scan preview unavailable.</string>
+    <string name="multi_coupon_all_saved_snackbar">Successfully saved %1$d coupons.</string>
+    <string name="multi_coupon_single_saved_snackbar">Coupon processed successfully.</string>
+    <string name="multi_coupon_already_saved_snackbar">Coupon was already saved.</string>
 </resources>

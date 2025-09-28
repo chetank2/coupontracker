@@ -57,9 +57,9 @@ def update_app_model(models_dir="models", app_dir="../app/src/main/assets"):
         if os.path.exists(history_file):
             with open(history_file, 'r') as f:
                 history = json.load(f)
-            
+
             if history:
-                latest_model = history[0]
+                latest_model = history[-1]
                 model_version = latest_model.get("version", "unknown")
             else:
                 model_version = "unknown"

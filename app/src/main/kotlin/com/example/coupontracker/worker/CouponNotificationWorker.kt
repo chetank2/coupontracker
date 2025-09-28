@@ -30,16 +30,18 @@ class CouponNotificationWorker @AssistedInject constructor(
             // Check for coupons that are expiring soon
             val now = Date()
             val expiringCoupons = coupons.filter { coupon ->
-                val daysUntilExpiry = (coupon.expiryDate.time - now.time) / (1000 * 60 * 60 * 24)
+                val expiry = coupon.expiryDate ?: return@filter false
+                val daysUntilExpiry = (expiry.time - now.time) / (1000 * 60 * 60 * 24)
                 daysUntilExpiry in 1..7 // Notify for coupons expiring in 1-7 days
             }
             
             // Create notifications for expiring coupons
             expiringCoupons.forEach { coupon ->
+                val expiry = coupon.expiryDate ?: return@forEach
                 val notification = NotificationCompat.Builder(context, "coupon_expiry")
                     .setSmallIcon(R.drawable.ic_notification)
                     .setContentTitle("Coupon Expiring Soon")
-                    .setContentText("${coupon.storeName} coupon for ${coupon.description} expires in ${(coupon.expiryDate.time - now.time) / (1000 * 60 * 60 * 24)} days")
+                    .setContentText("${coupon.storeName} coupon for ${coupon.description} expires in ${(expiry.time - now.time) / (1000 * 60 * 60 * 24)} days")
                     .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                     .build()
                 

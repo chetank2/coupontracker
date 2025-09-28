@@ -27,13 +27,8 @@ class MLKitTextRecognitionHelper {
             try {
                 Log.d(TAG, "Processing image from URI with ML Kit")
                 
-                try {
-                    // Use the real ML Kit implementation
-                    return@withContext mlKitRealTextRecognition.processImageFromUri(context, imageUri)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Real ML Kit processing failed, falling back to dummy text", e)
-                    return@withContext createBasicDummyText()
-                }
+                // Use the real ML Kit implementation - let failures propagate
+                return@withContext mlKitRealTextRecognition.processImageFromUri(context, imageUri)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing image from URI with ML Kit", e)
                 throw e
@@ -49,13 +44,8 @@ class MLKitTextRecognitionHelper {
             try {
                 Log.d(TAG, "Processing bitmap with ML Kit")
                 
-                try {
-                    // Use the real ML Kit implementation
-                    return@withContext mlKitRealTextRecognition.processImageFromBitmap(bitmap)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Real ML Kit processing failed, falling back to dummy text", e)
-                    return@withContext createBasicDummyText()
-                }
+                // Use the real ML Kit implementation - let failures propagate
+                return@withContext mlKitRealTextRecognition.processImageFromBitmap(bitmap)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing bitmap with ML Kit", e)
                 throw e
@@ -63,15 +53,6 @@ class MLKitTextRecognitionHelper {
         }
     }
     
-    /**
-     * Create dummy text for testing and fallback
-     */
-    private fun createBasicDummyText(): String {
-        return """
-            Store: BasicStore
-            Coupon: BASIC10
-            Get 10% off your order
-            Expires: 10/31/2023
-        """.trimIndent()
-    }
+    // Removed createBasicDummyText() - we now properly propagate failures
+    // instead of injecting fake coupon content
 } 

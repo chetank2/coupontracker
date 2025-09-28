@@ -4,6 +4,7 @@ import com.example.coupontracker.data.local.CouponDao
 import com.example.coupontracker.data.model.Coupon
 import kotlinx.coroutines.flow.Flow
 import java.util.Date
+import kotlin.math.max
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -77,5 +78,58 @@ class CouponRepositoryImpl @Inject constructor(
             updatedAt = Date()
         )
         couponDao.updateCoupon(updatedCoupon)
+    }
+
+    override suspend fun saveOrMergeCoupon(
+        coupon: Coupon,
+        normalizedDescription: String,
+        imagePhash: String?,
+        imageSignature: String?
+    ): Long {
+        val normalizedCoupon = coupon.copy(
+            normalizedDescription = normalizedDescription,
+            imagePhash = imagePhash,
+            imageSignature = imageSignature
+        )
+
+        val existing = couponDao.findByStoreAndDescription(
+            storeName = normalizedCoupon.storeName,
+            normalizedDescription = normalizedDescription,
+            imagePhash = imagePhash,
+            imageSignature = imageSignature
+        )
+
+        return if (existing != null) {
+            val merged = mergeCoupons(existing, normalizedCoupon)
+            couponDao.updateCoupon(merged)
+            existing.id
+        } else {
+            couponDao.insertCoupon(normalizedCoupon)
+        }
+    }
+
+    private fun mergeCoupons(existing: Coupon, incoming: Coupon): Coupon {
+        return incoming.copy(
+            id = existing.id,
+            expiryDate = incoming.expiryDate ?: existing.expiryDate,
+            normalizedDescription = incoming.normalizedDescription ?: existing.normalizedDescription,
+            redeemCode = incoming.redeemCode ?: existing.redeemCode,
+            imageUri = incoming.imageUri ?: existing.imageUri,
+            imagePhash = incoming.imagePhash ?: existing.imagePhash,
+            imageSignature = incoming.imageSignature ?: existing.imageSignature,
+            category = incoming.category ?: existing.category,
+            status = incoming.status ?: existing.status,
+            minimumPurchase = incoming.minimumPurchase ?: existing.minimumPurchase,
+            maximumDiscount = incoming.maximumDiscount ?: existing.maximumDiscount,
+            isPriority = incoming.isPriority || existing.isPriority,
+            paymentMethod = incoming.paymentMethod ?: existing.paymentMethod,
+            usageLimit = incoming.usageLimit ?: existing.usageLimit,
+            usageCount = max(incoming.usageCount, existing.usageCount),
+            reminderDate = incoming.reminderDate ?: existing.reminderDate,
+            platformType = incoming.platformType ?: existing.platformType,
+            rating = incoming.rating ?: existing.rating,
+            createdAt = existing.createdAt,
+            updatedAt = Date()
+        )
     }
 }

@@ -1,0 +1,2 @@
+Placeholder binary for the Stage 2 field detector.
+Replace this file with the trained stage2_field_detector.tflite artifact before running production builds.

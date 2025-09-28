@@ -75,14 +75,23 @@ class HomeViewModel @Inject constructor(
         // Apply filter option
         filteredCoupons = when (filters.filterOption) {
             FilterOption.ALL -> coupons
-            FilterOption.ACTIVE -> coupons.filter { it.expiryDate.after(now) }
+            FilterOption.ACTIVE -> coupons.filter { coupon ->
+                val expiry = coupon.expiryDate
+                expiry == null || expiry.after(now)
+            }
             FilterOption.EXPIRING_SOON -> {
                 calendar.time = now
                 calendar.add(Calendar.DAY_OF_YEAR, 7)
                 val sevenDaysFromNow = calendar.time
-                coupons.filter { it.expiryDate.after(now) && it.expiryDate.before(sevenDaysFromNow) }
+                coupons.filter { coupon ->
+                    val expiry = coupon.expiryDate ?: return@filter false
+                    expiry.after(now) && expiry.before(sevenDaysFromNow)
+                }
             }
-            FilterOption.EXPIRED -> coupons.filter { it.expiryDate.before(now) }
+            FilterOption.EXPIRED -> coupons.filter { coupon ->
+                val expiry = coupon.expiryDate ?: return@filter false
+                expiry.before(now)
+            }
             FilterOption.HIGH_VALUE -> coupons.filter { it.cashbackAmount >= 100 } // Assuming 100 is high value
             FilterOption.FOOD -> coupons.filter { it.category?.contains("Food", ignoreCase = true) == true ||
                                                  it.category?.contains("Dining", ignoreCase = true) == true ||
@@ -105,7 +114,9 @@ class HomeViewModel @Inject constructor(
 
         // Apply sorting
         filteredCoupons = when (filters.sortOrder) {
-            SortOrder.EXPIRY_DATE -> filteredCoupons.sortedBy { it.expiryDate }
+            SortOrder.EXPIRY_DATE -> filteredCoupons.sortedWith(
+                compareBy<Coupon> { it.expiryDate == null }.thenBy { it.expiryDate }
+            )
             SortOrder.NAME -> filteredCoupons.sortedBy { it.storeName }
             SortOrder.AMOUNT -> filteredCoupons.sortedByDescending { it.cashbackAmount }
             SortOrder.CREATED_DATE -> filteredCoupons.sortedByDescending { it.createdAt }

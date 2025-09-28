@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.util.CouponDedupUtils
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -126,4 +127,34 @@ class CouponDaoTest {
         // Then
         assert(coupons.isEmpty())
     }
-} 
+
+    @Test
+    fun findByStoreAndDescriptionMatchesCouponsWithCodes() = runBlocking {
+        val description = "Limited Time Offer!!!"
+        val normalized = CouponDedupUtils.normalizeDescription(description)
+
+        val coupon = Coupon(
+            id = 0,
+            storeName = "Store",
+            description = description,
+            normalizedDescription = normalized,
+            expiryDate = Date(),
+            cashbackAmount = 15.0,
+            redeemCode = "CODE123",
+            imageUri = null,
+            category = "Test"
+        )
+
+        couponDao.insertCoupon(coupon)
+
+        val duplicate = couponDao.findByStoreAndDescription(
+            storeName = coupon.storeName,
+            normalizedDescription = normalized,
+            imagePhash = null,
+            imageSignature = null
+        )
+
+        assert(duplicate != null)
+        assert(duplicate?.redeemCode == coupon.redeemCode)
+    }
+}

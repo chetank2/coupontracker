@@ -15,19 +15,23 @@ object DateParser {
     /**
      * Parse a date from text
      * @param text The text to parse
+     * @param baseDate The base date to use for relative calculations (defaults to current time)
      * @return The parsed date or null if not found
      */
-    fun parseDate(text: String?): Date? {
+    fun parseDate(text: String?, baseDate: Date? = null): Date? {
         if (text.isNullOrBlank()) return null
 
+        val referenceDate = baseDate ?: Date()
+        
         // Check for "Expires in X hours" format
         val expiresInHoursPattern = Pattern.compile("(?i)expires?\\s+in\\s+(\\d+)\\s+hours?")
         val expiresInHoursMatcher = expiresInHoursPattern.matcher(text)
         if (expiresInHoursMatcher.find()) {
             val hoursToAdd = expiresInHoursMatcher.group(1)?.toIntOrNull() ?: 0
             val calendar = Calendar.getInstance()
+            calendar.time = referenceDate
             calendar.add(Calendar.HOUR_OF_DAY, hoursToAdd)
-            Log.d(TAG, "Found expiry date from 'expires in X hours' format: ${hoursToAdd} hours from now")
+            Log.d(TAG, "Found expiry date from 'expires in X hours' format: ${hoursToAdd} hours from base date $referenceDate")
             return calendar.time
         }
 
@@ -37,8 +41,9 @@ object DateParser {
         if (expiresInDaysMatcher.find()) {
             val daysToAdd = expiresInDaysMatcher.group(1)?.toIntOrNull() ?: 0
             val calendar = Calendar.getInstance()
+            calendar.time = referenceDate
             calendar.add(Calendar.DAY_OF_YEAR, daysToAdd)
-            Log.d(TAG, "Found expiry date from 'expires in X days' format: ${daysToAdd} days from now")
+            Log.d(TAG, "Found expiry date from 'expires in X days' format: ${daysToAdd} days from base date $referenceDate")
             return calendar.time
         }
 

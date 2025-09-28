@@ -2,8 +2,8 @@ package com.example.coupontracker.di
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.example.coupontracker.util.ImageProcessor
-import com.example.coupontracker.util.SecurePreferencesManager
+// ImageProcessor import removed - now provided by LlmModule
+// SecurePreferencesManager import removed - now provided by LlmModule
 import com.example.coupontracker.util.ThemeManager
 import dagger.Module
 import dagger.Provides
@@ -22,16 +22,7 @@ object AppModule {
         return context
     }
 
-    @Provides
-    @Singleton
-    fun provideSecurePreferencesManager(
-        @ApplicationContext context: Context
-    ): SecurePreferencesManager {
-        val securePreferencesManager = SecurePreferencesManager(context)
-        // Initialize the manager (migrate legacy preferences if needed)
-        securePreferencesManager.initialize()
-        return securePreferencesManager
-    }
+    // SecurePreferencesManager now provided by LlmModule
 
     @Provides
     @Singleton
@@ -42,14 +33,7 @@ object AppModule {
         return context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
     }
 
-    @Provides
-    @Singleton
-    fun provideImageProcessor(
-        @ApplicationContext context: Context
-    ): ImageProcessor {
-        // Create a new ImageProcessor that uses the model-based approach
-        return ImageProcessor(context)
-    }
+    // ImageProcessor now provided by LlmModule with proper dependencies
 
     @Provides
     @Singleton
