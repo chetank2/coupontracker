@@ -25,7 +25,7 @@
   ],
   "confidence_threshold": 0.5,
   "iou_threshold": 0.4,
-  "stub_mode": false,
+  "stub_mode": true,
   "stub_notes": "Demo mode: Returns synthetic multi-coupon detections for testing UI",
   "demo_mode": true
 }
