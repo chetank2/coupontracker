@@ -334,6 +334,107 @@ class LocalLlmOcrService(
     }
     
     /**
+     * Process coupon image using local LLM with typed results
+     * New entry point that returns ExtractResult for better error handling
+     */
+    suspend fun processCouponImageTyped(bitmap: Bitmap, captureTimestamp: Date? = null): ExtractResult = coroutineScope {
+        val startTime = System.currentTimeMillis()
+        var memoryUsage = 0L
+        var extractedFieldCount = 0
+        val triedStages = mutableListOf<String>()
+        
+        try {
+            Log.d(TAG, "Processing coupon with MiniCPM-Llama3-V2.5 (typed)")
+            triedStages.add("LLM")
+            
+            // Step 1: Validate input
+            if (bitmap.isRecycled) {
+                return@coroutineScope ExtractResult.Failed(
+                    stage = ExtractionStage.LLM,
+                    error = IllegalArgumentException("Input bitmap is recycled")
+                )
+            }
+            
+            // Step 2: Check service availability
+            if (!isServiceAvailable()) {
+                return@coroutineScope ExtractResult.Failed(
+                    stage = ExtractionStage.LLM,
+                    error = IllegalStateException("LLM model not available on device")
+                )
+            }
+            
+            // Step 3: Preprocess image for MiniCPM
+            val preprocessedBitmap = preprocessForMiniCPM(bitmap)
+            Log.d(TAG, "Preprocessed image for MiniCPM: ${preprocessedBitmap.width}x${preprocessedBitmap.height}")
+            
+            // Step 4: Create structured extraction prompt
+            val prompt = createCouponExtractionPrompt()
+            
+            // Step 5: Run LLM inference with timeout and memory tracking
+            memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
+            val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
+                llmRuntime.runInference(preprocessedBitmap, prompt)
+            }
+
+            // Step 6: Parse and validate response
+            if (llmResponse != null) {
+                val rawOcrText = captureRawOcrText(preprocessedBitmap)
+                val couponInfo = parseLlmResponseToCouponInfo(llmResponse, rawOcrText)
+                extractedFieldCount = countExtractedFields(couponInfo)
+                
+                // Step 7: Quality validation
+                val qualityScore = calculateQualityScore(couponInfo)
+                val signals = ExtractionSignals(
+                    qualityScore = qualityScore,
+                    fieldConfidences = calculateFieldConfidences(couponInfo),
+                    processingTimeMs = System.currentTimeMillis() - startTime,
+                    memoryUsageMB = memoryUsage.toFloat(),
+                    stage = ExtractionStage.LLM,
+                    nativeAvailable = llmRuntime.isModelAvailable(),
+                    modelVersion = SUPPORTED_MODEL_VERSION
+                )
+                
+                // Determine result based on quality
+                return@coroutineScope when {
+                    qualityScore >= 70 -> ExtractResult.Good(couponInfo, signals)
+                    qualityScore >= 40 -> {
+                        val reason = determineQualityReason(couponInfo)
+                        ExtractResult.LowQuality(couponInfo, reason, signals)
+                    }
+                    else -> {
+                        val reason = determineQualityReason(couponInfo)
+                        ExtractResult.LowQuality(couponInfo, reason, signals)
+                    }
+                }
+            } else {
+                // Timeout occurred
+                return@coroutineScope ExtractResult.Failed(
+                    stage = ExtractionStage.LLM,
+                    error = Exception("LLM inference timeout after ${INFERENCE_TIMEOUT_MS}ms")
+                )
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "LLM processing failed: ${e.message}", e)
+            
+            val signals = ExtractionSignals(
+                qualityScore = 0,
+                fieldConfidences = emptyMap(),
+                processingTimeMs = System.currentTimeMillis() - startTime,
+                memoryUsageMB = memoryUsage.toFloat(),
+                stage = ExtractionStage.LLM,
+                nativeAvailable = llmRuntime.isModelAvailable()
+            )
+            
+            return@coroutineScope ExtractResult.Failed(
+                stage = ExtractionStage.LLM,
+                error = e,
+                signals = signals
+            )
+        }
+    }
+    
+    /**
      * Process coupon image using local LLM
      * Main entry point that mirrors ModelBasedOCRService.processCouponImage
      */
@@ -931,6 +1032,64 @@ class LocalLlmOcrService(
             referenceCount = modelInfo.referenceCount,
             serviceVersion = SERVICE_VERSION
         )
+    }
+    
+    /**
+     * Calculate quality score for extracted coupon information
+     */
+    private fun calculateQualityScore(couponInfo: CouponInfo): Int {
+        var qualityScore = 0
+        
+        // Score based on field completeness and quality
+        if (!GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)) qualityScore += 25
+        if (!couponInfo.redeemCode.isNullOrBlank()) qualityScore += 30
+        if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) qualityScore += 20
+        if (couponInfo.expiryDate != null) qualityScore += 15
+        if (!GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)) qualityScore += 10
+        
+        return qualityScore
+    }
+    
+    /**
+     * Calculate field-level confidences
+     */
+    private fun calculateFieldConfidences(couponInfo: CouponInfo): Map<String, Float> {
+        return mapOf(
+            "storeName" to if (GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)) 0.3f else 0.9f,
+            "description" to if (GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)) 0.3f else 0.8f,
+            "redeemCode" to if (couponInfo.redeemCode.isNullOrBlank()) 0.0f else 0.9f,
+            "cashbackAmount" to if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) 0.8f else 0.2f,
+            "expiryDate" to if (couponInfo.expiryDate != null) 0.7f else 0.1f
+        )
+    }
+    
+    /**
+     * Determine the specific quality failure reason
+     */
+    private fun determineQualityReason(couponInfo: CouponInfo): QualityReason {
+        val hasGenericStoreName = GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)
+        val hasGenericDescription = GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)
+        val hasGenericCode = GenericFieldHeuristics.isGenericOrMissing(couponInfo.redeemCode)
+        val hasMeaninglessAmount = GenericFieldHeuristics.isZeroOrMeaningless(couponInfo.cashbackAmount)
+        val hasDuplicateFields = GenericFieldHeuristics.areDuplicateFields(
+            couponInfo.storeName, couponInfo.redeemCode
+        )
+        
+        return when {
+            couponInfo.storeName == "Unknown Store" &&
+            couponInfo.redeemCode.isNullOrBlank() &&
+            hasMeaninglessAmount -> QualityReason.COMPLETE_EXTRACTION_FAILURE
+            
+            hasGenericStoreName && hasGenericCode && hasGenericDescription -> 
+                QualityReason.ALL_GENERIC_CONTENT
+            
+            hasDuplicateFields -> QualityReason.DUPLICATE_FIELD_VALUES
+            
+            couponInfo.redeemCode.isNullOrBlank() && hasMeaninglessAmount -> 
+                QualityReason.MISSING_CRITICAL_FIELDS
+            
+            else -> QualityReason.LOW_QUALITY_EXTRACTION
+        }
     }
 }
 
