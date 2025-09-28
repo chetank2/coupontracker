@@ -594,7 +594,9 @@ class TextExtractor {
         if (codeMatcher.find()) {
             val code = codeMatcher.group(1)
             Log.d(TAG, "Found code from 'code:' pattern: $code")
-            return code
+            RedeemCodeSanitizer.sanitize(code)?.let { sanitized ->
+                return sanitized
+            }
         }
 
         // Look for "code" pattern without colon (common in Myntra coupons)
@@ -603,7 +605,9 @@ class TextExtractor {
         if (codeWithoutColonMatcher.find()) {
             val code = codeWithoutColonMatcher.group(1)
             Log.d(TAG, "Found code from 'code' pattern without colon: $code")
-            return code
+            RedeemCodeSanitizer.sanitize(code)?.let { sanitized ->
+                return sanitized
+            }
         }
 
         // Check specifically for Myntra coupon code format
@@ -616,7 +620,9 @@ class TextExtractor {
                 // Skip if it's too long to be a code
                 if (potentialCode?.length ?: 0 <= 20) {
                     Log.d(TAG, "Found Myntra code from specific pattern: $potentialCode")
-                    return potentialCode
+                    RedeemCodeSanitizer.sanitize(potentialCode)?.let { sanitized ->
+                        return sanitized
+                    }
                 }
             }
         }
@@ -630,7 +636,9 @@ class TextExtractor {
             // Skip if it's likely not a code (too long or too short)
             if ((potentialCode?.length ?: 0) in 6..20 && !COMMON_WORDS.contains(potentialCode?.lowercase() ?: "")) {
                 Log.d(TAG, "Found code from all caps+digits pattern: $potentialCode")
-                return potentialCode
+                RedeemCodeSanitizer.sanitize(potentialCode)?.let { sanitized ->
+                    return sanitized
+                }
             }
         }
 
@@ -646,7 +654,9 @@ class TextExtractor {
 
                 if (potentialCode.length >= 5 && potentialCode.matches("[A-Z0-9]+".toRegex())) {
                     Log.d(TAG, "Found code after indicator '$indicator': $potentialCode")
-                    return potentialCode
+                    RedeemCodeSanitizer.sanitize(potentialCode)?.let { sanitized ->
+                        return sanitized
+                    }
                 }
             }
         }

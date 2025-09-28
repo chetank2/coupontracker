@@ -158,10 +158,19 @@ class TextExtractorTest {
             Code: SWGGS01BO719GFHS
             Claim Now
         """.trimIndent()
-        
+
         val redeemCode = extractor.extractRedeemCode(text)
         assertNotNull("Redeem code should not be null", redeemCode)
         assertEquals("SWGGS01BO719GFHS", redeemCode)
+    }
+
+    @Test
+    fun `extractRedeemCode collapses whitespace and trims trailing noise`() {
+        val text = "Use code Q2SQ74 JS7CK O today"
+
+        val redeemCode = extractor.extractRedeemCode(text)
+
+        assertEquals("Q2SQ74JS7CK", redeemCode)
     }
     
     @Test
