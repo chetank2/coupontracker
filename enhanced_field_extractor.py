@@ -37,56 +37,69 @@ class EnhancedCouponFieldExtractor:
             'amazon': {
                 'identifiers': ['amazon', 'amzn', 'amazon.in'],
                 'code_patterns': [r'[A-Z0-9]{8,12}'],
-                'discount_patterns': [r'(\d+)%\s*off', r'save\s*₹(\d+)', r'flat\s*(\d+)%'],
+                'discount_patterns': [r'(\d+(?:\.\d+)?)%\s*off', r'save\s*₹(\d+)', r'flat\s*(\d+(?:\.\d+)?)%'],
                 'common_terms': ['prime', 'delivery', 'shopping', 'cart']
             },
             'flipkart': {
                 'identifiers': ['flipkart', 'fkrt', 'flipkart.com'],
                 'code_patterns': [r'[A-Z]{2,4}\d{4,8}', r'FK[A-Z0-9]{6,10}'],
-                'discount_patterns': [r'(\d+)%\s*off', r'extra\s*(\d+)%', r'flat\s*₹(\d+)'],
+                'discount_patterns': [r'(\d+(?:\.\d+)?)%\s*off', r'extra\s*(\d+(?:\.\d+)?)%', r'flat\s*₹(\d+)'],
                 'common_terms': ['plus', 'supercoins', 'delivery', 'exchange']
             },
             'myntra': {
                 'identifiers': ['myntra', 'myntra.com'],
                 'code_patterns': [r'[A-Z]{3,5}\d{3,6}', r'MYNTRA[0-9]{4,8}'],
-                'discount_patterns': [r'(\d+)%\s*off', r'flat\s*(\d+)%', r'buy\s*\d+\s*get\s*\d+'],
+                'discount_patterns': [r'(\d+(?:\.\d+)?)%\s*off', r'flat\s*(\d+(?:\.\d+)?)%', r'buy\s*\d+\s*get\s*\d+'],
                 'common_terms': ['fashion', 'style', 'brands', 'clothing']
             },
             'swiggy': {
                 'identifiers': ['swiggy', 'swiggy.com'],
                 'code_patterns': [r'[A-Z]{4,6}\d{2,4}', r'SWIGGY[0-9]{3,6}'],
-                'discount_patterns': [r'(\d+)%\s*off', r'flat\s*₹(\d+)', r'free\s*delivery'],
+                'discount_patterns': [r'(\d+(?:\.\d+)?)%\s*off', r'flat\s*₹(\d+)', r'free\s*delivery'],
                 'common_terms': ['food', 'delivery', 'restaurant', 'order']
             },
             'zomato': {
                 'identifiers': ['zomato', 'zomato.com'],
                 'code_patterns': [r'[A-Z]{4,6}\d{2,4}', r'ZOMATO[0-9]{3,6}'],
-                'discount_patterns': [r'(\d+)%\s*off', r'flat\s*₹(\d+)', r'free\s*delivery'],
+                'discount_patterns': [r'(\d+(?:\.\d+)?)%\s*off', r'flat\s*₹(\d+)', r'free\s*delivery'],
                 'common_terms': ['food', 'delivery', 'dining', 'restaurant']
+            },
+            'aha': {
+                'identifiers': ['aha'],
+                'code_patterns': [],
+                'discount_patterns': [r'flat\s*(\d+(?:\.\d+)?)%'],
+                'common_terms': ['telugu', 'plan', 'subscription']
             }
         }
         
         # Common coupon code patterns
         self.general_code_patterns = [
-            r'\b[A-Z]{3,6}\d{2,6}\b',  # 3-6 letters + 2-6 digits
-            r'\b[A-Z0-9]{6,12}\b',     # 6-12 alphanumeric
-            r'\b[A-Z]{2,4}[0-9]{4,8}\b',  # Letters + numbers
-            r'\bCODE\s*[A-Z0-9]{4,10}\b',  # CODE prefix
-            r'\bUSE\s*[A-Z0-9]{4,10}\b',   # USE prefix
+            r'\b[A-Za-z]{3,6}\d{2,6}\b',  # 3-6 letters + 2-6 digits
+            r'\b[A-Za-z]{2,4}[0-9]{4,8}\b',  # Letters + numbers
+            r'\b[A-Za-z0-9]{6,12}\b',     # 6-12 alphanumeric
+            r'\bCODE\s*[A-Za-z0-9]{4,10}\b',  # CODE prefix
+            r'\bUSE\s*[A-Za-z0-9]{4,10}\b',   # USE prefix
         ]
         
         # Discount patterns with confidence scoring
+        self.discount_phrase_patterns = [
+            r'(?:up\s*to|upto)\s*\d+(?:\.\d+)?%[^\w]*(?:off|discount)',
+            r'extra\s*\d+(?:\.\d+)?%[^\w]*(?:off|discount)',
+            r'flat\s*\d+(?:\.\d+)?%[^\w]*(?:off|discount)',
+            r'\d+(?:\.\d+)?%[^\w]*(?:off|discount)'
+        ]
+
         self.discount_patterns = [
-            (r'(\d+)%\s*(?:off|discount)', 0.9, 'percentage'),
-            (r'flat\s*(\d+)%\s*(?:off|discount)', 0.9, 'percentage'),
-            (r'extra\s*(\d+)%\s*(?:off|discount)', 0.85, 'percentage'),
-            (r'upto\s*(\d+)%\s*(?:off|discount)', 0.8, 'percentage'),
+            (r'(\d+(?:\.\d+)?)%\s*(?:off|discount)', 0.9, 'percentage'),
+            (r'flat\s*(\d+(?:\.\d+)?)%\s*(?:off|discount)', 0.9, 'percentage'),
+            (r'extra\s*(\d+(?:\.\d+)?)%\s*(?:off|discount)', 0.85, 'percentage'),
+            (r'upto\s*(\d+(?:\.\d+)?)%\s*(?:off|discount)', 0.8, 'percentage'),
             (r'save\s*₹(\d+)', 0.9, 'amount'),
             (r'flat\s*₹(\d+)\s*(?:off|discount)', 0.9, 'amount'),
             (r'₹(\d+)\s*(?:off|discount)', 0.8, 'amount'),
             (r'rs\.?\s*(\d+)\s*(?:off|discount)', 0.8, 'amount'),
             (r'get\s*₹(\d+)\s*(?:back|cashback)', 0.85, 'cashback'),
-            (r'(\d+)\s*rs\.?\s*(?:off|discount)', 0.75, 'amount'),
+            (r'(?<!%)\b(\d+)\s*(?:off|discount|cashback)', 0.75, 'amount'),
         ]
         
         # Expiry date patterns
@@ -94,8 +107,8 @@ class EnhancedCouponFieldExtractor:
             (r'valid\s*(?:till|until)\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', 0.9),
             (r'expires?\s*(?:on|at)?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', 0.9),
             (r'expiry\s*:?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', 0.9),
-            (r'valid\s*(?:till|until)\s*(\d{1,2}\s+\w+\s+\d{2,4})', 0.95),
-            (r'expires?\s*(?:on|at)?\s*(\d{1,2}\s+\w+\s+\d{2,4})', 0.95),
+            (r'valid\s*(?:till|until)\s*(\d{1,2}\s+\w+,?\s+\d{2,4}(?:,\s*\d{1,2}:\d{2}\s*(?:am|pm))?)', 0.95),
+            (r'expires?\s*(?:on|at)?\s*(\d{1,2}\s+\w+,?\s+\d{2,4}(?:,\s*\d{1,2}:\d{2}\s*(?:am|pm))?)', 0.95),
             (r'(\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\s+\d{2,4})', 0.85),
         ]
         
@@ -215,21 +228,91 @@ class EnhancedCouponFieldExtractor:
         
         # If no store detected, try to extract any brand-like words
         if best_match['confidence'] < 0.5:
-            brand_patterns = [
-                r'\b[A-Z][a-z]+\s*(?:\.com|\.in)?\b',  # Domain-like
-                r'\b[A-Z]{2,8}\b'  # All caps words
+            # Try to capture "at <Brand>" constructs first
+            location_patterns = [
+                r'(?:at|@)\s+([A-Z][A-Za-z&]*(?:\s+[A-Z][A-Za-z&]*){0,2})',
+                r'(?:from)\s+([A-Z][A-Za-z&]*(?:\s+[A-Z][A-Za-z&]*){0,2})',
             ]
-            
-            for pattern in brand_patterns:
-                matches = re.findall(pattern, text)
-                if matches:
+            location_candidates: List[Tuple[str, int]] = []
+            generic_suffixes = re.compile(r'\b(store|stores|shop|shops|outlet|outlets|mall|malls|retail|online|sale|offer)s?\b', re.IGNORECASE)
+
+            for pattern in location_patterns:
+                for match in re.finditer(pattern, text):
+                    candidate = match.group(1).strip()
+                    candidate = generic_suffixes.sub('', candidate).strip()
+                    candidate = re.sub(r'\s{2,}', ' ', candidate)
+                    if candidate:
+                        words = candidate.split()
+                        cleaned_words = []
+                        for word in words:
+                            if word.lower() in {'the', 'at', 'and'}:
+                                continue
+                            cleaned_words.append(word)
+                        if cleaned_words:
+                            cleaned = ' '.join(cleaned_words)
+                            location_candidates.append((cleaned, match.start()))
+
+            if location_candidates:
+                # Prefer the candidate that appears first but prioritise longer names
+                location_candidates.sort(key=lambda item: (-len(item[0]), item[1]))
+                best_match = {
+                    'name': location_candidates[0][0].strip(),
+                    'confidence': 0.45,
+                    'type': 'extracted'
+                }
+            else:
+                brand_patterns = [
+                    r'\b[A-Z][a-z]+\s*(?:\.com|\.in)?\b',  # Domain-like
+                    r'\b[A-Z]{2,8}\b'  # All caps words
+                ]
+
+                stopwords = {'redeem', 'super', 'mega', 'offer', 'offers', 'coupon', 'coupons', 'multi', 'valid', 'expires',
+                             'get', 'save', 'extra', 'flat', 'cashback', 'discount'}
+
+                selected = None
+                for pattern in brand_patterns:
+                    matches = re.findall(pattern, text)
+                    if not matches:
+                        continue
+
+                    for match in matches:
+                        candidate = match.strip()
+                        if candidate.lower() in stopwords:
+                            continue
+                        selected = candidate
+                        break
+
+                    if selected:
+                        break
+
+                if selected:
                     best_match = {
-                        'name': matches[0].strip(),
+                        'name': selected,
                         'confidence': 0.4,
                         'type': 'extracted'
                     }
-                    break
-        
+                else:
+                    lowercase_stopwords = stopwords | {'purchase', 'details', 'terms', 'condition', 'conditions', 'plan',
+                                                       'plans', 'annual', 'telugu', 'unknown', 'couponcode', 'code'}
+
+                    words = re.findall(r'\b[a-z]{3,}\b', text_lower)
+                    frequency: Dict[str, int] = {}
+                    for word in words:
+                        if word in lowercase_stopwords:
+                            continue
+                        frequency[word] = frequency.get(word, 0) + 1
+
+                    if frequency:
+                        candidate_word, count = max(frequency.items(), key=lambda item: (item[1], len(item[0])))
+                        if count > 1:
+                            match = re.search(r'\b' + re.escape(candidate_word) + r'\b', text, re.IGNORECASE)
+                            name = match.group(0) if match else candidate_word
+                            best_match = {
+                                'name': name,
+                                'confidence': 0.38,
+                                'type': 'extracted'
+                            }
+
         return best_match
     
     def _extract_coupon_code(self, text: str, store_info: Dict) -> Dict:
@@ -250,6 +333,8 @@ class EnhancedCouponFieldExtractor:
             for pattern in store_patterns:
                 matches = re.findall(pattern, text, re.IGNORECASE)
                 for match in matches:
+                    if not any(char.isdigit() for char in match):
+                        continue
                     candidates.append({
                         'code': match,
                         'confidence': 0.9,
@@ -261,6 +346,8 @@ class EnhancedCouponFieldExtractor:
             matches = re.findall(pattern, text, re.IGNORECASE)
             for match in matches:
                 # Filter out common false positives
+                if not any(char.isdigit() for char in match):
+                    continue
                 if not self._is_likely_false_positive(match):
                     candidates.append({
                         'code': match,
@@ -270,9 +357,9 @@ class EnhancedCouponFieldExtractor:
         
         # Look for explicit code indicators
         code_indicator_patterns = [
-            r'(?:code|coupon)\s*:?\s*([A-Z0-9]{4,12})',
-            r'use\s+(?:code\s+)?([A-Z0-9]{4,12})',
-            r'promo\s*code\s*:?\s*([A-Z0-9]{4,12})'
+            r'(?:code|coupon)\s*:?\s*([A-Za-z0-9]{4,12})',
+            r'use\s+(?:code\s+)?([A-Za-z0-9]{4,12})',
+            r'promo\s*code\s*:?\s*([A-Za-z0-9]{4,12})'
         ]
         
         for pattern in code_indicator_patterns:
@@ -300,41 +387,132 @@ class EnhancedCouponFieldExtractor:
         Returns:
             Dict: Discount extraction result
         """
-        best_match = {'value': None, 'type': None, 'confidence': 0.0, 'raw_text': None}
-        
+        best_match = {
+            'value': None,
+            'type': None,
+            'confidence': 0.0,
+            'raw_text': None,
+            'text': None,
+            'components': []
+        }
+
+        # First try to capture composite discount phrases like
+        # "Up to 50% off + Extra 33% off"
+        phrase_matches: List[Tuple[int, str]] = []
+        for pattern in self.discount_phrase_patterns:
+            for match in re.finditer(pattern, text, re.IGNORECASE):
+                phrase_matches.append((match.start(), match.group(0)))
+
+        if phrase_matches:
+            phrase_matches.sort(key=lambda item: item[0])
+            normalized_phrases: List[str] = []
+
+            for _, phrase in phrase_matches:
+                normalized = re.sub(r'\s+', ' ', phrase.strip(' ,;:+-*')).strip()
+                normalized = normalized.lower().replace('upto', 'up to')
+                normalized = re.sub(r'(\d+)\.0+%', r'\1%', normalized)
+                if normalized and normalized not in normalized_phrases:
+                    normalized_phrases.append(normalized)
+
+            if normalized_phrases:
+                filtered_phrases = []
+                for phrase in normalized_phrases:
+                    if any(phrase != other and phrase in other for other in normalized_phrases):
+                        continue
+                    filtered_phrases.append(phrase)
+                normalized_phrases = filtered_phrases
+
+            if normalized_phrases:
+                pretty_phrases = []
+                for phrase in normalized_phrases:
+                    pretty = phrase
+                    pretty = re.sub(r'\bup to\b', 'Up to', pretty)
+                    pretty = re.sub(r'\bextra\b', 'Extra', pretty)
+                    pretty = re.sub(r'\bflat\b', 'Flat', pretty)
+                    pretty = re.sub(r'\boff\b', 'Off', pretty)
+                    pretty = re.sub(r'(\d+)\.0+%', r'\1%', pretty)
+                    pretty_phrases.append(pretty)
+
+                combined_phrase = ' + '.join(pretty_phrases)
+                percentages = [
+                    float(num)
+                    for phrase in normalized_phrases
+                    for num in re.findall(r'(\d+(?:\.\d+)?)%', phrase)
+                ]
+
+                if percentages:
+                    max_value = max(percentages)
+                    if abs(max_value - int(max_value)) < 1e-6:
+                        max_value = int(max_value)
+                    best_match = {
+                        'value': max_value,
+                        'type': 'percentage',
+                        'confidence': 0.92,
+                        'raw_text': combined_phrase,
+                        'text': combined_phrase,
+                        'components': pretty_phrases
+                    }
+
         for pattern, confidence, discount_type in self.discount_patterns:
-            matches = re.findall(pattern, text, re.IGNORECASE)
-            for match in matches:
+            for match in re.finditer(pattern, text, re.IGNORECASE):
                 try:
-                    # Extract numeric value
-                    if isinstance(match, tuple):
-                        value = int(match[0])
-                        raw_text = match[1] if len(match) > 1 else str(match)
+                    groups = match.groups()
+                    value_str = None
+                    if groups:
+                        for group in groups:
+                            if group and group.strip().replace('.', '', 1).isdigit():
+                                value_str = group
+                                break
+                    if value_str is None:
+                        digits = re.search(r'\d+', match.group(0))
+                        value_str = digits.group(0) if digits else None
+
+                    if not value_str:
+                        continue
+
+                    if '.' in value_str:
+                        value = float(value_str)
                     else:
-                        value = int(match)
-                        raw_text = match
-                    
+                        value = int(value_str)
+
+                    raw_text = re.sub(r'\s+', ' ', match.group(0).strip())
+                    raw_text = re.sub(r'(\d+)\.0+%', r'\1%', raw_text)
+                    normalized_text = raw_text
+
+                    # If the raw text contains a percentage symbol, ensure we treat it as percentage
+                    normalized_type = 'percentage' if '%' in raw_text else discount_type
+
                     # Validate reasonable discount values
-                    if discount_type == 'percentage' and 1 <= value <= 99:
-                        if confidence > best_match['confidence']:
-                            best_match = {
-                                'value': value,
-                                'type': discount_type,
-                                'confidence': confidence,
-                                'raw_text': raw_text
-                            }
-                    elif discount_type in ['amount', 'cashback'] and 10 <= value <= 10000:
-                        if confidence > best_match['confidence']:
-                            best_match = {
-                                'value': value,
-                                'type': discount_type,
-                                'confidence': confidence,
-                                'raw_text': raw_text
-                            }
-                
+                    if normalized_type == 'percentage':
+                        numeric_value = float(value)
+                        if 1 <= numeric_value <= 99:
+                            output_value = int(numeric_value) if abs(numeric_value - int(numeric_value)) < 1e-6 else numeric_value
+                            if confidence > best_match['confidence']:
+                                best_match = {
+                                    'value': output_value,
+                                    'type': 'percentage',
+                                    'confidence': confidence,
+                                    'raw_text': normalized_text,
+                                    'text': normalized_text,
+                                    'components': [normalized_text]
+                                }
+                    elif normalized_type in ['amount', 'cashback']:
+                        numeric_value = float(value)
+                        if 10 <= numeric_value <= 10000:
+                            output_value = int(numeric_value) if abs(numeric_value - int(numeric_value)) < 1e-6 else numeric_value
+                            if confidence > best_match['confidence']:
+                                best_match = {
+                                    'value': output_value,
+                                    'type': normalized_type,
+                                    'confidence': confidence,
+                                    'raw_text': normalized_text,
+                                    'text': normalized_text,
+                                    'components': [normalized_text]
+                                }
+
                 except (ValueError, IndexError):
                     continue
-        
+
         return best_match
     
     def _extract_expiry_date(self, text: str) -> Dict:
@@ -466,25 +644,47 @@ class EnhancedCouponFieldExtractor:
         terms_keywords = [
             'terms', 'conditions', 'applicable', 'valid', 'offer',
             'cannot be combined', 'not applicable', 'restrictions',
-            'one time use', 'limited period'
+            'one time use', 'limited period', 'purchase', 'plan'
         ]
-        
-        terms_text = []
-        for keyword in terms_keywords:
-            if keyword in text.lower():
-                # Find sentences containing terms keywords
-                sentences = re.split(r'[.!?]', text)
-                for sentence in sentences:
-                    if keyword in sentence.lower():
-                        terms_text.append(sentence.strip())
-        
-        if terms_text:
+
+        sentences = [s.strip() for s in re.split(r'[.!?]', text) if s.strip()]
+        collected_terms: List[str] = []
+
+        for sentence in sentences:
+            lower_sentence = sentence.lower()
+            if any(keyword in lower_sentence for keyword in terms_keywords):
+                collected_terms.append(sentence)
+
+        amount_pattern = re.compile(r'₹\s*(\d+(?:,\d{3})*)')
+        for sentence in sentences:
+            lower_sentence = sentence.lower()
+            amounts = amount_pattern.findall(sentence)
+            if amounts and ('plan' in lower_sentence or 'subscription' in lower_sentence or 'purchase' in lower_sentence):
+                descriptor_match = re.search(r'([A-Za-z&\s]{3,}?\bplan[s]?)', sentence, re.IGNORECASE)
+                if descriptor_match:
+                    descriptor = descriptor_match.group(1).strip()
+                else:
+                    descriptor = 'this offer'
+
+                unique_amounts: List[str] = []
+                for amount in amounts:
+                    normalized_amount = amount.replace(',', '')
+                    if normalized_amount not in unique_amounts:
+                        unique_amounts.append(normalized_amount)
+
+                formatted_amounts = ', '.join(f'₹{amt}' for amt in unique_amounts)
+                formatted_sentence = f"Valid on {descriptor} of {formatted_amounts}"
+
+                if formatted_sentence not in collected_terms:
+                    collected_terms.append(formatted_sentence)
+
+        if collected_terms:
             return {
-                'text': '. '.join(terms_text),
+                'text': '. '.join(collected_terms),
                 'confidence': 0.7,
                 'source': 'keyword_match'
             }
-        
+
         return {'text': None, 'confidence': 0.0, 'source': 'none'}
     
     def _is_likely_false_positive(self, code: str) -> bool:

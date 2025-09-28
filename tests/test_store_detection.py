@@ -48,3 +48,69 @@ def test_detect_store_prefers_mixed_case_brand_over_short_all_caps():
 
     assert result['type'] == 'extracted'
     assert result['name'] == 'Minimalist'
+
+
+def test_extract_discount_handles_combined_percentage_phrases():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        Get Upto 50% Off* + Extra 33% Off
+        at PUMA
+        Code: KQSKLBLBIR
+        Expires on 05 May, 2025, 11:59 PM
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+    discount = extractor._extract_discount(cleaned_text)
+
+    assert discount['type'] == 'percentage'
+    assert discount['value'] == 50
+    assert discount['raw_text'] == 'Up to 50% Off + Extra 33% Off'
+    assert discount['components'] == ['Up to 50% Off', 'Extra 33% Off']
+
+
+def test_extract_expiry_date_with_comma_and_time():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        Expires on 05 May, 2025, 11:59 PM
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+    expiry = extractor._extract_expiry_date(cleaned_text)
+
+    assert expiry['raw_text'] == '05 May, 2025, 11:59 PM'
+    assert expiry['confidence'] > 0.9
+    assert expiry['parsed_date'] is not None
+
+
+def test_aha_coupon_fields_are_preserved():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        Get Flat 20.0% off
+        on purchase of aha Telugu Annual Plan of ₹499, ₹699 or ₹999
+        Code: ahappe20
+        Expires on 30 Sep, 2025, 11:59 PM
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+
+    store = extractor._detect_store(cleaned_text)
+    assert store['name'] == 'aha'
+
+    discount = extractor._extract_discount(cleaned_text)
+    assert discount['type'] == 'percentage'
+    assert discount['raw_text'] == 'Flat 20% Off'
+    assert discount['components'] == ['Flat 20% Off']
+
+    expiry = extractor._extract_expiry_date(cleaned_text)
+    assert expiry['raw_text'] == '30 Sep, 2025, 11:59 PM'
+
+    code = extractor._extract_coupon_code(cleaned_text, store)
+    assert code['code'] == 'ahappe20'
+
+    terms = extractor._extract_terms(cleaned_text)
+    assert '₹499' in terms['text']
+    assert '₹699' in terms['text']
+    assert '₹999' in terms['text']
