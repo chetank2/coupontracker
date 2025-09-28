@@ -313,7 +313,7 @@ class LocalLlmOcrService(
             // Try both 'redeemCode' (from prompt) and 'code' (fallback) to handle both field names
             val code = (json.optString("redeemCode").takeIf { it.isNotBlank() && it != "Unknown" }
                 ?: json.optString("code").takeIf { it.isNotBlank() && it != "Unknown" })
-                ?.trim()?.uppercase()
+                ?.let { RedeemCodeSanitizer.sanitize(it) }
                 ?.takeIf { !GenericFieldHeuristics.isGenericOrMissing(it) }
             
             val expiryDate = json.optString("expiryDate").let {
