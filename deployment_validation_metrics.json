@@ -1,0 +1,9 @@
+{
+  "total_tests": 17,
+  "passed": 11,
+  "failed": 6,
+  "success_rate": 64.70588235294117,
+  "critical_failures": 3,
+  "minor_issues": 3,
+  "status": "CRITICAL_ISSUES"
+}
