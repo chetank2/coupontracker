@@ -3,7 +3,9 @@ package com.example.coupontracker.ml
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.RectF
+import android.util.DisplayMetrics
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import org.json.JSONObject
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.support.common.FileUtil
@@ -14,6 +16,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Two-Stage Multi-Coupon Detection System
@@ -26,7 +29,7 @@ import kotlin.math.min
  * - Partial coupon screenshots (top/bottom cut-off)
  * - Scrollable coupon lists
  */
-class TwoStageDetector(private val context: Context) {
+class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean = true) {
     
     companion object {
         private const val TAG = "TwoStageDetector"
@@ -35,6 +38,7 @@ class TwoStageDetector(private val context: Context) {
         private const val CONFIDENCE_THRESHOLD = 0.5f
         private const val IOU_THRESHOLD = 0.4f
         private const val MAX_DETECTIONS = 50
+        private const val DEFAULT_CROP_PADDING_DP = 12f
         
         // Model paths
         private const val STAGE1_MODEL_PATH = "models/multi_coupon/stage1_coupon_detector.tflite"
@@ -59,7 +63,9 @@ class TwoStageDetector(private val context: Context) {
     private var isInitialized = false
     
     init {
-        initializeModels()
+        if (initializeOnCreate) {
+            initializeModels()
+        }
     }
     
     /**
@@ -180,7 +186,8 @@ class TwoStageDetector(private val context: Context) {
             couponDetections.forEachIndexed { index, couponDetection ->
                 try {
                     // Crop coupon from original image
-                    val couponCrop = cropBitmap(bitmap, couponDetection.boundingBox)
+                    val cropResult = cropBitmap(bitmap, couponDetection.boundingBox)
+                    val couponCrop = cropResult.bitmap
                     
                     if (couponCrop.width < 10 || couponCrop.height < 10) {
                         Log.w(TAG, "Coupon crop too small, skipping instance $index")
@@ -191,8 +198,12 @@ class TwoStageDetector(private val context: Context) {
                     val fieldDetections = detectFieldsInCoupon(couponCrop)
                     
                     // Adjust field coordinates back to original image space
-                    val adjustedFields = adjustFieldCoordinates(fieldDetections, couponDetection.boundingBox)
-                    
+                    val adjustedFields = adjustFieldCoordinates(
+                        fieldDetections,
+                        couponDetection.boundingBox,
+                        cropResult.padding
+                    )
+
                     couponInstances.add(
                         CouponInstance(
                             id = "coupon_${System.currentTimeMillis()}_$index",
@@ -200,7 +211,8 @@ class TwoStageDetector(private val context: Context) {
                             status = couponDetection.status,
                             confidence = couponDetection.confidence,
                             fields = adjustedFields,
-                            cropBitmap = couponCrop
+                            cropBitmap = couponCrop,
+                            cropPadding = cropResult.padding
                         )
                     )
                     
@@ -428,35 +440,79 @@ class TwoStageDetector(private val context: Context) {
     /**
      * Crop bitmap to specified rectangle with bounds checking
      */
-    private fun cropBitmap(bitmap: Bitmap, rect: RectF): Bitmap {
-        val left = max(0, rect.left.toInt())
-        val top = max(0, rect.top.toInt())
-        val right = min(bitmap.width, rect.right.toInt())
-        val bottom = min(bitmap.height, rect.bottom.toInt())
-        
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal fun cropBitmap(
+        bitmap: Bitmap,
+        rect: RectF,
+        paddingDp: Float = DEFAULT_CROP_PADDING_DP
+    ): CropResult {
+        val density = if (bitmap.density > 0) bitmap.density else DisplayMetrics.DENSITY_DEFAULT
+        val densityScale = density / DisplayMetrics.DENSITY_DEFAULT.toFloat()
+        val paddingPx = (paddingDp * densityScale).roundToInt()
+
+        val expandedLeft = rect.left - paddingPx
+        val expandedTop = rect.top - paddingPx
+        val expandedRight = rect.right + paddingPx
+        val expandedBottom = rect.bottom + paddingPx
+
+        val clampedLeft = max(0f, expandedLeft)
+        val clampedTop = max(0f, expandedTop)
+        val clampedRight = min(bitmap.width.toFloat(), expandedRight)
+        val clampedBottom = min(bitmap.height.toFloat(), expandedBottom)
+
+        val left = clampedLeft.toInt()
+        val top = clampedTop.toInt()
+        val right = clampedRight.toInt()
+        val bottom = clampedBottom.toInt()
+
         val width = right - left
         val height = bottom - top
-        
-        return if (width > 0 && height > 0) {
-            Bitmap.createBitmap(bitmap, left, top, width, height)
-        } else {
-            // Return a small placeholder if crop is invalid
-            Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888)
+
+        if (width <= 0 || height <= 0) {
+            return CropResult(
+                bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888),
+                padding = CropPadding.ZERO
+            )
         }
+
+        val crop = Bitmap.createBitmap(bitmap, left, top, width, height)
+
+        val paddingLeft = (rect.left - left).coerceAtLeast(0f)
+        val paddingTop = (rect.top - top).coerceAtLeast(0f)
+        val paddingRight = (right - rect.right).coerceAtLeast(0f)
+        val paddingBottom = (bottom - rect.bottom).coerceAtLeast(0f)
+
+        return CropResult(
+            bitmap = crop,
+            padding = CropPadding(
+                left = paddingLeft,
+                top = paddingTop,
+                right = paddingRight,
+                bottom = paddingBottom
+            )
+        )
     }
-    
+
     /**
      * Adjust field coordinates from crop space back to original image space
      */
-    private fun adjustFieldCoordinates(fields: List<FieldDetection>, couponBox: RectF): List<FieldDetection> {
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    internal fun adjustFieldCoordinates(
+        fields: List<FieldDetection>,
+        couponBox: RectF,
+        padding: CropPadding
+    ): List<FieldDetection> {
+        val offsetLeft = couponBox.left - padding.left
+        val offsetTop = couponBox.top - padding.top
+
         return fields.map { field ->
             val adjustedBox = RectF(
-                couponBox.left + field.boundingBox.left,
-                couponBox.top + field.boundingBox.top,
-                couponBox.left + field.boundingBox.right,
-                couponBox.top + field.boundingBox.bottom
+                offsetLeft + field.boundingBox.left,
+                offsetTop + field.boundingBox.top,
+                offsetLeft + field.boundingBox.right,
+                offsetTop + field.boundingBox.bottom
             )
-            
+
             field.copy(boundingBox = adjustedBox)
         }
     }
@@ -555,6 +611,28 @@ class TwoStageDetector(private val context: Context) {
  */
 
 /**
+ * Represents the bitmap crop result and the padding that was applied.
+ */
+data class CropResult(
+    val bitmap: Bitmap,
+    val padding: CropPadding
+)
+
+/**
+ * Metadata describing how much padding was applied around a crop on each edge.
+ */
+data class CropPadding(
+    val left: Float,
+    val top: Float,
+    val right: Float,
+    val bottom: Float
+) {
+    companion object {
+        val ZERO = CropPadding(0f, 0f, 0f, 0f)
+    }
+}
+
+/**
  * Represents a complete coupon instance with all its detected fields
  */
 data class CouponInstance(
@@ -563,7 +641,8 @@ data class CouponInstance(
     val status: CouponStatus,
     val confidence: Float,
     val fields: List<FieldDetection>,
-    val cropBitmap: Bitmap
+    val cropBitmap: Bitmap,
+    val cropPadding: CropPadding = CropPadding.ZERO
 ) {
     fun getFieldByType(fieldType: FieldType): FieldDetection? {
         return fields.find { it.fieldType == fieldType }
