@@ -6,18 +6,44 @@ Testable Coupon Recognizer
 This script implements a testable code structure with dependency injection for the coupon recognizer.
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import json
 import argparse
-import cv2
-import numpy as np
-from PIL import Image
-import pytesseract
 import re
 import abc
 import logging
 from typing import Dict, List, Tuple, Optional, Any, Union
+
+from typing import TYPE_CHECKING
+
+try:  # pragma: no cover - exercised indirectly during runtime
+    import numpy as np  # type: ignore
+except ImportError:  # pragma: no cover - handled via graceful degradation
+    np = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - exercised indirectly during runtime
+    import cv2  # type: ignore
+except ImportError:  # pragma: no cover - handled via graceful degradation
+    cv2 = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - exercised indirectly during runtime
+    import pytesseract  # type: ignore
+except ImportError:  # pragma: no cover - handled via graceful degradation
+    pytesseract = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - optional dependency for image conversions
+    from PIL import Image  # type: ignore
+except ImportError:  # pragma: no cover - handled via graceful degradation
+    Image = None  # type: ignore[assignment]
+
+if TYPE_CHECKING:  # pragma: no cover - only used for static analysis
+    import numpy as np  # type: ignore
+    import cv2 as cv2_module  # type: ignore
+    import pytesseract as pytesseract_module  # type: ignore
+    from PIL import Image as PILImage  # type: ignore
 
 # Add parent directory to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -32,6 +58,18 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("TestableCouponRecognizer")
+
+# Helpers for optional dependencies
+def _require_dependency(module: Any, package_name: str):
+    """Ensure an optional dependency is available before use."""
+
+    if module is None:
+        raise RuntimeError(
+            f"Optional dependency '{package_name}' is required for this operation. "
+            f"Install it with 'pip install {package_name}'."
+        )
+    return module
+
 
 # Define interfaces for dependency injection
 class ImageLoader(abc.ABC):
@@ -132,7 +170,8 @@ class OpenCVImageLoader(ImageLoader):
         Returns:
             np.ndarray: Loaded image
         """
-        image = cv2.imread(image_path)
+        cv2_module = _require_dependency(cv2, "opencv-python")
+        image = cv2_module.imread(image_path)
         if image is None:
             raise ValueError(f"Could not read image {image_path}")
         return image
@@ -152,14 +191,21 @@ class TesseractTextExtractor(TextExtractor):
             str: Extracted text
         """
         # Convert OpenCV image to PIL if needed
-        if isinstance(image, np.ndarray):
-            pil_image = Image.fromarray(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        pil_module = _require_dependency(Image, "Pillow")
+
+        if np is not None and isinstance(image, np.ndarray):
+            cv2_module = _require_dependency(cv2, "opencv-python")
+            pil_image = pil_module.fromarray(cv2_module.cvtColor(image, cv2_module.COLOR_BGR2RGB))
         else:
             pil_image = image
-        
+            if not hasattr(pil_image, "convert"):
+                # If the input isn't already a PIL Image, convert using Pillow
+                pil_image = pil_module.fromarray(_require_dependency(np, "numpy").array(image))  # type: ignore[arg-type]
+
         # Extract text
-        text = pytesseract.image_to_string(pil_image, config=config).strip()
-        
+        tesseract = _require_dependency(pytesseract, "pytesseract")
+        text = tesseract.image_to_string(pil_image, config=config).strip()
+
         return text
 
 class DefaultImagePreprocessor(ImagePreprocessor):
@@ -176,42 +222,52 @@ class DefaultImagePreprocessor(ImagePreprocessor):
         Returns:
             np.ndarray: Preprocessed image
         """
+        cv2_module = _require_dependency(cv2, "opencv-python")
+        np_module = _require_dependency(np, "numpy")
+
         if region_type == 'store':
             # For store names, enhance contrast
-            lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-            l, a, b = cv2.split(lab)
-            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+            lab = cv2_module.cvtColor(image, cv2_module.COLOR_BGR2LAB)
+            l, a, b = cv2_module.split(lab)
+            clahe = cv2_module.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
             cl = clahe.apply(l)
-            limg = cv2.merge((cl, a, b))
-            enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+            limg = cv2_module.merge((cl, a, b))
+            enhanced = cv2_module.cvtColor(limg, cv2_module.COLOR_LAB2BGR)
             return enhanced
-        
+
         elif region_type == 'code':
             # For coupon codes, binarize
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            gray = cv2_module.cvtColor(image, cv2_module.COLOR_BGR2GRAY)
+            _, binary = cv2_module.threshold(gray, 0, 255, cv2_module.THRESH_BINARY + cv2_module.THRESH_OTSU)
             return binary
-        
+
         elif region_type == 'amount':
             # For amounts, adaptive threshold
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-            binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+            gray = cv2_module.cvtColor(image, cv2_module.COLOR_BGR2GRAY)
+            binary = cv2_module.adaptiveThreshold(
+                gray,
+                255,
+                cv2_module.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2_module.THRESH_BINARY,
+                11,
+                2,
+            )
             return binary
-        
+
         elif region_type == 'expiry':
             # For expiry dates, sharpen
-            kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
-            sharpened = cv2.filter2D(image, -1, kernel)
+            kernel = np_module.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+            sharpened = cv2_module.filter2D(image, -1, kernel)
             return sharpened
-        
+
         elif region_type == 'description':
             # For descriptions, mild enhancement
-            lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-            l, a, b = cv2.split(lab)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            lab = cv2_module.cvtColor(image, cv2_module.COLOR_BGR2LAB)
+            l, a, b = cv2_module.split(lab)
+            clahe = cv2_module.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
             cl = clahe.apply(l)
-            limg = cv2.merge((cl, a, b))
-            enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+            limg = cv2_module.merge((cl, a, b))
+            enhanced = cv2_module.cvtColor(limg, cv2_module.COLOR_LAB2BGR)
             return enhanced
         
         # Default: return original image
@@ -253,13 +309,14 @@ class DefaultTextPostprocessor(TextPostprocessor):
             # Clean up amount
             text = text.strip()
             text = re.sub(r'\s+', ' ', text)  # Normalize whitespace
-            
-            # Ensure proper spacing around percentage symbol
-            text = re.sub(r'(\d)%', r'\1 %', text)
-            
+
+            # Normalize percentage formatting: no space before %, single space after when followed by text
+            text = re.sub(r'(\d)\s*%', r'\1%', text)
+            text = re.sub(r'%\s*(\w)', r'% \1', text)
+
             # Ensure proper spacing around currency symbols
-            text = re.sub(r'(₹|Rs\.?)(\d)', r'\1 \2', text)
-            
+            text = re.sub(r'(₹|Rs\.?)(\s*)(\d)', r'\1 \3', text)
+
             return text
         
         elif region_type == 'expiry':
