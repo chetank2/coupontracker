@@ -108,23 +108,23 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
                     is ScannerUiState.Success -> {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE
-                        
+
                         Toast.makeText(
                             this@MultiCouponSelectionActivity,
-                            "Coupon processed successfully: ${state.coupon.redeemCode}",
+                            "Coupon processed successfully: ${state.coupon.redeemCode} (${state.miniCpmStatus.displayName()})",
                             Toast.LENGTH_LONG
                         ).show()
-                        
+
                         // Save the coupon
                         viewModel.saveCoupon(state.coupon)
                     }
                     is ScannerUiState.AllCouponsSaved -> {
                         binding.progressBar.visibility = View.GONE
                         binding.buttonsContainer.visibility = View.VISIBLE
-                        
+
                         Toast.makeText(
                             this@MultiCouponSelectionActivity,
-                            "Successfully saved ${state.coupons.size} coupons",
+                            "Successfully saved ${state.processedCoupons.size} coupons",
                             Toast.LENGTH_LONG
                         ).show()
                         
