@@ -687,22 +687,41 @@ class ScannerViewModel @Inject constructor(
     private fun parseExpiryDate(dateString: String?): Date? {
         if (dateString.isNullOrBlank()) return null
 
-        val dateFormats = arrayOf(
-            "dd/MM/yyyy", "MM/dd/yyyy", "yyyy/MM/dd",
-            "dd-MM-yyyy", "MM-dd-yyyy", "yyyy-MM-dd",
-            "dd MMM yyyy", "MMM dd, yyyy", "yyyy-MM-dd'T'HH:mm:ss"
+        val cleanedDate = dateString
+            .trim()
+            .replace("\u202F", " ")
+            .let {
+                val timeRegex = Regex("\\s*(?:at\\s*)?\\d{1,2}:\\d{2}(?:\\s*[AaPp][Mm])?(?:\\s*[A-Za-z]+)?$")
+                timeRegex.replace(it) { _ -> "" }.trim()
+            }
+
+        val dateFormats = listOf(
+            "dd/MM/yyyy",
+            "MM/dd/yyyy",
+            "yyyy/MM/dd",
+            "dd-MM-yyyy",
+            "MM-dd-yyyy",
+            "yyyy-MM-dd",
+            "dd MMM yyyy",
+            "dd MMMM yyyy",
+            "dd MMM, yyyy",
+            "dd MMMM, yyyy"
         )
 
         for (format in dateFormats) {
             try {
                 val sdf = SimpleDateFormat(format, Locale.getDefault())
-                return sdf.parse(dateString.trim())
+                sdf.isLenient = false
+                val parsed = sdf.parse(cleanedDate)
+                if (parsed != null) {
+                    return parsed
+                }
             } catch (e: Exception) {
                 // Try next format
             }
         }
 
-        return null
+        return Date()
     }
 
     /**
