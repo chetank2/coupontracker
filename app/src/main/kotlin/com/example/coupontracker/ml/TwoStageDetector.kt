@@ -3,6 +3,7 @@ package com.example.coupontracker.ml
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.RectF
+import android.os.Parcelable
 import android.util.DisplayMetrics
 import android.util.Log
 import androidx.annotation.VisibleForTesting
@@ -17,6 +18,7 @@ import java.nio.ByteOrder
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlinx.parcelize.Parcelize
 
 /**
  * Two-Stage Multi-Coupon Detection System
@@ -621,12 +623,13 @@ data class CropResult(
 /**
  * Metadata describing how much padding was applied around a crop on each edge.
  */
+@Parcelize
 data class CropPadding(
     val left: Float,
     val top: Float,
     val right: Float,
     val bottom: Float
-) {
+) : Parcelable {
     companion object {
         val ZERO = CropPadding(0f, 0f, 0f, 0f)
     }
@@ -635,6 +638,7 @@ data class CropPadding(
 /**
  * Represents a complete coupon instance with all its detected fields
  */
+@Parcelize
 data class CouponInstance(
     val id: String,
     val boundingBox: RectF,
@@ -643,7 +647,7 @@ data class CouponInstance(
     val fields: List<FieldDetection>,
     val cropBitmap: Bitmap,
     val cropPadding: CropPadding = CropPadding.ZERO
-) {
+) : Parcelable {
     fun getFieldByType(fieldType: FieldType): FieldDetection? {
         return fields.find { it.fieldType == fieldType }
     }
@@ -659,12 +663,13 @@ data class CouponInstance(
 /**
  * Represents a detected field within a coupon
  */
+@Parcelize
 data class FieldDetection(
     val fieldType: FieldType,
     val boundingBox: RectF,
     val confidence: Float,
     val text: String? = null
-)
+) : Parcelable
 
 /**
  * Represents a detected coupon boundary (Stage 1 result)

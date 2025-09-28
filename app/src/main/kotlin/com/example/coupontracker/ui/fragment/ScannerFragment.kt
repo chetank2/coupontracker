@@ -1,6 +1,8 @@
 package com.example.coupontracker.ui.fragment
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
@@ -22,6 +24,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.navigation.fragment.findNavController
 import com.example.coupontracker.R
 import com.example.coupontracker.databinding.FragmentScannerBinding
+import com.example.coupontracker.ui.activity.MultiCouponSelectionActivity
 import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 import com.example.coupontracker.ui.viewmodel.ScannerUiState
 import com.example.coupontracker.util.CouponInfo
@@ -46,9 +49,9 @@ class ScannerFragment : Fragment() {
     private var imageCapture: ImageCapture? = null
     private lateinit var outputDirectory: File
     private lateinit var cameraExecutor: ExecutorService
-    
+
     private val TAG = "ScannerFragment"
-    
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -62,6 +65,46 @@ class ScannerFragment : Fragment() {
             ).show()
             findNavController().navigateUp()
         }
+    }
+
+    private val multiCouponSelectionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val currentBinding = _binding
+
+        if (result.resultCode == Activity.RESULT_OK) {
+            val data = result.data
+            val processedCount = data?.getIntExtra(
+                MultiCouponSelectionActivity.EXTRA_RESULT_PROCESSED_COUNT,
+                0
+            ) ?: 0
+            val resultType = data?.getStringExtra(MultiCouponSelectionActivity.EXTRA_RESULT_TYPE)
+            val explicitMessage = data?.getStringExtra(MultiCouponSelectionActivity.EXTRA_RESULT_MESSAGE)
+
+            val fallbackMessage = when (resultType) {
+                MultiCouponSelectionActivity.RESULT_TYPE_ALL_PROCESSED ->
+                    getString(R.string.multi_coupon_all_saved_snackbar, processedCount)
+
+                MultiCouponSelectionActivity.RESULT_TYPE_SINGLE_PROCESSED ->
+                    getString(R.string.multi_coupon_single_saved_snackbar)
+
+                MultiCouponSelectionActivity.RESULT_TYPE_ALREADY_SAVED ->
+                    getString(R.string.multi_coupon_already_saved_snackbar)
+
+                else -> if (processedCount > 0) {
+                    getString(R.string.multi_coupon_all_saved_snackbar, processedCount)
+                } else {
+                    null
+                }
+            }
+
+            val messageToShow = explicitMessage ?: fallbackMessage
+            if (!messageToShow.isNullOrBlank() && currentBinding != null) {
+                Snackbar.make(currentBinding.root, messageToShow, Snackbar.LENGTH_LONG).show()
+            }
+        }
+
+        viewModel.resetState()
     }
     
     override fun onCreateView(
@@ -162,16 +205,25 @@ class ScannerFragment : Fragment() {
                     is ScannerUiState.MultiCouponDetected -> {
                         binding.progressBar.visibility = View.GONE
                         binding.captureButton.isEnabled = true
-                        
-                        // Handle multi-coupon detection
-                        Snackbar.make(
-                            binding.root,
-                            "Detected ${state.couponInstances.size} coupons! Opening selection interface...",
-                            Snackbar.LENGTH_LONG
-                        ).show()
-                        
-                        // Navigate to multi-coupon selection activity
-                        // For now, just show a message - you can implement navigation later
+
+                        val selectionIntent = Intent(
+                            requireContext(),
+                            MultiCouponSelectionActivity::class.java
+                        ).apply {
+                            putParcelableArrayListExtra(
+                                MultiCouponSelectionActivity.EXTRA_COUPON_INSTANCES,
+                                ArrayList(state.couponInstances)
+                            )
+                            putExtra(
+                                MultiCouponSelectionActivity.EXTRA_ORIGINAL_BITMAP,
+                                state.originalBitmap
+                            )
+                            state.imageUri?.let {
+                                putExtra(MultiCouponSelectionActivity.EXTRA_IMAGE_URI, it)
+                            }
+                        }
+
+                        multiCouponSelectionLauncher.launch(selectionIntent)
                     }
                     is ScannerUiState.AllCouponsSaved -> {
                         binding.progressBar.visibility = View.GONE
