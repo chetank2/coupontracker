@@ -40,6 +40,7 @@ class ScannerViewModel @Inject constructor(
 
     private val multiEngineOCR: MultiEngineOCR = MultiEngineOCR(context)
     private val twoStageDetector: TwoStageDetector = TwoStageDetector(context)
+    private val manualCouponOverrides = mutableMapOf<String, CouponInstance>()
 
     companion object {
         private const val TAG = "ScannerViewModel"
@@ -171,7 +172,8 @@ class ScannerViewModel @Inject constructor(
                 Log.d(TAG, "Processing selected coupon: ${selectedInstance.id}")
 
                 // Process the selected coupon
-                processSingleCoupon(selectedInstance, originalImageUri)
+                val instance = manualCouponOverrides[selectedInstance.id] ?: selectedInstance
+                processSingleCoupon(instance, originalImageUri)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing selected coupon", e)
@@ -187,11 +189,12 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _uiState.value = ScannerUiState.Scanning
-                Log.d(TAG, "Processing all ${couponInstances.size} detected coupons")
+                val adjustedInstances = getManualAdjustedInstances(couponInstances)
+                Log.d(TAG, "Processing all ${adjustedInstances.size} detected coupons")
 
                 val savedCoupons = mutableListOf<Coupon>()
 
-                for ((index, instance) in couponInstances.withIndex()) {
+                for ((index, instance) in adjustedInstances.withIndex()) {
                     try {
                         val extractedInfo = extractTextFromFields(instance)
                         val coupon = createCouponFromInstance(instance, extractedInfo, originalImageUri)
@@ -485,6 +488,26 @@ class ScannerViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up TwoStageDetector", e)
         }
+    }
+
+    fun resetManualOverrides() {
+        manualCouponOverrides.clear()
+    }
+
+    fun updateManualCouponInstance(instance: CouponInstance) {
+        manualCouponOverrides[instance.id] = instance
+    }
+
+    fun removeManualCoupons(ids: Set<String>) {
+        ids.forEach { manualCouponOverrides.remove(it) }
+    }
+
+    fun getManualAdjustedInstances(instances: List<CouponInstance>): List<CouponInstance> {
+        val updated = instances.map { manualCouponOverrides[it.id] ?: it }
+        val extras = manualCouponOverrides.values.filter { manual ->
+            instances.none { it.id == manual.id }
+        }
+        return updated + extras
     }
 }
 

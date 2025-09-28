@@ -17,7 +17,8 @@
         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
         app:title="Multi-Coupon Detection"
         app:titleTextColor="@android:color/white"
-        app:navigationIcon="@drawable/ic_arrow_back" />
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:menu="@menu/menu_multi_coupon_selection" />
 
     <!-- Header Info -->
     <LinearLayout
@@ -54,13 +55,11 @@
         app:cardCornerRadius="8dp"
         app:cardElevation="4dp">
 
-        <ImageView
-            android:id="@+id/original_image_view"
+        <com.example.coupontracker.ui.view.MultiCouponOverlayView
+            android:id="@+id/multi_coupon_overlay"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:scaleType="centerCrop"
-            android:contentDescription="Original image with detected coupons"
-            tools:src="@drawable/ic_image_placeholder" />
+            android:contentDescription="Coupon overlay" />
 
     </androidx.cardview.widget.CardView>
 
@@ -94,22 +93,11 @@
         android:elevation="8dp">
 
         <Button
-            android:id="@+id/select_all_button"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginEnd="8dp"
-            android:text="Select All"
-            android:textColor="@color/primary"
-            style="@style/Widget.Material3.Button.OutlinedButton"
-            android:visibility="gone" />
-
-        <Button
             android:id="@+id/process_selected_button"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:layout_marginHorizontal="4dp"
+            android:layout_marginEnd="8dp"
             android:text="Process Selected"
             android:backgroundTint="@color/secondary"
             android:textColor="@color/on_secondary"

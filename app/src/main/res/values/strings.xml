@@ -29,4 +29,10 @@
     <string name="clear_data">Clear All Data</string>
     <string name="llm_verifying_model">Verifying model integrity…</string>
     <string name="llm_download_error_network">Check your internet connection or update the model URL in Advanced Settings</string>
+    <string name="action_select_all">Select All</string>
+    <string name="action_add_tile">Add Tile</string>
+    <string name="action_cancel_add_tile">Cancel Add Tile</string>
+    <string name="detected_coupon_count">Detected %1$d coupons</string>
+    <string name="overlay_draw_instruction">Drag on the image to add a tile, then tap Cancel Add Tile.</string>
+    <string name="overlay_missing_bitmap">Original image not available for editing.</string>
 </resources>
