@@ -204,14 +204,21 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
             return emptyList()
         }
         
+        if (demoMode) {
+            if (stubMode) {
+                Log.i(
+                    TAG,
+                    "TwoStageDetector is running in demo mode with stub assets; returning synthetic detections."
+                )
+            } else {
+                Log.i(TAG, "TwoStageDetector is running in demo mode; returning synthetic detections.")
+            }
+            return createDemoDetections(bitmap)
+        }
+
         if (stubMode) {
             Log.w(TAG, "TwoStageDetector is running in stub mode; multi-coupon detections are disabled.")
             return emptyList()
-        }
-        
-        if (demoMode) {
-            Log.i(TAG, "TwoStageDetector is running in demo mode; returning synthetic detections.")
-            return createDemoDetections(bitmap)
         }
 
         val stage1Interpreter = this.stage1Interpreter
