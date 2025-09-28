@@ -101,7 +101,7 @@ class TextExtractor {
 
         val result = CouponInfo(
             storeName = storeName ?: "",
-            description = description ?: "",
+            description = sanitizeDescription(description) ?: "",
             expiryDate = expiryDate,
             cashbackAmount = cashbackAmount,
             redeemCode = redeemCode,
@@ -204,7 +204,7 @@ class TextExtractor {
 
             val cleanDescription = "$storeName Coupon - $discountPhrase"
             Log.d(TAG, "Created clean description: $cleanDescription")
-            return cleanDescription
+            sanitizeDescription(cleanDescription)?.let { return it }
         }
 
         // If we couldn't create a clean description, fall back to pattern matching
@@ -215,7 +215,7 @@ class TextExtractor {
         if (offerMatcher.find()) {
             val offer = offerMatcher.group(1)?.trim()
             Log.d(TAG, "Found description from 'Offer:' pattern: $offer")
-            return offer
+            sanitizeDescription(offer)?.let { return it }
         }
 
         // Look for "You won X products at ₹Y + ₹Z cashback" pattern
@@ -224,7 +224,7 @@ class TextExtractor {
         if (wonProductsMatcher.find()) {
             val desc = wonProductsMatcher.group(1)?.trim()
             Log.d(TAG, "Found description from 'You won products' pattern: $desc")
-            return desc
+            sanitizeDescription(desc)?.let { return it }
         }
 
         // Special case for coupons with "Get upto ₹X" pattern
@@ -233,7 +233,7 @@ class TextExtractor {
         if (getUptoMatcher.find()) {
             val desc = getUptoMatcher.group(1)
             Log.d(TAG, "Found description from 'Get upto' pattern: $desc")
-            return desc
+            sanitizeDescription(desc)?.let { return it }
         }
 
         // Look for "Up to X% off" pattern
@@ -242,7 +242,7 @@ class TextExtractor {
         if (upToMatcher.find()) {
             val desc = upToMatcher.group(1)?.trim()
             Log.d(TAG, "Found description from 'Up to X%' pattern: $desc")
-            return desc
+            sanitizeDescription(desc)?.let { return it }
         }
 
         // Look for "Flat ₹X OFF" pattern
@@ -251,7 +251,7 @@ class TextExtractor {
         if (flatOffMatcher.find()) {
             val desc = flatOffMatcher.group(1)?.trim()
             Log.d(TAG, "Found description from 'Flat ₹X OFF' pattern: $desc")
-            return desc
+            sanitizeDescription(desc)?.let { return it }
         }
 
         // Look for discount descriptions
@@ -268,7 +268,7 @@ class TextExtractor {
             if (matcher.find()) {
                 val desc = matcher.group(1)
                 Log.d(TAG, "Found description from discount pattern: $desc")
-                return desc
+                sanitizeDescription(desc)?.let { return it }
             }
         }
 
@@ -277,10 +277,15 @@ class TextExtractor {
         if (sentences.isNotEmpty() && sentences[0].length > 10) {
             val desc = sentences[0].trim()
             Log.d(TAG, "Using first sentence as description: $desc")
-            return desc
+            return sanitizeDescription(desc)
         }
 
         return null
+    }
+
+    private fun sanitizeDescription(value: String?): String? {
+        val cleaned = LocalLlmOcrService.cleanDescription(value)
+        return cleaned.ifBlank { null }
     }
 
     /**
