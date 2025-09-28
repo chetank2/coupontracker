@@ -15,11 +15,13 @@ class CouponRepositoryTest {
 
     private lateinit var couponDao: CouponDao
     private lateinit var repository: CouponRepository
+    private lateinit var repositoryImpl: CouponRepositoryImpl
 
     @Before
     fun setup() {
         couponDao = mockk(relaxed = true)
-        repository = CouponRepositoryImpl(couponDao)
+        repositoryImpl = CouponRepositoryImpl(couponDao)
+        repository = repositoryImpl
     }
 
     @Test
@@ -89,4 +91,57 @@ class CouponRepositoryTest {
         // Then
         coVerify { couponDao.deleteCoupon(coupon) }
     }
-} 
+
+    @Test
+    fun `saveOrMergeCoupon reuses coupon with existing code`() = runBlocking {
+        val existing = Coupon(
+            id = 42,
+            storeName = "Store",
+            description = "Limited Time Offer",
+            expiryDate = Date(),
+            cashbackAmount = 10.0,
+            redeemCode = "CODE123",
+            imageUri = null,
+            category = "Test",
+            usageCount = 1,
+            createdAt = Date(0),
+            updatedAt = Date(0)
+        )
+        val normalized = existing.description.lowercase().trim()
+
+        val incoming = existing.copy(
+            id = 0,
+            redeemCode = null,
+            cashbackAmount = 20.0,
+            usageCount = 5,
+            createdAt = Date(),
+            updatedAt = Date()
+        )
+
+        coEvery {
+            couponDao.findByStoreAndDescription(
+                storeName = existing.storeName,
+                normalizedDescription = normalized,
+                descriptionHash = null,
+                descriptionSignature = null
+            )
+        } returns existing
+        coEvery { couponDao.updateCoupon(any()) } returns Unit
+
+        val result = repositoryImpl.saveOrMergeCoupon(incoming, normalized, null, null)
+
+        assert(result == existing.id)
+        coVerify(exactly = 0) { couponDao.insertCoupon(any()) }
+        coVerify {
+            couponDao.updateCoupon(
+                match {
+                    it.id == existing.id &&
+                        it.redeemCode == existing.redeemCode &&
+                        it.cashbackAmount == incoming.cashbackAmount &&
+                        it.usageCount == kotlin.math.max(existing.usageCount, incoming.usageCount) &&
+                        it.createdAt == existing.createdAt
+                }
+            )
+        }
+    }
+}

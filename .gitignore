@@ -41,6 +41,12 @@ logs/
 
 # Data directories
 data/
+!app/src/main/kotlin/com/example/coupontracker/data/
+!app/src/main/kotlin/com/example/coupontracker/data/**
+!app/src/test/java/com/example/coupontracker/data/
+!app/src/test/java/com/example/coupontracker/data/**
+!app/src/androidTest/java/com/example/coupontracker/data/
+!app/src/androidTest/java/com/example/coupontracker/data/**
 models/
 !app/src/test/resources/models/
 !app/src/test/resources/models/**
