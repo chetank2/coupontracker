@@ -4,7 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import com.example.coupontracker.data.model.CouponInfo
 import com.example.coupontracker.llm.LlmRuntimeManager
-import com.example.coupontracker.service.TelemetryService
+import com.example.coupontracker.llm.LlmTelemetryService
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -16,7 +16,7 @@ class LocalLlmOcrServiceTest {
     
     private lateinit var mockContext: Context
     private lateinit var mockLlmRuntime: LlmRuntimeManager
-    private lateinit var mockTelemetryService: TelemetryService
+    private lateinit var mockTelemetryService: LlmTelemetryService
     private lateinit var mockBitmap: Bitmap
     private lateinit var localLlmOcrService: LocalLlmOcrService
     
