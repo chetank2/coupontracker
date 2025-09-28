@@ -240,38 +240,38 @@ class EnhancedOCRHelper {
             // For Myntra, try to find their specific voucher description format
             findMatch(MYNTRA_DESCRIPTION_PATTERN, text)?.let {
                 val description = it.trim() + " up to ₹" + (result["amount"] ?: "").replace("₹", "")
-                result["description"] = description
+                result["description"] = sanitizeDescription(description)
                 descriptionFound = true
                 Log.d(TAG, "Found Myntra description: $description")
             }
-            
+
             // If that fails, look for a phrase containing "voucher" and "up to"
             if (!descriptionFound) {
                 val myntraDescRegex = "(?:you won a voucher|up to ₹\\d+)(.{5,30})".toRegex(RegexOption.IGNORE_CASE)
                 myntraDescRegex.find(text)?.let {
                     val desc = it.groupValues[0].trim()
                     if (desc.isNotBlank()) {
-                        result["description"] = desc
+                        result["description"] = sanitizeDescription(desc)
                         descriptionFound = true
                         Log.d(TAG, "Found Myntra description with alt pattern: $desc")
                     }
                 }
             }
         }
-        
+
         // If no description found yet, try standard pattern
         if (!descriptionFound) {
             findMatch(DESCRIPTION_PATTERN, text)?.let {
-                result["description"] = it.trim()
+                result["description"] = sanitizeDescription(it.trim())
                 descriptionFound = true
                 Log.d(TAG, "Found standard description: ${it.trim()}")
             }
         }
-        
+
         // If we couldn't extract any information, provide some defaults
         if (result.isEmpty()) {
             result["storeName"] = if (isMyntraCoupon) "Myntra" else "Unknown Store"
-            result["description"] = "Scanned coupon"
+            result["description"] = sanitizeDescription("Scanned coupon")
         }
         
         // Set default amount if not found
@@ -299,6 +299,53 @@ class EnhancedOCRHelper {
             matcher.group(2)
         } else {
             null
+        }
+    }
+
+    private fun sanitizeDescription(raw: String): String {
+        val tokens = raw.split(Regex("\\s+")).mapNotNull { token ->
+            val trimmed = token.trim()
+            if (trimmed.isEmpty()) {
+                null
+            } else {
+                trimmed
+            }
+        }
+
+        if (tokens.isEmpty()) {
+            return raw.trim()
+        }
+
+        val vowels = setOf('a', 'e', 'i', 'o', 'u')
+        val cleanedTokens = mutableListOf<String>()
+        var previousNormalized: String? = null
+
+        tokens.forEach { token ->
+            val strippedToken = token.trim { !it.isLetterOrDigit() && it != '.' && it != '%' && it != '₹' && it != '-' }
+            if (strippedToken.isEmpty()) {
+                return@forEach
+            }
+
+            val hasLetters = strippedToken.any { it.isLetter() }
+            val hasVowel = strippedToken.any { vowels.contains(it.lowercaseChar()) }
+
+            if (hasLetters && !hasVowel) {
+                return@forEach
+            }
+
+            val normalized = strippedToken.lowercase()
+            if (previousNormalized == normalized) {
+                return@forEach
+            }
+
+            cleanedTokens.add(strippedToken)
+            previousNormalized = normalized
+        }
+
+        return if (cleanedTokens.isEmpty()) {
+            raw.trim()
+        } else {
+            cleanedTokens.joinToString(" ")
         }
     }
 
