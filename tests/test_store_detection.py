@@ -69,6 +69,38 @@ def test_extract_discount_handles_combined_percentage_phrases():
     assert discount['components'] == ['Up to 50% Off', 'Extra 33% Off']
 
 
+def test_extract_discount_allows_leading_verbs_before_percentage():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        Get 50% Off on all skincare
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+    discount = extractor._extract_discount(cleaned_text)
+
+    assert discount['type'] == 'percentage'
+    assert discount['value'] == 50
+    assert discount['raw_text'] == '50% Off'
+    assert discount['components'] == ['50% Off']
+
+
+def test_extract_discount_handles_leading_percentage_without_prefix():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        50% Off + Extra 10% Off on accessories
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+    discount = extractor._extract_discount(cleaned_text)
+
+    assert discount['type'] == 'percentage'
+    assert discount['value'] == 50
+    assert discount['raw_text'] == '50% Off + Extra 10% Off'
+    assert discount['components'] == ['50% Off', 'Extra 10% Off']
+
+
 @pytest.fixture
 def frozen_datetime_now(monkeypatch):
     fixed_now = datetime(2026, 1, 1, 0, 0, 0)
