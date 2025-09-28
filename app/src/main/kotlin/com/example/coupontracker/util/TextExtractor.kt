@@ -589,7 +589,7 @@ class TextExtractor {
      */
     fun extractRedeemCode(text: String): String? {
         // First check for code: pattern (most common)
-        val codePattern = Pattern.compile("(?i)code:?\\s*([A-Z0-9]{5,})")
+        val codePattern = Pattern.compile("(?i)code\\s*[-–—:]?\\s*([A-Z0-9]{5,})")
         val codeMatcher = codePattern.matcher(text)
         if (codeMatcher.find()) {
             val code = codeMatcher.group(1)
@@ -600,7 +600,7 @@ class TextExtractor {
         }
 
         // Look for "code" pattern without colon (common in Myntra coupons)
-        val codeWithoutColonPattern = Pattern.compile("(?i)\\bcode\\b\\s*([A-Z0-9]{5,})")
+        val codeWithoutColonPattern = Pattern.compile("(?i)\\bcode\\b\\s*[-–—:]?\\s*([A-Z0-9]{5,})")
         val codeWithoutColonMatcher = codeWithoutColonPattern.matcher(text)
         if (codeWithoutColonMatcher.find()) {
             val code = codeWithoutColonMatcher.group(1)
