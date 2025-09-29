@@ -3,6 +3,7 @@ package com.example.coupontracker.model
 import android.util.Log
 import com.example.coupontracker.util.ConfidenceLevel
 import com.example.coupontracker.util.ExtractedField
+import com.example.coupontracker.util.IndianCurrencyParser
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -225,24 +226,11 @@ data class CouponData(
     }
     
     /**
-     * Get a numerical discount amount
+     * Get a numerical discount amount with Indian currency support
      * @return Numeric value or null if not available
      */
     fun getNumericAmount(): Float? {
-        if (amount.isNullOrBlank()) {
-            return null
-        }
-        
-        return try {
-            // Extract numbers from the amount string
-            val numberPattern = "(\\d+(?:\\.\\d+)?)".toRegex()
-            val match = numberPattern.find(amount)
-            
-            match?.groupValues?.get(1)?.toFloatOrNull()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing numeric amount", e)
-            null
-        }
+        return IndianCurrencyParser.parseAmount(amount)?.toFloat()
     }
     
     /**

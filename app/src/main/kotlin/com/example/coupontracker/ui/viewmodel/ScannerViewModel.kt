@@ -570,12 +570,7 @@ class ScannerViewModel @Inject constructor(
     }
 
     private fun extractNumericValue(value: String?): Double? {
-        if (value.isNullOrBlank()) {
-            return null
-        }
-
-        val match = Regex("[-+]?\\d+(?:\\.\\d+)?").find(value)?.value ?: return null
-        return match.toDoubleOrNull()
+        return IndianCurrencyParser.parseAmount(value)
     }
 
     private fun formatNumeric(value: Double): String {
@@ -597,10 +592,9 @@ class ScannerViewModel @Inject constructor(
         // Parse expiry date string to Date if available
         val expiryDate = parseExpiryDate(extractedInfo["expiryDate"])
 
-        // Parse amount to double
+        // Parse amount to double with Indian currency support
         val amount = extractedInfo["amount"]?.let {
-            val numericValue = Regex("\\d+(\\.\\d+)?").find(it)?.value
-            numericValue?.toDoubleOrNull() ?: 0.0
+            IndianCurrencyParser.parseAmount(it) ?: 0.0
         } ?: 0.0
 
         // Note: Quality determination could be used for analytics or sorting
@@ -709,11 +703,9 @@ class ScannerViewModel @Inject constructor(
         // Parse expiry date string to Date if available
         val expiryDate = parseExpiryDate(extractedInfo["expiryDate"])
 
-        // Parse amount to double
+        // Parse amount to double with Indian currency support
         val amount = extractedInfo["amount"]?.let {
-            // Extract numeric value from the amount string (remove rupee symbol and other non-numeric characters)
-            val numericValue = Regex("\\d+(\\.\\d+)?").find(it)?.value
-            numericValue?.toDoubleOrNull() ?: 0.0
+            IndianCurrencyParser.parseAmount(it) ?: 0.0
         } ?: 0.0
 
         return Coupon(

@@ -48,9 +48,8 @@ class LlmOcrFusionService(
                 redeemCode = fusedCode,
                 expiryDate = fusedExpiry, // Already a Date object, no conversion needed
                 cashbackAmount = fusedAmount?.let { amount ->
-                    // Extract numeric value from the amount string
-                    val numericValue = Regex("\\d+(\\.\\d+)?").find(amount)?.value
-                    numericValue?.toDoubleOrNull() ?: llmResult.cashbackAmount
+                    // Parse Indian currency format with thousand separators
+                    IndianCurrencyParser.parseAmount(amount) ?: llmResult.cashbackAmount
                 } ?: llmResult.cashbackAmount
             )
             
