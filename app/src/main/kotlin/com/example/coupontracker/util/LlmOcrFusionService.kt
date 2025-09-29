@@ -4,7 +4,10 @@ import android.graphics.Bitmap
 import android.util.Log
 import com.example.coupontracker.util.CouponInfo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * ROI-guided fusion of LLM and OCR results
@@ -37,22 +40,13 @@ class LlmOcrFusionService(
             
             // Fuse each field independently
             val fusedCode = fuseCode(llmResult.redeemCode, ocrSpans, brand)
-            val fusedExpiry = fuseExpiryDate(llmResult.expiryDate?.toString(), ocrSpans)
+            val fusedExpiry = fuseExpiryDate(llmResult.expiryDate, ocrSpans)
             val fusedAmount = fuseCashbackAmount(llmResult.cashbackAmount, ocrSpans, brand)
             
             // Return fused result
             llmResult.copy(
                 redeemCode = fusedCode,
-                expiryDate = fusedExpiry?.let { 
-                    try {
-                        IndianDateParser.parseExpiryIST(it).date?.let { localDate ->
-                            java.util.Date.from(localDate.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to parse fused expiry date: $it", e)
-                        llmResult.expiryDate
-                    }
-                } ?: llmResult.expiryDate,
+                expiryDate = fusedExpiry, // Already a Date object, no conversion needed
                 cashbackAmount = fusedAmount?.let { amount ->
                     // Extract numeric value from the amount string
                     val numericValue = Regex("\\d+(\\.\\d+)?").find(amount)?.value
@@ -116,9 +110,10 @@ class LlmOcrFusionService(
     }
     
     /**
-     * Fuse expiry dates with OCR validation
+     * Fuse expiry dates with OCR validation, preserving LLM confidence
      */
-    private fun fuseExpiryDate(llmExpiry: String?, ocrSpans: List<TextSpan>): String? {
+    private fun fuseExpiryDate(llmExpiry: java.util.Date?, ocrSpans: List<TextSpan>): java.util.Date? {
+        // Extract OCR date candidates near expiry keywords
         val ocrDateCandidates = ocrSpans
             .nearKeywords(EXPIRY_KEYWORDS, maxDistance = 300)
             .mapNotNull { span ->
@@ -138,16 +133,16 @@ class LlmOcrFusionService(
         
         return when {
             // LLM has no expiry, use best OCR candidate
-            llmExpiry.isNullOrBlank() && ocrDateCandidates.isNotEmpty() -> {
+            llmExpiry == null && ocrDateCandidates.isNotEmpty() -> {
                 val bestCandidate = ocrDateCandidates.maxByOrNull { candidate ->
                     IndianDateParser.parseExpiryIST(candidate).confidence
                 }
                 
                 if (bestCandidate != null) {
                     val parseResult = IndianDateParser.parseExpiryIST(bestCandidate)
-                    if (parseResult.confidence > 0.7f) {
+                    if (parseResult.confidence > 0.7f && parseResult.date != null) {
                         Log.d(TAG, "Using OCR expiry (no LLM): $bestCandidate")
-                        bestCandidate
+                        java.util.Date.from(parseResult.date.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
                     } else {
                         null
                     }
@@ -156,28 +151,51 @@ class LlmOcrFusionService(
                 }
             }
             
-            // LLM has expiry, validate with OCR
-            !llmExpiry.isNullOrBlank() -> {
-                val llmConfidence = IndianDateParser.parseExpiryIST(llmExpiry).confidence
+            // LLM has expiry, validate with OCR only if LLM date seems problematic
+            llmExpiry != null -> {
+                // Convert LLM Date back to LocalDate to check its validity
+                val llmLocalDate = llmExpiry.toInstant()
+                    .atZone(java.time.ZoneId.of("Asia/Kolkata"))
+                    .toLocalDate()
                 
-                if (llmConfidence < 0.6f && ocrDateCandidates.isNotEmpty()) {
-                    // LLM confidence is low, try OCR alternatives
+                val now = java.time.LocalDate.now()
+                val daysDifference = java.time.temporal.ChronoUnit.DAYS.between(now, llmLocalDate).toInt()
+                
+                // Calculate LLM confidence based on date reasonableness
+                val llmConfidence = when {
+                    daysDifference in 1..90 -> 0.9f  // Perfect range
+                    daysDifference in 91..365 -> 0.75f  // Acceptable
+                    daysDifference in -7..0 -> 0.6f  // Recently expired, might be valid
+                    daysDifference < -7 -> 0.2f  // Too old, likely wrong
+                    daysDifference > 730 -> 0.3f  // Too far future, suspicious
+                    else -> 0.5f
+                }
+                
+                // Only consider OCR if LLM confidence is genuinely low
+                if (llmConfidence < 0.5f && ocrDateCandidates.isNotEmpty()) {
+                    Log.d(TAG, "LLM expiry has low confidence ($llmConfidence), checking OCR alternatives")
+                    
                     val bestOcrCandidate = ocrDateCandidates.maxByOrNull { candidate ->
                         IndianDateParser.parseExpiryIST(candidate).confidence
                     }
                     
                     if (bestOcrCandidate != null) {
-                        val ocrConfidence = IndianDateParser.parseExpiryIST(bestOcrCandidate).confidence
-                        if (ocrConfidence > llmConfidence + 0.2f) {
-                            Log.d(TAG, "Using OCR expiry (better confidence): $bestOcrCandidate vs $llmExpiry")
-                            bestOcrCandidate
+                        val ocrParseResult = IndianDateParser.parseExpiryIST(bestOcrCandidate)
+                        
+                        // Only replace if OCR is significantly better
+                        if (ocrParseResult.confidence > llmConfidence + 0.3f && ocrParseResult.date != null) {
+                            Log.d(TAG, "Using OCR expiry (much better confidence): $bestOcrCandidate (${ocrParseResult.confidence}) vs LLM (${llmConfidence})")
+                            java.util.Date.from(ocrParseResult.date.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
                         } else {
+                            Log.d(TAG, "Keeping LLM expiry despite low confidence: OCR not significantly better")
                             llmExpiry
                         }
                     } else {
                         llmExpiry
                     }
                 } else {
+                    // LLM confidence is acceptable, keep it
+                    Log.d(TAG, "Keeping LLM expiry (confidence: $llmConfidence)")
                     llmExpiry
                 }
             }
@@ -229,22 +247,55 @@ class LlmOcrFusionService(
     }
     
     /**
-     * Extract OCR text spans from bitmap
+     * Extract OCR text spans from bitmap using real ML Kit OCR
      */
     private suspend fun extractOcrTextSpans(bitmap: Bitmap): List<TextSpan> {
-        return try {
-            // Use ML Kit for OCR text detection
-            val mlKitService = MLKitOCRService()
-            val ocrText = mlKitService.extractText(bitmap)
-            
-            // Convert to text spans (simplified - in real implementation would preserve coordinates)
-            ocrText.split("\n").mapIndexed { index, line ->
-                TextSpan(line.trim(), index * 50, 0, line.length * 10, 20)
-            }.filter { it.text.isNotBlank() }
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to extract OCR text spans", e)
-            emptyList()
+        return withContext(Dispatchers.IO) {
+            try {
+                // Use actual ML Kit OCR for text detection
+                val inputImage = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
+                val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(
+                    com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS
+                )
+                
+                // Run OCR and extract text with coordinates
+                val result = kotlinx.coroutines.suspendCancellableCoroutine<com.google.mlkit.vision.text.Text> { continuation ->
+                    recognizer.process(inputImage)
+                        .addOnSuccessListener { text ->
+                            continuation.resume(text)
+                        }
+                        .addOnFailureListener { exception ->
+                            continuation.resumeWithException(exception)
+                        }
+                }
+                
+                // Convert ML Kit text blocks to TextSpan objects with real coordinates
+                val textSpans = mutableListOf<TextSpan>()
+                
+                for (block in result.textBlocks) {
+                    for (line in block.lines) {
+                        val boundingBox = line.boundingBox
+                        if (boundingBox != null) {
+                            textSpans.add(
+                                TextSpan(
+                                    text = line.text,
+                                    x = boundingBox.left,
+                                    y = boundingBox.top,
+                                    width = boundingBox.width(),
+                                    height = boundingBox.height()
+                                )
+                            )
+                        }
+                    }
+                }
+                
+                Log.d(TAG, "Extracted ${textSpans.size} text spans from OCR")
+                textSpans
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to extract OCR text spans", e)
+                emptyList()
+            }
         }
     }
     
@@ -302,16 +353,3 @@ private fun String.normalize(): String {
     return this.trim().uppercase().replace(Regex("\\s+"), "")
 }
 
-/**
- * Simple ML Kit OCR service for text extraction
- */
-private class MLKitOCRService {
-    suspend fun extractText(bitmap: Bitmap): String {
-        return try {
-            // Simplified - would use actual ML Kit implementation
-            "Sample OCR text for fusion testing"
-        } catch (e: Exception) {
-            ""
-        }
-    }
-}
