@@ -36,6 +36,28 @@ class ManualEntryViewModel @Inject constructor(
         private const val TAG = "ManualEntryViewModel"
     }
 
+    init {
+        // Check for shared URL on initialization
+        checkForSharedUrl()
+    }
+
+    /**
+     * Check for shared URL from intent and auto-process it
+     */
+    private fun checkForSharedUrl() {
+        val sharedPrefs = context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
+        val sharedUrl = sharedPrefs.getString("shared_url", null)
+        
+        if (sharedUrl != null) {
+            // Clear the shared URL to prevent reuse
+            sharedPrefs.edit().remove("shared_url").apply()
+            
+            // Set the URL and auto-process it
+            _uiState.value = _uiState.value.copy(url = sharedUrl)
+            processUrl()
+        }
+    }
+
     /**
      * Set the URL to process
      * @param url The URL to process

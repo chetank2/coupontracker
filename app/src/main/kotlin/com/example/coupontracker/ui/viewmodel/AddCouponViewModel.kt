@@ -1,11 +1,15 @@
 package com.example.coupontracker.ui.viewmodel
 
+import android.app.Application
+import android.content.Context
 import android.net.Uri
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.util.UriPersistenceManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -14,8 +18,10 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AddCouponViewModel @Inject constructor(
+    application: Application,
+    @ApplicationContext private val context: Context,
     private val repository: CouponRepository
-) : ViewModel() {
+) : AndroidViewModel(application) {
 
     private val _savingState = MutableStateFlow<SavingState>(SavingState.Idle)
     val savingState: StateFlow<SavingState> = _savingState
@@ -29,6 +35,7 @@ class AddCouponViewModel @Inject constructor(
     var couponId: Long = 0
         private set
 
+    private val uriPersistenceManager = UriPersistenceManager(context)
     private var currentImageUri: Uri? = null
     private var currentExpiryDate: Date? = null
     private var currentReminderDate: Date? = null
@@ -76,13 +83,18 @@ class AddCouponViewModel @Inject constructor(
         viewModelScope.launch {
             _savingState.value = SavingState.Saving
             try {
+                // Persist the image URI if available
+                val persistedImageUri = currentImageUri?.let { uri ->
+                    uriPersistenceManager.persistUri(uri)?.toString() ?: uri.toString()
+                }
+
                 val coupon = Coupon(
                     storeName = storeName,
                     description = description,
                     expiryDate = currentExpiryDate,
                     cashbackAmount = cashbackAmount,
                     redeemCode = redeemCode,
-                    imageUri = currentImageUri?.toString(),
+                    imageUri = persistedImageUri,
                     category = category,
                     rating = rating,
                     status = status ?: "Active",

@@ -1,6 +1,7 @@
 package com.example.coupontracker.ui.screen
 
 import android.Manifest
+import android.content.Context
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
@@ -49,7 +50,6 @@ fun BatchScannerScreen(
     viewModel: BatchScannerViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     val uiState by viewModel.uiState.collectAsState()
 
@@ -71,6 +71,29 @@ fun BatchScannerScreen(
     ) { uri ->
         uri?.let {
             viewModel.addPdf(it)
+        }
+    }
+
+    // Check for shared images on screen load
+    LaunchedEffect(Unit) {
+        val sharedPrefs = context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
+        val sharedImageUris = sharedPrefs.getString("shared_image_uris", null)
+        
+        if (sharedImageUris != null) {
+            // Clear the shared URIs to prevent reuse
+            sharedPrefs.edit().remove("shared_image_uris").apply()
+            
+            try {
+                // Parse the JSON array of URI strings
+                val gson = com.google.gson.Gson()
+                val uriStrings: List<String> = gson.fromJson(sharedImageUris, Array<String>::class.java).toList()
+                val uris = uriStrings.map { Uri.parse(it) }
+                
+                // Add the shared images to the batch scanner
+                viewModel.addImages(uris)
+            } catch (e: Exception) {
+                Log.e("BatchScannerScreen", "Error parsing shared image URIs", e)
+            }
         }
     }
 

@@ -19,7 +19,11 @@ import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.CouponTrackerTheme
 import com.example.coupontracker.util.ThemeManager
 import com.example.coupontracker.util.ThemeMode
+import com.example.coupontracker.util.CouponUriMigrationManager
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -32,6 +36,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var themeManager: ThemeManager
+
+    @Inject
+    lateinit var uriMigrationManager: CouponUriMigrationManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,6 +93,15 @@ class MainActivity : ComponentActivity() {
 
         // Handle shared content if this activity was started from a share intent
         handleSharedContent(intent)
+
+        // Perform URI migration for existing coupons in background
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                uriMigrationManager.performMigrationIfNeeded()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during URI migration", e)
+            }
+        }
 
         Log.d(TAG, "MainActivity onCreate completed successfully")
     }

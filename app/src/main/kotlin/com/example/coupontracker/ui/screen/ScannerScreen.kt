@@ -134,10 +134,25 @@ fun ScannerScreen(
         }
     }
 
+    // Check for shared image on screen load
+    LaunchedEffect(Unit) {
+        val sharedPrefs = context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
+        val sharedImageUri = sharedPrefs.getString("shared_image_uri", null)
+        
+        if (sharedImageUri != null) {
+            // Clear the shared URI to prevent reuse
+            sharedPrefs.edit().remove("shared_image_uri").apply()
+            
+            // Load the shared image
+            val uri = Uri.parse(sharedImageUri)
+            capturedImageUri = uri
+            viewModel.scanImage(uri, persistImmediately = false)
+        }
+    }
+
     // Handle scan result and navigate to CouponFormScreen
     LaunchedEffect(uiState) {
         if (uiState is ScannerUiState.Success) {
-            val coupon = (uiState as ScannerUiState.Success).coupon
             capturedImageUri?.let { uri ->
                 // Navigate to the new CouponFormScreen
                 navController.navigate(

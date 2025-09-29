@@ -80,6 +80,7 @@ class CouponInputManager(private val context: Context) {
 
     private val imageProcessor = ImageProcessor(context)
     private val contentResolver: ContentResolver = context.contentResolver
+    private val uriPersistenceManager = UriPersistenceManager(context)
     private var screenshotObserver: ContentObserver? = null
 
     // Barcode scanner options
@@ -122,6 +123,36 @@ class CouponInputManager(private val context: Context) {
                 return@withContext processCouponFromBitmap(bitmap, captureTimestamp)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon from image URI", e)
+                throw e
+            }
+        }
+    }
+
+    /**
+     * Process an image URI, persist it to app storage, and extract coupon information
+     * @param imageUri The URI of the image to process
+     * @return The extracted coupon information with persisted image URI
+     */
+    suspend fun processCouponFromImageUriWithPersistence(imageUri: Uri): Coupon {
+        return withContext(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "Processing and persisting coupon from image URI: $imageUri")
+
+                // First persist the URI to app storage
+                val persistedUri = uriPersistenceManager.persistUri(imageUri)
+                if (persistedUri == null) {
+                    Log.w(TAG, "Failed to persist URI, using original: $imageUri")
+                }
+
+                // Process the coupon (use original URI for processing)
+                val coupon = processCouponFromImageUri(imageUri)
+
+                // Return coupon with persisted URI
+                return@withContext coupon.copy(
+                    imageUri = (persistedUri ?: imageUri).toString()
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing coupon from image URI with persistence", e)
                 throw e
             }
         }
@@ -382,6 +413,29 @@ class CouponInputManager(private val context: Context) {
                     results.add(coupon)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error processing image in batch: $uri", e)
+                    // Continue with next image
+                }
+            }
+
+            return@withContext results
+        }
+    }
+
+    /**
+     * Process multiple images in batch mode with URI persistence
+     * @param imageUris List of image URIs to process
+     * @return List of extracted coupon information with persisted image URIs
+     */
+    suspend fun processCouponsInBatchWithPersistence(imageUris: List<Uri>): List<Coupon> {
+        return withContext(Dispatchers.IO) {
+            val results = mutableListOf<Coupon>()
+
+            for (uri in imageUris) {
+                try {
+                    val coupon = processCouponFromImageUriWithPersistence(uri)
+                    results.add(coupon)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error processing image in batch with persistence: $uri", e)
                     // Continue with next image
                 }
             }

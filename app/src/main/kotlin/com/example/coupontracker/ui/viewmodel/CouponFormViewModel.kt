@@ -60,8 +60,8 @@ class CouponFormViewModel @Inject constructor(
             try {
                 updateState { it.copy(isProcessing = true, error = null, saveResult = null) }
 
-                // Process the image
-                val coupon = couponInputManager.processCouponFromImageUri(uri)
+                // Process the image with URI persistence
+                val coupon = couponInputManager.processCouponFromImageUriWithPersistence(uri)
 
                 // Convert to coupon info
                 val couponInfo = mapCouponToCouponInfo(coupon)

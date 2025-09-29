@@ -43,6 +43,7 @@ class ScannerViewModel @Inject constructor(
 
     private val multiEngineOCR: MultiEngineOCR = MultiEngineOCR(context)
     private val twoStageDetector: TwoStageDetector = TwoStageDetector(context)
+    private val uriPersistenceManager = UriPersistenceManager(context)
     private val fieldHeuristics: GenericFieldHeuristics = GenericFieldHeuristics
     private val manualOverrides = mutableMapOf<String, CouponInstance>()
     private var pendingPreview: PendingPreview? = null
@@ -631,6 +632,10 @@ class ScannerViewModel @Inject constructor(
         try {
             Log.d(TAG, "Using traditional OCR fallback")
             
+            // First persist the URI
+            val persistedUri = uriPersistenceManager.persistUri(imageUri)
+            val finalUri = persistedUri ?: imageUri
+            
             when (val result = multiEngineOCR.processImage(imageUri)) {
                 is MultiEngineOCR.OCRResult.Success -> {
                     val extractedInfo = result.extractedInfo
@@ -639,7 +644,7 @@ class ScannerViewModel @Inject constructor(
                     if (extractedInfo.isEmpty()) {
                         _uiState.value = ScannerUiState.Error("Could not extract any coupon information from the image")
                     } else {
-                        val coupon = createCouponFromExtractedInfo(extractedInfo, imageUri.toString())
+                        val coupon = createCouponFromExtractedInfo(extractedInfo, finalUri.toString())
                         _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.FALLBACK)
                     }
                 }

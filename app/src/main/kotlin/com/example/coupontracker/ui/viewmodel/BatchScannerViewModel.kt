@@ -89,12 +89,9 @@ class BatchScannerViewModel @Inject constructor(
 
                 for ((index, uri) in images.withIndex()) {
                     try {
-                        // Process the image
-                        val coupon = couponInputManager.processCouponFromImageUri(uri)
-
-                        // Set the image URI in the coupon object
-                        val couponWithImage = coupon.copy(imageUri = uri.toString())
-                        processedCoupons.add(couponWithImage)
+                        // Process the image with URI persistence
+                        val coupon = couponInputManager.processCouponFromImageUriWithPersistence(uri)
+                        processedCoupons.add(coupon)
                     } catch (e: Exception) {
                         Log.e(TAG, "Error processing image at index $index", e)
                         failedCount++
