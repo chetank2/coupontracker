@@ -129,16 +129,24 @@ abstract class CouponDatabase : RoomDatabase() {
                 // Migrate existing cashbackAmount data to typed fields
                 // This query attempts to detect percentages vs amounts based on value and description
                 database.execSQL("""
-                    UPDATE coupons SET 
-                        cashbackType = CASE 
-                            WHEN cashbackAmount <= 100 AND (description LIKE '%off%' OR description LIKE '%%' OR description LIKE '%percent%') THEN 'percent'
+                    UPDATE coupons SET
+                        cashbackType = CASE
+                            WHEN cashbackAmount <= 100 AND (
+                                description LIKE '%off%'
+                                OR instr(description, '%') > 0
+                                OR description LIKE '%percent%'
+                            ) THEN 'percent'
                             ELSE 'amount'
                         END,
                         cashbackValueNum = cashbackAmount,
                         offerText = CASE
-                            WHEN cashbackAmount <= 100 AND (description LIKE '%off%' OR description LIKE '%%') THEN 
+                            WHEN cashbackAmount <= 100 AND (
+                                description LIKE '%off%'
+                                OR instr(description, '%') > 0
+                                OR description LIKE '%percent%'
+                            ) THEN
                                 CAST(CAST(cashbackAmount AS INTEGER) AS TEXT) || '% Off'
-                            ELSE 
+                            ELSE
                                 '₹' || CAST(CAST(cashbackAmount AS INTEGER) AS TEXT)
                         END
                     WHERE cashbackType IS NULL
