@@ -825,7 +825,7 @@ class ScannerViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         try {
-            twoStageDetector.cleanup()
+            twoStageDetector.cleanupBitmaps()
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up TwoStageDetector", e)
         }

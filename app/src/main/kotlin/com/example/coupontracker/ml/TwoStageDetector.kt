@@ -764,9 +764,9 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
     /**
      * Cleanup all managed bitmap resources
      */
-    fun cleanup() {
+    fun cleanupBitmaps() {
         BitmapManager.cleanup()
-        Log.d(TAG, "TwoStageDetector cleanup completed")
+        Log.d(TAG, "TwoStageDetector bitmap cleanup completed")
     }
     
     /**
@@ -832,7 +832,7 @@ data class CouponInstance(
     /**
      * Release managed bitmap resources
      */
-    fun cleanup() {
+    fun releaseBitmap() {
         managedBitmapId?.let { id ->
             BitmapManager.releaseBitmap(id)
         }

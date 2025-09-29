@@ -1013,7 +1013,7 @@ class LocalLlmOcrService(
     /**
      * Release model resources
      */
-    fun releaseResources() {
+    suspend fun releaseResources() {
         Log.d(TAG, "Releasing LLM resources")
         llmRuntime.releaseModel()
     }
