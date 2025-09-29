@@ -558,7 +558,7 @@ class LocalLlmOcrService(
     }
     
     /**
-     * Create optimized structured prompt for coupon extraction with strict schema
+     * Create optimized structured prompt for coupon extraction with strict schema and typed cashback
      */
     private fun createCouponExtractionPrompt(): String {
         return """
@@ -566,22 +566,33 @@ class LocalLlmOcrService(
         {
             "storeName": string|null,
             "description": string|null,
-            "cashbackAmount": string|null,
+            "cashback": {
+                "type": "percent"|"amount"|"text",
+                "valueNum": number,
+                "currency": "INR"|"USD"|null
+            }|null,
+            "offerText": string|null,
             "redeemCode": string|null,
             "expiryDate": string|null,
             "minOrderAmount": string|null
         }
 
-        RULES:
+        CRITICAL CASHBACK RULES:
+        - For "75% Off" → {"type":"percent", "valueNum":75}
+        - For "₹500 Off" → {"type":"amount", "valueNum":500, "currency":"INR"}
+        - For unclear text → {"type":"text", "valueNum":0}
+        - NEVER show percentages as rupee amounts
+        - offerText = exact banner text ("Flat 75% Off*")
+
+        OTHER RULES:
         - If a field is not explicitly present, output null
         - Do not invent values. Do not include notes
-        - Preserve exact text as shown in image
-        - For codes: use exact alphanumeric text (SAVE20, FLAT50)
-        - For amounts: include currency (₹100, 20%, $50 off)
-        - For dates: use format shown (31 Dec 2024, 31/12/2024)
+        - For codes: exact alphanumeric text (APR25PPM2OP6ZZ)
+        - For dates: preserve format (31 May, 2025, 11:59 PM)
+        - No code needed = redeemCode: null
 
         Example:
-        {"storeName":"Myntra","description":"Flat 20% off on fashion","cashbackAmount":"20% off","redeemCode":"SAVE20","expiryDate":"31 Dec 2024","minOrderAmount":"₹999"}
+        {"storeName":"ACwO","description":"Flat 75% Off on purchase of ACwO Earbuds and BT-Calling Smartwatches","cashback":{"type":"percent","valueNum":75},"offerText":"Flat 75% Off*","redeemCode":"APR25PPM2OP6ZZ","expiryDate":"31 May, 2025, 11:59 PM","minOrderAmount":null}
 
         Extract from the coupon image:
         """.trimIndent()
@@ -700,8 +711,30 @@ class LocalLlmOcrService(
                 if (it.isBlank() || it == "Unknown") null else it
             }
             
-            val cashbackAmountRaw = json.optString("cashbackAmount").let {
-                if (it.isBlank() || it == "Unknown") null else it
+            // Parse new typed cashback or fallback to legacy field
+            val (cashbackAmountRaw, cashbackTypeInfo) = if (json.has("cashback") && !json.isNull("cashback")) {
+                val cashbackObj = json.getJSONObject("cashback")
+                val type = cashbackObj.optString("type", "text")
+                val valueNum = cashbackObj.optDouble("valueNum", 0.0)
+                val currency = cashbackObj.optString("currency", "INR")
+                
+                val displayText = when (type) {
+                    "percent" -> "${valueNum.toInt()}%"
+                    "amount" -> when (currency) {
+                        "INR" -> "₹${valueNum.toInt()}"
+                        "USD" -> "$${valueNum.toInt()}"
+                        else -> "${valueNum.toInt()}"
+                    }
+                    else -> json.optString("offerText", "")
+                }
+                
+                Pair(displayText, Triple(type, valueNum, currency))
+            } else {
+                // Fallback to legacy cashbackAmount field
+                val legacy = json.optString("cashbackAmount").let {
+                    if (it.isBlank() || it == "Unknown") null else it
+                }
+                Pair(legacy, null)
             }
 
             val validatedCashback = cashbackAmountRaw?.takeIf {
@@ -728,13 +761,29 @@ class LocalLlmOcrService(
                 null
             } else code
             
-            // Parse expiry date with IST-first parser
+            // Parse expiry date with enhanced pattern matching
             val parsedExpiryDate = expiryDate?.let { dateStr ->
                 try {
-                    val parseResult = IndianDateParser.parseExpiryIST(dateStr)
-                    if (parseResult.date != null && parseResult.confidence > 0.5f) {
-                        Log.d(TAG, "Parsed expiry date: $dateStr -> ${parseResult.date} (confidence: ${parseResult.confidence})")
-                        java.util.Date.from(parseResult.date.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
+                    // First try extracting from the full text (in case LLM gave us a sentence)
+                    var parseResult = IndianDateParser.extractExpiryFromText(dateStr)
+                    
+                    // If that fails, try parsing the string directly
+                    if (parseResult.date == null) {
+                        parseResult = IndianDateParser.parseExpiryIST(dateStr)
+                    }
+                    
+                    // Also try extracting from the full description as a fallback
+                    if (parseResult.date == null || parseResult.confidence < 0.5f) {
+                        val descriptionResult = IndianDateParser.extractExpiryFromText(description)
+                        if (descriptionResult.confidence > parseResult.confidence) {
+                            parseResult = descriptionResult
+                        }
+                    }
+                    
+                    val parsedDate = parseResult.date
+                    if (parsedDate != null && parseResult.confidence > 0.5f) {
+                        Log.d(TAG, "Parsed expiry date: $dateStr -> $parsedDate (confidence: ${parseResult.confidence})")
+                        java.util.Date.from(parsedDate.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
                     } else {
                         Log.w(TAG, "Low confidence date parse: $dateStr (confidence: ${parseResult.confidence})")
                         // Fallback to original parser

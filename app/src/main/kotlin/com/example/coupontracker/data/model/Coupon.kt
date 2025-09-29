@@ -12,8 +12,14 @@ data class Coupon(
     val description: String,
     val normalizedDescription: String? = null,
     val expiryDate: Date? = null,
-    val cashbackAmount: Double,
+    val cashbackAmount: Double, // Legacy field - will be migrated
     val redeemCode: String?,
+    
+    // New typed cashback fields
+    val cashbackType: String? = null, // "percent", "amount", "text"
+    val cashbackValueNum: Double? = null, // Numeric value only
+    val cashbackCurrency: String? = "INR", // Currency for amounts
+    val offerText: String? = null, // Original display text (e.g., "Flat 75% Off")
     val imageUri: String?,
     val imagePhash: String? = null,
     val imageSignature: String? = null,
@@ -34,4 +40,37 @@ data class Coupon(
     val rating: String? = null,
     val createdAt: Date = Date(),
     val updatedAt: Date = Date()
-)
+) {
+    /**
+     * Gets the typed cashback information, falling back to legacy cashbackAmount if needed.
+     */
+    fun getCashbackInfo(): CashbackInfo {
+        return if (cashbackType != null && cashbackValueNum != null) {
+            // Use new typed fields
+            val type = when (cashbackType) {
+                "percent" -> CashbackType.PERCENT
+                "amount" -> CashbackType.AMOUNT
+                "text" -> CashbackType.TEXT
+                else -> CashbackType.AMOUNT // Default fallback
+            }
+            CashbackInfo(type, cashbackValueNum, cashbackCurrency ?: "INR")
+        } else {
+            // Fallback to legacy field with heuristic detection
+            CashbackInfo.fromLegacyAmount(cashbackAmount, description)
+        }
+    }
+
+    /**
+     * Gets the display text for cashback, preferring offerText if available.
+     */
+    fun getCashbackDisplayText(): String {
+        return offerText ?: getCashbackInfo().getDisplayText()
+    }
+
+    /**
+     * Gets the numeric value for sorting and comparison.
+     */
+    fun getCashbackNumericValue(): Double {
+        return cashbackValueNum ?: cashbackAmount
+    }
+}

@@ -30,7 +30,8 @@ object DatabaseModule {
             .addMigrations(
                 CouponDatabase.MIGRATION_2_3,
                 CouponDatabase.MIGRATION_3_4,
-                CouponDatabase.MIGRATION_4_5
+                CouponDatabase.MIGRATION_4_5,
+                CouponDatabase.MIGRATION_5_6
             )
             .fallbackToDestructiveMigration()
             .build()

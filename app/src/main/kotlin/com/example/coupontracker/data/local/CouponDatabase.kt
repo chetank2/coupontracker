@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.CouponDedupUtils
 
-@Database(entities = [Coupon::class], version = 5)
+@Database(entities = [Coupon::class], version = 6)
 @TypeConverters(Converters::class)
 abstract class CouponDatabase : RoomDatabase() {
     abstract fun couponDao(): CouponDao
@@ -115,6 +115,34 @@ abstract class CouponDatabase : RoomDatabase() {
 
                 database.execSQL("DROP TABLE `coupons`")
                 database.execSQL("ALTER TABLE `coupons_new` RENAME TO `coupons`")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Add new typed cashback fields
+                database.execSQL("ALTER TABLE coupons ADD COLUMN cashbackType TEXT")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN cashbackValueNum REAL")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN cashbackCurrency TEXT DEFAULT 'INR'")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN offerText TEXT")
+
+                // Migrate existing cashbackAmount data to typed fields
+                // This query attempts to detect percentages vs amounts based on value and description
+                database.execSQL("""
+                    UPDATE coupons SET 
+                        cashbackType = CASE 
+                            WHEN cashbackAmount <= 100 AND (description LIKE '%off%' OR description LIKE '%%' OR description LIKE '%percent%') THEN 'percent'
+                            ELSE 'amount'
+                        END,
+                        cashbackValueNum = cashbackAmount,
+                        offerText = CASE
+                            WHEN cashbackAmount <= 100 AND (description LIKE '%off%' OR description LIKE '%%') THEN 
+                                CAST(CAST(cashbackAmount AS INTEGER) AS TEXT) || '% Off'
+                            ELSE 
+                                '₹' || CAST(CAST(cashbackAmount AS INTEGER) AS TEXT)
+                        END
+                    WHERE cashbackType IS NULL
+                """)
             }
         }
     }

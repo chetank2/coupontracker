@@ -45,7 +45,110 @@ object IndianDateParser {
         "nov" to "Nov", "november" to "November",
         "dec" to "Dec", "december" to "December"
     )
+
+    // Enhanced regex patterns for expiry detection
+    private val EXPIRY_PATTERNS = listOf(
+        // Absolute dates with context
+        Regex("""(?i)\b(?:expires?|valid\s*(?:till|until|on)|ends?)\s*(?:on\s*)?(\d{1,2}\s*[A-Za-z]{3,9}\s*,?\s*\d{4})(?:,\s*\d{1,2}:\d{2}\s*(?:AM|PM))?"""),
+        
+        // Numeric dates with context
+        Regex("""(?i)\b(?:expires?|valid\s*(?:till|until|on)|ends?)\s*(?:on\s*)?(0?[1-9]|[12][0-9]|3[01])[-/\s](0?[1-9]|1[0-2])[-/\s](\d{2,4})"""),
+        
+        // Relative dates
+        Regex("""(?i)\b(?:expires?|valid)\s+in\s+(\d+)\s+days?\b"""),
+        
+        // End of month
+        Regex("""(?i)\b(?:end(?:s)?\s+of\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)(?:ember|uary|ch|il|e|y|ust|tember|ober|ember)?)\b"""),
+        
+        // Just the date without context (fallback)
+        Regex("""(\d{1,2}\s*[A-Za-z]{3,9}\s*,?\s*\d{4})(?:,\s*\d{1,2}:\d{2}\s*(?:AM|PM))?"""),
+        
+        // Numeric only fallback
+        Regex("""(0?[1-9]|[12][0-9]|3[01])[-/](0?[1-9]|1[0-2])[-/](\d{2,4})""")
+    )
     
+    /**
+     * Extracts expiry date from text using regex patterns.
+     * This handles cases where the date is embedded in longer text.
+     */
+    fun extractExpiryFromText(text: String, now: LocalDate = LocalDate.now()): DateParseResult {
+        if (text.isBlank()) {
+            return DateParseResult(null, 0.0f, "Empty text")
+        }
+
+        Log.d(TAG, "Extracting expiry from text: '$text'")
+
+        // Try each regex pattern in priority order
+        for ((index, pattern) in EXPIRY_PATTERNS.withIndex()) {
+            val match = pattern.find(text)
+            if (match != null) {
+                val extractedDate = match.groupValues.getOrNull(1) ?: match.value
+                Log.d(TAG, "Pattern $index matched: '${match.value}' -> extracted: '$extractedDate'")
+                
+                // Handle special cases
+                val result = when {
+                    // Relative dates (e.g., "in 5 days")
+                    extractedDate.matches(Regex("\\d+")) && pattern.pattern.contains("days") -> {
+                        val days = extractedDate.toIntOrNull() ?: 0
+                        val futureDate = now.plusDays(days.toLong())
+                        DateParseResult(futureDate, 0.9f, "Relative date: +$days days")
+                    }
+                    
+                    // End of month (e.g., "end of May")
+                    pattern.pattern.contains("end") -> {
+                        parseEndOfMonth(extractedDate, now)
+                    }
+                    
+                    // Regular date parsing
+                    else -> parseExpiryIST(extractedDate, now)
+                }
+                
+                if (result.date != null) {
+                    return result.copy(confidence = result.confidence * (1.0f - index * 0.1f)) // Prefer earlier patterns
+                }
+            }
+        }
+
+        Log.w(TAG, "No expiry date pattern matched in text: '$text'")
+        return DateParseResult(null, 0.0f, "No date pattern found")
+    }
+
+    /**
+     * Parses "end of month" expressions like "end of May" or "end of December"
+     */
+    private fun parseEndOfMonth(monthName: String, now: LocalDate): DateParseResult {
+        val cleanMonth = monthName.lowercase().trim()
+        val monthNumber = when {
+            cleanMonth.startsWith("jan") -> 1
+            cleanMonth.startsWith("feb") -> 2
+            cleanMonth.startsWith("mar") -> 3
+            cleanMonth.startsWith("apr") -> 4
+            cleanMonth.startsWith("may") -> 5
+            cleanMonth.startsWith("jun") -> 6
+            cleanMonth.startsWith("jul") -> 7
+            cleanMonth.startsWith("aug") -> 8
+            cleanMonth.startsWith("sep") -> 9
+            cleanMonth.startsWith("oct") -> 10
+            cleanMonth.startsWith("nov") -> 11
+            cleanMonth.startsWith("dec") -> 12
+            else -> return DateParseResult(null, 0.0f, "Unrecognized month: $monthName")
+        }
+
+        // Determine year - if the month has passed this year, use next year
+        val currentYear = now.year
+        val currentMonth = now.monthValue
+        val year = if (monthNumber < currentMonth || (monthNumber == currentMonth && now.dayOfMonth > 15)) {
+            currentYear + 1
+        } else {
+            currentYear
+        }
+
+        // Get last day of the month
+        val lastDayOfMonth = LocalDate.of(year, monthNumber, 1).plusMonths(1).minusDays(1)
+        
+        return DateParseResult(lastDayOfMonth, 0.8f, "End of month: $monthName $year")
+    }
+
     /**
      * Parse expiry date with IST timezone and confidence scoring
      */
