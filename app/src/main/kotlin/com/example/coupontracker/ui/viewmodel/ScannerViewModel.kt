@@ -14,6 +14,9 @@ import com.example.coupontracker.data.model.CashbackInfo
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.universal.UniversalExtractionService
 import com.example.coupontracker.universal.ExtractionContext
+import com.example.coupontracker.util.ExtractionPerformanceMonitor
+import com.example.coupontracker.util.ExtractionMethod
+import com.example.coupontracker.util.FeedbackType
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
@@ -39,7 +42,8 @@ class ScannerViewModel @Inject constructor(
     private val couponRepository: CouponRepository,
     private val localLlmOcrService: LocalLlmOcrService,
     private val telemetryService: ExtractionTelemetryService,
-    private val universalExtractionService: UniversalExtractionService
+    private val universalExtractionService: UniversalExtractionService,
+    private val performanceMonitor: ExtractionPerformanceMonitor
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -645,6 +649,8 @@ class ScannerViewModel @Inject constructor(
      * Try universal extraction as an alternative to traditional OCR
      */
     private suspend fun tryUniversalExtraction(imageUri: Uri, bitmap: Bitmap) {
+        val startTime = System.currentTimeMillis()
+        
         try {
             Log.d(TAG, "Attempting universal extraction")
             
@@ -661,6 +667,17 @@ class ScannerViewModel @Inject constructor(
             
             if (ocrText.isBlank()) {
                 Log.w(TAG, "No OCR text available for universal extraction")
+                
+                // Record failed attempt
+                val processingTime = System.currentTimeMillis() - startTime
+                performanceMonitor.recordExtractionAttempt(
+                    method = ExtractionMethod.UNIVERSAL_EXTRACTION,
+                    success = false,
+                    confidence = 0f,
+                    processingTimeMs = processingTime,
+                    fieldsExtracted = emptySet()
+                )
+                
                 fallbackToTraditionalOCR(imageUri)
                 return
             }
@@ -675,6 +692,8 @@ class ScannerViewModel @Inject constructor(
                 context = context
             )
             
+            val processingTime = System.currentTimeMillis() - startTime
+            
             if (extractionResult.success && extractionResult.confidence > 0.3f) {
                 Log.d(TAG, "Universal extraction successful with confidence: ${extractionResult.confidence}")
                 
@@ -682,6 +701,21 @@ class ScannerViewModel @Inject constructor(
                 val persistedUri = uriPersistenceManager.persistUri(imageUri)
                 val coupon = extractionResult.coupon.copy(
                     imageUri = persistedUri?.toString()
+                )
+                
+                // Record successful extraction
+                val fieldsExtracted = mutableSetOf<String>()
+                if (coupon.storeName != "Unknown Store") fieldsExtracted.add("storeName")
+                if (!coupon.redeemCode.isNullOrBlank()) fieldsExtracted.add("redeemCode")
+                if (coupon.getCashbackNumericValue() > 0) fieldsExtracted.add("cashback")
+                if (coupon.expiryDate != null) fieldsExtracted.add("expiryDate")
+                
+                performanceMonitor.recordExtractionAttempt(
+                    method = ExtractionMethod.UNIVERSAL_EXTRACTION,
+                    success = true,
+                    confidence = extractionResult.confidence,
+                    processingTimeMs = processingTime,
+                    fieldsExtracted = fieldsExtracted
                 )
                 
                 // Store extraction result for potential feedback learning
@@ -698,11 +732,32 @@ class ScannerViewModel @Inject constructor(
                 
             } else {
                 Log.d(TAG, "Universal extraction failed or low confidence: ${extractionResult.confidence}")
+                
+                // Record failed attempt
+                performanceMonitor.recordExtractionAttempt(
+                    method = ExtractionMethod.UNIVERSAL_EXTRACTION,
+                    success = false,
+                    confidence = extractionResult.confidence,
+                    processingTimeMs = processingTime,
+                    fieldsExtracted = emptySet()
+                )
+                
                 fallbackToTraditionalOCR(imageUri)
             }
             
         } catch (e: Exception) {
             Log.e(TAG, "Universal extraction error", e)
+            
+            // Record failed attempt
+            val processingTime = System.currentTimeMillis() - startTime
+            performanceMonitor.recordExtractionAttempt(
+                method = ExtractionMethod.UNIVERSAL_EXTRACTION,
+                success = false,
+                confidence = 0f,
+                processingTimeMs = processingTime,
+                fieldsExtracted = emptySet()
+            )
+            
             fallbackToTraditionalOCR(imageUri)
         }
     }
@@ -875,6 +930,13 @@ class ScannerViewModel @Inject constructor(
                 try {
                     Log.d(TAG, "User confirmed extraction is correct - learning from success")
                     
+                    // Record positive feedback
+                    performanceMonitor.recordUserFeedback(
+                        method = ExtractionMethod.UNIVERSAL_EXTRACTION,
+                        feedbackType = FeedbackType.CONFIRMED_CORRECT,
+                        correctedFields = emptySet()
+                    )
+                    
                     val context = ExtractionContext()
                     universalExtractionService.learnFromSuccess(
                         extractionResult = extractionResult,
@@ -905,6 +967,20 @@ class ScannerViewModel @Inject constructor(
             lastExtractionResult?.let { (extractionResult, ocrText) ->
                 try {
                     Log.d(TAG, "User submitted corrections - learning from feedback")
+                    
+                    // Identify which fields were corrected
+                    val correctedFields = mutableSetOf<String>()
+                    if (!correctedStoreName.isNullOrBlank()) correctedFields.add("storeName")
+                    if (!correctedCode.isNullOrBlank()) correctedFields.add("redeemCode")
+                    if (!correctedAmount.isNullOrBlank()) correctedFields.add("cashback")
+                    if (!correctedExpiry.isNullOrBlank()) correctedFields.add("expiryDate")
+                    
+                    // Record negative feedback with corrections
+                    performanceMonitor.recordUserFeedback(
+                        method = ExtractionMethod.UNIVERSAL_EXTRACTION,
+                        feedbackType = FeedbackType.SUBMITTED_CORRECTIONS,
+                        correctedFields = correctedFields
+                    )
                     
                     // Create corrected coupon
                     val correctedCoupon = extractionResult.coupon.copy(

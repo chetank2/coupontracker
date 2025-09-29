@@ -313,6 +313,39 @@ fun SettingsScreen(
 
             // Protected features (only shown if unlocked)
             if (protectedFeaturesUnlocked) {
+                // Extraction Performance Dashboard
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        // Dashboard button
+                        OutlinedButton(
+                            onClick = { navController.navigate(Screen.ExtractionDashboard.route) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Analytics,
+                                contentDescription = null
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Extraction Performance")
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = "Monitor universal extraction performance, learning progress, and optimize the AI system.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
                 // Analytics button
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -329,7 +362,7 @@ fun SettingsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Analytics,
+                                imageVector = Icons.Default.School,
                                 contentDescription = null
                             )
                             Spacer(modifier = Modifier.width(8.dp))

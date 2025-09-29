@@ -17,6 +17,7 @@ import com.example.coupontracker.ui.screen.ApiTestScreen
 import com.example.coupontracker.ui.screen.BatchScannerScreen
 import com.example.coupontracker.ui.screen.CouponDetailScreen
 import com.example.coupontracker.ui.screen.CouponFormScreen
+import com.example.coupontracker.ui.screen.ExtractionDashboardScreen
 import com.example.coupontracker.ui.screen.HomeScreen
 import com.example.coupontracker.ui.screen.ManualEntryScreen
 import com.example.coupontracker.ui.screen.OnboardingScreen
@@ -64,6 +65,8 @@ sealed class Screen(val route: String) {
             return "coupon_form/${android.net.Uri.encode(imageUri)}?isBatchMode=$isBatchMode"
         }
     }
+    
+    object ExtractionDashboard : Screen("extraction_dashboard")
 }
 
 @Composable
@@ -214,6 +217,10 @@ fun AppNavigation(
                 isBatchMode = isBatchMode,
                 scannerViewModel = scannerViewModel
             )
+        }
+        
+        composable(Screen.ExtractionDashboard.route) {
+            ExtractionDashboardScreen(navController = navController)
         }
     }
 }
