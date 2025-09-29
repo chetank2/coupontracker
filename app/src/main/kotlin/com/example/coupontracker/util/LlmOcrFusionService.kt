@@ -64,15 +64,13 @@ class LlmOcrFusionService(
      * Fuse coupon codes using edit distance and brand awareness
      */
     private fun fuseCode(llmCode: String?, ocrSpans: List<TextSpan>, brand: String?): String? {
-        val ocrCandidates = ocrSpans
-            .nearKeywords(CODE_KEYWORDS)
-            .map { it.text.normalize() }
-            .filter { it.isNotBlank() }
+        // Extract clean code tokens from OCR spans near code keywords
+        val ocrCodeTokens = extractCleanOcrCodeTokens(ocrSpans)
         
         return when {
             // LLM has no code, but OCR found candidates
-            llmCode == null && ocrCandidates.isNotEmpty() -> {
-                val rankedCodes = BrandAwareCouponValidator.rankCodes(brand, ocrCandidates)
+            llmCode == null && ocrCodeTokens.isNotEmpty() -> {
+                val rankedCodes = BrandAwareCouponValidator.rankCodes(brand, ocrCodeTokens)
                 val best = rankedCodes.firstOrNull()
                 if (best != null && best.score > 0.6) {
                     Log.d(TAG, "Using OCR code (no LLM): ${best.text} (score: ${best.score})")
@@ -83,9 +81,10 @@ class LlmOcrFusionService(
             }
             
             // LLM has code, check if OCR has better match
-            llmCode != null && ocrCandidates.isNotEmpty() -> {
-                val closeMatches = ocrCandidates.filter { 
-                    editDistance(it, llmCode.normalize()) <= 2 
+            llmCode != null && ocrCodeTokens.isNotEmpty() -> {
+                val normalizedLlmCode = llmCode.normalize()
+                val closeMatches = ocrCodeTokens.filter { 
+                    editDistance(it.normalize(), normalizedLlmCode) <= 2 
                 }
                 
                 if (closeMatches.isNotEmpty()) {
@@ -107,6 +106,156 @@ class LlmOcrFusionService(
             // Default: use LLM result
             else -> llmCode
         }
+    }
+    
+    /**
+     * Extract clean coupon code tokens from OCR text spans
+     * Handles common prefixes, punctuation, and formatting issues
+     */
+    private fun extractCleanOcrCodeTokens(ocrSpans: List<TextSpan>): List<String> {
+        val cleanTokens = mutableListOf<String>()
+        
+        // Get spans near code-related keywords
+        val relevantSpans = ocrSpans.nearKeywords(CODE_KEYWORDS)
+        
+        for (span in relevantSpans) {
+            val text = span.text
+            
+            // Extract potential code tokens using multiple strategies
+            val extractedTokens = mutableSetOf<String>()
+            
+            // Strategy 1: Remove common prefixes and extract alphanumeric sequences
+            val cleanedText = removeCommonCodePrefixes(text)
+            val alphanumericTokens = extractAlphanumericTokens(cleanedText)
+            extractedTokens.addAll(alphanumericTokens)
+            
+            // Strategy 2: Look for patterns that match typical coupon codes
+            val patternMatches = extractCodePatterns(text)
+            extractedTokens.addAll(patternMatches)
+            
+            // Strategy 3: Split on punctuation and filter for code-like tokens
+            val punctuationSplit = splitOnPunctuation(text)
+            extractedTokens.addAll(punctuationSplit)
+            
+            // Filter and validate extracted tokens
+            for (token in extractedTokens) {
+                val cleanToken = token.trim().uppercase()
+                if (isValidCodeToken(cleanToken)) {
+                    cleanTokens.add(cleanToken)
+                }
+            }
+        }
+        
+        // Remove duplicates and return
+        val uniqueTokens = cleanTokens.distinct()
+        Log.d(TAG, "Extracted ${uniqueTokens.size} clean OCR code tokens: $uniqueTokens")
+        return uniqueTokens
+    }
+    
+    /**
+     * Remove common prefixes that appear before coupon codes
+     */
+    private fun removeCommonCodePrefixes(text: String): String {
+        val prefixPatterns = listOf(
+            Regex("(?i)coupon\\s*code\\s*:?\\s*", RegexOption.IGNORE_CASE),
+            Regex("(?i)promo\\s*code\\s*:?\\s*", RegexOption.IGNORE_CASE),
+            Regex("(?i)use\\s*code\\s*:?\\s*", RegexOption.IGNORE_CASE),
+            Regex("(?i)apply\\s*code\\s*:?\\s*", RegexOption.IGNORE_CASE),
+            Regex("(?i)redeem\\s*code\\s*:?\\s*", RegexOption.IGNORE_CASE),
+            Regex("(?i)discount\\s*code\\s*:?\\s*", RegexOption.IGNORE_CASE),
+            Regex("(?i)code\\s*:?\\s*", RegexOption.IGNORE_CASE),
+            Regex("(?i)offer\\s*code\\s*:?\\s*", RegexOption.IGNORE_CASE)
+        )
+        
+        var cleaned = text
+        for (pattern in prefixPatterns) {
+            cleaned = pattern.replace(cleaned, "")
+        }
+        
+        return cleaned.trim()
+    }
+    
+    /**
+     * Extract alphanumeric sequences that could be coupon codes
+     */
+    private fun extractAlphanumericTokens(text: String): List<String> {
+        // Look for sequences of letters, numbers, and common separators
+        val pattern = Regex("[A-Z0-9][A-Z0-9_-]{2,15}")
+        return pattern.findAll(text.uppercase())
+            .map { it.value }
+            .toList()
+    }
+    
+    /**
+     * Extract tokens using specific coupon code patterns
+     */
+    private fun extractCodePatterns(text: String): List<String> {
+        val patterns = listOf(
+            // Standard alphanumeric codes
+            Regex("\\b[A-Z0-9]{4,12}\\b"),
+            // Codes with separators
+            Regex("\\b[A-Z0-9]{2,6}[-_][A-Z0-9]{2,6}\\b"),
+            Regex("\\b[A-Z0-9]{2,4}[-_][A-Z0-9]{2,4}[-_][A-Z0-9]{2,4}\\b"),
+            // Brand-specific patterns (common prefixes)
+            Regex("\\b(?:SAVE|FLAT|GET|NEW|EXTRA|FIRST|WELCOME)[A-Z0-9]{2,8}\\b"),
+            // Numeric codes with letters
+            Regex("\\b[A-Z]{2,4}[0-9]{2,4}\\b"),
+            Regex("\\b[0-9]{2,4}[A-Z]{2,4}\\b")
+        )
+        
+        val matches = mutableListOf<String>()
+        val upperText = text.uppercase()
+        
+        for (pattern in patterns) {
+            matches.addAll(pattern.findAll(upperText).map { it.value })
+        }
+        
+        return matches
+    }
+    
+    /**
+     * Split text on punctuation and filter for code-like tokens
+     */
+    private fun splitOnPunctuation(text: String): List<String> {
+        // Split on common punctuation but preserve hyphens and underscores in codes
+        val tokens = text.split(Regex("[^A-Za-z0-9_-]+"))
+            .map { it.trim().uppercase() }
+            .filter { it.isNotBlank() }
+        
+        return tokens
+    }
+    
+    /**
+     * Validate if a token looks like a valid coupon code
+     */
+    private fun isValidCodeToken(token: String): Boolean {
+        // Basic length check
+        if (token.length < 3 || token.length > 16) return false
+        
+        // Must contain at least one letter or number
+        if (!token.any { it.isLetterOrDigit() }) return false
+        
+        // Reject tokens that are mostly punctuation
+        val alphanumericCount = token.count { it.isLetterOrDigit() }
+        if (alphanumericCount < token.length * 0.6) return false
+        
+        // Reject common non-code words
+        val rejectWords = setOf(
+            "CODE", "COUPON", "PROMO", "USE", "APPLY", "REDEEM", "DISCOUNT", 
+            "OFFER", "SAVE", "GET", "FREE", "OFF", "PERCENT", "RUPEES",
+            "VALID", "TILL", "EXPIRES", "TERMS", "CONDITIONS", "THE", "AND",
+            "FOR", "WITH", "ON", "AT", "TO", "FROM", "BY", "OF", "IN"
+        )
+        
+        if (rejectWords.contains(token)) return false
+        
+        // Reject tokens that are only numbers (unless 4+ digits which might be valid)
+        if (token.all { it.isDigit() } && token.length < 4) return false
+        
+        // Reject tokens that are only letters and too short
+        if (token.all { it.isLetter() } && token.length < 4) return false
+        
+        return true
     }
     
     /**
