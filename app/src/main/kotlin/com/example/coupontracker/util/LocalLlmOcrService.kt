@@ -678,30 +678,17 @@ class LocalLlmOcrService(
             //     if (it.isBlank() || it == "Unknown") null else it
             // }
             
-            // Extract brand for code validation
-            val detectedBrand = BrandAwareCouponValidator.extractBrand(
-                json.optString("storeName").takeIf { it.isNotBlank() },
-                json.optString("description").takeIf { it.isNotBlank() }
-            )
-            
-            // Try both 'redeemCode' (from prompt) and 'code' (fallback) to handle both field names
+            // Use universal code validation instead of brand-specific patterns
             val code = (json.optString("redeemCode").takeIf { it.isNotBlank() && it != "Unknown" }
                 ?: json.optString("code").takeIf { it.isNotBlank() && it != "Unknown" })
                 ?.let { rawCode ->
-                    // Use brand-aware validation instead of basic sanitization
+                    // Basic sanitization and universal validation
                     val sanitized = RedeemCodeSanitizer.sanitize(rawCode)
-                    if (sanitized != null && !BrandAwareCouponValidator.isJunkCode(sanitized)) {
-                        val candidates = BrandAwareCouponValidator.rankCodes(detectedBrand, listOf(sanitized))
-                        val bestCandidate = candidates.firstOrNull()
-                        
-                        if (bestCandidate != null && bestCandidate.score > 0.5) {
-                            Log.d(TAG, "Validated code: $sanitized (brand: $detectedBrand, score: ${bestCandidate.score})")
-                            bestCandidate.text
-                        } else {
-                            Log.w(TAG, "Low confidence code: $sanitized (score: ${bestCandidate?.score ?: 0.0})")
-                            null
-                        }
+                    if (sanitized != null && isValidUniversalCode(sanitized)) {
+                        Log.d(TAG, "Validated universal code: $sanitized")
+                        sanitized
                     } else {
+                        Log.w(TAG, "Invalid code pattern: $sanitized")
                         null
                     }
                 }
@@ -865,6 +852,42 @@ class LocalLlmOcrService(
 
         val trimmedToken = normalizedToken.trimStart('0')
         return trimmedToken.isNotBlank() && normalizedText.contains(trimmedToken)
+    }
+
+    /**
+     * Universal code validation - replaces brand-specific patterns
+     * Uses learned patterns and general validation rules
+     */
+    private fun isValidUniversalCode(code: String): Boolean {
+        if (code.isBlank()) return false
+        
+        // Basic format validation
+        val basePattern = Regex("^[A-Z0-9][A-Z0-9_-]{3,15}$")
+        if (!basePattern.matches(code)) {
+            return false
+        }
+        
+        // Reject obvious non-codes
+        val junkPatterns = listOf(
+            "VOUCHER", "COUPON", "OFFER", "DISCOUNT", "NEEDED", "USING", 
+            "CODE", "PROMO", "SAVE", "GET", "BUY", "USE", "APPLY"
+        )
+        
+        if (junkPatterns.any { code.contains(it, ignoreCase = true) }) {
+            return false
+        }
+        
+        // Must have some variety (not all same character)
+        if (code.toSet().size < 2) {
+            return false
+        }
+        
+        // Reasonable length check
+        if (code.length < 4 || code.length > 16) {
+            return false
+        }
+        
+        return true
     }
 
     /**
