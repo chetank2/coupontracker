@@ -5,6 +5,7 @@ import com.example.coupontracker.universal.PatternLearningEngine
 import com.example.coupontracker.universal.UniversalExtractionService
 import com.example.coupontracker.universal.UniversalFieldDetector
 import com.example.coupontracker.universal.UniversalLayoutAnalyzer
+import com.google.gson.Gson
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -58,5 +59,11 @@ object UniversalExtractionModule {
         confidenceScorer: AdaptiveConfidenceScorer
     ): UniversalExtractionService {
         return UniversalExtractionService(fieldDetector, patternLearner, confidenceScorer)
+    }
+
+    @Provides
+    @Singleton
+    fun provideGson(): Gson {
+        return Gson()
     }
 }
