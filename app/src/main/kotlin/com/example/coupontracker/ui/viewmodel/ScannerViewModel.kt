@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
@@ -61,6 +62,74 @@ class ScannerViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "ScannerViewModel"
+
+        @VisibleForTesting
+        internal fun parseExpiryDate(
+            dateString: String?,
+            locale: Locale = Locale.getDefault()
+        ): Date? {
+            if (dateString.isNullOrBlank()) return null
+
+            val cleanedDate = dateString
+                .trim()
+                .replace("\u202F", " ")
+                .let {
+                    val timeRegex = Regex("\\s*(?:at\\s*)?\\d{1,2}:\\d{2}(?:\\s*[AaPp][Mm])?(?:\\s*[A-Za-z]+)?$")
+                    timeRegex.replace(it) { _ -> "" }.trim()
+                }
+
+            val dateFormats = listOf(
+                "dd/MM/yyyy",
+                "MM/dd/yyyy",
+                "yyyy/MM/dd",
+                "dd-MM-yyyy",
+                "MM-dd-yyyy",
+                "yyyy-MM-dd",
+                "dd.MM.yyyy",
+                "MM.dd.yyyy",
+                "yyyy.MM.dd",
+                "dd MMM yyyy",
+                "dd MMMM yyyy",
+                "dd MMM, yyyy",
+                "dd MMMM, yyyy",
+                "dd/MM/yy",
+                "MM/dd/yy",
+                "dd-MM-yy",
+                "MM-dd-yy",
+                "dd.MM.yy",
+                "MM.dd.yy",
+                "dd MMM yy",
+                "dd MMMM yy"
+            )
+
+            val twoDigitYearStart = Calendar.getInstance().apply {
+                set(Calendar.YEAR, 2000)
+                set(Calendar.MONTH, Calendar.JANUARY)
+                set(Calendar.DAY_OF_MONTH, 1)
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.time
+
+            for (format in dateFormats) {
+                try {
+                    val sdf = SimpleDateFormat(format, locale)
+                    sdf.isLenient = false
+                    if (format.contains("yy") && !format.contains("yyyy")) {
+                        sdf.set2DigitYearStart(twoDigitYearStart)
+                    }
+                    val parsed = sdf.parse(cleanedDate)
+                    if (parsed != null) {
+                        return parsed
+                    }
+                } catch (e: Exception) {
+                    // Try next format
+                }
+            }
+
+            return null // Don't return fallback date - use null if parsing fails
+        }
     }
 
     init {
@@ -881,46 +950,6 @@ class ScannerViewModel @Inject constructor(
     /**
      * Parse expiry date string to Date
      */
-    private fun parseExpiryDate(dateString: String?): Date? {
-        if (dateString.isNullOrBlank()) return null
-
-        val cleanedDate = dateString
-            .trim()
-            .replace("\u202F", " ")
-            .let {
-                val timeRegex = Regex("\\s*(?:at\\s*)?\\d{1,2}:\\d{2}(?:\\s*[AaPp][Mm])?(?:\\s*[A-Za-z]+)?$")
-                timeRegex.replace(it) { _ -> "" }.trim()
-            }
-
-        val dateFormats = listOf(
-            "dd/MM/yyyy",
-            "MM/dd/yyyy",
-            "yyyy/MM/dd",
-            "dd-MM-yyyy",
-            "MM-dd-yyyy",
-            "yyyy-MM-dd",
-            "dd MMM yyyy",
-            "dd MMMM yyyy",
-            "dd MMM, yyyy",
-            "dd MMMM, yyyy"
-        )
-
-        for (format in dateFormats) {
-            try {
-                val sdf = SimpleDateFormat(format, Locale.getDefault())
-                sdf.isLenient = false
-                val parsed = sdf.parse(cleanedDate)
-                if (parsed != null) {
-                    return parsed
-                }
-            } catch (e: Exception) {
-                // Try next format
-            }
-        }
-
-        return null // Don't return fallback date - use null if parsing fails
-    }
-
     /**
      * Confirm that the extraction was correct (positive feedback)
      */
