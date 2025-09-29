@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
+import com.example.coupontracker.ui.components.ExtractionFeedbackDialog
+import com.example.coupontracker.ui.components.CorrectedCoupon
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.QrCode
@@ -113,6 +115,8 @@ fun ScannerScreen(
 
     var showCamera by remember { mutableStateOf(false) }
     var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var showFeedbackDialog by remember { mutableStateOf(false) }
+    var extractedCoupon by remember { mutableStateOf<com.example.coupontracker.data.model.Coupon?>(null) }
 
     // Form fields
     var code by remember { mutableStateOf("") }
@@ -150,17 +154,25 @@ fun ScannerScreen(
         }
     }
 
-    // Handle scan result and navigate to CouponFormScreen
+    // Handle scan result - show feedback dialog if universal extraction was used
     LaunchedEffect(uiState) {
-        if (uiState is ScannerUiState.Success) {
-            capturedImageUri?.let { uri ->
-                // Navigate to the new CouponFormScreen
-                navController.navigate(
-                    Screen.CouponForm.createRoute(
-                        imageUri = uri.toString(),
-                        isBatchMode = false
+        val currentState = uiState
+        if (currentState is ScannerUiState.Success) {
+            extractedCoupon = currentState.coupon
+            
+            // Show feedback dialog if we can collect feedback (universal extraction was used)
+            if (viewModel.canCollectFeedback()) {
+                showFeedbackDialog = true
+            } else {
+                // Navigate directly to form if no feedback needed
+                capturedImageUri?.let { uri ->
+                    navController.navigate(
+                        Screen.CouponForm.createRoute(
+                            imageUri = uri.toString(),
+                            isBatchMode = false
+                        )
                     )
-                )
+                }
             }
         }
     }
@@ -479,6 +491,59 @@ fun ScannerScreen(
                     }
                 }
             }
+        }
+        
+        // Show feedback dialog if needed
+        if (showFeedbackDialog && extractedCoupon != null) {
+            ExtractionFeedbackDialog(
+                coupon = extractedCoupon!!,
+                onConfirmCorrect = {
+                    viewModel.confirmExtractionCorrect()
+                    showFeedbackDialog = false
+                    
+                    // Navigate to form after feedback
+                    capturedImageUri?.let { uri ->
+                        navController.navigate(
+                            Screen.CouponForm.createRoute(
+                                imageUri = uri.toString(),
+                                isBatchMode = false
+                            )
+                        )
+                    }
+                },
+                onSubmitCorrection = { correction ->
+                    viewModel.submitExtractionCorrection(
+                        correctedStoreName = correction.storeName,
+                        correctedCode = correction.redeemCode,
+                        correctedAmount = correction.cashbackAmount,
+                        correctedExpiry = correction.expiryDate
+                    )
+                    showFeedbackDialog = false
+                    
+                    // Navigate to form after feedback
+                    capturedImageUri?.let { uri ->
+                        navController.navigate(
+                            Screen.CouponForm.createRoute(
+                                imageUri = uri.toString(),
+                                isBatchMode = false
+                            )
+                        )
+                    }
+                },
+                onDismiss = {
+                    showFeedbackDialog = false
+                    
+                    // Navigate to form without feedback
+                    capturedImageUri?.let { uri ->
+                        navController.navigate(
+                            Screen.CouponForm.createRoute(
+                                imageUri = uri.toString(),
+                                isBatchMode = false
+                            )
+                        )
+                    }
+                }
+            )
         }
     }
 }

@@ -12,6 +12,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.CashbackInfo
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.universal.UniversalExtractionService
+import com.example.coupontracker.universal.ExtractionContext
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
@@ -36,7 +38,8 @@ class ScannerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository,
     private val localLlmOcrService: LocalLlmOcrService,
-    private val telemetryService: ExtractionTelemetryService
+    private val telemetryService: ExtractionTelemetryService,
+    private val universalExtractionService: UniversalExtractionService
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -48,6 +51,9 @@ class ScannerViewModel @Inject constructor(
     private val fieldHeuristics: GenericFieldHeuristics = GenericFieldHeuristics
     private val manualOverrides = mutableMapOf<String, CouponInstance>()
     private var pendingPreview: PendingPreview? = null
+    
+    // Store extraction results for feedback learning
+    private var lastExtractionResult: Pair<com.example.coupontracker.universal.UniversalExtractionResult, String>? = null
 
     companion object {
         private const val TAG = "ScannerViewModel"
@@ -86,9 +92,9 @@ class ScannerViewModel @Inject constructor(
 
                 when {
                     couponInstances.isEmpty() -> {
-                        // Fallback to traditional OCR if no coupons detected
-                        Log.d(TAG, "No coupons detected, falling back to traditional OCR")
-                        fallbackToTraditionalOCR(imageUri)
+                        // Try universal extraction first, then fallback to traditional OCR
+                        Log.d(TAG, "No coupons detected, trying universal extraction first")
+                        tryUniversalExtraction(imageUri, bitmap)
                     }
                     couponInstances.size == 1 -> {
                         // Single coupon detected - process directly
@@ -134,9 +140,15 @@ class ScannerViewModel @Inject constructor(
 
                 when {
                     couponInstances.isEmpty() -> {
-                        // Fallback to traditional OCR
-                        Log.d(TAG, "No coupons detected in bitmap, falling back to traditional OCR")
-                        fallbackToTraditionalOCRBitmap(bitmap, imageUri)
+                        // Try universal extraction first for bitmap processing
+                        Log.d(TAG, "No coupons detected in bitmap, trying universal extraction")
+                        if (imageUri != null) {
+                            tryUniversalExtraction(imageUri, bitmap)
+                        } else {
+                            // Create temporary URI for bitmap
+                            Log.d(TAG, "No imageUri provided, falling back to traditional OCR")
+                            fallbackToTraditionalOCRBitmap(bitmap, imageUri)
+                        }
                     }
                     couponInstances.size == 1 -> {
                         // Single coupon detected
@@ -630,6 +642,72 @@ class ScannerViewModel @Inject constructor(
     }
 
     /**
+     * Try universal extraction as an alternative to traditional OCR
+     */
+    private suspend fun tryUniversalExtraction(imageUri: Uri, bitmap: Bitmap) {
+        try {
+            Log.d(TAG, "Attempting universal extraction")
+            
+            // Extract text using OCR for universal extraction
+            val ocrText = when (val result = multiEngineOCR.processImage(bitmap)) {
+                is MultiEngineOCR.OCRResult.Success -> {
+                    result.extractedInfo.values.joinToString(" ")
+                }
+                is MultiEngineOCR.OCRResult.Error -> {
+                    Log.w(TAG, "OCR failed for universal extraction: ${result.message}")
+                    ""
+                }
+            }
+            
+            if (ocrText.isBlank()) {
+                Log.w(TAG, "No OCR text available for universal extraction")
+                fallbackToTraditionalOCR(imageUri)
+                return
+            }
+            
+            // Create extraction context
+            val context = ExtractionContext()
+            
+            // Run universal extraction
+            val extractionResult = universalExtractionService.extractCoupon(
+                image = bitmap,
+                ocrText = ocrText,
+                context = context
+            )
+            
+            if (extractionResult.success && extractionResult.confidence > 0.3f) {
+                Log.d(TAG, "Universal extraction successful with confidence: ${extractionResult.confidence}")
+                
+                // Use the universally extracted coupon
+                val persistedUri = uriPersistenceManager.persistUri(imageUri)
+                val coupon = extractionResult.coupon.copy(
+                    imageUri = persistedUri?.toString()
+                )
+                
+                // Store extraction result for potential feedback learning
+                lastExtractionResult = extractionResult to ocrText
+                
+                val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
+                pendingPreview = PendingPreview(
+                    coupon = coupon,
+                    normalizedDescription = normalizedDescription,
+                    miniCpmStatus = MiniCpmProgress.SUCCESS
+                )
+                
+                _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.SUCCESS)
+                
+            } else {
+                Log.d(TAG, "Universal extraction failed or low confidence: ${extractionResult.confidence}")
+                fallbackToTraditionalOCR(imageUri)
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Universal extraction error", e)
+            fallbackToTraditionalOCR(imageUri)
+        }
+    }
+
+    /**
      * Fallback to traditional OCR when no coupons are detected
      */
     private suspend fun fallbackToTraditionalOCR(imageUri: Uri) {
@@ -786,6 +864,90 @@ class ScannerViewModel @Inject constructor(
         }
 
         return null // Don't return fallback date - use null if parsing fails
+    }
+
+    /**
+     * Confirm that the extraction was correct (positive feedback)
+     */
+    fun confirmExtractionCorrect() {
+        viewModelScope.launch {
+            lastExtractionResult?.let { (extractionResult, ocrText) ->
+                try {
+                    Log.d(TAG, "User confirmed extraction is correct - learning from success")
+                    
+                    val context = ExtractionContext()
+                    universalExtractionService.learnFromSuccess(
+                        extractionResult = extractionResult,
+                        originalText = ocrText,
+                        context = context
+                    )
+                    
+                    // Clear the stored result
+                    lastExtractionResult = null
+                    
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error learning from positive feedback", e)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Submit user corrections (negative feedback with corrections)
+     */
+    fun submitExtractionCorrection(
+        correctedStoreName: String?,
+        correctedCode: String?,
+        correctedAmount: String?,
+        correctedExpiry: String?
+    ) {
+        viewModelScope.launch {
+            lastExtractionResult?.let { (extractionResult, ocrText) ->
+                try {
+                    Log.d(TAG, "User submitted corrections - learning from feedback")
+                    
+                    // Create corrected coupon
+                    val correctedCoupon = extractionResult.coupon.copy(
+                        storeName = correctedStoreName ?: extractionResult.coupon.storeName,
+                        redeemCode = correctedCode,
+                        // Note: For amount and expiry, we'd need more sophisticated parsing
+                        // For now, we'll just learn from the text patterns
+                    )
+                    
+                    val context = ExtractionContext()
+                    universalExtractionService.learnFromCorrection(
+                        extractionResult = extractionResult,
+                        correctedCoupon = correctedCoupon,
+                        originalText = ocrText,
+                        context = context
+                    )
+                    
+                    // Update the current coupon with corrections if it's still in preview
+                    pendingPreview?.let { preview ->
+                        val updatedCoupon = preview.coupon.copy(
+                            storeName = correctedStoreName ?: preview.coupon.storeName,
+                            redeemCode = correctedCode
+                        )
+                        
+                        pendingPreview = preview.copy(coupon = updatedCoupon)
+                        _uiState.value = ScannerUiState.Success(updatedCoupon, preview.miniCpmStatus)
+                    }
+                    
+                    // Clear the stored result
+                    lastExtractionResult = null
+                    
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error learning from correction feedback", e)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Check if feedback can be collected (i.e., there's a recent extraction to learn from)
+     */
+    fun canCollectFeedback(): Boolean {
+        return lastExtractionResult != null
     }
 
     /**
