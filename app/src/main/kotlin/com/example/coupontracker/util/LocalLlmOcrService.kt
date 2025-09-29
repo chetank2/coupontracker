@@ -558,46 +558,32 @@ class LocalLlmOcrService(
     }
     
     /**
-     * Create optimized structured prompt for coupon extraction
+     * Create optimized structured prompt for coupon extraction with strict schema
      */
     private fun createCouponExtractionPrompt(): String {
         return """
-        You are a precise coupon information extractor. Analyze this coupon image and extract structured information in JSON format.
-
-        CRITICAL RULES:
-        1. Extract ONLY information clearly visible in the image
-        2. Return valid JSON with the exact schema below
-        3. Use null for missing information (never use "Unknown")
-        4. Be conservative - if unsure, use null
-        5. Preserve original currency symbols and formatting
-        6. For dates, use format: "YYYY-MM-DD" or "DD/MM/YYYY" as shown
-        7. For amounts, include currency symbol: "₹100", "$50", "20%"
-
-        REQUIRED JSON FORMAT:
+        You are a strict coupon extractor. Output ONLY valid JSON with this exact schema:
         {
-            "storeName": "Store/brand name (required)",
-            "description": "Offer description (required)", 
-            "cashbackAmount": "Amount/percentage off with currency or null",
-            "redeemCode": "Promo/coupon code or null",
-            "expiryDate": "Expiry date in original format or null",
-            "minOrderAmount": "Minimum order value with currency or null"
+            "storeName": string|null,
+            "description": string|null,
+            "cashbackAmount": string|null,
+            "redeemCode": string|null,
+            "expiryDate": string|null,
+            "minOrderAmount": string|null
         }
 
-        EXTRACTION GUIDE:
-        - Store Name: Look for logos, brand names, prominent text
-        - Description: Main offer details in 1-2 sentences
-        - Cashback Amount: Exact discount (20%, ₹100, $50 off)
-        - Redeem Code: Alphanumeric codes (SAVE20, FIRST50, etc.)
-        - Expiry Date: Look for "valid till", "expires", date stamps
-        - Min Order: Find "minimum order", "above ₹X", "orders over"
+        RULES:
+        - If a field is not explicitly present, output null
+        - Do not invent values. Do not include notes
+        - Preserve exact text as shown in image
+        - For codes: use exact alphanumeric text (SAVE20, FLAT50)
+        - For amounts: include currency (₹100, 20%, $50 off)
+        - For dates: use format shown (31 Dec 2024, 31/12/2024)
 
-        QUALITY CHECKS:
-        - Verify store name appears in image
-        - Confirm discount amounts are realistic
-        - Validate promo codes don't contain spaces
-        - Ensure amounts include proper currency symbols
+        Example:
+        {"storeName":"Myntra","description":"Flat 20% off on fashion","cashbackAmount":"20% off","redeemCode":"SAVE20","expiryDate":"31 Dec 2024","minOrderAmount":"₹999"}
 
-        Return ONLY the JSON object, no additional text or formatting.
+        Extract from the coupon image:
         """.trimIndent()
     }
 
@@ -633,7 +619,7 @@ class LocalLlmOcrService(
     }
 
     /**
-     * Parse LLM JSON response to CouponInfo object
+     * Parse LLM JSON response to CouponInfo object with strict validation
      */
     private fun parseLlmResponseToCouponInfo(response: String, rawOcrText: String?): CouponInfo {
         return try {
@@ -644,7 +630,19 @@ class LocalLlmOcrService(
                 .removeSuffix("```")
                 .trim()
             
-            val json = JSONObject(cleanResponse)
+            // Use strict JSON validation
+            val json = CouponJsonValidator.parseStrict(cleanResponse)
+            if (json == null) {
+                Log.w(TAG, "JSON failed strict validation, falling back to OCR")
+                throw IllegalArgumentException("Invalid JSON schema")
+            }
+            
+            // Validate field constraints
+            val validation = CouponJsonValidator.validateFieldConstraints(json)
+            if (validation is JsonValidationResult.Invalid) {
+                Log.w(TAG, "Field validation failed: ${validation.issues}")
+                // Continue with warnings but don't fail completely
+            }
             
             // Extract fields with fallbacks and generic filtering
             val storeName = json.optString("storeName", "Unknown Store").let {
@@ -669,10 +667,33 @@ class LocalLlmOcrService(
             //     if (it.isBlank() || it == "Unknown") null else it
             // }
             
+            // Extract brand for code validation
+            val detectedBrand = BrandAwareCouponValidator.extractBrand(
+                json.optString("storeName").takeIf { it.isNotBlank() },
+                json.optString("description").takeIf { it.isNotBlank() }
+            )
+            
             // Try both 'redeemCode' (from prompt) and 'code' (fallback) to handle both field names
             val code = (json.optString("redeemCode").takeIf { it.isNotBlank() && it != "Unknown" }
                 ?: json.optString("code").takeIf { it.isNotBlank() && it != "Unknown" })
-                ?.let { RedeemCodeSanitizer.sanitize(it) }
+                ?.let { rawCode ->
+                    // Use brand-aware validation instead of basic sanitization
+                    val sanitized = RedeemCodeSanitizer.sanitize(rawCode)
+                    if (sanitized != null && !BrandAwareCouponValidator.isJunkCode(sanitized)) {
+                        val candidates = BrandAwareCouponValidator.rankCodes(detectedBrand, listOf(sanitized))
+                        val bestCandidate = candidates.firstOrNull()
+                        
+                        if (bestCandidate != null && bestCandidate.score > 0.5) {
+                            Log.d(TAG, "Validated code: $sanitized (brand: $detectedBrand, score: ${bestCandidate.score})")
+                            bestCandidate.text
+                        } else {
+                            Log.w(TAG, "Low confidence code: $sanitized (score: ${bestCandidate?.score ?: 0.0})")
+                            null
+                        }
+                    } else {
+                        null
+                    }
+                }
                 ?.takeIf { !GenericFieldHeuristics.isGenericOrMissing(it) }
             
             val expiryDate = json.optString("expiryDate").let {
@@ -707,10 +728,18 @@ class LocalLlmOcrService(
                 null
             } else code
             
-            // Parse expiry date if available
+            // Parse expiry date with IST-first parser
             val parsedExpiryDate = expiryDate?.let { dateStr ->
                 try {
-                    DateParser.parseDate(dateStr)
+                    val parseResult = IndianDateParser.parseExpiryIST(dateStr)
+                    if (parseResult.date != null && parseResult.confidence > 0.5f) {
+                        Log.d(TAG, "Parsed expiry date: $dateStr -> ${parseResult.date} (confidence: ${parseResult.confidence})")
+                        java.util.Date.from(parseResult.date.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
+                    } else {
+                        Log.w(TAG, "Low confidence date parse: $dateStr (confidence: ${parseResult.confidence})")
+                        // Fallback to original parser
+                        DateParser.parseDate(dateStr)
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to parse expiry date: $dateStr", e)
                     null

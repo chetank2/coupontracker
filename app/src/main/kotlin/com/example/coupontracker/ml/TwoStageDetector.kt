@@ -9,6 +9,7 @@ import android.util.DisplayMetrics
 import android.util.Log
 import androidx.annotation.VisibleForTesting
 import com.example.coupontracker.util.BitmapManager
+import com.example.coupontracker.util.CouponInstanceValidator
 import kotlinx.coroutines.runBlocking
 import org.json.JSONObject
 import org.tensorflow.lite.Interpreter
@@ -308,7 +309,19 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
             val totalTime = System.currentTimeMillis() - startTime
             Log.i(TAG, "Two-stage detection completed in ${totalTime}ms: ${couponInstances.size} coupons with ${couponInstances.sumOf { it.fields.size }} total fields")
             
-            return couponInstances
+            // Validate and clean instances to prevent cross-contamination
+            val validatedInstances = CouponInstanceValidator.validateAndCleanInstances(couponInstances)
+            
+            // Check for overlapping coupons
+            val overlaps = CouponInstanceValidator.detectOverlappingCoupons(validatedInstances)
+            if (overlaps.isNotEmpty()) {
+                Log.w(TAG, "Detected ${overlaps.size} overlapping coupon pairs")
+                overlaps.forEach { overlap ->
+                    Log.w(TAG, "Overlap: ${overlap.coupon1Id} <-> ${overlap.coupon2Id} (${(overlap.overlapRatio * 100).toInt()}%)")
+                }
+            }
+            
+            return validatedInstances
             
         } catch (e: Exception) {
             Log.e(TAG, "Error in multi-coupon detection", e)
