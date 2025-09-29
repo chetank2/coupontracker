@@ -3,6 +3,7 @@ package com.example.coupontracker.util
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -15,7 +16,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class ExtractionTelemetryService @Inject constructor(
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) {
     
     companion object {
