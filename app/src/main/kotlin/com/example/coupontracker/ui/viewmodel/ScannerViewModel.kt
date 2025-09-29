@@ -14,10 +14,7 @@ import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
-import com.example.coupontracker.util.CouponInfo
-import com.example.coupontracker.util.GenericFieldHeuristics
-import com.example.coupontracker.util.LocalLlmOcrService
-import com.example.coupontracker.util.MultiEngineOCR
+import com.example.coupontracker.util.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -37,7 +34,8 @@ class ScannerViewModel @Inject constructor(
     application: Application,
     @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository,
-    private val localLlmOcrService: LocalLlmOcrService
+    private val localLlmOcrService: LocalLlmOcrService,
+    private val telemetryService: ExtractionTelemetryService
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -400,34 +398,82 @@ class ScannerViewModel @Inject constructor(
     }
 
     /**
-     * Extract text from detected fields using OCR
+     * Extract text from detected fields using OCR with run-path telemetry
      */
     private suspend fun extractTextFromFields(couponInstance: CouponInstance): FieldExtractionResult {
         return withContext(Dispatchers.IO) {
+            val startTime = System.currentTimeMillis()
             val extractedInfo = mutableMapOf<String, String>()
             var progress = MiniCpmProgress.SUCCESS
+            val triedStages = mutableListOf<String>()
+            var finalStage = "UNKNOWN"
 
             extractedInfo["minicpmConfidence"] = couponInstance.confidence.toString()
             extractedInfo["minicpmDetectionStatus"] = couponInstance.status.name
 
             try {
-                val couponInfo = localLlmOcrService.processCouponImage(couponInstance.cropBitmap)
-                extractedInfo.putAll(mapCouponInfoToFields(couponInfo))
-
-                val needsReview = shouldFlagForReview(couponInfo, extractedInfo)
-                if (needsReview) {
-                    progress = MiniCpmProgress.NEEDS_REVIEW
-                    val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
-                    mergeValidatedFields(extractedInfo, fallbackFields)
+                // Try LLM extraction first
+                triedStages.add("LLM")
+                finalStage = "LLM"
+                
+                val result = localLlmOcrService.processCouponImageTyped(couponInstance.cropBitmap)
+                
+                when (result) {
+                    is ExtractResult.Good -> {
+                        extractedInfo.putAll(mapCouponInfoToFields(result.info))
+                        progress = MiniCpmProgress.SUCCESS
+                        Log.d(TAG, "✅ LLM extraction successful (quality: ${result.signals.qualityScore})")
+                    }
+                    
+                    is ExtractResult.LowQuality -> {
+                        extractedInfo.putAll(mapCouponInfoToFields(result.info))
+                        progress = MiniCpmProgress.NEEDS_REVIEW
+                        
+                        // Try fallback for low quality
+                        triedStages.add("FALLBACK_OCR")
+                        finalStage = "FALLBACK_OCR"
+                        val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
+                        mergeValidatedFields(extractedInfo, fallbackFields)
+                        
+                        Log.w(TAG, "⚠️ LLM low quality (${result.reason}), used fallback")
+                    }
+                    
+                    is ExtractResult.Failed -> {
+                        // LLM failed, use fallback
+                        triedStages.add("FALLBACK_OCR")
+                        finalStage = "FALLBACK_OCR"
+                        progress = MiniCpmProgress.FALLBACK
+                        val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
+                        extractedInfo.putAll(fallbackFields)
+                        
+                        Log.e(TAG, "❌ LLM extraction failed: ${result.error.message}")
+                    }
                 }
+                
             } catch (e: Exception) {
                 Log.e(TAG, "MiniCPM processing failed, using fallback", e)
+                triedStages.add("FALLBACK_OCR")
+                finalStage = "FALLBACK_OCR"
                 progress = MiniCpmProgress.FALLBACK
                 val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
                 extractedInfo.putAll(fallbackFields)
             }
 
+            // Track run path telemetry
+            val totalTime = System.currentTimeMillis() - startTime
+            val runPath = RunPath(
+                primary = "LLM",
+                tried = triedStages,
+                final = finalStage,
+                nativeAvailable = localLlmOcrService.isServiceAvailable(),
+                totalTimeMs = totalTime
+            )
+            
+            telemetryService.trackRunPath(runPath)
+            
             extractedInfo["minicpmProcessing"] = progress.name
+            extractedInfo["runPath"] = "${runPath.primary} → ${runPath.final}"
+            extractedInfo["processingTimeMs"] = totalTime.toString()
 
             FieldExtractionResult(extractedInfo, progress)
         }

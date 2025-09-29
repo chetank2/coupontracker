@@ -1,5 +1,36 @@
 # CouponTracker: Comprehensive Technical Architecture Guide
 
+## 🔄 **ENGINEERING REVIEW CORRECTIONS**
+
+**Updated**: December 29, 2024 - Based on comprehensive engineering review and code analysis
+
+### **Critical Corrections Made:**
+
+1. **✅ PRIMARY PATH ROUTING - CORRECTED**
+   - **TRUTH**: LLM **IS** the primary path when `ApiType.LOCAL_LLM` is enabled and model is available
+   - **ROUTING**: `ImageProcessor` → `LocalLlmOcrService` (primary) → fallback chain if needed
+   - **FALLBACK**: Only occurs when LLM extraction quality is insufficient or model unavailable
+
+2. **✅ JNI IMPLEMENTATION - CLARIFIED**  
+   - **TRUTH**: JNI has **both real and mock implementations**
+   - **REAL**: When native library loads successfully, calls actual MLC-LLM inference
+   - **MOCK**: When native library unavailable, returns structured mock responses for development
+
+3. **✅ ROOM MIGRATION - VERIFIED CORRECT**
+   - **TRUTH**: Migration 3→4 **IS correctly implemented** with proper indexing and resource management
+   - **IMPLEMENTATION**: Uses prepared statements, proper column indexing, and resource cleanup
+   - **BACKFILL**: Correctly populates `normalizedDescription` using `CouponDedupUtils`
+
+4. **✅ MEMORY LIFECYCLE - RACE CONDITIONS FIXED**
+   - **OLD**: Handler-based auto-unload with race conditions
+   - **NEW**: Mutex-guarded lifecycle with structured concurrency and proper cancellation
+
+5. **✅ BITMAP PRESSURE - COMPREHENSIVE SOLUTION**
+   - **IMPLEMENTED**: `BitmapManager` with 3×768² pixel budget and automatic recycling
+   - **FEATURES**: Memory pressure detection, oldest-first cleanup, real-time usage tracking
+
+---
+
 ## 🎯 Executive Summary
 
 CouponTracker is a production-ready Android application that combines cutting-edge AI/ML technologies with robust software engineering practices to create an intelligent coupon recognition system. The app features on-device LLM inference, multi-stage computer vision pipelines, and a sophisticated fallback architecture that ensures reliable performance across diverse scenarios.
@@ -13,16 +44,19 @@ CouponTracker is a production-ready Android application that combines cutting-ed
 - **AI/ML**: MiniCPM-Llama3-V2.5 LLM + TensorFlow Lite + ML Kit
 - **Database**: Room (SQLite) with advanced migrations
 - **Architecture**: MVVM + Repository Pattern + Dependency Injection (Hilt)
-- **Concurrency**: Kotlin Coroutines + StateFlow
+- **Concurrency**: Kotlin Coroutines + StateFlow + Mutex-guarded lifecycle
+- **Memory Management**: BitmapManager with pixel budget and automatic recycling
+- **Quality Assurance**: SystemVerificationHarness with self-test and path assertions
 - **Build System**: Gradle with multi-module architecture
 
 ---
 
 ## 🧠 AI/ML Architecture Deep Dive
 
-### **1. Multi-Stage AI Pipeline**
+### **1. Multi-Stage AI Pipeline** ⭐ **UPDATED WITH TYPED RESULTS**
 
 #### **Stage 1: LLM-Based Vision Processing (Primary)**
+**NEW**: Returns `ExtractResult` with explicit quality assessment and fallback routing
 ```kotlin
 // LlmRuntimeManager.kt - Singleton model lifecycle management
 class LlmRuntimeManager private constructor(private val context: Context) {
@@ -604,6 +638,75 @@ try {
 - **Build Variants**: Debug, Release, with multi-architecture support
 - **Error Handling**: Comprehensive with telemetry
 - **Documentation**: Complete technical and user documentation
+
+---
+
+## 🔍 System Verification & Quality Assurance ⭐ **NEW**
+
+### **SystemVerificationHarness**
+
+Comprehensive verification system implementing engineering review requirements:
+
+```kotlin
+// SystemVerificationHarness.kt - Production readiness verification
+class SystemVerificationHarness {
+    
+    suspend fun runVerification(): VerificationResult {
+        // Test 1: Self-test with embedded image → LLM → assert known JSON
+        val selfTestPassed = runSelfTest()
+        
+        // Test 2: Migration test with seeded v3 DB → run migrations → assert fields  
+        val migrationTestPassed = runMigrationTest()
+        
+        // Test 3: Path assertion with LOCAL_LLM → assert RunPath.final == "LLM"
+        val pathAssertionPassed = runPathAssertion()
+        
+        return VerificationResult(
+            selfTestPassed, migrationTestPassed, pathAssertionPassed,
+            nativeState, overallPassed, details, errors
+        )
+    }
+}
+```
+
+#### **Verification Components:**
+
+1. **Self-Test**: Embedded test image → LLM inference → validate expected JSON structure
+2. **Migration Test**: Database schema verification and field population validation  
+3. **Path Assertion**: Verify LLM is primary path when native library available
+4. **Native State Detection**: Distinguish between REAL/MOCK/MISSING native implementations
+
+#### **Usage:**
+```bash
+# Run via Android test
+./gradlew :app:connectedAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.example.coupontracker.verification.SystemVerificationTest
+
+# Run via VerificationRunner in development
+VerificationRunner.runVerification(context, database, llmManager, ocrService, telemetry)
+```
+
+### **BitmapManager** ⭐ **NEW**
+
+Memory pressure control system preventing OOM during multi-coupon processing:
+
+```kotlin
+// BitmapManager.kt - Memory-aware bitmap lifecycle
+object BitmapManager {
+    private const val MAX_PIXEL_BUDGET = 3 * 768 * 768 // 3×768² pixels max
+    
+    suspend fun createManagedBitmap(source: Bitmap): ProcessedBitmap {
+        // Automatic downsampling if needed
+        // Memory pressure detection
+        // Oldest-first recycling when budget exceeded
+    }
+}
+```
+
+#### **Features:**
+- **Pixel Budget**: 3×768² maximum (≈7MB memory cap)
+- **Automatic Downsampling**: Oversized images reduced to fit constraints
+- **Memory Pressure Detection**: Real-time usage tracking with automatic cleanup
+- **Deterministic Cleanup**: Explicit resource release with `releaseBitmap(id)`
 
 ---
 
