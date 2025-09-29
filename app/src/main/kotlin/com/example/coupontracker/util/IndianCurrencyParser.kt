@@ -48,6 +48,7 @@ object IndianCurrencyParser {
             Log.d(TAG, "Parsed '$value' → $parsed")
             parsed
             }
+            }
             
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse amount: '$value'", e)
