@@ -9,7 +9,7 @@ import org.junit.Assert.*
 class ExtractResultTest {
 
     @Test
-    fun `policy should route low quality LLM to MLKit`() {
+    fun `policy should route low quality LLM to MLKit deterministically`() {
         val lowQualityResult = ExtractResult.LowQuality(
             info = createMockCouponInfo(),
             reason = QualityReason.ALL_GENERIC_CONTENT,
@@ -19,7 +19,7 @@ class ExtractResultTest {
         val availableStages = setOf(ExtractionStage.MLKIT, ExtractionStage.TFLITE, ExtractionStage.REGEX)
         val nextStage = ExtractionPolicy.decideNext(lowQualityResult, availableStages)
         
-        assertEquals(ExtractionStage.MLKIT, nextStage)
+        assertEquals("Should route LLM → MLKit in deterministic order", ExtractionStage.MLKIT, nextStage)
     }
     
     @Test
@@ -101,5 +101,46 @@ class ExtractResultTest {
             stage = stage,
             nativeAvailable = true
         )
+    }
+    
+    @Test
+    fun `policy should prevent loops with deterministic fallback order`() {
+        // Test that MLKit failure routes to TFLite, not back to LLM
+        val mlkitFailedResult = ExtractResult.Failed(
+            stage = ExtractionStage.MLKIT,
+            error = Exception("MLKit failed")
+        )
+        
+        val availableStages = setOf(ExtractionStage.LLM, ExtractionStage.MLKIT, ExtractionStage.TFLITE, ExtractionStage.REGEX)
+        val nextStage = ExtractionPolicy.decideNext(mlkitFailedResult, availableStages)
+        
+        assertEquals("MLKit should route to TFLite, not back to LLM", ExtractionStage.TFLITE, nextStage)
+    }
+    
+    @Test
+    fun `policy should handle missing stages gracefully`() {
+        val llmFailedResult = ExtractResult.Failed(
+            stage = ExtractionStage.LLM,
+            error = Exception("LLM failed")
+        )
+        
+        // Only REGEX available (skip MLKit and TFLite)
+        val availableStages = setOf(ExtractionStage.REGEX)
+        val nextStage = ExtractionPolicy.decideNext(llmFailedResult, availableStages)
+        
+        assertEquals("Should skip to REGEX when intermediate stages unavailable", ExtractionStage.REGEX, nextStage)
+    }
+    
+    @Test
+    fun `policy should return null when no more fallbacks available`() {
+        val regexFailedResult = ExtractResult.Failed(
+            stage = ExtractionStage.REGEX,
+            error = Exception("Regex failed")
+        )
+        
+        val availableStages = setOf(ExtractionStage.LLM, ExtractionStage.MLKIT, ExtractionStage.TFLITE, ExtractionStage.REGEX)
+        val nextStage = ExtractionPolicy.decideNext(regexFailedResult, availableStages)
+        
+        assertNull("Should return null when REGEX (final stage) fails", nextStage)
     }
 }

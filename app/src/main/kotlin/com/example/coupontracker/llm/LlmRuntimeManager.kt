@@ -117,8 +117,15 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     suspend fun acquireModel(): Unit = lifecycleMutex.withLock {
         if (referenceCount.incrementAndGet() == 1) {
             // First reference - load the model
-            modelHandle = loadModelOrThrow()
-            Log.d(TAG, "Model loaded on first acquire (handle: $modelHandle)")
+            try {
+                modelHandle = loadModelOrThrow()
+                Log.d(TAG, "Model loaded on first acquire (handle: $modelHandle)")
+            } catch (e: Exception) {
+                // Rollback reference count on load failure
+                referenceCount.decrementAndGet()
+                Log.e(TAG, "Model load failed, rolled back reference count", e)
+                throw e
+            }
         }
         // Cancel any pending auto-unload
         autoUnloadJob?.cancel()
@@ -356,7 +363,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             totalMemoryMB = runtime.totalMemory() / (1024 * 1024),
             freeMemoryMB = runtime.freeMemory() / (1024 * 1024),
             maxMemoryMB = runtime.maxMemory() / (1024 * 1024),
-            modelLoadedMemoryMB = if (isModelLoaded.get()) MAX_MEMORY_MB else 0
+            modelLoadedMemoryMB = if (modelHandle != null) MAX_MEMORY_MB else 0
         )
     }
 }

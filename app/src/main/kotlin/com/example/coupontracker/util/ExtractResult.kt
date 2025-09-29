@@ -86,60 +86,42 @@ data class RunPath(
  */
 object ExtractionPolicy {
     
+    // Deterministic fallback order
+    private val FALLBACK_ORDER = listOf(
+        ExtractionStage.LLM,
+        ExtractionStage.MLKIT,
+        ExtractionStage.TFLITE,
+        ExtractionStage.REGEX
+    )
+    
     /**
      * Decide the next extraction stage based on current result
+     * Uses deterministic fallback order to prevent loops
      */
     fun decideNext(result: ExtractResult, availableStages: Set<ExtractionStage>): ExtractionStage? {
-        return when (result) {
-            is ExtractResult.Good -> null // Success, no next stage needed
-            
-            is ExtractResult.LowQuality -> {
-                when (result.reason) {
-                    QualityReason.ALL_GENERIC_CONTENT,
-                    QualityReason.DUPLICATE_FIELD_VALUES -> {
-                        // Try ML Kit for better text recognition
-                        if (availableStages.contains(ExtractionStage.MLKIT)) ExtractionStage.MLKIT
-                        else if (availableStages.contains(ExtractionStage.TFLITE)) ExtractionStage.TFLITE
-                        else ExtractionStage.REGEX
-                    }
-                    
-                    QualityReason.LOW_QUALITY_EXTRACTION,
-                    QualityReason.INSUFFICIENT_CONFIDENCE -> {
-                        // Try TensorFlow Lite models
-                        if (availableStages.contains(ExtractionStage.TFLITE)) ExtractionStage.TFLITE
-                        else if (availableStages.contains(ExtractionStage.MLKIT)) ExtractionStage.MLKIT
-                        else ExtractionStage.REGEX
-                    }
-                    
-                    QualityReason.COMPLETE_EXTRACTION_FAILURE,
-                    QualityReason.MISSING_CRITICAL_FIELDS -> {
-                        // Fall back to any available method
-                        availableStages.firstOrNull { it != result.signals.stage }
-                    }
-                }
-            }
-            
-            is ExtractResult.Failed -> {
-                // Try next available stage, avoiding the failed one
-                when (result.stage) {
-                    ExtractionStage.LLM -> {
-                        if (availableStages.contains(ExtractionStage.MLKIT)) ExtractionStage.MLKIT
-                        else if (availableStages.contains(ExtractionStage.TFLITE)) ExtractionStage.TFLITE
-                        else ExtractionStage.REGEX
-                    }
-                    
-                    ExtractionStage.MLKIT -> {
-                        if (availableStages.contains(ExtractionStage.TFLITE)) ExtractionStage.TFLITE
-                        else ExtractionStage.REGEX
-                    }
-                    
-                    ExtractionStage.TFLITE -> ExtractionStage.REGEX
-                    
-                    ExtractionStage.REGEX,
-                    ExtractionStage.TWO_STAGE_DETECTION -> null // No more fallbacks
-                }
+        val currentStage = when (result) {
+            is ExtractResult.Good -> return null // Success, no next stage needed
+            is ExtractResult.LowQuality -> result.signals.stage
+            is ExtractResult.Failed -> result.stage
+        }
+        
+        // Find current stage position in fallback order
+        val currentIndex = FALLBACK_ORDER.indexOf(currentStage)
+        if (currentIndex == -1) {
+            // Unknown stage, fall back to first available
+            return availableStages.intersect(FALLBACK_ORDER.toSet()).firstOrNull()
+        }
+        
+        // Try next stages in deterministic order
+        for (i in (currentIndex + 1) until FALLBACK_ORDER.size) {
+            val nextStage = FALLBACK_ORDER[i]
+            if (availableStages.contains(nextStage)) {
+                return nextStage
             }
         }
+        
+        // No more fallbacks available
+        return null
     }
     
     /**
