@@ -126,6 +126,9 @@ class ExtractionPerformanceMonitor @Inject constructor(
      */
     suspend fun getMethodPerformance(method: ExtractionMethod): MethodPerformance = withContext(Dispatchers.IO) {
         try {
+            // Ensure all session stats are persisted before reading
+            persistSessionStats()
+            
             val dailyStats = getDailyStats()
             val methodStats = dailyStats.values.filter { it.method == method }
             
@@ -177,6 +180,9 @@ class ExtractionPerformanceMonitor @Inject constructor(
      */
     suspend fun getOverallPerformance(): SystemPerformance = withContext(Dispatchers.IO) {
         try {
+            // Ensure all session stats are persisted before reading
+            persistSessionStats()
+            
             val dailyStats = getDailyStats()
             val allStats = dailyStats.values
             
@@ -196,8 +202,9 @@ class ExtractionPerformanceMonitor @Inject constructor(
             val overallSuccessRate = if (totalExtractions > 0) totalSuccessful.toFloat() / totalExtractions else 0f
             
             // Method breakdown
-            val methodBreakdown = ExtractionMethod.values().associateWith { method ->
-                getMethodPerformance(method)
+            val methodBreakdown = mutableMapOf<ExtractionMethod, MethodPerformance>()
+            for (method in ExtractionMethod.values()) {
+                methodBreakdown[method] = getMethodPerformance(method)
             }
             
             // Top performing method
@@ -252,7 +259,7 @@ class ExtractionPerformanceMonitor @Inject constructor(
     
     // Private helper methods
     
-    private fun persistSessionStats() {
+    suspend fun persistSessionStats() = withContext(Dispatchers.IO) {
         try {
             val dailyStats = getDailyStats().toMutableMap()
             

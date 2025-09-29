@@ -46,6 +46,9 @@ class ExtractionDashboardViewModel @Inject constructor(
                 
                 Log.d(TAG, "Refreshing dashboard data...")
                 
+                // Ensure all recent extraction attempts are persisted before reading
+                performanceMonitor.persistSessionStats()
+                
                 // Load system performance data
                 val systemPerformance = performanceMonitor.getOverallPerformance()
                 

@@ -357,7 +357,8 @@ fun HomeScreen(
                             onCopyCode = { code ->
                                 clipboardManager.setText(AnnotatedString(code))
                                 // In a real app, you would show a toast or snackbar here
-                            }
+                            },
+                            cashbackDisplayText = coupon.getCashbackDisplayText()
                         )
                     }
                 }

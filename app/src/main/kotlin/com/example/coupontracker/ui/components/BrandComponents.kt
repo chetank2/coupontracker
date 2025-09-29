@@ -580,7 +580,8 @@ fun EnhancedCouponCard(
     imageUri: String? = null,
     onClick: () -> Unit,
     onCopyCode: ((String) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    cashbackDisplayText: String? = null
 ) {
     val expiryStatus = DateFormatter.getExpiryStatus(expiryDate)
     val expiryText = DateFormatter.getExpiryText(expiryDate)
@@ -666,14 +667,17 @@ fun EnhancedCouponCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Amount
-                    if (amount != null && amount > 0) {
+                    // Amount (use typed cashback display if available, fallback to legacy format)
+                    val displayText = cashbackDisplayText?.takeIf { it.isNotBlank() } 
+                        ?: if (amount != null && amount > 0) "₹${amount.toInt()}" else null
+                    
+                    if (!displayText.isNullOrBlank()) {
                         Surface(
                             shape = BrandShapes.MediumCornerShape,
                             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                         ) {
                             Text(
-                                text = "₹${amount.toInt()}",
+                                text = displayText,
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
@@ -733,7 +737,7 @@ fun EnhancedCouponCard(
     onCopyCode: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    // Call the new version with imageUri = null
+    // Call the new version with imageUri = null and cashbackDisplayText = null (legacy fallback)
     EnhancedCouponCard(
         storeName = storeName,
         description = description,
@@ -743,6 +747,7 @@ fun EnhancedCouponCard(
         imageUri = null,
         onClick = onClick,
         onCopyCode = onCopyCode,
-        modifier = modifier
+        modifier = modifier,
+        cashbackDisplayText = null
     )
 }
