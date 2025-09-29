@@ -20,7 +20,7 @@ interface CouponDao {
     @Query("SELECT * FROM coupons ORDER BY cashbackAmount DESC")
     fun getCouponsByAmount(): Flow<List<Coupon>>
 
-    @Query("SELECT * FROM coupons ORDER BY storeName ASC")
+    @Query("SELECT * FROM coupons ORDER BY storeName COLLATE NOCASE ASC")
     fun getCouponsByName(): Flow<List<Coupon>>
 
     @Query("SELECT * FROM coupons WHERE expiryDate <= :date")

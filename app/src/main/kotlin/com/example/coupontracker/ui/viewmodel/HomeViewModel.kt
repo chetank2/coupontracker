@@ -68,12 +68,11 @@ class HomeViewModel @Inject constructor(
      * Apply filters to the coupon list
      */
     private fun applyCouponFilters(coupons: List<Coupon>, filters: CouponFilters): List<Coupon> {
-        var filteredCoupons = coupons
         val now = Date()
         val calendar = Calendar.getInstance()
 
         // Apply filter option
-        filteredCoupons = when (filters.filterOption) {
+        var filteredCoupons = when (filters.filterOption) {
             FilterOption.ALL -> coupons
             FilterOption.ACTIVE -> coupons.filter { coupon ->
                 val expiry = coupon.expiryDate
@@ -109,7 +108,7 @@ class HomeViewModel @Inject constructor(
                                                           it.storeName.contains("Movie", ignoreCase = true) ||
                                                           it.storeName.contains("Game", ignoreCase = true) ||
                                                           it.storeName.contains("Play", ignoreCase = true) }
-            FilterOption.OTHER -> coupons.filter { it.category == null || it.category == "Other" }
+            FilterOption.OTHER -> coupons.filter { it.category == null || it.category.equals("Other", ignoreCase = true) }
         }
 
         // Apply sorting
@@ -117,7 +116,7 @@ class HomeViewModel @Inject constructor(
             SortOrder.EXPIRY_DATE -> filteredCoupons.sortedWith(
                 compareBy<Coupon> { it.expiryDate == null }.thenBy { it.expiryDate }
             )
-            SortOrder.NAME -> filteredCoupons.sortedBy { it.storeName }
+            SortOrder.NAME -> filteredCoupons.sortedBy { it.storeName.lowercase() }
             SortOrder.AMOUNT -> filteredCoupons.sortedByDescending { it.cashbackAmount }
             SortOrder.CREATED_DATE -> filteredCoupons.sortedByDescending { it.createdAt }
         }
