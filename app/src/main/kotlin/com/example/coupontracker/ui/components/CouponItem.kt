@@ -169,14 +169,15 @@ fun CouponItem(
                     }
                 }
 
-                // Amount if > 0
-                if (coupon.cashbackAmount > 0) {
+                // Amount if > 0 (use typed display)
+                val cashbackDisplayText = coupon.getCashbackDisplayText()
+                if (cashbackDisplayText.isNotBlank() && coupon.getCashbackNumericValue() > 0) {
                     Surface(
                         shape = BrandShapes.MediumCornerShape,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                     ) {
                         Text(
-                            text = "₹${coupon.cashbackAmount.toInt()}",
+                            text = cashbackDisplayText, // Shows "75%" or "₹500" correctly
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)

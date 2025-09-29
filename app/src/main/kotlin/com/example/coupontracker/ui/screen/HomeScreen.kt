@@ -348,7 +348,7 @@ fun HomeScreen(
                             storeName = coupon.storeName,
                             description = coupon.description,
                             expiryDate = coupon.expiryDate,
-                            amount = coupon.cashbackAmount,
+                            amount = coupon.getCashbackNumericValue(),
                             code = coupon.redeemCode,
                             imageUri = coupon.imageUri,
                             onClick = {

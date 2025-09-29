@@ -190,9 +190,10 @@ class DetailFragment : Fragment() {
                             // Show full description
                             description.text = coupon.description
 
-                            // Always format cashback amount with rupee symbol
-                            if (coupon.cashbackAmount > 0) {
-                                cashbackAmount.text = "₹${coupon.cashbackAmount.toInt()}"
+                            // Use typed cashback display
+                            val cashbackDisplayText = coupon.getCashbackDisplayText()
+                            if (cashbackDisplayText.isNotBlank() && coupon.getCashbackNumericValue() > 0) {
+                                cashbackAmount.text = cashbackDisplayText // Shows "75%" or "₹500" correctly
                                 cashbackAmount.visibility = View.VISIBLE
                             } else {
                                 cashbackAmount.visibility = View.GONE

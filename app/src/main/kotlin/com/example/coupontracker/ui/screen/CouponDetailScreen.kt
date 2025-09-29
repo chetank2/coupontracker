@@ -37,6 +37,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.R
 import com.example.coupontracker.ui.components.DateFormatter
+import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.ui.components.StatusType
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.DetailViewModel
@@ -250,20 +251,22 @@ fun CouponDetailScreen(
 
                     Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
-                    // Cashback amount
-                    if (coupon.cashbackAmount > 0) {
+                    // Cashback amount (use typed display)
+                    val cashbackDisplayText = coupon.getCashbackDisplayText()
+                    if (cashbackDisplayText.isNotBlank() && coupon.getCashbackNumericValue() > 0) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Default.CurrencyRupee,
+                                imageVector = if (coupon.getCashbackInfo().type == CashbackType.PERCENT) 
+                                    Icons.Default.Percent else Icons.Default.CurrencyRupee,
                                 contentDescription = null
                             )
 
                             Spacer(modifier = Modifier.width(BrandSpacing.Small))
 
                             Text(
-                                text = "₹${coupon.cashbackAmount.toInt()}",
+                                text = cashbackDisplayText, // Shows "75%" or "₹500" correctly
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold
                             )
