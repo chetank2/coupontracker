@@ -268,14 +268,8 @@ class BatchScannerViewModel @Inject constructor(
                     buildPlaceholderCoupon(uri)
                 }
             } finally {
-                // CRITICAL: Release all detector crops to prevent memory leaks
-                // Each crop has refCount=1 from detectMultiCoupons, must be released
-                couponInstances.forEach { instance ->
-                    instance.cropBitmap?.let { crop ->
-                        bitmapManager.releaseBitmap(crop)
-                        Log.d(TAG, "Released detector crop: ${crop.width}x${crop.height}")
-                    }
-                }
+                // Release detector-managed crops immediately after processing
+                twoStageDetector.releaseInstances(couponInstances)
             }
         }
     }

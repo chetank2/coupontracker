@@ -333,6 +333,16 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
             return emptyList()
         }
     }
+
+    /**
+     * Release managed crop bitmaps associated with the provided coupon instances.
+     * This ensures the detector's internal bitmap manager can recycle memory promptly.
+     */
+    fun releaseInstances(instances: Iterable<CouponInstance>) {
+        instances.forEach { instance ->
+            bitmapManager.releaseBitmap(instance.cropBitmap)
+        }
+    }
     
     /**
      * Stage 1: Detect coupon instances in the full image
