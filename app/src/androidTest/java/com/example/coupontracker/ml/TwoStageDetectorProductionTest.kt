@@ -1,6 +1,7 @@
 package com.example.coupontracker.ml
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
@@ -49,6 +50,26 @@ class TwoStageDetectorProductionTest {
         val detections = detector.detectMultiCoupons(bitmap)
 
         assertTrue("Production detector should not return demo detections on blank input", detections.isEmpty())
+
+        detector.releaseInstances(detections)
+        bitmap.recycle()
+    }
+
+    @Test
+    fun interpretersExecuteOnFixtureBitmap() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.context
+
+        val bitmap = context.assets.open("multi_coupon_fixture.png").use { stream ->
+            BitmapFactory.decodeStream(stream)
+        }
+
+        requireNotNull(bitmap) { "Fixture bitmap should decode successfully" }
+
+        val detections = detector.detectMultiCoupons(bitmap)
+
+        // The synthetic models return empty detections but the call should succeed and return a list instance
+        assertNotNull("Detector should return a non-null list", detections)
 
         detector.releaseInstances(detections)
         bitmap.recycle()
