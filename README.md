@@ -82,6 +82,15 @@ python coupon_trainer_cli.py --url <URL> --output-dir <OUTPUT_DIR>
 ./gradlew assembleDebug
 ```
 
+## 🧪 Testing
+
+### **Instrumentation (Connected) Tests**
+Run the connected test suite to verify on-device TensorFlow Lite integration, including the `TwoStageDetectorProductionTest` that exercises the demo detections:
+
+```bash
+./gradlew connectedAndroidTest
+```
+
 ## 📊 Key Features
 
 ### **Advanced OCR Pipeline**
