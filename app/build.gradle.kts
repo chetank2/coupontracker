@@ -33,7 +33,10 @@ android {
                     "-DANDROID_STL=c++_shared",
                     "-DANDROID_PLATFORM=android-26",
                     "-DBUILD_MOCK_JNI=ON"
-                    // Note: Remove BUILD_MOCK_JNI=ON when real MLC-LLM libraries are available
+                    // NOTE: MLC-LLM libraries in app/libs/mlc_llm/lib/ are placeholders
+                    // Real .so files require compilation from MLC-LLM source (GPU server, ~4-6 hours)
+                    // See MLC_LLM_INTEGRATION_GUIDE.md for instructions to build real libraries
+                    // Remove BUILD_MOCK_JNI=ON after populating with actual binaries
                 )
             }
         }
