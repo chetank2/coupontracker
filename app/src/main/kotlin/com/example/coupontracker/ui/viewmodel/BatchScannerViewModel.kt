@@ -248,6 +248,7 @@ class BatchScannerViewModel @Inject constructor(
     
     /**
      * Process image using LEGACY two-stage detection
+     * This is the TERMINAL fallback - it never recurses to other strategies
      */
     private suspend fun processWithLegacyPath(uri: Uri, bitmap: android.graphics.Bitmap): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
@@ -260,10 +261,36 @@ class BatchScannerViewModel @Inject constructor(
                 val extractedInfo = extractFieldsFromInstance(instance)
                 buildCouponFromFields(extractedInfo, uri)
             } else {
-                // Fallback to universal extraction
-                processWithOcrFirstPath(uri, bitmap)
+                // TERMINAL: Create placeholder coupon instead of recursing
+                // This prevents LEGACY→OCR→LLM→LEGACY infinite loop
+                Log.w(TAG, "LEGACY detection failed, creating placeholder coupon")
+                buildPlaceholderCoupon(uri)
             }
         }
+    }
+    
+    /**
+     * Create a placeholder coupon when all extraction methods fail
+     * This is the absolute last resort to prevent infinite recursion
+     */
+    private suspend fun buildPlaceholderCoupon(uri: Uri): Coupon {
+        return Coupon(
+            id = 0,
+            storeName = "Unknown Store",
+            description = "Extraction failed - please edit manually",
+            expiryDate = null,
+            cashbackAmount = 0.0,
+            redeemCode = null,
+            imageUri = persistUri(uri),
+            category = "Other",
+            status = "Active",
+            createdAt = java.util.Date(),
+            updatedAt = java.util.Date(),
+            cashbackType = com.example.coupontracker.data.model.CashbackType.TEXT.name,
+            cashbackValueNum = 0.0,
+            cashbackCurrency = null,
+            offerText = "Unable to extract coupon details"
+        )
     }
     
     /**
