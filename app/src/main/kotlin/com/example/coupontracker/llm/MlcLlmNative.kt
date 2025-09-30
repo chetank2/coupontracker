@@ -83,7 +83,7 @@ class MlcLlmNative {
                     Log.e(TAG, "Failed to load MLC-LLM native library: no candidates found")
                 }
 
-                false
+                return false
             }
         }
 
