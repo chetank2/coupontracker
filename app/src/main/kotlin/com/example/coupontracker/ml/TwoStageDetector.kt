@@ -8,7 +8,7 @@ import android.os.Parcelable
 import android.util.DisplayMetrics
 import android.util.Log
 import androidx.annotation.VisibleForTesting
-import com.example.coupontracker.BuildConfig
+// BuildConfig import removed - using direct debug check
 import com.example.coupontracker.util.BitmapManager
 import com.example.coupontracker.util.CouponInstanceValidator
 import kotlinx.coroutines.runBlocking
@@ -38,7 +38,7 @@ import kotlinx.parcelize.Parcelize
  */
 class TwoStageDetector(
     private val context: Context,
-    private val isDebugBuild: Boolean = BuildConfig.DEBUG,
+    private val isDebugBuild: Boolean = false, // Default to release mode
     initializeOnCreate: Boolean = true
 ) {
     
