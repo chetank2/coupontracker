@@ -255,16 +255,27 @@ class BatchScannerViewModel @Inject constructor(
             // Run two-stage detection
             val couponInstances = twoStageDetector.detectMultiCoupons(bitmap)
             
-            if (couponInstances.isNotEmpty()) {
-                // Take first coupon for batch processing
-                val instance = couponInstances.first()
-                val extractedInfo = extractFieldsFromInstance(instance)
-                buildCouponFromFields(extractedInfo, uri)
-            } else {
-                // TERMINAL: Create placeholder coupon instead of recursing
-                // This prevents LEGACY→OCR→LLM→LEGACY infinite loop
-                Log.w(TAG, "LEGACY detection failed, creating placeholder coupon")
-                buildPlaceholderCoupon(uri)
+            try {
+                if (couponInstances.isNotEmpty()) {
+                    // Take first coupon for batch processing
+                    val instance = couponInstances.first()
+                    val extractedInfo = extractFieldsFromInstance(instance)
+                    buildCouponFromFields(extractedInfo, uri)
+                } else {
+                    // TERMINAL: Create placeholder coupon instead of recursing
+                    // This prevents LEGACY→OCR→LLM→LEGACY infinite loop
+                    Log.w(TAG, "LEGACY detection failed, creating placeholder coupon")
+                    buildPlaceholderCoupon(uri)
+                }
+            } finally {
+                // CRITICAL: Release all detector crops to prevent memory leaks
+                // Each crop has refCount=1 from detectMultiCoupons, must be released
+                couponInstances.forEach { instance ->
+                    instance.cropBitmap?.let { crop ->
+                        bitmapManager.releaseBitmap(crop)
+                        Log.d(TAG, "Released detector crop: ${crop.width}x${crop.height}")
+                    }
+                }
             }
         }
     }
@@ -794,7 +805,13 @@ class BatchScannerViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        // V2: No longer using CouponInputManager
+        // V2: Cleanup detector bitmap crops to prevent memory leaks
+        try {
+            twoStageDetector.cleanupBitmaps()
+            Log.d(TAG, "Cleaned up TwoStageDetector bitmap crops")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cleaning up TwoStageDetector", e)
+        }
     }
 }
 
