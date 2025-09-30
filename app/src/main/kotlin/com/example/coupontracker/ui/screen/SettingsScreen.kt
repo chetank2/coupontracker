@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -293,6 +295,9 @@ fun SettingsScreen(
             
             // LLM Status Info
             LlmStatusCard(securePreferencesManager = securePreferencesManager, ocrEngine = ocrEngine)
+
+            // Model Management (Import/Test/Delete)
+            ModelManagementCard(ocrEngine = ocrEngine)
 
             // Protected features button (only shown if features are not unlocked)
             if (!protectedFeaturesUnlocked) {
@@ -1079,6 +1084,184 @@ private fun ApiTypeSelector(securePreferencesManager: SecurePreferencesManager) 
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelManagementCard(ocrEngine: OcrEngine) {
+    val context = LocalContext.current
+    val modelImportViewModel: com.example.coupontracker.ui.viewmodel.ModelImportViewModel = hiltViewModel()
+    val uiState by modelImportViewModel.uiState.collectAsState()
+    
+    val filePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { modelImportViewModel.importModel(it) }
+    }
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Memory,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "MiniCPM Model",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Model Status
+            if (uiState.isModelInstalled) {
+                // Installed status
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "✓ Model Installed",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color(0xFF4CAF50),
+                            fontWeight = FontWeight.Bold
+                        )
+                        uiState.modelInfo?.let { info ->
+                            val totalSizeMB = info.files.sumOf { it.size } / (1024 * 1024)
+                            Text(
+                                text = "Version: ${info.version} • ${totalSizeMB} MB",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Self-test result
+                uiState.selfTestResult?.let { result ->
+                    when (result) {
+                        is com.example.coupontracker.model.SelfTestResult.Success -> {
+                            Text(
+                                text = "✓ Self-test passed (${result.durationMs}ms)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF4CAF50)
+                            )
+                        }
+                        is com.example.coupontracker.model.SelfTestResult.Failed -> {
+                            Text(
+                                text = "✗ Self-test failed: ${result.reason}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    text = "No model installed. Import a model to enable advanced extraction.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Import Progress
+            if (uiState.isImporting) {
+                LinearProgressIndicator(
+                    progress = uiState.importProgress / 100f,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = uiState.importMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+            
+            // Error Message
+            uiState.importError?.let { error ->
+                Text(
+                    text = "Error: $error",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Action Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Import Button
+                if (!uiState.isModelInstalled) {
+                    Button(
+                        onClick = {
+                            filePicker.launch(arrayOf("application/zip", "application/octet-stream"))
+                        },
+                        enabled = !uiState.isImporting,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Import")
+                    }
+                } else {
+                    // Test Button
+                    OutlinedButton(
+                        onClick = { modelImportViewModel.runSelfTest() },
+                        enabled = !uiState.selfTestRunning && !uiState.isImporting,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        if (uiState.selfTestRunning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null)
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Test")
+                    }
+                    
+                    // Delete Button
+                    OutlinedButton(
+                        onClick = { modelImportViewModel.deleteModel() },
+                        enabled = !uiState.isImporting && !uiState.selfTestRunning,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        ),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = Icons.Default.Error, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Delete")
                     }
                 }
             }
