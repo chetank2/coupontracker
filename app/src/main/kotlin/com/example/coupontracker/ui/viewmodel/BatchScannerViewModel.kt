@@ -397,25 +397,114 @@ class BatchScannerViewModel @Inject constructor(
                 Pair(llmDeferred.await(), ocrDeferred.await())
             }
             
-            // Fuse results
+            // Fuse results with real per-field confidence comparison
             when {
                 llmResult is com.example.coupontracker.util.ExtractResult.Good && ocrResult != null && ocrResult.success -> {
-                    // Both successful - prefer LLM for most fields
-                    buildCouponFromLlmResult(llmResult.info, uri)
+                    // Both successful - perform REAL FUSION (not just LLM)
+                    Log.d(TAG, "HYBRID: Both LLM and OCR successful, performing per-field fusion")
+                    fuseLlmAndOcrResults(llmResult, ocrResult, uri)
                 }
                 llmResult is com.example.coupontracker.util.ExtractResult.Good -> {
+                    Log.d(TAG, "HYBRID: Only LLM successful")
                     buildCouponFromLlmResult(llmResult.info, uri)
                 }
                 ocrResult != null && ocrResult.success -> {
+                    Log.d(TAG, "HYBRID: Only OCR successful")
                     ocrResult.coupon.copy(imageUri = persistUri(uri))
                 }
                 else -> {
                     // Both failed - use LEGACY
+                    Log.d(TAG, "HYBRID: Both failed, falling back to LEGACY")
                     processWithLegacyPath(uri, bitmap)
                 }
             }
         }
     }
+    
+    /**
+     * Fuse LLM and OCR results by choosing best field per confidence
+     * This is the REAL HYBRID fusion logic (mirrors ScannerViewModel)
+     */
+    private suspend fun fuseLlmAndOcrResults(
+        llmResult: com.example.coupontracker.util.ExtractResult.Good,
+        ocrResult: com.example.coupontracker.universal.UniversalExtractionResult,
+        uri: Uri
+    ): Coupon {
+        val llmInfo = llmResult.info
+        val ocrCoupon = ocrResult.coupon
+        
+        // For each field, choose the result with higher confidence
+        val llmConf = llmResult.signals.fieldConfidences
+        
+        // Store name: prefer LLM if confident (>0.6), else OCR
+        val storeName = if (llmConf.getOrDefault("storeName", 0f) > 0.6f && llmInfo.storeName.isNotBlank()) {
+            llmInfo.storeName
+        } else if (ocrCoupon.storeName != "Unknown Store") {
+            ocrCoupon.storeName
+        } else {
+            llmInfo.storeName.takeIf { it.isNotBlank() } ?: "Unknown Store"
+        }
+        
+        // Coupon code: prefer LLM if confident (>0.7), else OCR
+        val redeemCode = when {
+            llmConf.getOrDefault("code", 0f) > 0.7f && !llmInfo.redeemCode.isNullOrBlank() -> llmInfo.redeemCode
+            !ocrCoupon.redeemCode.isNullOrBlank() -> ocrCoupon.redeemCode
+            else -> llmInfo.redeemCode
+        }
+        
+        // Expiry date: prefer LLM if confident (>0.6), else OCR
+        val expiryDate = if (llmConf.getOrDefault("expiry", 0f) > 0.6f && llmInfo.expiryDate != null) {
+            llmInfo.expiryDate
+        } else {
+            ocrCoupon.expiryDate ?: llmInfo.expiryDate
+        }
+        
+        // Cashback: prefer LLM if confident (>0.6), else OCR
+        val (cashbackAmount, cashbackValueNum, cashbackType, cashbackCurrency) = 
+            if (llmConf.getOrDefault("cashback", 0f) > 0.6f && llmInfo.cashbackAmount != null) {
+                val amount = llmInfo.cashbackAmount
+                if (llmInfo.discountType == "PERCENTAGE") {
+                    Tuple4(amount, amount, com.example.coupontracker.data.model.CashbackType.PERCENT.name, null)
+                } else {
+                    Tuple4(amount, amount, com.example.coupontracker.data.model.CashbackType.AMOUNT.name, "INR")
+                }
+            } else if (ocrCoupon.getCashbackNumericValue() > 0) {
+                val value = ocrCoupon.getCashbackNumericValue()
+                Tuple4(value, value, ocrCoupon.cashbackType ?: "TEXT", ocrCoupon.cashbackCurrency)
+            } else {
+                Tuple4(0.0, 0.0, com.example.coupontracker.data.model.CashbackType.TEXT.name, null)
+            }
+        
+        // Description: combine both sources
+        val description = when {
+            llmInfo.description.isNotBlank() && ocrCoupon.description.isNotBlank() -> 
+                "${llmInfo.description} (Hybrid: LLM + OCR)"
+            llmInfo.description.isNotBlank() -> llmInfo.description
+            ocrCoupon.description.isNotBlank() -> ocrCoupon.description
+            else -> "Extracted via Hybrid method"
+        }
+        
+        return Coupon(
+            id = 0,
+            storeName = storeName,
+            description = description,
+            expiryDate = expiryDate,
+            cashbackAmount = cashbackAmount,
+            redeemCode = redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
+            imageUri = persistUri(uri),
+            category = llmInfo.category ?: ocrCoupon.category,
+            status = "Active",
+            createdAt = java.util.Date(),
+            updatedAt = java.util.Date(),
+            cashbackType = cashbackType,
+            cashbackValueNum = cashbackValueNum,
+            cashbackCurrency = cashbackCurrency,
+            offerText = ocrCoupon.offerText ?: llmInfo.description
+        )
+    }
+    
+    // Helper data class for tuple return
+    private data class Tuple4<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
     
     // Helper methods
     
