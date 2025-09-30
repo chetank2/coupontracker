@@ -5,20 +5,15 @@ import android.graphics.Bitmap
 import android.util.Log
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.LlmTelemetryService
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.example.coupontracker.ocr.OcrEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
 import org.json.JSONObject
 import java.util.Date
 import java.util.Locale
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
  * Local LLM OCR Service using MiniCPM-Llama3-V2.5
@@ -26,6 +21,7 @@ import kotlin.coroutines.resumeWithException
  */
 class LocalLlmOcrService(
     private val context: Context,
+    private val ocrEngine: OcrEngine,
     private val injectedLlmRuntimeManager: LlmRuntimeManager? = null,
     private val injectedTelemetryService: LlmTelemetryService? = null,
     private val customOcrTextProvider: (suspend (Bitmap) -> String?)? = null
@@ -655,15 +651,15 @@ class LocalLlmOcrService(
         }
 
         return try {
-            val mlKitText = performMlKitOcr(bitmap)
-            if (mlKitText.isBlank()) {
-                Log.w(TAG, "ML Kit OCR returned blank text during capture")
+            val ocrText = performMlKitOcr(bitmap)
+            if (ocrText.isBlank()) {
+                Log.w(TAG, "OCR returned blank text during capture")
                 null
             } else {
-                mlKitText
+                ocrText
             }
-        } catch (mlKitError: Exception) {
-            Log.w(TAG, "ML Kit OCR capture failed, attempting fallback", mlKitError)
+        } catch (ocrError: Exception) {
+            Log.w(TAG, "OCR capture failed, attempting fallback", ocrError)
             runCatching {
                 val fallbackService = ModelBasedOCRService(context)
                 val fallbackInfo = fallbackService.processCouponImage(bitmap)
@@ -1073,18 +1069,18 @@ class LocalLlmOcrService(
         Log.d(TAG, "Using traditional OCR fallback")
         
         try {
-            // Use Google ML Kit for text recognition
-            val mlKitText = performMlKitOcr(bitmap)
-            Log.d(TAG, "ML Kit OCR extracted text: ${mlKitText.take(100)}...")
+            // Use Tesseract for text recognition
+            val ocrText = performMlKitOcr(bitmap)
+            Log.d(TAG, "OCR extracted text: ${ocrText.take(100)}...")
             
             // Validate that we got real text, not empty/whitespace
-            if (mlKitText.isBlank()) {
-                throw Exception("ML Kit OCR returned blank text")
+            if (ocrText.isBlank()) {
+                throw Exception("OCR returned blank text")
             }
             
             // Use existing TextExtractor to parse the OCR text
             val textExtractor = TextExtractor()
-            val extractedInfo = textExtractor.extractCouponInfoSync(mlKitText, captureTimestamp)
+            val extractedInfo = textExtractor.extractCouponInfoSync(ocrText, captureTimestamp)
                 .let { info ->
                     info.copy(description = cleanDescription(info.description))
                 }
@@ -1122,28 +1118,16 @@ class LocalLlmOcrService(
     }
     
     /**
-     * Perform ML Kit OCR on bitmap
+     * Perform OCR on bitmap using Tesseract
      */
     private suspend fun performMlKitOcr(bitmap: Bitmap): String = withContext(Dispatchers.IO) {
-        return@withContext suspendCancellableCoroutine { continuation ->
-            try {
-                val image = InputImage.fromBitmap(bitmap, 0)
-                val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-                
-                recognizer.process(image)
-                    .addOnSuccessListener { visionText ->
-                        val extractedText = visionText.text
-                        Log.d(TAG, "ML Kit OCR success: ${extractedText.length} chars")
-                        continuation.resume(extractedText)
-                    }
-                    .addOnFailureListener { exception ->
-                        Log.e(TAG, "ML Kit OCR failed", exception)
-                        continuation.resumeWithException(exception)
-                    }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error setting up ML Kit OCR", e)
-                continuation.resumeWithException(e)
-            }
+        return@withContext try {
+            val extractedText = ocrEngine.recognize(bitmap)
+            Log.d(TAG, "Tesseract OCR success: ${extractedText.length} chars")
+            extractedText
+        } catch (e: Exception) {
+            Log.e(TAG, "Tesseract OCR failed", e)
+            ""
         }
     }
     

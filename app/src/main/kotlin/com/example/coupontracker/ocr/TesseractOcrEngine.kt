@@ -71,7 +71,7 @@ class TesseractOcrEngine @Inject constructor(
             
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize Tesseract", e)
-            tessBaseAPI?.recycle()
+            tessBaseAPI?.end()
             tessBaseAPI = null
             isInitialized = false
         }
@@ -105,7 +105,7 @@ class TesseractOcrEngine @Inject constructor(
     override fun isReady(): Boolean = isInitialized && tessBaseAPI != null
     
     override fun release() {
-        tessBaseAPI?.recycle()
+        tessBaseAPI?.end()
         tessBaseAPI = null
         isInitialized = false
         Log.d(TAG, "Tesseract resources released")

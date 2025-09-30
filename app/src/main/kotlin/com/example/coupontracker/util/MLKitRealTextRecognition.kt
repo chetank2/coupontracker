@@ -5,109 +5,64 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
+import com.example.coupontracker.ocr.OcrEngine
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.TextRecognizer
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 import android.graphics.ImageDecoder
 
 /**
- * Real ML Kit text recognition implementation
- * This class provides actual OCR functionality using ML Kit
+ * Tesseract-based text recognition implementation
+ * Replaced ML Kit with Tesseract for fully offline operation
+ * 
+ * @deprecated Use OcrEngine directly via Hilt injection instead
  */
-class MLKitRealTextRecognition {
-    
-    private val textRecognizer: TextRecognizer by lazy {
-        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    }
+@Deprecated("Use OcrEngine directly via Hilt injection", ReplaceWith("OcrEngine"))
+class MLKitRealTextRecognition(
+    private val ocrEngine: OcrEngine
+) {
     
     companion object {
         private const val TAG = "MLKitRealTextRecognition"
     }
     
     /**
-     * Process image from URI using ML Kit
+     * Process image from URI using Tesseract OCR
      */
     suspend fun processImageFromUri(context: Context, imageUri: Uri): String {
         return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "Processing image from URI with ML Kit")
-                
-                try {
-                    // Use modern approach to load bitmap
-                    val bitmap = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
-                        val source = ImageDecoder.createSource(context.contentResolver, imageUri)
-                        ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
-                            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-                            decoder.isMutableRequired = true
-                        }
-                    } else {
-                        @Suppress("DEPRECATION")
-                        MediaStore.Images.Media.getBitmap(context.contentResolver, imageUri)
-                    }
-                    return@withContext recognizeTextFromBitmap(bitmap)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error loading bitmap from URI", e)
-                    throw e
+                // Load bitmap from URI
+                val bitmap = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    val source = ImageDecoder.createSource(context.contentResolver, imageUri)
+                    ImageDecoder.decodeBitmap(source).copy(Bitmap.Config.ARGB_8888, false)
+                } else {
+                    @Suppress("DEPRECATION")
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, imageUri)
                 }
+                
+                // Process with Tesseract
+                val text = ocrEngine.recognize(bitmap)
+                
+                // Clean up
+                bitmap.recycle()
+                
+                if (text.isBlank()) {
+                    Log.w(TAG, "OCR returned empty text")
+                    throw Exception("OCR returned empty text")
+                }
+                
+                text
             } catch (e: Exception) {
-                Log.e(TAG, "Error processing image from URI with ML Kit", e)
+                Log.e(TAG, "Image processing failed", e)
                 throw e
             }
         }
     }
     
     /**
-     * Process bitmap using ML Kit
+     * Process image from bitmap using Tesseract OCR
      */
     suspend fun processImageFromBitmap(bitmap: Bitmap): String {
-        return withContext(Dispatchers.IO) {
-            try {
-                Log.d(TAG, "Processing bitmap with ML Kit")
-                return@withContext recognizeTextFromBitmap(bitmap)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error processing bitmap with ML Kit", e)
-                throw e
-            }
-        }
+        return ocrEngine.recognize(bitmap)
     }
-    
-    /**
-     * Recognize text from bitmap using ML Kit
-     */
-    private suspend fun recognizeTextFromBitmap(bitmap: Bitmap): String {
-        return suspendCancellableCoroutine { continuation ->
-            try {
-                val image = InputImage.fromBitmap(bitmap, 0)
-                textRecognizer.process(image)
-                    .addOnSuccessListener { text ->
-                        if (text.text.isNotBlank()) {
-                            continuation.resume(text.text)
-                        } else {
-                            Log.w(TAG, "ML Kit returned empty text")
-                            continuation.resumeWithException(Exception("ML Kit OCR returned empty text"))
-                        }
-                    }
-                    .addOnFailureListener { e ->
-                        Log.e(TAG, "ML Kit text recognition failed", e)
-                        continuation.resumeWithException(e)
-                    }
-                
-                continuation.invokeOnCancellation {
-                    // No need to cancel ML Kit task, it will be garbage collected
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error setting up ML Kit", e)
-                continuation.resumeWithException(e)
-            }
-        }
-    }
-    
-    // Removed createFallbackText() - we now properly propagate failures
-    // instead of injecting fake coupon content
-} 
+}

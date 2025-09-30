@@ -51,9 +51,10 @@ object LlmModule {
     @Singleton
     fun provideLocalLlmOcrService(
         @ApplicationContext context: Context,
+        ocrEngine: com.example.coupontracker.ocr.OcrEngine,
         llmRuntimeManager: LlmRuntimeManager
     ): LocalLlmOcrService {
-        return LocalLlmOcrService(context, llmRuntimeManager)
+        return LocalLlmOcrService(context, ocrEngine, llmRuntimeManager)
     }
 
     @Provides
