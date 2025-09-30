@@ -57,11 +57,35 @@ class ModelDownloadManager(
         
         // Minimum expected model size (90% of actual size for validation)
         private const val MIN_MODEL_SIZE = 4231152L // 4.03MB (90% of 4.7MB)
-        
+
         // Download configuration
         private const val DOWNLOAD_TIMEOUT_MS = 30_000L
         private const val BUFFER_SIZE = 8192
         private const val PROGRESS_UPDATE_INTERVAL = 100L
+
+        fun getNativeLibraryCandidates(context: Context): List<File> {
+            val appContext = context.applicationContext ?: context
+            val modelsDir = appContext?.filesDir?.let { File(it, "models") } ?: return emptyList()
+            if (!modelsDir.exists()) {
+                return emptyList()
+            }
+
+            val allSoFiles = modelsDir.walkTopDown()
+                .filter { it.isFile && it.extension.equals("so", ignoreCase = true) }
+                .toList()
+
+            if (allSoFiles.isEmpty()) {
+                return emptyList()
+            }
+
+            val preferredOrder = listOf("libmlc_llm_android.so", "minicpm_llm_q4f16_1.so")
+            val prioritized = preferredOrder.mapNotNull { name ->
+                allSoFiles.firstOrNull { it.name == name }
+            }
+
+            val remaining = allSoFiles.filterNot { prioritized.contains(it) }
+            return (prioritized + remaining).distinct()
+        }
     }
     
     private val securePrefs = SecurePreferencesManager(context)
@@ -344,7 +368,7 @@ class ModelDownloadManager(
         return try {
             ZipInputStream(zipFile.inputStream()).use { zipStream ->
                 var entry: ZipEntry?
-                
+
                 while (zipStream.nextEntry.also { entry = it } != null) {
                     val entryName = entry!!.name
                     
@@ -363,9 +387,11 @@ class ModelDownloadManager(
                     Log.d(TAG, "Extracted: $entryName (${formatBytes(outputFile.length())})")
                 }
             }
-            
+
+            ensureNativeLibraryAlias()
+
             true
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "Model extraction failed", e)
             false
@@ -418,6 +444,28 @@ class ModelDownloadManager(
         
         Log.d(TAG, "All required model files present and verified")
         return true
+    }
+
+    private fun ensureNativeLibraryAlias() {
+        val existingAlias = modelDir.walkTopDown()
+            .firstOrNull { it.isFile && it.name == "libmlc_llm_android.so" }
+
+        if (existingAlias != null) {
+            return
+        }
+
+        val primaryLibrary = modelDir.walkTopDown()
+            .firstOrNull { it.isFile && it.name == "minicpm_llm_q4f16_1.so" }
+
+        if (primaryLibrary != null) {
+            val aliasFile = File(primaryLibrary.parentFile ?: modelDir, "libmlc_llm_android.so")
+            runCatching {
+                primaryLibrary.copyTo(aliasFile, overwrite = true)
+                Log.d(TAG, "Created native library alias at ${aliasFile.absolutePath}")
+            }.onFailure { error ->
+                Log.w(TAG, "Failed to create native library alias", error)
+            }
+        }
     }
     
     /**
