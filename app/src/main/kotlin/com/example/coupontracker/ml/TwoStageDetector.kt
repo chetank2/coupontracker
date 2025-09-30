@@ -8,6 +8,7 @@ import android.os.Parcelable
 import android.util.DisplayMetrics
 import android.util.Log
 import androidx.annotation.VisibleForTesting
+import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.util.BitmapManager
 import com.example.coupontracker.util.CouponInstanceValidator
 import kotlinx.coroutines.runBlocking
@@ -35,7 +36,11 @@ import kotlinx.parcelize.Parcelize
  * - Partial coupon screenshots (top/bottom cut-off)
  * - Scrollable coupon lists
  */
-class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean = true) {
+class TwoStageDetector(
+    private val context: Context,
+    private val isDebugBuild: Boolean = BuildConfig.DEBUG,
+    initializeOnCreate: Boolean = true
+) {
     
     companion object {
         private const val TAG = "TwoStageDetector"
@@ -85,21 +90,27 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
     private fun initializeModels() {
         try {
             Log.d(TAG, "Initializing two-stage detection models...")
-            
+
             // Load model manifest
             loadModelManifest()
-            
+
             if (stubMode) {
-                Log.w(
-                    TAG,
-                    "Multi-coupon manifest is marked as stub_mode. Skipping TensorFlow Lite interpreter initialization. " +
-                        "Replace the placeholder assets with trained binaries for production use."
-                )
-                stage1Interpreter = null
-                stage2Interpreter = null
-                initializeImageProcessors()
-                isInitialized = true
-                return
+                if (isDebugBuild) {
+                    Log.w(
+                        TAG,
+                        "Multi-coupon manifest is marked as stub_mode. Skipping TensorFlow Lite interpreter initialization. " +
+                            "Replace the placeholder assets with trained binaries for production use."
+                    )
+                    stage1Interpreter = null
+                    stage2Interpreter = null
+                    initializeImageProcessors()
+                    isInitialized = true
+                    return
+                } else {
+                    val message = "Two-stage detector manifest is marked stub_mode=true; trained assets are required for production builds."
+                    Log.e(TAG, message)
+                    throw IllegalStateException(message)
+                }
             }
 
             // Try to load models, but fallback gracefully if they're placeholders
@@ -110,13 +121,13 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
 
                 // Load Stage 2 Model (Field Detection)
                 loadStage2Model()
-                
+
                 modelsLoaded = true
                 Log.i(TAG, "Production models loaded successfully")
-                
+
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to load production models (likely placeholders): ${e.message}")
-                
+
                 if (demoMode) {
                     Log.i(TAG, "Demo mode enabled - continuing with placeholder models for synthetic detections")
                     stage1Interpreter = null
@@ -132,17 +143,18 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
                 // Initialize image processors
                 initializeImageProcessors()
                 isInitialized = true
-                
+
                 if (demoMode) {
                     Log.i(TAG, "Two-stage detector initialized in demo mode")
                 } else {
                     Log.i(TAG, "Two-stage detector initialized with production models")
                 }
             }
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing models", e)
             isInitialized = false
+            throw e
         }
     }
     

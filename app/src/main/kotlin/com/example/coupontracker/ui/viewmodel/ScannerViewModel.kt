@@ -53,7 +53,9 @@ class ScannerViewModel @Inject constructor(
     val uiState: StateFlow<ScannerUiState> = _uiState.asStateFlow()
 
     private val multiEngineOCR: MultiEngineOCR = MultiEngineOCR(context)
-    private val twoStageDetector: TwoStageDetector = TwoStageDetector(context)
+    private val detectorInitializationResult = initializeTwoStageDetector()
+    private val twoStageDetector: TwoStageDetector? = detectorInitializationResult.detector
+    private val detectorInitErrorMessage: String? = detectorInitializationResult.errorMessage
     private val uriPersistenceManager = UriPersistenceManager(context)
     private val fieldHeuristics: GenericFieldHeuristics = GenericFieldHeuristics
     private val manualOverrides = mutableMapOf<String, CouponInstance>()
@@ -134,13 +136,59 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    private data class DetectorInitializationResult(
+        val detector: TwoStageDetector?,
+        val errorMessage: String?
+    )
+
+    private fun initializeTwoStageDetector(): DetectorInitializationResult {
+        return try {
+            DetectorInitializationResult(TwoStageDetector(context), null)
+        } catch (e: IllegalStateException) {
+            val message = e.message ?: "Multi-coupon detector assets are not available for this build."
+            Log.e(TAG, "TwoStageDetector initialization blocked", e)
+            telemetryService.trackExtractionResult(
+                ExtractResult.Failed(
+                    stage = ExtractionStage.TWO_STAGE_DETECTION,
+                    error = e
+                ),
+                RunPath(
+                    strategy = "LEGACY",
+                    final = "two_stage_detector_initialization_failure",
+                    reasons = mutableListOf("stub_mode_manifest")
+                )
+            )
+            DetectorInitializationResult(null, message)
+        } catch (e: Exception) {
+            val message = e.message ?: "Failed to initialize multi-coupon detector."
+            Log.e(TAG, "TwoStageDetector initialization failed", e)
+            telemetryService.trackExtractionResult(
+                ExtractResult.Failed(
+                    stage = ExtractionStage.TWO_STAGE_DETECTION,
+                    error = e
+                ),
+                RunPath(
+                    strategy = "LEGACY",
+                    final = "two_stage_detector_initialization_failure",
+                    reasons = mutableListOf("unexpected_initialization_error")
+                )
+            )
+            DetectorInitializationResult(null, message)
+        }
+    }
+
     init {
         // Assume network is available by default
         multiEngineOCR.setNetworkAvailability(true)
-        
-        // Log detector initialization
-        val modelInfo = twoStageDetector.getModelInfo()
-        Log.d(TAG, "TwoStageDetector initialized: $modelInfo")
+
+        // Surface detector initialization status
+        detectorInitErrorMessage?.let { error ->
+            Log.e(TAG, "TwoStageDetector unavailable: $error")
+            _uiState.value = ScannerUiState.Error(error)
+        } ?: run {
+            val modelInfo = twoStageDetector?.getModelInfo()
+            Log.d(TAG, "TwoStageDetector initialized: $modelInfo")
+        }
     }
 
     /**
@@ -202,31 +250,35 @@ class ScannerViewModel @Inject constructor(
     private suspend fun scanWithLegacyPath(imageUri: Uri, bitmap: Bitmap, persistImmediately: Boolean) {
         Log.d(TAG, "LEGACY path: Running two-stage detection")
 
-                // Run two-stage detection
-                val couponInstances = withContext(Dispatchers.IO) {
-                    twoStageDetector.detectMultiCoupons(bitmap)
-                }
+        val detector = twoStageDetector ?: run {
+            val message = detectorInitErrorMessage ?: "Multi-coupon detector is unavailable."
+            Log.e(TAG, "LEGACY path unavailable: $message")
+            _uiState.value = ScannerUiState.Error(message)
+            return
+        }
 
-                Log.d(TAG, "Two-stage detection completed: ${couponInstances.size} coupons detected")
+        // Run two-stage detection
+        val couponInstances = withContext(Dispatchers.IO) {
+            detector.detectMultiCoupons(bitmap)
+        }
 
-                when {
-                    couponInstances.isEmpty() -> {
-                // Try universal extraction first, then fallback to traditional OCR
+        Log.d(TAG, "Two-stage detection completed: ${couponInstances.size} coupons detected")
+
+        when {
+            couponInstances.isEmpty() -> {
                 Log.d(TAG, "No coupons detected, trying universal extraction first")
                 tryUniversalExtraction(imageUri, bitmap)
-                    }
-                    couponInstances.size == 1 -> {
-                        // Single coupon detected - process directly
-                        val couponInstance = couponInstances.first()
-                        processSingleCoupon(
-                            couponInstance = couponInstance,
-                            imageUri = imageUri.toString(),
-                            persistImmediately = persistImmediately
-                        )
-                    }
-                    else -> {
-                        // Multiple coupons detected - show selection interface
-                        _uiState.value = ScannerUiState.MultiCouponDetected(couponInstances, bitmap, imageUri.toString())
+            }
+            couponInstances.size == 1 -> {
+                val couponInstance = couponInstances.first()
+                processSingleCoupon(
+                    couponInstance = couponInstance,
+                    imageUri = imageUri.toString(),
+                    persistImmediately = persistImmediately
+                )
+            }
+            else -> {
+                _uiState.value = ScannerUiState.MultiCouponDetected(couponInstances, bitmap, imageUri.toString())
             }
         }
     }
@@ -716,9 +768,16 @@ class ScannerViewModel @Inject constructor(
                 _uiState.value = ScannerUiState.Scanning
                 Log.d(TAG, "Processing captured bitmap with two-stage detection")
 
+                val detector = twoStageDetector ?: run {
+                    val message = detectorInitErrorMessage ?: "Multi-coupon detector is unavailable."
+                    Log.e(TAG, "Captured image processing blocked: $message")
+                    _uiState.value = ScannerUiState.Error(message)
+                    return@launch
+                }
+
                 // Run two-stage detection
                 val couponInstances = withContext(Dispatchers.IO) {
-                    twoStageDetector.detectMultiCoupons(bitmap)
+                    detector.detectMultiCoupons(bitmap)
                 }
 
                 Log.d(TAG, "Two-stage detection on bitmap completed: ${couponInstances.size} coupons detected")
@@ -797,7 +856,7 @@ class ScannerViewModel @Inject constructor(
             Log.e(TAG, "Error processing single coupon", e)
             _uiState.value = ScannerUiState.Error("Error processing coupon: ${e.message}")
         } finally {
-            twoStageDetector.releaseInstances(listOf(couponInstance))
+            twoStageDetector?.releaseInstances(listOf(couponInstance))
         }
     }
 
@@ -989,7 +1048,7 @@ class ScannerViewModel @Inject constructor(
                 Log.e(TAG, "Error processing coupon $index", e)
                 // Continue with other coupons
             } finally {
-                twoStageDetector.releaseInstances(listOf(instance))
+                twoStageDetector?.releaseInstances(listOf(instance))
             }
         }
 
@@ -1643,7 +1702,7 @@ class ScannerViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         try {
-            twoStageDetector.cleanupBitmaps()
+            twoStageDetector?.cleanupBitmaps()
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up TwoStageDetector", e)
         }
