@@ -2,8 +2,7 @@ package com.example.coupontracker.di
 
 import android.content.Context
 import androidx.room.Room
-import com.example.coupontracker.data.local.CouponDatabase
-import com.example.coupontracker.data.local.CouponDao
+import com.example.coupontracker.data.local.*
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.repository.CouponRepositoryImpl
 import dagger.Module
@@ -31,7 +30,8 @@ object DatabaseModule {
                 CouponDatabase.MIGRATION_2_3,
                 CouponDatabase.MIGRATION_3_4,
                 CouponDatabase.MIGRATION_4_5,
-                CouponDatabase.MIGRATION_5_6
+                CouponDatabase.MIGRATION_5_6,
+                CouponDatabase.MIGRATION_6_7  // V2: Pattern learning and feedback tables
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -40,6 +40,18 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideCouponDao(database: CouponDatabase) = database.couponDao()
+    
+    // V2: Provide pattern DAO
+    @Provides
+    @Singleton
+    fun provideLearnedPatternDao(database: CouponDatabase): LearnedPatternDao = 
+        database.learnedPatternDao()
+    
+    // V2: Provide feedback DAO
+    @Provides
+    @Singleton
+    fun provideExtractionFeedbackDao(database: CouponDatabase): ExtractionFeedbackDao = 
+        database.extractionFeedbackDao()
 
     @Provides
     @Singleton

@@ -8,10 +8,20 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.CouponDedupUtils
 
-@Database(entities = [Coupon::class], version = 6)
+@Database(
+    entities = [
+        Coupon::class,
+        LearnedPattern::class,          // V2: Pattern storage
+        ExtractionFeedback::class       // V2: Feedback & telemetry
+    ],
+    version = 7,
+    exportSchema = true
+)
 @TypeConverters(Converters::class)
 abstract class CouponDatabase : RoomDatabase() {
     abstract fun couponDao(): CouponDao
+    abstract fun learnedPatternDao(): LearnedPatternDao              // V2: Pattern management
+    abstract fun extractionFeedbackDao(): ExtractionFeedbackDao      // V2: Feedback management
 
     companion object {
         const val DATABASE_NAME = "coupon_database"
@@ -151,6 +161,66 @@ abstract class CouponDatabase : RoomDatabase() {
                         END
                     WHERE cashbackType IS NULL
                 """)
+            }
+        }
+        
+        /**
+         * V2 Architecture Migration: Add pattern learning and feedback tables
+         * Version 6 → 7
+         * 
+         * Changes:
+         * - Creates learned_patterns_v1 table for storing extraction patterns
+         * - Creates extraction_feedback_v1 table for user feedback and telemetry
+         * - Adds indices for efficient queries
+         * - Zero impact on existing coupons table
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Create learned_patterns_v1 table
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `learned_patterns_v1` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `brand` TEXT,
+                        `fieldType` TEXT NOT NULL,
+                        `regex` TEXT NOT NULL,
+                        `weight` REAL NOT NULL DEFAULT 0.0,
+                        `source` TEXT NOT NULL,
+                        `sampleValue` TEXT NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `successCount` INTEGER NOT NULL DEFAULT 1,
+                        `attemptCount` INTEGER NOT NULL DEFAULT 1
+                    )
+                """.trimIndent())
+                
+                // Create indices for learned_patterns_v1
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_learned_patterns_v1_fieldType` ON `learned_patterns_v1` (`fieldType`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_learned_patterns_v1_brand` ON `learned_patterns_v1` (`brand`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_learned_patterns_v1_weight` ON `learned_patterns_v1` (`weight` DESC)")
+                
+                // Create extraction_feedback_v1 table
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `extraction_feedback_v1` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `couponId` INTEGER,
+                        `extractionStrategy` TEXT NOT NULL,
+                        `feedbackType` TEXT NOT NULL,
+                        `originalValues` TEXT NOT NULL,
+                        `correctedValues` TEXT,
+                        `signalsJson` TEXT NOT NULL,
+                        `runPathJson` TEXT NOT NULL,
+                        `deviceInfo` TEXT NOT NULL,
+                        `timestamp` INTEGER NOT NULL,
+                        `consentGiven` INTEGER NOT NULL DEFAULT 0
+                    )
+                """.trimIndent())
+                
+                // Create indices for extraction_feedback_v1
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_extraction_feedback_v1_timestamp` ON `extraction_feedback_v1` (`timestamp` DESC)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_extraction_feedback_v1_extractionStrategy` ON `extraction_feedback_v1` (`extractionStrategy`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_extraction_feedback_v1_feedbackType` ON `extraction_feedback_v1` (`feedbackType`)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS `index_extraction_feedback_v1_couponId` ON `extraction_feedback_v1` (`couponId`)")
+                
+                android.util.Log.d("CouponDatabase", "✅ V2 Migration 6→7 complete: Pattern learning and feedback tables created")
             }
         }
     }
