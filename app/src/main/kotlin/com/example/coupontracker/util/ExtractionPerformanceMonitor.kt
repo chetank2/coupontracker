@@ -433,7 +433,10 @@ enum class ExtractionMethod {
     UNIVERSAL_EXTRACTION,
     LLM_OCR_FUSION,
     TRADITIONAL_OCR,
-    MANUAL_ENTRY
+    MANUAL_ENTRY,
+    LLM_DIRECT,           // V2: LLM-first strategy
+    OCR_PATTERN_MATCH,    // V2: OCR-first strategy
+    HYBRID_FUSION         // V2: Hybrid parallel strategy
 }
 
 enum class FeedbackType {
