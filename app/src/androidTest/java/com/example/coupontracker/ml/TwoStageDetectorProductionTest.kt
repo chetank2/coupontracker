@@ -4,7 +4,8 @@ import android.graphics.Bitmap
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.After
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -28,29 +29,26 @@ class TwoStageDetectorProductionTest {
     }
 
     @Test
-    fun demoManifestInitializesWithoutInterpretersButProvidesDetections() {
+    fun productionModelsLoadAndReturnRealDetections() {
         val modelInfo = detector.getModelInfo()
         val isInitialized = modelInfo["isInitialized"] as? Boolean ?: false
+        val demoModeEnabled = readPrivateField<Boolean>("demoMode")
+        val stubModeEnabled = readPrivateField<Boolean>("stubMode")
+
+        assertFalse("Detector should not initialize in demo mode", demoModeEnabled)
+        assertFalse("Detector should not initialize in stub mode", stubModeEnabled)
         assertTrue("Detector should report initialized when manifest is present", isInitialized)
 
         val stage1Interpreter = readPrivateField<Interpreter?>("stage1Interpreter")
         val stage2Interpreter = readPrivateField<Interpreter?>("stage2Interpreter")
 
-        assertNull("Stage 1 interpreter should not initialize in stub/demo mode", stage1Interpreter)
-        assertNull("Stage 2 interpreter should not initialize in stub/demo mode", stage2Interpreter)
+        assertNotNull("Stage 1 interpreter should initialize in production mode", stage1Interpreter)
+        assertNotNull("Stage 2 interpreter should initialize in production mode", stage2Interpreter)
 
         val bitmap = Bitmap.createBitmap(1280, 720, Bitmap.Config.ARGB_8888)
         val detections = detector.detectMultiCoupons(bitmap)
 
-        assertTrue("Demo detections should be returned when demo_mode is true", detections.isNotEmpty())
-        assertTrue(
-            "Each detection should include code and benefit regions",
-            detections.all { instance ->
-                val fields = instance.fields
-                fields.any { it.fieldType == FieldType.CODE_REGION } &&
-                    fields.any { it.fieldType == FieldType.BENEFIT_REGION }
-            }
-        )
+        assertTrue("Production detector should not return demo detections on blank input", detections.isEmpty())
 
         detector.releaseInstances(detections)
         bitmap.recycle()

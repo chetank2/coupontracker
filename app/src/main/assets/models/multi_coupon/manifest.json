@@ -1,5 +1,5 @@
 {
-  "model_version": "1.0.0-demo",
+  "model_version": "1.0.0",
   "model_type": "two_stage_yolo",
   "stage1_model": "stage1_coupon_detector.tflite",
   "stage2_model": "stage2_field_detector.tflite",
@@ -25,7 +25,7 @@
   ],
   "confidence_threshold": 0.5,
   "iou_threshold": 0.4,
-  "stub_mode": true,
-  "stub_notes": "Demo mode: Returns synthetic multi-coupon detections for testing UI",
-  "demo_mode": true
+  "stub_mode": false,
+  "stub_notes": "Production mode: Loads trained TensorFlow Lite interpreters",
+  "demo_mode": false
 }

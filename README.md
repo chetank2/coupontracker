@@ -85,10 +85,16 @@ python coupon_trainer_cli.py --url <URL> --output-dir <OUTPUT_DIR>
 ## 🧪 Testing
 
 ### **Instrumentation (Connected) Tests**
-Run the connected test suite to verify on-device TensorFlow Lite integration, including the `TwoStageDetectorProductionTest` that exercises the demo detections:
+Run the connected test suite to verify on-device TensorFlow Lite integration, including the `TwoStageDetectorProductionTest` that exercises the production detector with the device/emulator's native TensorFlow Lite runtime:
 
 ```bash
 ./gradlew connectedAndroidTest
+```
+
+For CI or local scripting workflows, use the helper wrapper which simply forwards to the same Gradle task from the project root:
+
+```bash
+./scripts/run_connected_android_tests.sh
 ```
 
 ## 📊 Key Features
