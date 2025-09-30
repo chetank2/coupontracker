@@ -24,13 +24,14 @@ import javax.inject.Inject
 class QRScannerViewModel @Inject constructor(
     application: Application,
     @ApplicationContext private val context: Context,
-    private val couponRepository: CouponRepository
+    private val couponRepository: CouponRepository,
+    private val imageProcessor: com.example.coupontracker.util.ImageProcessor
 ) : AndroidViewModel(application) {
     
     private val _uiState = MutableStateFlow(QRScannerUiState())
     val uiState: StateFlow<QRScannerUiState> = _uiState.asStateFlow()
     
-    private val couponInputManager = CouponInputManager(context)
+    private val couponInputManager = CouponInputManager(context, imageProcessor)
     
     companion object {
         private const val TAG = "QRScannerViewModel"

@@ -42,6 +42,7 @@ class ScannerViewModel @Inject constructor(
     application: Application,
     @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository,
+    private val ocrEngine: com.example.coupontracker.ocr.OcrEngine,  // Tesseract OCR engine
     private val localLlmOcrService: LocalLlmOcrService,
     private val telemetryService: ExtractionTelemetryService,
     private val universalExtractionService: UniversalExtractionService,
@@ -52,7 +53,7 @@ class ScannerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
     val uiState: StateFlow<ScannerUiState> = _uiState.asStateFlow()
 
-    private val multiEngineOCR: MultiEngineOCR = MultiEngineOCR(context)
+    private val multiEngineOCR: MultiEngineOCR = MultiEngineOCR(context, ocrEngine)
     private val detectorInitializationResult = initializeTwoStageDetector()
     private val twoStageDetector: TwoStageDetector? = detectorInitializationResult.detector
     private val detectorInitErrorMessage: String? = detectorInitializationResult.errorMessage

@@ -59,7 +59,7 @@ class AddFragment : Fragment() {
     private var imageUri: Uri? = null
     private var imageCapture: ImageCapture? = null
     @Inject
-    lateinit var imageProcessor: ImageProcessor
+    lateinit var imageProcessor: com.example.coupontracker.util.ImageProcessor
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var securePreferencesManager: SecurePreferencesManager
     private lateinit var modelDownloadManager: ModelDownloadManager
@@ -141,7 +141,8 @@ class AddFragment : Fragment() {
             Log.d(TAG, "Mistral API disabled")
         }
 
-        imageProcessor = ImageProcessor(requireContext())
+        // ImageProcessor is now injected via Hilt, no manual instantiation needed
+        // imageProcessor = com.example.coupontracker.util.ImageProcessor(requireContext())
     }
 
     private fun setupMistralApiSwitch() {

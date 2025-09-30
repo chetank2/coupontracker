@@ -29,13 +29,14 @@ class CouponFormViewModel @Inject constructor(
     application: Application,
     @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository,
+    private val imageProcessor: com.example.coupontracker.util.ImageProcessor,
     savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(CouponFormUiState())
     val uiState: StateFlow<CouponFormUiState> = _uiState.asStateFlow()
 
-    private val couponInputManager = CouponInputManager(context)
+    private val couponInputManager = CouponInputManager(context, imageProcessor)
 
     companion object {
         private const val TAG = "CouponFormViewModel"

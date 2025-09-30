@@ -25,13 +25,14 @@ import javax.inject.Inject
 class UnifiedUploadViewModel @Inject constructor(
     application: Application,
     @ApplicationContext private val context: Context,
-    private val couponRepository: CouponRepository
+    private val couponRepository: CouponRepository,
+    private val imageProcessor: com.example.coupontracker.util.ImageProcessor
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(UnifiedUploadUiState())
     val uiState: StateFlow<UnifiedUploadUiState> = _uiState.asStateFlow()
 
-    private val couponInputManager = CouponInputManager(context)
+    private val couponInputManager = CouponInputManager(context, imageProcessor)
 
     companion object {
         private const val TAG = "UnifiedUploadViewModel"

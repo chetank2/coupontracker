@@ -12,9 +12,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Helper class that uses multiple OCR engines for better results
  */
 class MultiEngineOCR(
-    private val context: Context
+    private val context: Context,
+    private val tesseractOcrEngine: com.example.coupontracker.ocr.OcrEngine
 ) {
-    private val ocrEngine = OCREngineImpl(context)
+    private val ocrEngine = OCREngineImpl(context, tesseractOcrEngine)
     
     // Track if we're connected to the network
     private var isNetworkAvailable = AtomicBoolean(false)

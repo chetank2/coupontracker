@@ -61,13 +61,13 @@ enum class CaptureMode {
 @HiltViewModel
 class SmartCaptureViewModel @Inject constructor(
     application: Application,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val imageProcessor: ImageProcessor
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(SmartCaptureUiState())
     val uiState: StateFlow<SmartCaptureUiState> = _uiState.asStateFlow()
 
-    private val imageProcessor = ImageProcessor(context)
     private val imageOptimizer = ImageOptimizer(context)
 
     // Barcode scanner options

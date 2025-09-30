@@ -68,7 +68,10 @@ private fun areWithinTolerance(first: Date, second: Date): Boolean {
 /**
  * Manager class for handling various coupon input methods
  */
-class CouponInputManager(private val context: Context) {
+class CouponInputManager(
+    private val context: Context,
+    private val imageProcessor: ImageProcessor
+) {
 
     companion object {
         private const val TAG = "CouponInputManager"
@@ -77,8 +80,6 @@ class CouponInputManager(private val context: Context) {
         private const val TEMP_FILE_SUFFIX_PDF = ".pdf"
         private const val SCREENSHOTS_FOLDER = "Screenshots"
     }
-
-    private val imageProcessor = ImageProcessor(context)
     private val contentResolver: ContentResolver = context.contentResolver
     private val uriPersistenceManager = UriPersistenceManager(context)
     private var screenshotObserver: ContentObserver? = null

@@ -27,6 +27,7 @@ class BatchScannerViewModel @Inject constructor(
     application: Application,
     @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository,
+    private val ocrEngine: com.example.coupontracker.ocr.OcrEngine,  // Tesseract OCR engine
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Bitmap memory management
     private val localLlmOcrService: com.example.coupontracker.util.LocalLlmOcrService,  // V2: LLM service
     private val universalExtractionService: com.example.coupontracker.universal.UniversalExtractionService  // V2: Universal extraction
@@ -35,7 +36,7 @@ class BatchScannerViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(BatchScannerUiState())
     val uiState: StateFlow<BatchScannerUiState> = _uiState.asStateFlow()
 
-    private val multiEngineOCR = com.example.coupontracker.util.MultiEngineOCR(context)
+    private val multiEngineOCR = com.example.coupontracker.util.MultiEngineOCR(context, ocrEngine)
     private val uriPersistenceManager = com.example.coupontracker.util.UriPersistenceManager(context)
     private val detectorInitializationResult = initializeTwoStageDetector()
     private val twoStageDetector = detectorInitializationResult.detector

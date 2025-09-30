@@ -12,7 +12,10 @@ import kotlinx.coroutines.withContext
 /**
  * Main OCR engine that orchestrates the OCR process using multiple OCR implementations
  */
-class OCREngineImpl(private val context: Context) {
+class OCREngineImpl(
+    private val context: Context,
+    private val ocrEngine: com.example.coupontracker.ocr.OcrEngine
+) {
     companion object {
         private const val TAG = "OCREngineImpl"
     }
@@ -22,8 +25,8 @@ class OCREngineImpl(private val context: Context) {
 
     // We've removed Google Cloud Vision API dependencies as we're using on-device OCR only
 
-    private val enhancedOCRHelper = EnhancedOCRHelper()
-    private val mlKitTextRecognitionHelper = MLKitTextRecognitionHelper()
+    private val enhancedOCRHelper = EnhancedOCRHelper(ocrEngine)
+    private val mlKitTextRecognitionHelper = MLKitTextRecognitionHelper(ocrEngine)
 
     /**
      * Process an image and extract text using the best available OCR implementation

@@ -661,7 +661,7 @@ class LocalLlmOcrService(
         } catch (ocrError: Exception) {
             Log.w(TAG, "OCR capture failed, attempting fallback", ocrError)
             runCatching {
-                val fallbackService = ModelBasedOCRService(context)
+                val fallbackService = ModelBasedOCRService(context, ocrEngine)
                 val fallbackInfo = fallbackService.processCouponImage(bitmap)
                 listOfNotNull(
                     fallbackInfo.storeName.takeIf { !it.equals("Unknown Store", ignoreCase = true) && it.isNotBlank() },
@@ -1100,7 +1100,7 @@ class LocalLlmOcrService(
             
             // Try using ModelBasedOCRService as final fallback
             try {
-                val modelBasedService = ModelBasedOCRService(context)
+                val modelBasedService = ModelBasedOCRService(context, ocrEngine)
                 val result = modelBasedService.processCouponImage(bitmap)
                 val cleanedResult = result.copy(description = cleanDescription(result.description))
                 Log.d(TAG, "Model-based OCR fallback result: $cleanedResult")

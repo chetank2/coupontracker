@@ -24,13 +24,14 @@ import javax.inject.Inject
 class ManualEntryViewModel @Inject constructor(
     application: Application,
     @ApplicationContext private val context: Context,
-    private val couponRepository: CouponRepository
+    private val couponRepository: CouponRepository,
+    private val imageProcessor: com.example.coupontracker.util.ImageProcessor
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(ManualEntryUiState())
     val uiState: StateFlow<ManualEntryUiState> = _uiState.asStateFlow()
 
-    private val couponInputManager = CouponInputManager(context)
+    private val couponInputManager = CouponInputManager(context, imageProcessor)
 
     companion object {
         private const val TAG = "ManualEntryViewModel"

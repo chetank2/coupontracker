@@ -292,7 +292,7 @@ fun SettingsScreen(
             }
             
             // LLM Status Info
-            LlmStatusCard(securePreferencesManager = securePreferencesManager)
+            LlmStatusCard(securePreferencesManager = securePreferencesManager, ocrEngine = ocrEngine)
 
             // Protected features button (only shown if features are not unlocked)
             if (!protectedFeaturesUnlocked) {
@@ -524,7 +524,10 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun LlmStatusCard(securePreferencesManager: SecurePreferencesManager) {
+private fun LlmStatusCard(
+    securePreferencesManager: SecurePreferencesManager,
+    ocrEngine: OcrEngine
+) {
     val context = LocalContext.current
     var llmStatus by remember { mutableStateOf<LlmServiceStatus?>(null) }
     var isLoading by remember { mutableStateOf(true) }
