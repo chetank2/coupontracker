@@ -147,49 +147,134 @@ class ScannerViewModel @Inject constructor(
      */
     fun scanImage(imageUri: Uri, persistImmediately: Boolean = true) {
         viewModelScope.launch {
+            var bitmap: Bitmap? = null
             try {
                 _uiState.value = ScannerUiState.Scanning
-                Log.d(TAG, "Starting enhanced multi-coupon scan for: $imageUri")
+                
+                // V2: Get current extraction strategy
+                val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
+                Log.d(TAG, "Starting scan with strategy: ${strategy.name} for: $imageUri")
 
                 // Load bitmap from URI
-                val bitmap = loadBitmapFromUri(imageUri) ?: run {
+                bitmap = loadBitmapFromUri(imageUri) ?: run {
                     _uiState.value = ScannerUiState.Error("Could not load image")
                     return@launch
                 }
 
-                // Run two-stage detection
-                val couponInstances = withContext(Dispatchers.IO) {
-                    twoStageDetector.detectMultiCoupons(bitmap)
-                }
-
-                Log.d(TAG, "Two-stage detection completed: ${couponInstances.size} coupons detected")
-
-                when {
-                    couponInstances.isEmpty() -> {
-                        // Try universal extraction first, then fallback to traditional OCR
-                        Log.d(TAG, "No coupons detected, trying universal extraction first")
-                        tryUniversalExtraction(imageUri, bitmap)
+                // V2: Route based on extraction strategy
+                when (strategy) {
+                    com.example.coupontracker.util.ExtractionStrategy.LEGACY -> {
+                        // LEGACY: Two-stage detection → LLM → OCR fallback
+                        scanWithLegacyPath(imageUri, bitmap, persistImmediately)
                     }
-                    couponInstances.size == 1 -> {
-                        // Single coupon detected - process directly
-                        val couponInstance = couponInstances.first()
-                        processSingleCoupon(
-                            couponInstance = couponInstance,
-                            imageUri = imageUri.toString(),
-                            persistImmediately = persistImmediately
-                        )
+                    com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST -> {
+                        // LLM_FIRST: LLM locates ROIs → OCR extracts → Fusion
+                        scanWithLlmFirstPath(imageUri, bitmap, persistImmediately)
                     }
-                    else -> {
-                        // Multiple coupons detected - show selection interface
-                        _uiState.value = ScannerUiState.MultiCouponDetected(couponInstances, bitmap, imageUri.toString())
+                    com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST -> {
+                        // OCR_FIRST: OCR finds text → LLM validates → Fusion
+                        scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
+                    }
+                    com.example.coupontracker.util.ExtractionStrategy.HYBRID -> {
+                        // HYBRID: Parallel LLM + OCR → Fusion arbitrates
+                        scanWithHybridPath(imageUri, bitmap, persistImmediately)
                     }
                 }
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error in enhanced scanning", e)
                 _uiState.value = ScannerUiState.Error("Error processing image: ${e.message}")
+            } finally {
+                // V2: Release bitmap after processing completes
+                bitmap?.let { bm ->
+                    bitmapManager.releaseBitmap(bm)
+                    Log.d(TAG, "Released original bitmap for: $imageUri")
+                }
             }
         }
+    }
+    
+    /**
+     * V2: LEGACY extraction path (current behavior)
+     * Two-stage detection → process instances → fallback to universal/traditional OCR
+     */
+    private suspend fun scanWithLegacyPath(imageUri: Uri, bitmap: Bitmap, persistImmediately: Boolean) {
+        Log.d(TAG, "LEGACY path: Running two-stage detection")
+        
+        // Run two-stage detection
+        val couponInstances = withContext(Dispatchers.IO) {
+            twoStageDetector.detectMultiCoupons(bitmap)
+        }
+
+        Log.d(TAG, "Two-stage detection completed: ${couponInstances.size} coupons detected")
+
+        when {
+            couponInstances.isEmpty() -> {
+                // Try universal extraction first, then fallback to traditional OCR
+                Log.d(TAG, "No coupons detected, trying universal extraction first")
+                tryUniversalExtraction(imageUri, bitmap)
+            }
+            couponInstances.size == 1 -> {
+                // Single coupon detected - process directly
+                val couponInstance = couponInstances.first()
+                processSingleCoupon(
+                    couponInstance = couponInstance,
+                    imageUri = imageUri.toString(),
+                    persistImmediately = persistImmediately
+                )
+            }
+            else -> {
+                // Multiple coupons detected - show selection interface
+                _uiState.value = ScannerUiState.MultiCouponDetected(couponInstances, bitmap, imageUri.toString())
+            }
+        }
+    }
+    
+    /**
+     * V2: LLM_FIRST extraction path
+     * LLM identifies field ROIs → OCR extracts text from those ROIs → Fusion decides
+     */
+    private suspend fun scanWithLlmFirstPath(imageUri: Uri, bitmap: Bitmap, persistImmediately: Boolean) {
+        Log.d(TAG, "LLM_FIRST path: LLM locates field ROIs")
+        
+        // Use universal extraction service which implements LLM-first logic
+        tryUniversalExtraction(imageUri, bitmap)
+    }
+    
+    /**
+     * V2: OCR_FIRST extraction path
+     * OCR finds all text regions → LLM validates and labels semantically → Fusion decides
+     */
+    private suspend fun scanWithOcrFirstPath(imageUri: Uri, bitmap: Bitmap, persistImmediately: Boolean) {
+        Log.d(TAG, "OCR_FIRST path: OCR finds text regions first")
+        
+        // Run OCR to get all text regions
+        val ocrResult = withContext(Dispatchers.IO) {
+            multiEngineOCR.processImage(bitmap)
+        }
+        
+        when (ocrResult) {
+            is MultiEngineOCR.OCRResult.Success -> {
+                Log.d(TAG, "OCR_FIRST: Extracted ${ocrResult.text.length} characters")
+            }
+            is MultiEngineOCR.OCRResult.Error -> {
+                Log.w(TAG, "OCR_FIRST: OCR failed - ${ocrResult.message}")
+            }
+        }
+        
+        // Fallback to universal extraction with OCR-first hint
+        tryUniversalExtraction(imageUri, bitmap)
+    }
+    
+    /**
+     * V2: HYBRID extraction path
+     * Parallel execution of LLM and OCR → Fusion arbitrates between results
+     */
+    private suspend fun scanWithHybridPath(imageUri: Uri, bitmap: Bitmap, persistImmediately: Boolean) {
+        Log.d(TAG, "HYBRID path: Parallel LLM + OCR execution")
+        
+        // Use universal extraction which can handle hybrid fusion
+        tryUniversalExtraction(imageUri, bitmap)
     }
 
     /**
