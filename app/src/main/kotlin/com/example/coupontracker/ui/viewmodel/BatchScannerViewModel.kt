@@ -37,16 +37,42 @@ class BatchScannerViewModel @Inject constructor(
 
     private val multiEngineOCR = com.example.coupontracker.util.MultiEngineOCR(context)
     private val uriPersistenceManager = com.example.coupontracker.util.UriPersistenceManager(context)
-    private val twoStageDetector = com.example.coupontracker.ml.TwoStageDetector(context)  // V2: LEGACY detector (not injected)
+    private val detectorInitializationResult = initializeTwoStageDetector()
+    private val twoStageDetector = detectorInitializationResult.detector
+    private val detectorInitErrorMessage = detectorInitializationResult.errorMessage
 
     companion object {
         private const val TAG = "BatchScannerViewModel"
+    }
+
+    private data class DetectorInitializationResult(
+        val detector: com.example.coupontracker.ml.TwoStageDetector?,
+        val errorMessage: String?
+    )
+
+    private fun initializeTwoStageDetector(): DetectorInitializationResult {
+        return try {
+            DetectorInitializationResult(com.example.coupontracker.ml.TwoStageDetector(context), null)
+        } catch (e: IllegalStateException) {
+            val message = e.message ?: "Multi-coupon detector assets are not available for this build."
+            Log.e(TAG, "TwoStageDetector initialization blocked", e)
+            DetectorInitializationResult(null, message)
+        } catch (e: Exception) {
+            val message = e.message ?: "Failed to initialize multi-coupon detector."
+            Log.e(TAG, "TwoStageDetector initialization failed", e)
+            DetectorInitializationResult(null, message)
+        }
     }
 
     init {
         // V2: Enable OCR network availability (critical for OCR_FIRST and HYBRID strategies)
         multiEngineOCR.setNetworkAvailability(true)
         Log.d(TAG, "MultiEngineOCR network availability enabled for batch processing")
+
+        detectorInitErrorMessage?.let { error ->
+            Log.e(TAG, "TwoStageDetector unavailable for batch scanning: $error")
+            updateState { it.copy(error = error) }
+        }
     }
 
     /**
@@ -98,7 +124,14 @@ class BatchScannerViewModel @Inject constructor(
                 // V2: Get active strategy
                 val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
                 Log.d(TAG, "Batch: Starting with strategy ${strategy.name}, ${_uiState.value.selectedImages.size} images")
-                
+
+                if (twoStageDetector == null) {
+                    val message = detectorInitErrorMessage ?: "Multi-coupon detector is unavailable."
+                    Log.e(TAG, "Batch: TwoStageDetector unavailable - aborting processing")
+                    updateState { it.copy(isProcessing = false, error = message) }
+                    return@launch
+                }
+
                 updateState { it.copy(isProcessing = true, processedCount = 0, error = null) }
 
                 val images = _uiState.value.selectedImages
@@ -252,9 +285,12 @@ class BatchScannerViewModel @Inject constructor(
      */
     private suspend fun processWithLegacyPath(uri: Uri, bitmap: android.graphics.Bitmap): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val detector = twoStageDetector
+                ?: throw IllegalStateException(detectorInitErrorMessage ?: "Multi-coupon detector is unavailable.")
+
             // Run two-stage detection
-            val couponInstances = twoStageDetector.detectMultiCoupons(bitmap)
-            
+            val couponInstances = detector.detectMultiCoupons(bitmap)
+
             try {
                 if (couponInstances.isNotEmpty()) {
                     // Take first coupon for batch processing
@@ -269,7 +305,7 @@ class BatchScannerViewModel @Inject constructor(
                 }
             } finally {
                 // Release detector-managed crops immediately after processing
-                twoStageDetector.releaseInstances(couponInstances)
+                detector.releaseInstances(couponInstances)
             }
         }
     }
@@ -801,7 +837,7 @@ class BatchScannerViewModel @Inject constructor(
         super.onCleared()
         // V2: Cleanup detector bitmap crops to prevent memory leaks
         try {
-            twoStageDetector.cleanupBitmaps()
+            twoStageDetector?.cleanupBitmaps()
             Log.d(TAG, "Cleaned up TwoStageDetector bitmap crops")
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up TwoStageDetector", e)
