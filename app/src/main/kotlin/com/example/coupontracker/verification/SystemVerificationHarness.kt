@@ -258,7 +258,7 @@ class SystemVerificationHarness @Inject constructor(
      */
     private fun determineNativeState(): NativeState {
         return when {
-            MlcLlmNative.loadLibrary() -> {
+            MlcLlmNative.loadLibrary(context) -> {
                 if (MlcLlmNative.isAvailable()) {
                     NativeState.REAL
                 } else {

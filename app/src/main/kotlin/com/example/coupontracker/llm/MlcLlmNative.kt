@@ -1,6 +1,8 @@
 package com.example.coupontracker.llm
 
+import android.content.Context
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 
 /**
  * JNI interface for MLC-LLM native library
@@ -11,31 +13,89 @@ class MlcLlmNative {
     companion object {
         private const val TAG = "MlcLlmNative"
         private const val LIBRARY_NAME = "mlc_llm_android"
-        
+
         @Volatile
         private var isLibraryLoaded = false
-        
+
+        @VisibleForTesting
+        internal interface NativeLibraryLoader {
+            fun loadLibrary(name: String)
+            fun load(path: String)
+        }
+
+        @VisibleForTesting
+        @JvmStatic
+        internal var libraryLoader: NativeLibraryLoader = object : NativeLibraryLoader {
+            override fun loadLibrary(name: String) {
+                System.loadLibrary(name)
+            }
+
+            override fun load(path: String) {
+                System.load(path)
+            }
+        }
+
         /**
          * Load the native MLC-LLM library
          */
-        fun loadLibrary(): Boolean {
+        fun loadLibrary(context: Context? = null): Boolean {
             if (isLibraryLoaded) return true
-            
-            return try {
-                System.loadLibrary(LIBRARY_NAME)
-                isLibraryLoaded = true
-                Log.i(TAG, "MLC-LLM native library loaded successfully")
-                true
-            } catch (e: UnsatisfiedLinkError) {
-                Log.e(TAG, "Failed to load MLC-LLM native library", e)
+
+            synchronized(this) {
+                if (isLibraryLoaded) return true
+
+                val loadErrors = mutableListOf<Throwable>()
+
+                try {
+                    libraryLoader.loadLibrary(LIBRARY_NAME)
+                    isLibraryLoaded = true
+                    Log.i(TAG, "MLC-LLM native library loaded from application package")
+                    return true
+                } catch (e: Throwable) {
+                    loadErrors.add(e)
+                    Log.w(TAG, "Packaged native library unavailable, attempting downloaded artifacts", e)
+                }
+
+                val candidateContext = context?.applicationContext ?: context
+                if (candidateContext != null) {
+                    val candidates = ModelDownloadManager.getNativeLibraryCandidates(candidateContext)
+                    for (candidate in candidates) {
+                        try {
+                            libraryLoader.load(candidate.absolutePath)
+                            isLibraryLoaded = true
+                            Log.i(TAG, "Loaded MLC-LLM native library from ${candidate.absolutePath}")
+                            return true
+                        } catch (fallbackError: Throwable) {
+                            loadErrors.add(fallbackError)
+                            Log.e(
+                                TAG,
+                                "Failed to load native library from ${candidate.absolutePath}",
+                                fallbackError
+                            )
+                        }
+                    }
+                }
+
+                val primaryError = loadErrors.firstOrNull()
+                if (primaryError != null) {
+                    Log.e(TAG, "Failed to load MLC-LLM native library", primaryError)
+                } else {
+                    Log.e(TAG, "Failed to load MLC-LLM native library: no candidates found")
+                }
+
                 false
             }
         }
-        
+
         /**
          * Check if the native library is available
          */
         fun isAvailable(): Boolean = isLibraryLoaded
+
+        @VisibleForTesting
+        internal fun resetForTests() {
+            isLibraryLoaded = false
+        }
     }
     
     // Native method declarations - implemented in C++
