@@ -78,10 +78,15 @@ class BatchScannerViewModel @Inject constructor(
 
     /**
      * Process all selected images
+     * V2: Now logs extraction strategy and manages bitmap lifecycle
      */
     fun processImages() {
         viewModelScope.launch {
             try {
+                // V2: Log extraction strategy at batch start
+                val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
+                Log.d(TAG, "Starting batch processing with strategy: ${strategy.name}, ${_uiState.value.selectedImages.size} images")
+                
                 updateState { it.copy(isProcessing = true, processedCount = 0, error = null) }
 
                 val images = _uiState.value.selectedImages
@@ -89,14 +94,29 @@ class BatchScannerViewModel @Inject constructor(
                 var failedCount = 0
 
                 for ((index, uri) in images.withIndex()) {
+                    var bitmap: android.graphics.Bitmap? = null
                     try {
+                        // V2: Track bitmap for memory management
+                        bitmap = android.graphics.BitmapFactory.decodeStream(
+                            context.contentResolver.openInputStream(uri)
+                        )
+                        bitmap?.let { bitmapManager.trackBitmap(it) }
+                        
                         // Process the image with URI persistence
                         val coupon = couponInputManager.processCouponFromImageUriWithPersistence(uri)
                         processedCoupons.add(coupon)
+                        
+                        Log.d(TAG, "Batch: Successfully processed image ${index + 1}/${images.size}")
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error processing image at index $index", e)
+                        Log.e(TAG, "Batch: Error processing image ${index + 1}/${images.size}", e)
                         failedCount++
                         // Continue with next image
+                    } finally {
+                        // V2: Release bitmap after processing
+                        bitmap?.let { 
+                            bitmapManager.releaseBitmap(it)
+                            Log.d(TAG, "Batch: Released bitmap for image ${index + 1}")
+                        }
                     }
 
                     // Update progress
