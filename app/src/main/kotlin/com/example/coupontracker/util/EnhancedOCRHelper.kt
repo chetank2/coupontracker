@@ -51,11 +51,11 @@ class EnhancedOCRHelper {
                 Log.d(TAG, "Processing image from URI with preprocessing")
                 
                 // Use the real ML Kit implementation
-                try {
-                    return@withContext mlKitRealTextRecognition.processImageFromUri(context, imageUri)
+                return@withContext try {
+                    mlKitRealTextRecognition.processImageFromUri(context, imageUri)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Real ML Kit processing failed, falling back to dummy text", e)
-                    return@withContext getDummyText()
+                    Log.e(TAG, "Real ML Kit processing failed", e)
+                    throw e
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing image from URI", e)
@@ -73,30 +73,17 @@ class EnhancedOCRHelper {
                 Log.d(TAG, "Processing bitmap with preprocessing")
                 
                 // Use the real ML Kit implementation
-                try {
-                    return@withContext mlKitRealTextRecognition.processImageFromBitmap(bitmap)
+                return@withContext try {
+                    mlKitRealTextRecognition.processImageFromBitmap(bitmap)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Real ML Kit processing failed, falling back to dummy text", e)
-                    return@withContext getDummyText()
+                    Log.e(TAG, "Real ML Kit processing failed", e)
+                    throw e
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing bitmap", e)
                 throw e
             }
         }
-    }
-    
-    /**
-     * Create dummy text for testing
-     */
-    private fun getDummyText(): String {
-        return """
-            STORE: Example Store
-            CODE: EXAMPLE20
-            Get 20% off your next purchase
-            Valid until: 12/31/2023
-            Description: This is an example coupon for testing
-        """.trimIndent()
     }
     
     /**

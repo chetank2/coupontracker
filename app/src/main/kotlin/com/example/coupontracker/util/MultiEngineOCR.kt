@@ -42,14 +42,19 @@ class MultiEngineOCR(
                 }
                 
                 Log.d(TAG, "Processing image with OCR Engine")
-                try {
+                return@withContext try {
                     val text = ocrEngine.processImage(imageUri)
                     val extractedInfo = ocrEngine.extractCouponInfo(text)
-                    
-                    return@withContext OCRResult.Success(text, extractedInfo)
+
+                    if (text.isBlank() || isPlaceholderResult(text, extractedInfo)) {
+                        Log.w(TAG, "OCR returned placeholder or empty text")
+                        OCRResult.Error("OCR returned placeholder data")
+                    } else {
+                        OCRResult.Success(text, extractedInfo)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "OCR Engine failed", e)
-                    return@withContext OCRResult.Error("OCR processing failed: ${e.message}")
+                    OCRResult.Error("OCR processing failed: ${e.message}")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "OCR processing failed", e)
@@ -70,19 +75,36 @@ class MultiEngineOCR(
                 }
                 
                 Log.d(TAG, "Processing bitmap with OCR Engine")
-                try {
+                return@withContext try {
                     val text = ocrEngine.processImage(bitmap)
                     val extractedInfo = ocrEngine.extractCouponInfo(text)
-                    
-                    return@withContext OCRResult.Success(text, extractedInfo)
+
+                    if (text.isBlank() || isPlaceholderResult(text, extractedInfo)) {
+                        Log.w(TAG, "OCR returned placeholder or empty text")
+                        OCRResult.Error("OCR returned placeholder data")
+                    } else {
+                        OCRResult.Success(text, extractedInfo)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "OCR Engine failed", e)
-                    return@withContext OCRResult.Error("OCR processing failed: ${e.message}")
+                    OCRResult.Error("OCR processing failed: ${e.message}")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "OCR processing failed", e)
                 return@withContext OCRResult.Error("OCR processing failed: ${e.message}")
             }
+        }
+    }
+
+    private fun isPlaceholderResult(text: String, extractedInfo: Map<String, String>): Boolean {
+        val normalizedText = text.lowercase()
+        if (normalizedText.contains("example store") || normalizedText.contains("example20")) {
+            return true
+        }
+
+        val normalizedValues = extractedInfo.values.map { it.lowercase() }
+        return normalizedValues.any { value ->
+            value.contains("example store") || value.contains("example20")
         }
     }
     
