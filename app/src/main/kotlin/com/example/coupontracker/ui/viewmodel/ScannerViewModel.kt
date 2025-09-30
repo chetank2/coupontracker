@@ -1099,7 +1099,12 @@ class ScannerViewModel @Inject constructor(
         }
 
         couponInfo.cashbackAmount?.takeIf { !GenericFieldHeuristics.isZeroOrMeaningless(it) }?.let {
-            fields["amount"] = formatNumeric(it)
+            // Preserve type information for percentages
+            if (couponInfo.discountType == "PERCENTAGE") {
+                fields["amount"] = "${formatNumeric(it)}%"  // ✅ Preserve % for percentage
+            } else {
+                fields["amount"] = formatNumeric(it)  // Keep as number for amounts
+            }
         }
 
         couponInfo.minimumPurchase?.takeIf { !GenericFieldHeuristics.isZeroOrMeaningless(it) }?.let {

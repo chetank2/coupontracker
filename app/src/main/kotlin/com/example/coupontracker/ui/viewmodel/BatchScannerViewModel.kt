@@ -636,9 +636,13 @@ class BatchScannerViewModel @Inject constructor(
             fields["expiryDate"] = formatter.format(date)
         }
         
-        // Cashback amount
+        // Cashback amount (preserve type information)
         couponInfo.cashbackAmount?.let { amount ->
-            fields["amount"] = amount.toString()
+            if (couponInfo.discountType == "PERCENTAGE") {
+                fields["amount"] = "${amount}%"  // ✅ Preserve % for percentage
+            } else {
+                fields["amount"] = amount.toString()  // Keep as number for amounts
+            }
         }
         
         // Category
@@ -673,7 +677,12 @@ class BatchScannerViewModel @Inject constructor(
         }
         
         if (coupon.cashbackAmount > 0) {
-            fields["amount"] = coupon.cashbackAmount.toString()
+            // Preserve type information from typed cashback fields
+            if (coupon.cashbackType == "percent") {
+                fields["amount"] = "${coupon.cashbackAmount}%"  // ✅ Preserve % for percentage
+            } else {
+                fields["amount"] = coupon.cashbackAmount.toString()  // Keep as number for amounts
+            }
         }
         
         coupon.category?.let { category ->
