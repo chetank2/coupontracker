@@ -53,9 +53,9 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     private val lifecycleMutex = Mutex()
     private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
-    // Model paths
-    private val modelDir = File(context.filesDir, "models")
-    private val modelPath = File(modelDir, MODEL_FILE)
+    // Model paths - now uses ModelPaths for consistency
+    private val modelDir: File
+        get() = com.example.coupontracker.model.ModelPaths.modelDir(context)
     private val configPath = File(modelDir, CONFIG_FILE)
     private val tokenizerPath = File(modelDir, TOKENIZER_FILE)
     
@@ -65,16 +65,13 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     /**
      * Check if the model is available on device
      * Verifies all required files exist and are not empty
+     * Note: Runtime .so is in APK, not in model directory
      */
     fun isModelAvailable(): Boolean {
-        val requiredFiles = listOf(
-            modelPath,           // minicpm_llm_q4f16_1.so
-            configPath,          // mlc-chat-config.json
-            tokenizerPath,       // tokenizer.json
-            File(modelDir, "model.bin"),        // model parameters
-            File(modelDir, "vision_config.json"), // vision configuration
-            File(modelDir, "tokenizer.model")   // tokenizer model
-        )
+        // Check using ModelPaths constants (no .so required in models dir)
+        val requiredFiles = com.example.coupontracker.model.ModelPaths.REQUIRED_FILES.map { 
+            File(modelDir, it)
+        }
         
         val missingFiles = mutableListOf<String>()
         for (file in requiredFiles) {
@@ -85,6 +82,13 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         
         if (missingFiles.isNotEmpty()) {
             Log.d(TAG, "Missing or empty model files: ${missingFiles.joinToString(", ")}")
+            return false
+        }
+        
+        // Also check if .verified marker exists
+        val verifiedFile = File(modelDir, ".verified")
+        if (!verifiedFile.exists()) {
+            Log.d(TAG, "Model not verified (missing .verified marker)")
             return false
         }
         
@@ -173,8 +177,9 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         Log.d(TAG, "Loading MiniCPM-Llama3-V2.5 model...")
         
         // Initialize model through native interface
+        // Pass model directory (not .so path - runtime is in APK)
         val handle = nativeInterface.initializeModel(
-            modelPath.absolutePath,
+            modelDir.absolutePath,
             configPath.absolutePath
         )
         
@@ -346,7 +351,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 Log.w(TAG, "See MLC_LLM_INTEGRATION_GUIDE.md for integration instructions")
                 
                 return MLCEngineStub(
-                    modelPath = modelPath.absolutePath,
+                    modelPath = modelDir.absolutePath,
                     configPath = configPath.absolutePath,
                     tokenizerPath = tokenizerPath.absolutePath,
                     maxMemoryMB = MAX_MEMORY_MB
@@ -368,7 +373,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             Log.w(TAG, "⚠️ MLCEngineReal not yet implemented - using stub temporarily")
             
             MLCEngineStub(
-                modelPath = modelPath.absolutePath,
+                modelPath = modelDir.absolutePath,
                 configPath = configPath.absolutePath,
                 tokenizerPath = tokenizerPath.absolutePath,
                 maxMemoryMB = MAX_MEMORY_MB

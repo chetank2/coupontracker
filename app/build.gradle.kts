@@ -213,11 +213,11 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
 
-    // OCR Libraries - On-device OCR only
-    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
-    implementation("com.google.mlkit:text-recognition:16.0.0")
+    // OCR Libraries - Fully offline Tesseract OCR
+    implementation("com.rmtheis:tess-two:9.1.0")
+    
+    // Keep barcode scanning if needed (uses bundled model)
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
 
     implementation("com.google.code.gson:gson:2.10.1")
@@ -269,7 +269,6 @@ dependencies {
 
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
     // We've removed Google Cloud Vision API dependencies as we're using on-device OCR only
 
@@ -292,9 +291,7 @@ dependencies {
     // Security
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
-    // Image Processing & ML
-    implementation("com.google.mlkit:image-labeling:17.0.7")
-    implementation("com.google.mlkit:text-recognition:16.0.0")
+    // Image Processing & ML (TensorFlow Lite for YOLO models)
     implementation("org.tensorflow:tensorflow-lite:2.12.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
