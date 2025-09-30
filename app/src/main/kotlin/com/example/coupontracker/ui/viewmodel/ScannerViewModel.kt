@@ -796,6 +796,8 @@ class ScannerViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error processing single coupon", e)
             _uiState.value = ScannerUiState.Error("Error processing coupon: ${e.message}")
+        } finally {
+            twoStageDetector.releaseInstances(listOf(couponInstance))
         }
     }
 
@@ -986,6 +988,8 @@ class ScannerViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon $index", e)
                 // Continue with other coupons
+            } finally {
+                twoStageDetector.releaseInstances(listOf(instance))
             }
         }
 
