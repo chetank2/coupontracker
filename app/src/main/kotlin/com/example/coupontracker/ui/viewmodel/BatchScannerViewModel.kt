@@ -286,7 +286,7 @@ class BatchScannerViewModel @Inject constructor(
             status = "Active",
             createdAt = java.util.Date(),
             updatedAt = java.util.Date(),
-            cashbackType = com.example.coupontracker.data.model.CashbackType.TEXT.name,
+            cashbackType = com.example.coupontracker.data.model.CashbackType.TEXT.name.lowercase(),
             cashbackValueNum = 0.0,
             cashbackCurrency = null,
             offerText = "Unable to extract coupon details"
@@ -464,15 +464,15 @@ class BatchScannerViewModel @Inject constructor(
             if (llmConf.getOrDefault("cashback", 0f) > 0.6f && llmInfo.cashbackAmount != null) {
                 val amount = llmInfo.cashbackAmount
                 if (llmInfo.discountType == "PERCENTAGE") {
-                    Tuple4(amount, amount, com.example.coupontracker.data.model.CashbackType.PERCENT.name, null)
+                    Tuple4(amount, amount, com.example.coupontracker.data.model.CashbackType.PERCENT.name.lowercase(), null)
                 } else {
-                    Tuple4(amount, amount, com.example.coupontracker.data.model.CashbackType.AMOUNT.name, "INR")
+                    Tuple4(amount, amount, com.example.coupontracker.data.model.CashbackType.AMOUNT.name.lowercase(), "INR")
                 }
             } else if (ocrCoupon.getCashbackNumericValue() > 0) {
                 val value = ocrCoupon.getCashbackNumericValue()
                 Tuple4(value, value, ocrCoupon.cashbackType ?: "TEXT", ocrCoupon.cashbackCurrency)
             } else {
-                Tuple4(0.0, 0.0, com.example.coupontracker.data.model.CashbackType.TEXT.name, null)
+                Tuple4(0.0, 0.0, com.example.coupontracker.data.model.CashbackType.TEXT.name.lowercase(), null)
             }
         
         // Description: combine both sources
@@ -720,12 +720,12 @@ class BatchScannerViewModel @Inject constructor(
         val (cashbackType, cashbackValueNum, cashbackCurrency) = if (cashbackAmount > 0) {
             val originalAmount = fields["amount"] ?: ""
             if (originalAmount.contains("%")) {
-                Triple("PERCENT", cashbackAmount, null)
+                Triple("percent", cashbackAmount, null)  // ✅ lowercase
             } else {
-                Triple("AMOUNT", cashbackAmount, "INR")
+                Triple("amount", cashbackAmount, "INR")  // ✅ lowercase
             }
         } else {
-            Triple("TEXT", 0.0, null)
+            Triple("text", 0.0, null)  // ✅ lowercase
         }
         
         return Coupon(

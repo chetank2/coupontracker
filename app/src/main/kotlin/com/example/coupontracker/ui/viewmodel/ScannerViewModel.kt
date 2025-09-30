@@ -364,7 +364,7 @@ class ScannerViewModel @Inject constructor(
             status = "Active",
             createdAt = Date(),
             updatedAt = Date(),
-            cashbackType = cashbackInfo.type.name,
+            cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
             offerText = couponInfo.description
@@ -696,7 +696,7 @@ class ScannerViewModel @Inject constructor(
             status = "Active",
             createdAt = Date(),
             updatedAt = Date(),
-            cashbackType = cashbackInfo.type.name,
+            cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
             offerText = ocrCoupon.offerText ?: llmInfo.description
