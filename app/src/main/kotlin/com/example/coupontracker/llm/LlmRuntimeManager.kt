@@ -9,6 +9,7 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.LazyThreadSafetyMode
 
 /**
  * Singleton manager for MiniCPM-Llama3-V2.5 LLM runtime
@@ -44,7 +45,9 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     }
     
     // Native interface and model state
-    private val nativeInterface = SafeMlcLlmNative()
+    private val nativeInterface: SafeMlcLlmNative by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        SafeMlcLlmNative(context)
+    }
     private var modelHandle: Long? = null
     private val referenceCount = AtomicInteger(0)
     private val lifecycleMutex = Mutex()
@@ -163,7 +166,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         }
         
         // Load native library
-        if (!MlcLlmNative.loadLibrary()) {
+        if (!MlcLlmNative.loadLibrary(context)) {
             throw IllegalStateException("Failed to load MLC-LLM native library")
         }
         
