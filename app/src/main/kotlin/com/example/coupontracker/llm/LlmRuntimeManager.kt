@@ -339,11 +339,33 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     @Deprecated("Use native interface instead")
     private fun createMLCEngine(): MLCEngine? {
         return try {
+            // Check if real MLC-LLM native library is available
+            if (!MlcLlmNative.isAvailable()) {
+                Log.w(TAG, "⚠️ MLC-LLM native library not available - using stub implementation")
+                Log.w(TAG, "LLM_FIRST strategy will return mock data until real libraries are integrated")
+                Log.w(TAG, "See MLC_LLM_INTEGRATION_GUIDE.md for integration instructions")
+                
+                return MLCEngineStub(
+                    modelPath = modelPath.absolutePath,
+                    configPath = configPath.absolutePath,
+                    tokenizerPath = tokenizerPath.absolutePath,
+                    maxMemoryMB = MAX_MEMORY_MB
+                )
+            }
+            
+            // Real MLC-LLM is available - create native engine
+            Log.i(TAG, "✅ MLC-LLM native library available - creating real engine")
+            
             // In real implementation, this would initialize MLC-LLM with:
             // - Model path
             // - Device configuration (Vulkan/NNAPI/CPU)
             // - Memory limits
             // - Quantization settings
+            
+            // TODO: Implement MLCEngineReal that wraps MlcLlmNative
+            // For now, fall back to stub even when native is available
+            // This will be fixed when real model binaries are integrated
+            Log.w(TAG, "⚠️ MLCEngineReal not yet implemented - using stub temporarily")
             
             MLCEngineStub(
                 modelPath = modelPath.absolutePath,
