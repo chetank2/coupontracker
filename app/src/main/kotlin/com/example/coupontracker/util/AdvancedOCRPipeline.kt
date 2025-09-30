@@ -16,7 +16,8 @@ import kotlinx.coroutines.withContext
  * preprocessing, and structured data extraction
  */
 class AdvancedOCRPipeline(
-    private val context: Context
+    private val context: Context,
+    private val ocrEngine: com.example.coupontracker.ocr.OcrEngine
 ) {
     companion object {
         private const val TAG = "AdvancedOCRPipeline"
@@ -25,7 +26,7 @@ class AdvancedOCRPipeline(
     // Components
     private val imagePreprocessor = ImagePreprocessor()
     private val couponFieldExtractor = CouponFieldExtractor()
-    private val mlKitTextRecognition = MLKitRealTextRecognition()
+    private val mlKitTextRecognition = MLKitRealTextRecognition(ocrEngine)
 
     // We've removed Google Cloud Vision API as we're using on-device OCR only
 

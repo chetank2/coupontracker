@@ -44,10 +44,21 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Memory
+import com.example.coupontracker.ocr.OcrEngine
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
 
 // Using keys from SecurePreferencesManager
 
 // We've removed the API Type enum as users don't need to select the OCR technology
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface SettingsScreenEntryPoint {
+    fun getOcrEngine(): OcrEngine
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +67,13 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val ocrEngine = remember {
+        val hiltEntryPoint = EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            SettingsScreenEntryPoint::class.java
+        )
+        hiltEntryPoint.getOcrEngine()
+    }
     
     // Use a lazy initialization to avoid ANR
     val securePreferencesManager = remember { 
@@ -522,7 +540,7 @@ private fun LlmStatusCard(securePreferencesManager: SecurePreferencesManager) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 val llmRuntimeManager = LlmRuntimeManager.getInstance(context)
-                val localLlmOcrService = LocalLlmOcrService(context, llmRuntimeManager)
+                val localLlmOcrService = LocalLlmOcrService(context, ocrEngine, llmRuntimeManager)
                 
                 val status = localLlmOcrService.getServiceStatus()
                 val downloadStatus = if (securePreferencesManager.getLlmModelDownloaded()) {

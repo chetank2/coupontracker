@@ -8,12 +8,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Basic ML Kit text recognition implementation
- * This implementation uses the real ML Kit text recognition under the hood
+ * Basic Tesseract text recognition implementation
+ * This implementation uses Tesseract OCR for fully offline operation
  */
-class MLKitTextRecognitionHelper {
+class MLKitTextRecognitionHelper(
+    private val ocrEngine: com.example.coupontracker.ocr.OcrEngine
+) {
     
-    private val mlKitRealTextRecognition = MLKitRealTextRecognition()
+    private val mlKitRealTextRecognition = MLKitRealTextRecognition(ocrEngine)
     
     companion object {
         private const val TAG = "MLKitTextRecognitionHelper"

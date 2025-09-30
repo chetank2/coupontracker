@@ -14,7 +14,8 @@ import kotlin.coroutines.resumeWithException
  * Implements the fusion logic from the analysis document
  */
 class LlmOcrFusionService(
-    private val context: android.content.Context
+    private val context: android.content.Context,
+    private val ocrEngine: com.example.coupontracker.ocr.OcrEngine
 ) {
     private val TAG = "LlmOcrFusionService"
     
@@ -400,41 +401,25 @@ class LlmOcrFusionService(
     private suspend fun extractOcrTextSpans(bitmap: Bitmap): List<TextSpan> {
         return withContext(Dispatchers.IO) {
             try {
-                // Use actual ML Kit OCR for text detection
-                val inputImage = com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0)
-                val recognizer = com.google.mlkit.vision.text.TextRecognition.getClient(
-                    com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS
-                )
+                // Use Tesseract OCR for text detection
+                // TODO: Implement recognizeWithBoxes in TesseractOcrEngine for accurate bounding boxes
+                val fullText = ocrEngine.recognize(bitmap)
                 
-                // Run OCR and extract text with coordinates
-                val result = kotlinx.coroutines.suspendCancellableCoroutine<com.google.mlkit.vision.text.Text> { continuation ->
-                    recognizer.process(inputImage)
-                        .addOnSuccessListener { text ->
-                            continuation.resume(text)
-                        }
-                        .addOnFailureListener { exception ->
-                            continuation.resumeWithException(exception)
-                        }
-                }
-                
-                // Convert ML Kit text blocks to TextSpan objects with real coordinates
+                // Split text into lines and create simple TextSpan objects
+                // For now, we don't have accurate bounding boxes, so we use null
                 val textSpans = mutableListOf<TextSpan>()
                 
-                for (block in result.textBlocks) {
-                    for (line in block.lines) {
-                        val boundingBox = line.boundingBox
-                        if (boundingBox != null) {
-                            textSpans.add(
-                                TextSpan(
-                                    text = line.text,
-                                    x = boundingBox.left,
-                                    y = boundingBox.top,
-                                    width = boundingBox.width(),
-                                    height = boundingBox.height()
-                                )
-                            )
-                        }
-                    }
+                val lines = fullText.split("\n").filter { it.isNotBlank() }
+                for (line in lines) {
+                    textSpans.add(
+                        TextSpan(
+                            text = line.trim(),
+                            x = 0, // TODO: Get actual bounding box from TesseractOcrEngine
+                            y = 0,
+                            width = bitmap.width,
+                            height = 20 // Estimated line height
+                        )
+                    )
                 }
                 
                 Log.d(TAG, "Extracted ${textSpans.size} text spans from OCR")

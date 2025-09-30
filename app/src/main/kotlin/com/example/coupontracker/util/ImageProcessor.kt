@@ -9,38 +9,31 @@ import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.graphics.drawable.toBitmap
-
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.Text
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.example.coupontracker.ocr.OcrEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.Date
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 /**
- * Utility class to process images and extract coupon information using the trained model
+ * Utility class to process images and extract coupon information using Tesseract OCR
  */
 class ImageProcessor(
     private val context: Context,
+    private val ocrEngine: OcrEngine,
     private val injectedLocalLlmOcrService: LocalLlmOcrService? = null
 ) {
     private val TAG = "ImageProcessor"
-    private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     private val textExtractor = TextExtractor()
 
     // Coupon pattern recognizer
-    private var couponPatternRecognizer: CouponPatternRecognizer = CouponPatternRecognizer(context)
+    private var couponPatternRecognizer: CouponPatternRecognizer = CouponPatternRecognizer(context, ocrEngine)
 
     // OCR services
-    private var modelBasedOCRService: ModelBasedOCRService = ModelBasedOCRService(context)
-    private var localLlmOcrService: LocalLlmOcrService = injectedLocalLlmOcrService ?: LocalLlmOcrService(context)
+    private var modelBasedOCRService: ModelBasedOCRService = ModelBasedOCRService(context, ocrEngine)
+    private var localLlmOcrService: LocalLlmOcrService = injectedLocalLlmOcrService ?: LocalLlmOcrService(context, ocrEngine)
 
     // Default to using the model-based OCR service
     private var useModelBasedOcr = true
@@ -186,37 +179,25 @@ class ImageProcessor(
     }
 
     /**
-     * Try processing with ML Kit
+     * Try processing with Tesseract OCR
      * @param bitmap The bitmap to process
      * @param captureTimestamp The timestamp when the image was captured (for relative date calculations)
      * @return The extracted coupon information
      */
     private suspend fun tryMlKit(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Trying ML Kit OCR")
+            Log.d(TAG, "Trying Tesseract OCR")
 
-            // Process with ML Kit
-            val inputImage = InputImage.fromBitmap(bitmap, 0)
-            val result = suspendCancellableCoroutine<Text> { continuation ->
-                textRecognizer.process(inputImage)
-                    .addOnSuccessListener { text ->
-                        continuation.resume(text)
-                    }
-                    .addOnFailureListener { e ->
-                        continuation.resumeWithException(e)
-                    }
-            }
-
-            // Extract text
-            val text = result.text
+            // Process with Tesseract
+            val text = ocrEngine.recognize(bitmap)
 
             // Use TextExtractor to extract coupon info
             val couponInfo = textExtractor.extractCouponInfoSync(text, captureTimestamp)
 
-            Log.d(TAG, "ML Kit OCR result: $couponInfo")
+            Log.d(TAG, "Tesseract OCR result: $couponInfo")
             return@withContext couponInfo
         } catch (e: Exception) {
-            Log.e(TAG, "Error processing with ML Kit", e)
+            Log.e(TAG, "Error processing with Tesseract", e)
             return@withContext CouponInfo()
         }
     }

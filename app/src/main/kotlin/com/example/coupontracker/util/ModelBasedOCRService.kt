@@ -16,14 +16,17 @@ import java.util.Date
  * Model-based OCR Service that uses the trained model for coupon recognition
  * without relying on external APIs
  */
-class ModelBasedOCRService(private val context: Context) {
+class ModelBasedOCRService(
+    private val context: Context,
+    private val ocrEngine: com.example.coupontracker.ocr.OcrEngine
+) {
     private val TAG = "ModelBasedOCRService"
 
     // OCR components
-    private val mlKitTextRecognition = MLKitRealTextRecognition()
+    private val mlKitTextRecognition = MLKitRealTextRecognition(ocrEngine)
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor()
-    private val couponPatternRecognizer = CouponPatternRecognizer(context)
+    private val couponPatternRecognizer = CouponPatternRecognizer(context, ocrEngine)
 
     // Model version and metadata
     private val modelVersion = "2.0.0"

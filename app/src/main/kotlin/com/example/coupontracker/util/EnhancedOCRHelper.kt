@@ -11,9 +11,11 @@ import java.util.regex.Pattern
 /**
  * Enhanced OCR Helper that provides improved OCR results with preprocessing
  */
-class EnhancedOCRHelper {
+class EnhancedOCRHelper(
+    private val ocrEngine: com.example.coupontracker.ocr.OcrEngine
+) {
     
-    private val mlKitRealTextRecognition = MLKitRealTextRecognition()
+    private val mlKitRealTextRecognition = MLKitRealTextRecognition(ocrEngine)
     
     companion object {
         private const val TAG = "EnhancedOCRHelper"

@@ -17,7 +17,10 @@ import com.example.coupontracker.util.CouponInfo
 /**
  * Recognizes coupon elements using patterns learned from training data
  */
-class CouponPatternRecognizer(private val context: Context) {
+class CouponPatternRecognizer(
+    private val context: Context,
+    private val ocrEngine: com.example.coupontracker.ocr.OcrEngine
+) {
     companion object {
         private const val TAG = "CouponPatternRecognizer"
         private const val PATTERNS_FILE = "coupon_model/coupon_patterns.txt"
@@ -34,8 +37,8 @@ class CouponPatternRecognizer(private val context: Context) {
         )
     }
 
-    // ML Kit text recognition
-    private val mlKitTextRecognition = MLKitRealTextRecognition()
+    // Tesseract text recognition via OCR engine
+    private val mlKitTextRecognition = MLKitRealTextRecognition(ocrEngine)
 
     // Patterns for different coupon elements
     private val patterns: Map<String, List<Rect>> by lazy { loadPatterns() }

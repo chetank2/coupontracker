@@ -61,9 +61,10 @@ object LlmModule {
     @Singleton
     fun provideImageProcessor(
         @ApplicationContext context: Context,
+        ocrEngine: com.example.coupontracker.ocr.OcrEngine,
         localLlmOcrService: LocalLlmOcrService
     ): ImageProcessor {
-        return ImageProcessor(context, localLlmOcrService)
+        return ImageProcessor(context, ocrEngine, localLlmOcrService)
     }
 
     @Provides
