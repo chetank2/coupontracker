@@ -44,7 +44,8 @@ class ScannerViewModel @Inject constructor(
     private val localLlmOcrService: LocalLlmOcrService,
     private val telemetryService: ExtractionTelemetryService,
     private val universalExtractionService: UniversalExtractionService,
-    private val performanceMonitor: ExtractionPerformanceMonitor
+    private val performanceMonitor: ExtractionPerformanceMonitor,
+    private val bitmapManager: com.example.coupontracker.util.BitmapManager  // V2: Injected bitmap memory management
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -900,7 +901,19 @@ class ScannerViewModel @Inject constructor(
         return withContext(Dispatchers.IO) {
             try {
                 val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
-                BitmapFactory.decodeStream(inputStream)
+                val bitmap = BitmapFactory.decodeStream(inputStream)
+                
+                // V2: Track bitmap with BitmapManager for memory management
+                bitmap?.let { bitmapManager.trackBitmap(it) }
+                
+                // V2: Log memory stats after loading
+                val memStats = bitmapManager.getMemoryStats()
+                Log.d(TAG, "Bitmap loaded: ${bitmap?.width}x${bitmap?.height}, " +
+                        "Active bitmaps: ${memStats.activeBitmapCount}, " +
+                        "Memory usage: ${String.format("%.2f", memStats.totalBytesMB)} MB " +
+                        "(${String.format("%.1f", memStats.pixelBudgetUsage * 100)}% of budget)")
+                
+                bitmap
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading bitmap from URI", e)
                 null

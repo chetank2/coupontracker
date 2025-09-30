@@ -24,7 +24,8 @@ import javax.inject.Inject
 class BatchScannerViewModel @Inject constructor(
     application: Application,
     @ApplicationContext private val context: Context,
-    private val couponRepository: CouponRepository
+    private val couponRepository: CouponRepository,
+    private val bitmapManager: com.example.coupontracker.util.BitmapManager  // V2: Injected bitmap memory management
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(BatchScannerUiState())
