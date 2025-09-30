@@ -88,73 +88,69 @@ class TwoStageDetector(
      * Initialize both stage models and processors
      */
     private fun initializeModels() {
-        try {
-            Log.d(TAG, "Initializing two-stage detection models...")
+        Log.d(TAG, "Initializing two-stage detection models...")
 
-            // Load model manifest
-            loadModelManifest()
+        // Always assume initialization is incomplete until the end
+        isInitialized = false
 
-            if (stubMode) {
-                if (isDebugBuild) {
-                    Log.w(
-                        TAG,
-                        "Multi-coupon manifest is marked as stub_mode. Skipping TensorFlow Lite interpreter initialization. " +
-                            "Replace the placeholder assets with trained binaries for production use."
-                    )
-                    stage1Interpreter = null
-                    stage2Interpreter = null
-                    initializeImageProcessors()
-                    isInitialized = true
-                    return
-                } else {
-                    val message = "Two-stage detector manifest is marked stub_mode=true; trained assets are required for production builds."
-                    Log.e(TAG, message)
-                    throw IllegalStateException(message)
-                }
-            }
+        // Load model manifest
+        loadModelManifest()
 
-            // Try to load models, but fallback gracefully if they're placeholders
-            var modelsLoaded = false
-            try {
-                // Load Stage 1 Model (Coupon Detection)
-                loadStage1Model()
-
-                // Load Stage 2 Model (Field Detection)
-                loadStage2Model()
-
-                modelsLoaded = true
-                Log.i(TAG, "Production models loaded successfully")
-
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to load production models (likely placeholders): ${e.message}")
-
-                if (demoMode) {
-                    Log.i(TAG, "Demo mode enabled - continuing with placeholder models for synthetic detections")
-                    stage1Interpreter = null
-                    stage2Interpreter = null
-                    modelsLoaded = true // Allow demo mode to work
-                } else {
-                    Log.e(TAG, "No demo mode fallback available, initialization failed")
-                    throw e
-                }
-            }
-
-            if (modelsLoaded) {
-                // Initialize image processors
+        if (stubMode) {
+            if (isDebugBuild) {
+                Log.w(
+                    TAG,
+                    "Multi-coupon manifest is marked as stub_mode. Skipping TensorFlow Lite interpreter initialization. " +
+                        "Replace the placeholder assets with trained binaries for production use."
+                )
+                stage1Interpreter = null
+                stage2Interpreter = null
                 initializeImageProcessors()
                 isInitialized = true
-
-                if (demoMode) {
-                    Log.i(TAG, "Two-stage detector initialized in demo mode")
-                } else {
-                    Log.i(TAG, "Two-stage detector initialized with production models")
-                }
+                return
+            } else {
+                val message = "Two-stage detector manifest is marked stub_mode=true; trained assets are required for production builds."
+                Log.e(TAG, message)
+                throw IllegalStateException(message)
             }
+        }
+
+        // Try to load models, but fallback gracefully if they're placeholders
+        var modelsLoaded = false
+        try {
+            // Load Stage 1 Model (Coupon Detection)
+            loadStage1Model()
+
+            // Load Stage 2 Model (Field Detection)
+            loadStage2Model()
+
+            modelsLoaded = true
+            Log.i(TAG, "Production models loaded successfully")
 
         } catch (e: Exception) {
-            Log.e(TAG, "Error initializing models", e)
-            isInitialized = false
-            throw e
+            Log.w(TAG, "Failed to load production models (likely placeholders): ${e.message}")
+
+            if (demoMode) {
+                Log.i(TAG, "Demo mode enabled - continuing with placeholder models for synthetic detections")
+                stage1Interpreter = null
+                stage2Interpreter = null
+                modelsLoaded = true // Allow demo mode to work
+            } else {
+                Log.e(TAG, "No demo mode fallback available, initialization failed")
+                throw e
+            }
+        }
+
+        if (modelsLoaded) {
+            // Initialize image processors
+            initializeImageProcessors()
+            isInitialized = true
+
+            if (demoMode) {
+                Log.i(TAG, "Two-stage detector initialized in demo mode")
+            } else {
+                Log.i(TAG, "Two-stage detector initialized with production models")
+            }
         }
     }
     

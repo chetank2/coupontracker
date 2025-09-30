@@ -47,20 +47,21 @@ class BatchScannerViewModel @Inject constructor(
 
     private data class DetectorInitializationResult(
         val detector: com.example.coupontracker.ml.TwoStageDetector?,
-        val errorMessage: String?
+        val errorMessage: String?,
+        val exception: Throwable?
     )
 
     private fun initializeTwoStageDetector(): DetectorInitializationResult {
         return try {
-            DetectorInitializationResult(com.example.coupontracker.ml.TwoStageDetector(context), null)
+            DetectorInitializationResult(com.example.coupontracker.ml.TwoStageDetector(context), null, null)
         } catch (e: IllegalStateException) {
             val message = e.message ?: "Multi-coupon detector assets are not available for this build."
             Log.e(TAG, "TwoStageDetector initialization blocked", e)
-            DetectorInitializationResult(null, message)
+            DetectorInitializationResult(null, message, e)
         } catch (e: Exception) {
             val message = e.message ?: "Failed to initialize multi-coupon detector."
             Log.e(TAG, "TwoStageDetector initialization failed", e)
-            DetectorInitializationResult(null, message)
+            DetectorInitializationResult(null, message, e)
         }
     }
 
@@ -70,8 +71,9 @@ class BatchScannerViewModel @Inject constructor(
         Log.d(TAG, "MultiEngineOCR network availability enabled for batch processing")
 
         detectorInitErrorMessage?.let { error ->
-            Log.e(TAG, "TwoStageDetector unavailable for batch scanning: $error")
-            updateState { it.copy(error = error) }
+            val message = "Multi-coupon detection unavailable: $error"
+            Log.e(TAG, message, detectorInitializationResult.exception)
+            updateState { it.copy(error = message) }
         }
     }
 

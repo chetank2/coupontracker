@@ -138,12 +138,13 @@ class ScannerViewModel @Inject constructor(
 
     private data class DetectorInitializationResult(
         val detector: TwoStageDetector?,
-        val errorMessage: String?
+        val errorMessage: String?,
+        val exception: Throwable?
     )
 
     private fun initializeTwoStageDetector(): DetectorInitializationResult {
         return try {
-            DetectorInitializationResult(TwoStageDetector(context), null)
+            DetectorInitializationResult(TwoStageDetector(context), null, null)
         } catch (e: IllegalStateException) {
             val message = e.message ?: "Multi-coupon detector assets are not available for this build."
             Log.e(TAG, "TwoStageDetector initialization blocked", e)
@@ -158,7 +159,7 @@ class ScannerViewModel @Inject constructor(
                     reasons = mutableListOf("stub_mode_manifest")
                 )
             )
-            DetectorInitializationResult(null, message)
+            DetectorInitializationResult(null, message, e)
         } catch (e: Exception) {
             val message = e.message ?: "Failed to initialize multi-coupon detector."
             Log.e(TAG, "TwoStageDetector initialization failed", e)
@@ -173,7 +174,7 @@ class ScannerViewModel @Inject constructor(
                     reasons = mutableListOf("unexpected_initialization_error")
                 )
             )
-            DetectorInitializationResult(null, message)
+            DetectorInitializationResult(null, message, e)
         }
     }
 
@@ -183,8 +184,9 @@ class ScannerViewModel @Inject constructor(
 
         // Surface detector initialization status
         detectorInitErrorMessage?.let { error ->
-            Log.e(TAG, "TwoStageDetector unavailable: $error")
-            _uiState.value = ScannerUiState.Error(error)
+            val message = "Multi-coupon detection unavailable: $error"
+            Log.e(TAG, message, detectorInitializationResult.exception)
+            _uiState.value = ScannerUiState.Error(message)
         } ?: run {
             val modelInfo = twoStageDetector?.getModelInfo()
             Log.d(TAG, "TwoStageDetector initialized: $modelInfo")
