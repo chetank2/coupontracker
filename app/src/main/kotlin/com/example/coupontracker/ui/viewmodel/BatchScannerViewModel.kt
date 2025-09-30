@@ -512,27 +512,239 @@ class BatchScannerViewModel @Inject constructor(
         uriPersistenceManager.persistUri(uri)?.toString()
     }
     
-    private fun extractFieldsFromInstance(instance: com.example.coupontracker.ml.CouponInstance): Map<String, String> {
-        // Simple extraction from bounding boxes (basic implementation)
-        return mapOf(
-            "storeName" to "Unknown Store",
-            "description" to "Extracted via two-stage detection"
-        )
+    /**
+     * Extract real coupon fields from detected instance (mirrors ScannerViewModel logic)
+     * This is the REAL LEGACY implementation that was missing
+     */
+    private suspend fun extractFieldsFromInstance(instance: com.example.coupontracker.ml.CouponInstance): Map<String, String> {
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val extractedInfo = mutableMapOf<String, String>()
+            var finalStage = "UNKNOWN"
+            
+            // Store detection metadata
+            extractedInfo["minicpmConfidence"] = instance.confidence.toString()
+            extractedInfo["minicpmDetectionStatus"] = instance.status.name
+            
+            try {
+                // Step 1: Try LLM extraction on the cropped coupon
+                Log.d(TAG, "LEGACY: Extracting fields from coupon crop using LLM")
+                finalStage = "LLM"
+                
+                val llmResult = localLlmOcrService.processCouponImageTyped(instance.cropBitmap)
+                
+                when (llmResult) {
+                    is com.example.coupontracker.util.ExtractResult.Good -> {
+                        // LLM succeeded - map fields
+                        extractedInfo.putAll(mapCouponInfoToFields(llmResult.info))
+                        Log.d(TAG, "LEGACY: LLM extraction successful (quality: ${llmResult.signals.qualityScore})")
+                    }
+                    
+                    is com.example.coupontracker.util.ExtractResult.LowQuality -> {
+                        // LLM low quality - use it but try OCR fallback
+                        extractedInfo.putAll(mapCouponInfoToFields(llmResult.info))
+                        
+                        Log.w(TAG, "LEGACY: LLM low quality (${llmResult.reason}), trying OCR fallback")
+                        finalStage = "LLM+OCR_FALLBACK"
+                        
+                        // OCR fallback on the crop
+                        val ocrResult = multiEngineOCR.processImage(instance.cropBitmap)
+                        when (ocrResult) {
+                            is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success -> {
+                                val ocrText = ocrResult.extractedInfo.values.joinToString(" ")
+                                val universalResult = universalExtractionService.extractCoupon(
+                                    instance.cropBitmap, ocrText, com.example.coupontracker.universal.ExtractionContext()
+                                )
+                                if (universalResult.success) {
+                                    // Merge OCR fields where LLM was weak
+                                    mergeValidatedFields(extractedInfo, mapCouponToFields(universalResult.coupon))
+                                }
+                            }
+                            else -> {
+                                Log.w(TAG, "LEGACY: OCR fallback also failed")
+                            }
+                        }
+                    }
+                    
+                    is com.example.coupontracker.util.ExtractResult.Failed -> {
+                        // LLM failed completely - use OCR only
+                        Log.e(TAG, "LEGACY: LLM failed (${llmResult.error.message}), using OCR only")
+                        finalStage = "OCR_ONLY"
+                        
+                        val ocrResult = multiEngineOCR.processImage(instance.cropBitmap)
+                        when (ocrResult) {
+                            is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success -> {
+                                val ocrText = ocrResult.extractedInfo.values.joinToString(" ")
+                                val universalResult = universalExtractionService.extractCoupon(
+                                    instance.cropBitmap, ocrText, com.example.coupontracker.universal.ExtractionContext()
+                                )
+                                if (universalResult.success) {
+                                    extractedInfo.putAll(mapCouponToFields(universalResult.coupon))
+                                } else {
+                                    // Both LLM and OCR failed - return minimal data
+                                    extractedInfo["storeName"] = "Unknown Store"
+                                    extractedInfo["description"] = "Extraction failed - please edit manually"
+                                }
+                            }
+                            else -> {
+                                // Both LLM and OCR failed
+                                extractedInfo["storeName"] = "Unknown Store"
+                                extractedInfo["description"] = "Extraction failed - please edit manually"
+                            }
+                        }
+                    }
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "LEGACY: Field extraction failed", e)
+                finalStage = "ERROR"
+                extractedInfo["storeName"] = "Unknown Store"
+                extractedInfo["description"] = "Extraction error: ${e.message}"
+            }
+            
+            // Add processing metadata
+            extractedInfo["processingStage"] = finalStage
+            extractedInfo["extractionMethod"] = "LEGACY_BATCH"
+            
+            extractedInfo
+        }
+    }
+    
+    /**
+     * Map CouponInfo to field map (mirrors ScannerViewModel)
+     */
+    private fun mapCouponInfoToFields(couponInfo: com.example.coupontracker.util.CouponInfo): MutableMap<String, String> {
+        val fields = mutableMapOf<String, String>()
+        
+        // Store name
+        if (couponInfo.storeName.isNotBlank()) {
+            fields["storeName"] = couponInfo.storeName
+        }
+        
+        // Description
+        if (couponInfo.description.isNotBlank()) {
+            fields["description"] = couponInfo.description
+        }
+        
+        // Coupon code
+        couponInfo.redeemCode?.takeIf { it.isNotBlank() }?.let { 
+            fields["code"] = it 
+        }
+        
+        // Expiry date
+        couponInfo.expiryDate?.let { date ->
+            val formatter = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            fields["expiryDate"] = formatter.format(date)
+        }
+        
+        // Cashback amount
+        couponInfo.cashbackAmount?.let { amount ->
+            fields["amount"] = amount.toString()
+        }
+        
+        // Category
+        couponInfo.category?.let { category ->
+            fields["category"] = category
+        }
+        
+        return fields
+    }
+    
+    /**
+     * Map Coupon to field map (for OCR results)
+     */
+    private fun mapCouponToFields(coupon: com.example.coupontracker.data.model.Coupon): Map<String, String> {
+        val fields = mutableMapOf<String, String>()
+        
+        if (coupon.storeName.isNotBlank() && coupon.storeName != "Unknown Store") {
+            fields["storeName"] = coupon.storeName
+        }
+        
+        if (coupon.description.isNotBlank()) {
+            fields["description"] = coupon.description
+        }
+        
+        coupon.redeemCode?.takeIf { it.isNotBlank() }?.let {
+            fields["code"] = it
+        }
+        
+        coupon.expiryDate?.let { date ->
+            val formatter = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            fields["expiryDate"] = formatter.format(date)
+        }
+        
+        if (coupon.cashbackAmount > 0) {
+            fields["amount"] = coupon.cashbackAmount.toString()
+        }
+        
+        coupon.category?.let { category ->
+            fields["category"] = category
+        }
+        
+        return fields
+    }
+    
+    /**
+     * Merge OCR fields into LLM fields where LLM was weak or missing
+     */
+    private fun mergeValidatedFields(llmFields: MutableMap<String, String>, ocrFields: Map<String, String>) {
+        ocrFields.forEach { (key, value) ->
+            when {
+                // If LLM field is missing or generic, use OCR
+                !llmFields.containsKey(key) -> llmFields[key] = value
+                llmFields[key] == "Unknown Store" && key == "storeName" -> llmFields[key] = value
+                llmFields[key]?.isBlank() == true -> llmFields[key] = value
+                // For codes, prefer OCR if it looks more valid
+                key == "code" && value.length >= 4 && llmFields[key]?.length ?: 0 < 4 -> llmFields[key] = value
+            }
+        }
     }
     
     private suspend fun buildCouponFromFields(fields: Map<String, String>, uri: Uri): Coupon {
+        // Parse expiry date
+        val expiryDate = fields["expiryDate"]?.let { dateStr ->
+            try {
+                val formatter = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+                formatter.parse(dateStr)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to parse expiry date: $dateStr", e)
+                null
+            }
+        }
+        
+        // Parse cashback amount
+        val cashbackAmount = fields["amount"]?.let { amountStr ->
+            com.example.coupontracker.util.IndianCurrencyParser.parseAmount(amountStr) ?: 0.0
+        } ?: 0.0
+        
+        // Determine cashback type and currency
+        val (cashbackType, cashbackValueNum, cashbackCurrency) = if (cashbackAmount > 0) {
+            val originalAmount = fields["amount"] ?: ""
+            if (originalAmount.contains("%")) {
+                Triple("PERCENT", cashbackAmount, null)
+            } else {
+                Triple("AMOUNT", cashbackAmount, "INR")
+            }
+        } else {
+            Triple("TEXT", 0.0, null)
+        }
+        
         return Coupon(
             id = 0,
             storeName = fields["storeName"] ?: "Unknown Store",
             description = fields["description"] ?: "Batch processed coupon",
-            expiryDate = null,
-            cashbackAmount = 0.0,
-            redeemCode = fields["code"],
+            expiryDate = expiryDate,
+            cashbackAmount = cashbackAmount,
+            redeemCode = fields["code"]?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
             imageUri = persistUri(uri),
-            category = null,
+            category = fields["category"] ?: "Other",
             status = "Active",
             createdAt = java.util.Date(),
-            updatedAt = java.util.Date()
+            updatedAt = java.util.Date(),
+            // V2: Typed cashback fields
+            cashbackType = cashbackType,
+            cashbackValueNum = cashbackValueNum,
+            cashbackCurrency = cashbackCurrency,
+            offerText = fields["description"] ?: "Extracted via batch LEGACY processing"
         )
     }
     
