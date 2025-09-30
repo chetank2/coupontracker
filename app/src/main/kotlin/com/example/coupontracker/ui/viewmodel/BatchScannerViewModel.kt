@@ -470,7 +470,7 @@ class BatchScannerViewModel @Inject constructor(
                 }
             } else if (ocrCoupon.getCashbackNumericValue() > 0) {
                 val value = ocrCoupon.getCashbackNumericValue()
-                Tuple4(value, value, ocrCoupon.cashbackType ?: "TEXT", ocrCoupon.cashbackCurrency)
+                Tuple4(value, value, ocrCoupon.cashbackType ?: "text", ocrCoupon.cashbackCurrency)
             } else {
                 Tuple4(0.0, 0.0, com.example.coupontracker.data.model.CashbackType.TEXT.name.lowercase(), null)
             }
@@ -749,18 +749,37 @@ class BatchScannerViewModel @Inject constructor(
     }
     
     private suspend fun buildCouponFromLlmResult(couponInfo: com.example.coupontracker.util.CouponInfo, uri: Uri): Coupon {
+        // Parse typed cashback from LLM result
+        val cashbackAmount = couponInfo.cashbackAmount ?: 0.0
+        val (cashbackType, cashbackValueNum, cashbackCurrency) = when {
+            couponInfo.discountType == "PERCENTAGE" && cashbackAmount > 0 -> {
+                Triple("percent", cashbackAmount, null)
+            }
+            cashbackAmount > 0 -> {
+                Triple("amount", cashbackAmount, "INR")
+            }
+            else -> {
+                Triple("text", 0.0, null)
+            }
+        }
+        
         return Coupon(
             id = 0,
             storeName = couponInfo.storeName.takeIf { it.isNotBlank() } ?: "Unknown Store",
             description = couponInfo.description.takeIf { it.isNotBlank() } ?: "Extracted via LLM",
             expiryDate = couponInfo.expiryDate,
-            cashbackAmount = couponInfo.cashbackAmount ?: 0.0,
+            cashbackAmount = cashbackAmount,
             redeemCode = couponInfo.redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" },
             imageUri = persistUri(uri),
             category = couponInfo.category,
             status = "Active",
             createdAt = java.util.Date(),
-            updatedAt = java.util.Date()
+            updatedAt = java.util.Date(),
+            // V2: Typed cashback fields (CRITICAL - was missing!)
+            cashbackType = cashbackType,
+            cashbackValueNum = cashbackValueNum,
+            cashbackCurrency = cashbackCurrency,
+            offerText = couponInfo.description.takeIf { it.isNotBlank() } ?: "Extracted via batch LLM"
         )
     }
 
