@@ -536,14 +536,8 @@ private fun LlmStatusCard(
     val context = LocalContext.current
     var llmStatus by remember { mutableStateOf<LlmServiceStatus?>(null) }
     var isLoading by remember { mutableStateOf(true) }
-    var modelDownloadStatus by remember { mutableStateOf("Unknown") }
-    var modelSize by remember { mutableStateOf(0f) }
-    var isDownloading by remember { mutableStateOf(false) }
-    var downloadProgress by remember { mutableStateOf(0) }
-    var downloadStatusMessage by remember { mutableStateOf("") }
-    val coroutineScope = rememberCoroutineScope()
     
-    // Load LLM status and download info in background
+    // Load LLM runtime status in background
     LaunchedEffect(Unit) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
@@ -551,17 +545,9 @@ private fun LlmStatusCard(
                 val localLlmOcrService = LocalLlmOcrService(context, ocrEngine, llmRuntimeManager)
                 
                 val status = localLlmOcrService.getServiceStatus()
-                val downloadStatus = if (securePreferencesManager.getLlmModelDownloaded()) {
-                    "Downloaded"
-                } else {
-                    "Not Downloaded"
-                }
-                val sizeMB = securePreferencesManager.getLlmModelSizeMB()
                 
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     llmStatus = status
-                    modelDownloadStatus = downloadStatus
-                    modelSize = sizeMB
                     isLoading = false
                 }
             } catch (e: Exception) {
@@ -724,205 +710,6 @@ private fun LlmStatusCard(
                                 text = status.referenceCount.toString(),
                                 style = MaterialTheme.typography.bodyMedium
                             )
-                        }
-                    }
-                    
-                    // Model Download Management Section
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    HorizontalDivider()
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Text(
-                        text = "Model Management",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Download Status
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Download Status:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = if (modelDownloadStatus == "Downloaded") Icons.Default.CheckCircle else Icons.Default.CloudDownload,
-                                contentDescription = null,
-                                tint = if (modelDownloadStatus == "Downloaded") androidx.compose.ui.graphics.Color.Green else MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = modelDownloadStatus,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = if (modelDownloadStatus == "Downloaded") androidx.compose.ui.graphics.Color.Green else MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                    
-                    if (modelSize > 0) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "Model Size:",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-
-                            Text(
-                                text = "${modelSize.toInt()}MB",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
-                    
-                    // Download Button
-                    if (modelDownloadStatus != "Downloaded") {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
-                        Button(
-                            onClick = {
-                                if (!isDownloading) {
-                                    isDownloading = true
-                                    downloadProgress = 0
-                                    downloadStatusMessage = "Starting download..."
-                                    
-                                    coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                        try {
-                                            val modelDownloadManager = ModelDownloadManager(context)
-                                            
-                                            // Start download with progress callback
-                                            val result = modelDownloadManager.downloadModel { progress ->
-                                                // Update UI on main thread
-                                                coroutineScope.launch(kotlinx.coroutines.Dispatchers.Main) {
-                                                    downloadProgress = progress.progressPercent
-                                                    downloadStatusMessage = progress.statusMessage
-                                                }
-                                            }
-                                            
-                                            // Handle result on main thread
-                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                when (result) {
-                                                    is com.example.coupontracker.llm.DownloadResult.Success -> {
-                                                        Toast.makeText(context, "Model downloaded successfully!", Toast.LENGTH_LONG).show()
-                                                        modelDownloadStatus = "Downloaded"
-                                                        modelSize = result.modelSizeMB
-                                                        // Update preferences
-                                                        coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                                                            securePreferencesManager.setLlmModelDownloaded(true)
-                                                            securePreferencesManager.setLlmModelSizeMB(result.modelSizeMB)
-                                                        }
-                                                    }
-                                                    is com.example.coupontracker.llm.DownloadResult.Error -> {
-                                                        Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
-                                                        downloadStatusMessage = "Download failed"
-                                                    }
-                                                }
-                                                isDownloading = false
-                                                downloadProgress = 0
-                                            }
-                                        } catch (e: Exception) {
-                                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                                Toast.makeText(context, "Download error: ${e.message}", Toast.LENGTH_LONG).show()
-                                                downloadStatusMessage = "Download error"
-                                                isDownloading = false
-                                                downloadProgress = 0
-                                            }
-                                        }
-                                    }
-                                }
-                            },
-                            enabled = !isDownloading,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            if (isDownloading) {
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        CircularProgressIndicator(
-                                            progress = { if (downloadProgress > 0) downloadProgress / 100f else 0f },
-                                            modifier = Modifier.size(16.dp),
-                                            strokeWidth = 2.dp
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = if (downloadProgress > 0) "Downloading... ${downloadProgress}%" else "Downloading...",
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    }
-                                    
-                                    if (downloadStatusMessage.isNotEmpty()) {
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = downloadStatusMessage,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            } else {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.CloudDownload,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Download MiniCPM Model (~4.5MB)")
-                                }
-                            }
-                        }
-                        
-                        // Progress bar for download
-                        if (isDownloading && downloadProgress > 0) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            
-                            LinearProgressIndicator(
-                                progress = { downloadProgress / 100f },
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                            
-                            Spacer(modifier = Modifier.height(4.dp))
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "${downloadProgress}%",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                
-                                if (downloadStatusMessage.isNotEmpty()) {
-                                    Text(
-                                        text = downloadStatusMessage,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
                         }
                     }
                     
