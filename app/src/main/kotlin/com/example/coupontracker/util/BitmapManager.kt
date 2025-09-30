@@ -2,7 +2,6 @@ package com.example.coupontracker.util
 
 import android.graphics.Bitmap
 import android.util.Log
-import java.lang.ref.WeakReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,6 +10,7 @@ import javax.inject.Singleton
  * Enforces pixel budget to prevent OOM errors on low-memory devices
  * 
  * V2 Architecture: Single source of truth for bitmap lifecycle
+ * Uses reference counting to ensure bitmaps are only recycled when no longer in use
  */
 @Singleton
 class BitmapManager @Inject constructor() {
@@ -18,63 +18,116 @@ class BitmapManager @Inject constructor() {
     companion object {
         const val MAX_DIMENSION = 768
         const val MAX_TOTAL_PIXELS = 3 * MAX_DIMENSION * MAX_DIMENSION  // 1,769,472 pixels (~6.75 MB ARGB_8888)
-    private const val TAG = "BitmapManager"
+        private const val TAG = "BitmapManager"
     }
     
-    private val activeBuffers = mutableListOf<WeakReference<Bitmap>>()
+    private data class ManagedBitmap(
+        val bitmap: Bitmap,
+        var refCount: Int = 1,
+        val createdAt: Long = System.currentTimeMillis()
+    )
+    
+    private val managedBitmaps = mutableMapOf<Bitmap, ManagedBitmap>()
     
     /**
-     * Enforce pixel budget by recycling old bitmaps if necessary
-     * Called automatically before creating new bitmaps
+     * Track a bitmap for memory management
+     * Increments reference count if already tracked
+     * @return The same bitmap for chaining
      */
-    fun enforcePixelBudget() {
-        val totalPixels = activeBuffers
-            .mapNotNull { it.get() }
-            .filter { !it.isRecycled }
-            .sumOf { it.width.toLong() * it.height }
-        
-        if (totalPixels > MAX_TOTAL_PIXELS) {
-            Log.w(TAG, "Pixel budget exceeded: $totalPixels > $MAX_TOTAL_PIXELS, recycling old buffers")
-            
-            var freedPixels = 0L
-            activeBuffers.removeAll { ref ->
-                val bitmap = ref.get()
-                if (bitmap != null && !bitmap.isRecycled && totalPixels - freedPixels > MAX_TOTAL_PIXELS) {
-                    freedPixels += bitmap.width.toLong() * bitmap.height
-                    bitmap.recycle()
-                    Log.d(TAG, "Recycled bitmap: ${bitmap.width}x${bitmap.height}, freed $freedPixels pixels")
-                    true
-                } else {
-                    bitmap == null // Remove dead references
-                }
+    fun trackBitmap(bitmap: Bitmap): Bitmap {
+        synchronized(managedBitmaps) {
+            val managed = managedBitmaps[bitmap]
+            if (managed != null) {
+                managed.refCount++
+                Log.d(TAG, "Incremented ref count for bitmap ${bitmap.width}x${bitmap.height}: refCount=${managed.refCount}")
+            } else {
+                managedBitmaps[bitmap] = ManagedBitmap(bitmap)
+                Log.d(TAG, "Tracking new bitmap: ${bitmap.width}x${bitmap.height}, total managed: ${managedBitmaps.size}")
             }
             
-            Log.d(TAG, "Pixel budget enforced: freed $freedPixels pixels, ${activeBuffers.size} active buffers remaining")
+            // Enforce budget after adding new bitmap
+            enforcePixelBudgetInternal()
+        }
+        return bitmap
+    }
+    
+    /**
+     * Release a bitmap reference
+     * Bitmap will be recycled when reference count reaches zero
+     * @param bitmap Bitmap to release
+     */
+    fun releaseBitmap(bitmap: Bitmap) {
+        synchronized(managedBitmaps) {
+            val managed = managedBitmaps[bitmap] ?: return
+            
+            managed.refCount--
+            Log.d(TAG, "Decremented ref count for bitmap ${bitmap.width}x${bitmap.height}: refCount=${managed.refCount}")
+            
+            if (managed.refCount <= 0) {
+                if (!bitmap.isRecycled) {
+                    val pixels = bitmap.width.toLong() * bitmap.height
+                    bitmap.recycle()
+                    Log.d(TAG, "Recycled bitmap ${bitmap.width}x${bitmap.height} (freed $pixels pixels)")
+                }
+                managedBitmaps.remove(bitmap)
+            }
         }
     }
     
     /**
-     * Track a bitmap for memory management
-     * Should be called for all bitmaps created in extraction pipeline
+     * Enforce pixel budget by recycling ONLY bitmaps with zero references
+     * Called automatically when tracking new bitmaps
      */
-    fun trackBitmap(bitmap: Bitmap) {
-        enforcePixelBudget()
-        activeBuffers.add(WeakReference(bitmap))
-        Log.d(TAG, "Tracking bitmap: ${bitmap.width}x${bitmap.height}, total buffers: ${activeBuffers.size}")
+    private fun enforcePixelBudgetInternal() {
+        val totalPixels = managedBitmaps.values
+            .filter { !it.bitmap.isRecycled }
+            .sumOf { it.bitmap.width.toLong() * it.bitmap.height }
+        
+        if (totalPixels > MAX_TOTAL_PIXELS) {
+            Log.w(TAG, "Pixel budget exceeded: $totalPixels > $MAX_TOTAL_PIXELS")
+            
+            // Find unreferenced bitmaps, sorted by age (oldest first)
+            val unreferenced = managedBitmaps.values
+                .filter { it.refCount == 0 && !it.bitmap.isRecycled }
+                .sortedBy { it.createdAt }
+            
+            var freedPixels = 0L
+            val toRecycle = mutableListOf<Bitmap>()
+            
+            for (managed in unreferenced) {
+                if (totalPixels - freedPixels <= MAX_TOTAL_PIXELS) break
+                
+                val pixels = managed.bitmap.width.toLong() * managed.bitmap.height
+                freedPixels += pixels
+                toRecycle.add(managed.bitmap)
+            }
+            
+            // Recycle outside the iteration to avoid concurrent modification
+            toRecycle.forEach { bitmap ->
+                bitmap.recycle()
+                managedBitmaps.remove(bitmap)
+                Log.d(TAG, "Recycled unreferenced bitmap: ${bitmap.width}x${bitmap.height}")
+            }
+            
+            if (toRecycle.isEmpty()) {
+                Log.w(TAG, "Cannot free memory: all ${managedBitmaps.size} bitmaps are still in use!")
+            } else {
+                Log.d(TAG, "Freed $freedPixels pixels by recycling ${toRecycle.size} unreferenced bitmaps")
+            }
+        }
     }
     
     /**
      * Resize a bitmap to fit within maximum dimension while respecting pixel budget
-     * @param source Source bitmap (will not be recycled)
+     * @param source Source bitmap (will not be recycled unless you release it)
      * @param maxDim Maximum dimension for width or height (default: MAX_DIMENSION)
-     * @return Resized bitmap (may be same as source if already small enough)
+     * @return Resized bitmap (tracked and with refCount=1)
      */
     fun resizeWithBudget(source: Bitmap, maxDim: Int = MAX_DIMENSION): Bitmap {
-        enforcePixelBudget()
-        
         if (source.width <= maxDim && source.height <= maxDim) {
             Log.d(TAG, "Bitmap already within size limit: ${source.width}x${source.height}")
-            return source
+            // Track source if not already tracked
+            return trackBitmap(source)
         }
         
         val scale = minOf(
@@ -95,16 +148,14 @@ class BitmapManager @Inject constructor() {
     
     /**
      * Crop a bitmap to a specific region while respecting pixel budget
-     * @param source Source bitmap (will not be recycled)
+     * @param source Source bitmap (will not be recycled unless you release it)
      * @param x X coordinate of crop region
      * @param y Y coordinate of crop region
      * @param width Width of crop region
      * @param height Height of crop region
-     * @return Cropped bitmap
+     * @return Cropped bitmap (tracked and with refCount=1)
      */
     fun cropWithBudget(source: Bitmap, x: Int, y: Int, width: Int, height: Int): Bitmap {
-        enforcePixelBudget()
-        
         // Clamp crop region to bitmap bounds
         val clampedX = x.coerceIn(0, source.width - 1)
         val clampedY = y.coerceIn(0, source.height - 1)
@@ -124,33 +175,39 @@ class BitmapManager @Inject constructor() {
      * Useful for monitoring and diagnostics
      */
     fun getMemoryStats(): MemoryStats {
-        val activeBitmaps = activeBuffers.mapNotNull { it.get() }.filter { !it.isRecycled }
-        
-        val totalPixels = activeBitmaps.sumOf { it.width.toLong() * it.height }
-        val totalBytes = activeBitmaps.sumOf { it.allocationByteCount.toLong() }
-        
-        return MemoryStats(
-            activeBitmapCount = activeBitmaps.size,
-            totalPixels = totalPixels,
-            totalBytesMB = totalBytes / (1024f * 1024f),
-            pixelBudgetUsage = totalPixels.toFloat() / MAX_TOTAL_PIXELS
-        )
+        synchronized(managedBitmaps) {
+            val activeBitmaps = managedBitmaps.values.filter { !it.bitmap.isRecycled }
+            
+            val totalPixels = activeBitmaps.sumOf { it.bitmap.width.toLong() * it.bitmap.height }
+            val totalBytes = activeBitmaps.sumOf { it.bitmap.allocationByteCount.toLong() }
+            val referencedCount = activeBitmaps.count { it.refCount > 0 }
+            
+            return MemoryStats(
+                activeBitmapCount = activeBitmaps.size,
+                totalPixels = totalPixels,
+                totalBytesMB = totalBytes / (1024f * 1024f),
+                pixelBudgetUsage = totalPixels.toFloat() / MAX_TOTAL_PIXELS,
+                referencedCount = referencedCount
+            )
+        }
     }
     
     /**
      * Clean up all tracked bitmaps (use with caution!)
+     * Recycles ALL bitmaps regardless of reference count
      * Should only be called when clearing entire extraction pipeline
      */
     fun recycleAll() {
-        activeBuffers.forEach { ref ->
-            ref.get()?.let { bitmap ->
-                if (!bitmap.isRecycled) {
-                    bitmap.recycle()
+        synchronized(managedBitmaps) {
+            managedBitmaps.values.forEach { managed ->
+                if (!managed.bitmap.isRecycled) {
+                    managed.bitmap.recycle()
                 }
             }
+            val count = managedBitmaps.size
+            managedBitmaps.clear()
+            Log.d(TAG, "Force-recycled all $count tracked bitmaps")
         }
-        activeBuffers.clear()
-        Log.d(TAG, "Recycled all tracked bitmaps")
     }
 }
 
@@ -161,5 +218,6 @@ data class MemoryStats(
     val activeBitmapCount: Int,
     val totalPixels: Long,
     val totalBytesMB: Float,
-    val pixelBudgetUsage: Float  // 0.0 to 1.0+
+    val pixelBudgetUsage: Float,  // 0.0 to 1.0+
+    val referencedCount: Int = 0   // Number of bitmaps with refCount > 0
 )

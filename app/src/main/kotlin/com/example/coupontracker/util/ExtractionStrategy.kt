@@ -1,5 +1,7 @@
 package com.example.coupontracker.util
 
+import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 
 /**
@@ -35,25 +37,61 @@ enum class ExtractionStrategy {
 /**
  * Global extraction configuration
  * Can be controlled via Remote Config (Firebase) for production rollout
+ * 
+ * V2 Fix: Now persists strategy to SharedPreferences
  */
 object ExtractionConfig {
     private const val TAG = "ExtractionConfig"
+    private const val PREFS_NAME = "extraction_config"
+    private const val KEY_STRATEGY = "extraction_strategy"
+    
+    private var prefs: SharedPreferences? = null
     
     // Default strategy (LEGACY for safety during migration)
     private var _strategy: ExtractionStrategy = ExtractionStrategy.LEGACY
+    private var isInitialized = false
+    
+    /**
+     * Initialize with application context
+     * Call this from Application.onCreate() or before first use
+     */
+    fun init(context: Context) {
+        if (isInitialized) return
+        
+        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        
+        // Load saved strategy
+        val savedStrategyName = prefs?.getString(KEY_STRATEGY, ExtractionStrategy.LEGACY.name)
+        try {
+            _strategy = ExtractionStrategy.valueOf(savedStrategyName ?: ExtractionStrategy.LEGACY.name)
+            Log.d(TAG, "Loaded saved strategy: ${_strategy.name}")
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "Invalid saved strategy: $savedStrategyName, defaulting to LEGACY")
+            _strategy = ExtractionStrategy.LEGACY
+        }
+        
+        isInitialized = true
+    }
     
     /**
      * Get current extraction strategy
+     * Returns LEGACY if not initialized (safe default)
      */
-    fun getStrategy(): ExtractionStrategy = _strategy
+    fun getStrategy(): ExtractionStrategy {
+        return if (isInitialized) _strategy else ExtractionStrategy.LEGACY
+    }
     
     /**
      * Set extraction strategy (can be called from Settings UI or Remote Config)
+     * Persists to SharedPreferences immediately
      */
     fun setStrategy(strategy: ExtractionStrategy) {
         if (_strategy != strategy) {
             Log.d(TAG, "Strategy changed: ${_strategy.name} → ${strategy.name}")
             _strategy = strategy
+            
+            // Persist to SharedPreferences
+            prefs?.edit()?.putString(KEY_STRATEGY, strategy.name)?.apply()
         }
     }
     

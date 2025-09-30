@@ -385,6 +385,11 @@ fun SettingsScreen(
                             StrategyOption(com.example.coupontracker.util.ExtractionStrategy.HYBRID, "Hybrid (Experimental)", "Parallel AI + OCR for best accuracy")
                         )
                         
+                        // V2 Fix: Initialize ExtractionConfig if not already initialized
+                        LaunchedEffect(Unit) {
+                            com.example.coupontracker.util.ExtractionConfig.init(context)
+                        }
+                        
                         var currentStrategy by remember { 
                             mutableStateOf(com.example.coupontracker.util.ExtractionConfig.getStrategy()) 
                         }

@@ -23,6 +23,9 @@ class CouponTrackerApplication : Application(), Configuration.Provider {
         try {
             super.onCreate()
 
+            // V2: Initialize extraction strategy config (loads persisted strategy)
+            com.example.coupontracker.util.ExtractionConfig.init(this)
+
             // Initialize WorkManager and schedule daily reminder checks
             initializeWorkers()
 
