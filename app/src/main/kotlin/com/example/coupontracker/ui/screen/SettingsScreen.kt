@@ -346,6 +346,98 @@ fun SettingsScreen(
                     }
                 }
 
+                // V2: Extraction Strategy Selector
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    )
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Extraction Strategy (Advanced)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Text(
+                            text = "Choose how the AI extracts coupon information. LEGACY is the current stable mode.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        data class StrategyOption(
+                            val strategy: com.example.coupontracker.util.ExtractionStrategy,
+                            val label: String,
+                            val description: String
+                        )
+                        
+                        val strategies = listOf(
+                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.LEGACY, "Current (Default)", "Uses existing extraction flow"),
+                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST, "LLM First (Recommended)", "AI locates fields → OCR extracts text"),
+                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST, "OCR First", "OCR finds text → AI validates"),
+                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.HYBRID, "Hybrid (Experimental)", "Parallel AI + OCR for best accuracy")
+                        )
+                        
+                        var currentStrategy by remember { 
+                            mutableStateOf(com.example.coupontracker.util.ExtractionConfig.getStrategy()) 
+                        }
+                        
+                        strategies.forEach { option ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (currentStrategy == option.strategy) 
+                                        MaterialTheme.colorScheme.primaryContainer 
+                                    else 
+                                        MaterialTheme.colorScheme.surface
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = currentStrategy == option.strategy,
+                                        onClick = {
+                                            com.example.coupontracker.util.ExtractionConfig.setStrategy(option.strategy)
+                                            currentStrategy = option.strategy
+                                            Toast.makeText(
+                                                context,
+                                                "Strategy changed to ${option.strategy.name}",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = option.label,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = if (currentStrategy == option.strategy) FontWeight.Bold else FontWeight.Normal
+                                        )
+                                        Text(
+                                            text = option.description,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Analytics button
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
