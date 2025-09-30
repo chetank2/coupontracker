@@ -33,15 +33,16 @@ class ExtractionTelemetryService @Inject constructor(
             try {
                 val event = JSONObject().apply {
                     put("event", "extraction_path")
-                    put("primary", runPath.primary)
+                    put("strategy", runPath.strategy)  // V2: renamed from primary
                     put("tried", runPath.tried.joinToString(","))
                     put("final", runPath.final)
+                    put("reasons", runPath.reasons.joinToString(","))  // V2: added reasons
                     put("native_available", runPath.nativeAvailable)
                     put("total_time_ms", runPath.totalTimeMs)
                     put("device_info", getDeviceInfo())
                 }
                 
-                Log.d(TAG, "Run path: ${runPath.primary} → ${runPath.final} (${runPath.totalTimeMs}ms)")
+                Log.d(TAG, "Run path: ${runPath.strategy} → ${runPath.final} (${runPath.totalTimeMs}ms)")
                 
                 // In production, send to analytics service
                 // analyticsService.track(event)
@@ -65,9 +66,10 @@ class ExtractionTelemetryService @Inject constructor(
                     put("event", "extraction_result")
                     put("result_type", result::class.simpleName)
                     put("run_path", JSONObject().apply {
-                        put("primary", runPath.primary)
+                        put("strategy", runPath.strategy)  // V2: renamed from primary
                         put("final", runPath.final)
                         put("total_time_ms", runPath.totalTimeMs)
+                        put("reasons", runPath.reasons.joinToString(","))  // V2: added reasons
                     })
                     
                     when (result) {

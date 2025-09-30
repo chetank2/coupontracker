@@ -52,6 +52,9 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
         private const val MANIFEST_PATH = "models/multi_coupon/manifest.json"
     }
     
+    // V2: BitmapManager for memory-safe operations
+    private val bitmapManager = com.example.coupontracker.util.BitmapManager()
+    
     // TensorFlow Lite interpreters
     private var stage1Interpreter: Interpreter? = null  // Coupon detection
     private var stage2Interpreter: Interpreter? = null  // Field detection
@@ -260,20 +263,22 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
                         couponDetection.boundingBox.bottom.toInt()
                     )
                     
-                    val managedCrop = runBlocking {
-                        BitmapManager.createManagedCrop(bitmap, cropRect, "coupon_$index")
-                    }
-                    
-                    if (managedCrop == null) {
-                        Log.w(TAG, "Failed to create managed crop for coupon $index")
+                    // Use new BitmapManager to create crop with budget enforcement
+                    val couponCrop = try {
+                        bitmapManager.cropWithBudget(
+                            bitmap,
+                            cropRect.left,
+                            cropRect.top,
+                            cropRect.width(),
+                            cropRect.height()
+                        )
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to create crop for coupon $index", e)
                         return@forEachIndexed
                     }
                     
-                    val couponCrop = managedCrop.bitmap
-                    
                     if (couponCrop.width < 10 || couponCrop.height < 10) {
                         Log.w(TAG, "Coupon crop too small, skipping instance $index")
-                        BitmapManager.releaseBitmap(managedCrop.id)
                         return@forEachIndexed
                     }
                     
@@ -295,7 +300,7 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
                             confidence = couponDetection.confidence,
                             fields = adjustedFields,
                             cropBitmap = couponCrop,
-                            managedBitmapId = managedCrop.id
+                            managedBitmapId = null  // V2: No longer using managed bitmap IDs
                         )
                     )
                     
@@ -776,17 +781,19 @@ class TwoStageDetector(private val context: Context, initializeOnCreate: Boolean
     
     /**
      * Cleanup all managed bitmap resources
+     * V2: Uses new BitmapManager API
      */
     fun cleanupBitmaps() {
-        BitmapManager.cleanup()
+        bitmapManager.recycleAll()
         Log.d(TAG, "TwoStageDetector bitmap cleanup completed")
     }
     
     /**
      * Get current bitmap memory usage statistics
+     * V2: Returns new MemoryStats type
      */
-    fun getMemoryStats(): com.example.coupontracker.util.BitmapMemoryStats {
-        return BitmapManager.getMemoryStats()
+    fun getMemoryStats(): com.example.coupontracker.util.MemoryStats {
+        return bitmapManager.getMemoryStats()
     }
 }
 
@@ -844,11 +851,12 @@ data class CouponInstance(
     
     /**
      * Release managed bitmap resources
+     * V2: Manual bitmap recycling (BitmapManager handles this automatically now)
      */
     fun releaseBitmap() {
-        managedBitmapId?.let { id ->
-            BitmapManager.releaseBitmap(id)
-        }
+        // V2: BitmapManager handles cleanup automatically via WeakReferences
+        // This method is kept for backward compatibility but does nothing
+        // Bitmaps will be recycled when memory budget is exceeded
     }
 }
 

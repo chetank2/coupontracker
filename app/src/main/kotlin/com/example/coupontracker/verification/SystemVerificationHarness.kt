@@ -232,16 +232,17 @@ class SystemVerificationHarness @Inject constructor(
             val passed = runPath.final == "LLM" && runPath.nativeAvailable
             
             details["path_assertion"] = if (passed) "PASSED" else "FAILED"
-            details["path_primary"] = runPath.primary
+            details["path_strategy"] = runPath.strategy  // V2: renamed from primary
             details["path_final"] = runPath.final
             details["path_native_available"] = runPath.nativeAvailable.toString()
             details["path_total_time_ms"] = runPath.totalTimeMs.toString()
+            details["path_reasons"] = runPath.reasons.joinToString(",")  // V2: added reasons
             
             if (!passed) {
                 errors.add("Path assertion: Expected LLM path but got ${runPath.final}")
             }
             
-            Log.d(TAG, "✅ Path assertion: ${runPath.primary} → ${runPath.final} (${runPath.totalTimeMs}ms)")
+            Log.d(TAG, "✅ Path assertion: ${runPath.strategy} → ${runPath.final} (${runPath.totalTimeMs}ms)")
             passed
             
         } catch (e: Exception) {

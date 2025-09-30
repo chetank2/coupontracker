@@ -559,7 +559,7 @@ class ScannerViewModel @Inject constructor(
             telemetryService.trackRunPath(runPath)
             
             extractedInfo["minicpmProcessing"] = progress.name
-            extractedInfo["runPath"] = "${runPath.primary} → ${runPath.final}"
+            extractedInfo["runPath"] = "${runPath.strategy} → ${runPath.final}"
             extractedInfo["processingTimeMs"] = totalTime.toString()
 
             FieldExtractionResult(extractedInfo, progress)
