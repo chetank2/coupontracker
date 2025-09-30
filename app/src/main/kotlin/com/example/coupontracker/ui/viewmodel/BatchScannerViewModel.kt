@@ -268,8 +268,13 @@ class BatchScannerViewModel @Inject constructor(
     
     /**
      * Process image using LLM_FIRST strategy
+     * @param allowOcrFallback If true, can fall back to OCR. If false, falls back to LEGACY to prevent infinite loops.
      */
-    private suspend fun processWithLlmFirstPath(uri: Uri, bitmap: android.graphics.Bitmap): Coupon {
+    private suspend fun processWithLlmFirstPath(
+        uri: Uri, 
+        bitmap: android.graphics.Bitmap,
+        allowOcrFallback: Boolean = true
+    ): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             val llmResult = localLlmOcrService.processCouponImageTyped(bitmap)
             
@@ -278,8 +283,15 @@ class BatchScannerViewModel @Inject constructor(
                     buildCouponFromLlmResult(llmResult.info, uri)
                 }
                 else -> {
-                    // Fallback to OCR on LLM failure
-                    processWithOcrFirstPath(uri, bitmap)
+                    if (allowOcrFallback) {
+                        // First fallback: Try OCR (but don't allow it to call back to LLM)
+                        Log.d(TAG, "LLM_FIRST failed, falling back to OCR_FIRST (terminal)")
+                        processWithOcrFirstPath(uri, bitmap, allowLlmFallback = false)
+                    } else {
+                        // Terminal fallback: Use LEGACY two-stage detection
+                        Log.d(TAG, "LLM_FIRST failed with no OCR fallback allowed, using LEGACY")
+                        processWithLegacyPath(uri, bitmap)
+                    }
                 }
             }
         }
@@ -287,8 +299,13 @@ class BatchScannerViewModel @Inject constructor(
     
     /**
      * Process image using OCR_FIRST strategy
+     * @param allowLlmFallback If true, can fall back to LLM. If false, falls back to LEGACY to prevent infinite loops.
      */
-    private suspend fun processWithOcrFirstPath(uri: Uri, bitmap: android.graphics.Bitmap): Coupon {
+    private suspend fun processWithOcrFirstPath(
+        uri: Uri, 
+        bitmap: android.graphics.Bitmap,
+        allowLlmFallback: Boolean = true
+    ): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val ocrResult = multiEngineOCR.processImage(bitmap)
             
@@ -302,13 +319,27 @@ class BatchScannerViewModel @Inject constructor(
                     if (extractionResult.success) {
                         extractionResult.coupon.copy(imageUri = persistUri(uri))
                     } else {
-                        // Fallback to LLM
-                        processWithLlmFirstPath(uri, bitmap)
+                        if (allowLlmFallback) {
+                            // First fallback: Try LLM (but don't allow it to call back to OCR)
+                            Log.d(TAG, "OCR_FIRST low confidence, falling back to LLM_FIRST (terminal)")
+                            processWithLlmFirstPath(uri, bitmap, allowOcrFallback = false)
+                        } else {
+                            // Terminal fallback: Use LEGACY two-stage detection
+                            Log.d(TAG, "OCR_FIRST failed with no LLM fallback allowed, using LEGACY")
+                            processWithLegacyPath(uri, bitmap)
+                        }
                     }
                 }
                 is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Error -> {
-                    // Fallback to LLM
-                    processWithLlmFirstPath(uri, bitmap)
+                    if (allowLlmFallback) {
+                        // First fallback: Try LLM (but don't allow it to call back to OCR)
+                        Log.d(TAG, "OCR_FIRST error, falling back to LLM_FIRST (terminal)")
+                        processWithLlmFirstPath(uri, bitmap, allowOcrFallback = false)
+                    } else {
+                        // Terminal fallback: Use LEGACY two-stage detection
+                        Log.d(TAG, "OCR_FIRST failed with no LLM fallback allowed, using LEGACY")
+                        processWithLegacyPath(uri, bitmap)
+                    }
                 }
             }
         }
