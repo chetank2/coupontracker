@@ -1,5 +1,6 @@
 package com.example.coupontracker.di
 
+import com.example.coupontracker.data.local.LearnedPatternDao
 import com.example.coupontracker.universal.AdaptiveConfidenceScorer
 import com.example.coupontracker.universal.PatternLearningEngine
 import com.example.coupontracker.universal.UniversalExtractionService
@@ -14,6 +15,7 @@ import javax.inject.Singleton
 
 /**
  * Dagger Hilt module for universal extraction components
+ * V2: Updated to provide LearnedPatternDao dependency
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -25,13 +27,8 @@ object UniversalExtractionModule {
         return UniversalLayoutAnalyzer()
     }
 
-    @Provides
-    @Singleton
-    fun providePatternLearningEngine(
-        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context
-    ): PatternLearningEngine {
-        return PatternLearningEngine(context)
-    }
+    // V2: Removed manual construction - PatternLearningEngine now uses @Inject constructor
+    // Dagger will automatically provide it with required dependencies (Context, LearnedPatternDao)
 
     @Provides
     @Singleton

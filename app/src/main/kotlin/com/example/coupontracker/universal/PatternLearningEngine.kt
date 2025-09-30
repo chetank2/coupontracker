@@ -3,11 +3,14 @@ package com.example.coupontracker.universal
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import com.example.coupontracker.data.local.LearnedPatternDao
 import com.example.coupontracker.data.model.FieldType
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.*
 import javax.inject.Inject
@@ -16,29 +19,106 @@ import javax.inject.Singleton
 /**
  * Engine that learns extraction patterns from successful coupon extractions
  * and user corrections, eliminating the need for hardcoded brand-specific rules.
+ * 
+ * V2: Migrated from SharedPreferences to Room database for better storage and queries
  */
 @Singleton
 class PatternLearningEngine @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val learnedPatternDao: LearnedPatternDao  // V2: Injected Room DAO
 ) {
     companion object {
         private const val TAG = "PatternLearningEngine"
         private const val PREFS_NAME = "pattern_learning"
         private const val KEY_LEARNED_PATTERNS = "learned_patterns"
         private const val KEY_PATTERN_STATS = "pattern_stats"
+        private const val KEY_MIGRATED_TO_ROOM = "migrated_to_room_v2"  // V2: Migration flag
         private const val MAX_PATTERNS_PER_FIELD = 50
         private const val MIN_PATTERN_CONFIDENCE = 0.3f
     }
 
+    // V2: Keep SharedPreferences for one-time migration only
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val gson = Gson()
     
-    // In-memory cache of learned patterns
+    // V2: In-memory cache no longer used for primary storage
+    // Kept temporarily for migration purposes only
     private val learnedPatterns = mutableMapOf<FieldType, MutableList<LearnedPattern>>()
     private val patternStats = mutableMapOf<String, PatternStats>()
     
     init {
-        loadLearnedPatterns()
+        // V2: One-time migration from SharedPreferences to Room
+        // Using CoroutineScope for async migration on app start
+        CoroutineScope(Dispatchers.IO).launch {
+            migrateFromSharedPreferencesIfNeeded()
+        }
+    }
+
+    /**
+     * V2: One-time migration from SharedPreferences to Room
+     * Moves all learned patterns from old storage to new database
+     */
+    private suspend fun migrateFromSharedPreferencesIfNeeded() = withContext(Dispatchers.IO) {
+        if (prefs.getBoolean(KEY_MIGRATED_TO_ROOM, false)) {
+            Log.d(TAG, "Already migrated to Room, skipping")
+            return@withContext
+        }
+        
+        try {
+            Log.d(TAG, "Starting migration from SharedPreferences to Room...")
+            
+            // Load patterns from SharedPreferences
+            loadLearnedPatterns()  // This populates learnedPatterns from prefs
+            
+            var migratedCount = 0
+            var skippedCount = 0
+            
+            // Migrate each pattern to Room
+            learnedPatterns.forEach { (fieldType, patterns) ->
+                patterns.forEach { oldPattern ->
+                    try {
+                        // Get stats for this pattern
+                        val stats = patternStats[oldPattern.id]
+                        val successCount = stats?.successCount ?: 1
+                        val failureCount = stats?.failureCount ?: 0
+                        val totalCount = successCount + failureCount
+                        
+                        // Convert to Room entity
+                        val roomPattern = com.example.coupontracker.data.local.LearnedPattern(
+                            brand = stats?.contexts?.firstOrNull(),  // Use first context as brand
+                            fieldType = fieldType.name,
+                            regex = oldPattern.pattern,
+                            weight = oldPattern.confidence,
+                            source = "migrated_from_prefs",
+                            sampleValue = "legacy_pattern",  // No sample value in old format
+                            createdAt = oldPattern.createdAt.time,
+                            successCount = successCount,
+                            attemptCount = totalCount
+                        )
+                        
+                        learnedPatternDao.insertPattern(roomPattern)
+                        migratedCount++
+                        
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to migrate pattern ${oldPattern.id}", e)
+                        skippedCount++
+                    }
+                }
+            }
+            
+            // Mark migration as complete
+            prefs.edit().putBoolean(KEY_MIGRATED_TO_ROOM, true).apply()
+            
+            Log.d(TAG, "✅ Migration complete: $migratedCount patterns migrated, $skippedCount skipped")
+            
+            // Clear old data from memory (keep SharedPreferences for rollback if needed)
+            learnedPatterns.clear()
+            patternStats.clear()
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Migration failed", e)
+            // Don't set migration flag so it can be retried
+        }
     }
 
     /**
