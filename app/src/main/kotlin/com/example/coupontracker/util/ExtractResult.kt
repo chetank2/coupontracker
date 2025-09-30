@@ -12,7 +12,8 @@ sealed interface ExtractResult {
      */
     data class Good(
         val info: CouponInfo,
-        val signals: ExtractionSignals
+        val signals: ExtractionSignals,
+        val runPath: RunPath = RunPath()  // V2: Added for execution flow tracking
     ) : ExtractResult
 
     /**
@@ -21,7 +22,8 @@ sealed interface ExtractResult {
     data class LowQuality(
         val info: CouponInfo,
         val reason: QualityReason,
-        val signals: ExtractionSignals
+        val signals: ExtractionSignals,
+        val runPath: RunPath = RunPath()  // V2: Added for execution flow tracking
     ) : ExtractResult
 
     /**
@@ -30,7 +32,8 @@ sealed interface ExtractResult {
     data class Failed(
         val stage: ExtractionStage,
         val error: Throwable,
-        val signals: ExtractionSignals? = null
+        val signals: ExtractionSignals? = null,
+        val runPath: RunPath = RunPath()  // V2: Added for execution flow tracking
     ) : ExtractResult
 }
 
@@ -71,15 +74,28 @@ data class ExtractionSignals(
 )
 
 /**
- * Run path tracking for telemetry
+ * Run path tracking for telemetry and observability
+ * Enhanced in V2 architecture for detailed execution flow logging
  */
 data class RunPath(
-    val primary: String,
-    val tried: List<String>,
-    val final: String,
-    val nativeAvailable: Boolean,
-    val totalTimeMs: Long
-)
+    val strategy: String = "LEGACY",           // "LLM_FIRST", "OCR_FIRST", "HYBRID", "LEGACY"
+    val tried: MutableList<String> = mutableListOf(),
+    val final: String = "",
+    val reasons: MutableList<String> = mutableListOf(),
+    val nativeAvailable: Boolean = false,      // Kept for backward compatibility
+    val totalTimeMs: Long = 0L                 // Kept for backward compatibility
+) {
+    // Backward compatibility: allow creating with old signature
+    @Deprecated("Use new constructor with strategy parameter", ReplaceWith("RunPath(strategy = primary, tried = tried.toMutableList(), final = final, nativeAvailable = nativeAvailable, totalTimeMs = totalTimeMs)"))
+    constructor(primary: String, tried: List<String>, final: String, nativeAvailable: Boolean, totalTimeMs: Long) : this(
+        strategy = primary,
+        tried = tried.toMutableList(),
+        final = final,
+        reasons = mutableListOf(),
+        nativeAvailable = nativeAvailable,
+        totalTimeMs = totalTimeMs
+    )
+}
 
 /**
  * Extraction policy that decides next steps based on results
