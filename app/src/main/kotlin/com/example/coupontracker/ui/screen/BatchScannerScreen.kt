@@ -141,7 +141,21 @@ fun BatchScannerScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            when {
+            // Check if TwoStageDetector is available
+            val detectorAvailable = viewModel.isTwoStageDetectorAvailable()
+            
+            if (!detectorAvailable && uiState.selectedImages.isNotEmpty() && !uiState.isProcessing) {
+                // Show warning about batch scanning unavailability
+                BatchScanningUnavailableWarning(
+                    onUseSingleScan = {
+                        Toast.makeText(context, "Please use single scan mode", Toast.LENGTH_SHORT).show()
+                        navController.popBackStack()
+                    },
+                    onClearImages = {
+                        viewModel.clearImages()
+                    }
+                )
+            } else when {
                 uiState.isProcessing -> {
                     // Show loading indicator
                     Box(
@@ -222,6 +236,98 @@ fun BatchScannerScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun BatchScanningUnavailableWarning(
+    onUseSingleScan: () -> Unit,
+    onClearImages: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Warning,
+            contentDescription = null,
+            modifier = Modifier.size(80.dp),
+            tint = MaterialTheme.colorScheme.error
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "Batch Scanning Unavailable",
+            style = MaterialTheme.typography.headlineSmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.error
+        )
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(
+                    text = "⚠️ Multi-coupon detection models not available",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Batch scanning requires trained YOLO models (20-100 MB) that are not yet integrated. The current placeholder models cannot detect multiple coupons.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "Please use:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                )
+                Text(
+                    text = "• Single scan mode for individual coupons\n• OCR_FIRST strategy (recommended)\n• Manual entry for bulk addition",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(24.dp))
+        
+        Button(
+            onClick = onUseSingleScan,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.CameraAlt, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Use Single Scan Mode")
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        OutlinedButton(
+            onClick = onClearImages,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Clear Images")
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Text(
+            text = "See CRITICAL_PRODUCTION_BLOCKERS.md for details",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
     }
 }
 

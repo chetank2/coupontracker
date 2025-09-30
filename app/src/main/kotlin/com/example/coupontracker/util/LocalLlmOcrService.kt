@@ -380,6 +380,16 @@ class LocalLlmOcrService(
             if (llmResponse != null) {
                 val rawOcrText = captureRawOcrText(preprocessedBitmap)
                 val couponInfo = parseLlmResponseToCouponInfo(llmResponse, rawOcrText)
+                
+                // CRITICAL: Detect mock responses and reject them
+                if (isMockLlmResponse(couponInfo)) {
+                    Log.w(TAG, "⚠️ MOCK LLM RESPONSE DETECTED - Falling back to OCR")
+                    return@coroutineScope ExtractResult.Failed(
+                        stage = ExtractionStage.LLM,
+                        error = IllegalStateException("Mock LLM response detected (Example Store / MOCK123)")
+                    )
+                }
+                
                 extractedFieldCount = countExtractedFields(couponInfo)
                 
                 // Step 7: Quality validation
@@ -483,7 +493,15 @@ class LocalLlmOcrService(
                     null
                 }
 
-                parseLlmResponseToCouponInfo(llmResponse, rawOcrText)
+                val parsedInfo = parseLlmResponseToCouponInfo(llmResponse, rawOcrText)
+                
+                // CRITICAL: Detect mock responses and fall back to OCR
+                if (isMockLlmResponse(parsedInfo)) {
+                    Log.w(TAG, "⚠️ MOCK LLM RESPONSE DETECTED - Falling back to OCR")
+                    throw IllegalStateException("Mock LLM response detected (Example Store / MOCK123)")
+                }
+                
+                parsedInfo
             } else {
                 // Record timeout and throw
                 val duration = System.currentTimeMillis() - startTime
@@ -555,6 +573,37 @@ class LocalLlmOcrService(
         if (couponInfo.description != "Coupon offer") count++
         if (couponInfo.minimumPurchase != null && couponInfo.minimumPurchase > 0) count++
         return count
+    }
+    
+    /**
+     * Detect mock/placeholder responses from stub JNI
+     * Returns true if the response matches known mock patterns
+     */
+    private fun isMockLlmResponse(couponInfo: CouponInfo): Boolean {
+        // Check for exact mock patterns from mlc_llm_jni.cpp
+        val isMockStore = couponInfo.storeName.equals("Example Store", ignoreCase = true)
+        val isMockCode = couponInfo.redeemCode?.let {
+            it.equals("MOCK123", ignoreCase = true) ||
+            it.equals("EXAMPLE123", ignoreCase = true) ||
+            it.startsWith("MOCK", ignoreCase = true)
+        } ?: false
+        
+        // Check for generic placeholder patterns
+        val isPlaceholderDescription = couponInfo.description.let {
+            it.equals("Sample coupon offer", ignoreCase = true) ||
+            it.equals("Placeholder offer", ignoreCase = true) ||
+            it.contains("example", ignoreCase = true) && it.contains("offer", ignoreCase = true)
+        }
+        
+        // Detect if it's a mock response (any two indicators match)
+        val mockIndicators = listOf(isMockStore, isMockCode, isPlaceholderDescription).count { it }
+        
+        if (mockIndicators >= 2) {
+            Log.w(TAG, "Mock response detected: store='${couponInfo.storeName}', code='${couponInfo.redeemCode}', desc='${couponInfo.description}'")
+            return true
+        }
+        
+        return false
     }
     
     /**

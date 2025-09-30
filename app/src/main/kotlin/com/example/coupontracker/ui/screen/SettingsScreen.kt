@@ -378,12 +378,19 @@ fun SettingsScreen(
                             val description: String
                         )
                         
-                        val strategies = listOf(
-                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.LEGACY, "Current (Default)", "Uses existing extraction flow"),
-                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST, "LLM First (Recommended)", "AI locates fields → OCR extracts text"),
-                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST, "OCR First", "OCR finds text → AI validates"),
-                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.HYBRID, "Hybrid (Experimental)", "Parallel AI + OCR for best accuracy")
+                        // Get available strategies based on model availability
+                        val availableStrategies = com.example.coupontracker.util.ExtractionConfig.getAvailableStrategies()
+                        
+                        val allStrategyOptions = listOf(
+                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST, "OCR First (Recommended)", "✅ Real OCR → Pattern matching"),
+                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.LEGACY, "Legacy Fallback", "✅ Multi-step with fallbacks"),
+                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST, "LLM First", "⚠️ Requires model download (2.4 GB)"),
+                            StrategyOption(com.example.coupontracker.util.ExtractionStrategy.HYBRID, "Hybrid", "⚠️ Requires model download (2.4 GB)")
                         )
+                        
+                        val strategies = allStrategyOptions.filter { 
+                            availableStrategies.contains(it.strategy)
+                        }
                         
                         // V2 Fix: Initialize ExtractionConfig if not already initialized
                         LaunchedEffect(Unit) {

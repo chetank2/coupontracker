@@ -47,8 +47,9 @@ object ExtractionConfig {
     
     private var prefs: SharedPreferences? = null
     
-    // Default strategy (LEGACY for safety during migration)
-    private var _strategy: ExtractionStrategy = ExtractionStrategy.LEGACY
+    // Default strategy (OCR_FIRST - most reliable with current model availability)
+    // LLM_FIRST and HYBRID disabled due to missing MLC-LLM binaries (see CRITICAL_PRODUCTION_BLOCKERS.md)
+    private var _strategy: ExtractionStrategy = ExtractionStrategy.OCR_FIRST
     private var isInitialized = false
     
     /**
@@ -61,13 +62,27 @@ object ExtractionConfig {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         
         // Load saved strategy
-        val savedStrategyName = prefs?.getString(KEY_STRATEGY, ExtractionStrategy.LEGACY.name)
+        val savedStrategyName = prefs?.getString(KEY_STRATEGY, ExtractionStrategy.OCR_FIRST.name)
         try {
-            _strategy = ExtractionStrategy.valueOf(savedStrategyName ?: ExtractionStrategy.LEGACY.name)
-            Log.d(TAG, "Loaded saved strategy: ${_strategy.name}")
+            val savedStrategy = ExtractionStrategy.valueOf(savedStrategyName ?: ExtractionStrategy.OCR_FIRST.name)
+            
+            // Block non-functional strategies due to missing models
+            _strategy = when (savedStrategy) {
+                ExtractionStrategy.LLM_FIRST -> {
+                    Log.w(TAG, "LLM_FIRST requires real MLC-LLM binaries - falling back to OCR_FIRST")
+                    ExtractionStrategy.OCR_FIRST
+                }
+                ExtractionStrategy.HYBRID -> {
+                    Log.w(TAG, "HYBRID requires real MLC-LLM binaries - falling back to OCR_FIRST")
+                    ExtractionStrategy.OCR_FIRST
+                }
+                else -> savedStrategy
+            }
+            
+            Log.d(TAG, "Loaded strategy: ${_strategy.name}")
         } catch (e: IllegalArgumentException) {
-            Log.w(TAG, "Invalid saved strategy: $savedStrategyName, defaulting to LEGACY")
-            _strategy = ExtractionStrategy.LEGACY
+            Log.w(TAG, "Invalid saved strategy: $savedStrategyName, defaulting to OCR_FIRST")
+            _strategy = ExtractionStrategy.OCR_FIRST
         }
         
         isInitialized = true
@@ -75,15 +90,17 @@ object ExtractionConfig {
     
     /**
      * Get current extraction strategy
-     * Returns LEGACY if not initialized (safe default)
+     * Returns OCR_FIRST if not initialized (safe default)
      */
     fun getStrategy(): ExtractionStrategy {
-        return if (isInitialized) _strategy else ExtractionStrategy.LEGACY
+        return if (isInitialized) _strategy else ExtractionStrategy.OCR_FIRST
     }
     
     /**
      * Set extraction strategy (can be called from Settings UI or Remote Config)
      * Persists to SharedPreferences immediately
+     * 
+     * Note: LLM_FIRST and HYBRID are blocked at load time if real models not available
      */
     fun setStrategy(strategy: ExtractionStrategy) {
         if (_strategy != strategy) {
@@ -93,6 +110,36 @@ object ExtractionConfig {
             // Persist to SharedPreferences
             prefs?.edit()?.putString(KEY_STRATEGY, strategy.name)?.apply()
         }
+    }
+    
+    /**
+     * Get available strategies based on current model availability
+     * Returns only OCR_FIRST and LEGACY until real MLC-LLM binaries are integrated
+     */
+    fun getAvailableStrategies(): List<ExtractionStrategy> {
+        val mlcAvailable = try {
+            com.example.coupontracker.llm.MlcLlmNative.isAvailable()
+        } catch (e: Exception) {
+            false
+        }
+        
+        return if (mlcAvailable) {
+            // All strategies available when real MLC-LLM is present
+            ExtractionStrategy.values().toList()
+        } else {
+            // Only working strategies when using mock
+            listOf(
+                ExtractionStrategy.OCR_FIRST,  // ✅ Works with ML Kit OCR
+                ExtractionStrategy.LEGACY      // ✅ Works with fallback to OCR
+            )
+        }
+    }
+    
+    /**
+     * Check if a specific strategy is available
+     */
+    fun isStrategyAvailable(strategy: ExtractionStrategy): Boolean {
+        return getAvailableStrategies().contains(strategy)
     }
     
     /**

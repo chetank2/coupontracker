@@ -115,6 +115,19 @@ class BatchScannerViewModel @Inject constructor(
     fun clearImages() {
         _uiState.value = _uiState.value.copy(selectedImages = emptyList())
     }
+    
+    /**
+     * Check if TwoStageDetector is available for batch scanning
+     * Returns false if detector is null or models are not loaded
+     */
+    fun isTwoStageDetectorAvailable(): Boolean {
+        return try {
+            twoStageDetector != null && twoStageDetector?.getMemoryStats() != null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking TwoStageDetector availability", e)
+            false
+        }
+    }
 
     /**
      * Process all selected images
