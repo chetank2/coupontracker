@@ -168,28 +168,59 @@ class PatternLearningEngine @Inject constructor(
 
     /**
      * Get relevant patterns for a field type and context
+     * V2: Now queries Room database directly
      */
     suspend fun getRelevantPatterns(
         fieldType: FieldType,
         context: ExtractionContext
     ): List<LearnedPattern> = withContext(Dispatchers.IO) {
         
-        val patterns = learnedPatterns[fieldType] ?: return@withContext emptyList()
+        // V2: Query Room database, optionally filtered by brand
+        val roomPatterns = if (context.brandHint != null) {
+            learnedPatternDao.getPatternsByBrandAndField(context.brandHint, fieldType.name)
+        } else {
+            learnedPatternDao.getPatternsByField(fieldType.name)
+        }
         
-        return@withContext patterns
-            .filter { it.confidence >= MIN_PATTERN_CONFIDENCE }
-            .filter { isRelevantForContext(it, context) }
-            .sortedByDescending { it.confidence }
+        // Convert Room entities to domain LearnedPattern objects
+        return@withContext roomPatterns
+            .filter { it.weight >= MIN_PATTERN_CONFIDENCE }
+            .sortedByDescending { it.weight }
             .take(10) // Limit to top patterns
+            .map { roomPattern ->
+                LearnedPattern(
+                    id = roomPattern.id.toString(),
+                    fieldType = fieldType,
+                    pattern = roomPattern.regex,
+                    confidence = roomPattern.weight,
+                    createdAt = Date(roomPattern.createdAt),
+                    lastUsed = Date(roomPattern.createdAt) // Use createdAt as proxy for lastUsed
+                )
+            }
     }
 
     /**
      * Get pattern statistics for monitoring
+     * V2: Now queries Room database
      */
-    fun getPatternStats(): Map<FieldType, PatternFieldStats> {
-        return FieldType.values().associateWith { fieldType ->
-            val patterns = learnedPatterns[fieldType] ?: emptyList()
-            PatternFieldStats(
+    suspend fun getPatternStats(): Map<FieldType, PatternFieldStats> = withContext(Dispatchers.IO) {
+        FieldType.values().associate { fieldType ->
+            // V2: Query patterns from Room
+            val roomPatterns = learnedPatternDao.getPatternsByField(fieldType.name)
+            
+            // Convert to domain objects
+            val patterns = roomPatterns.map { roomPattern ->
+                LearnedPattern(
+                    id = roomPattern.id.toString(),
+                    fieldType = fieldType,
+                    pattern = roomPattern.regex,
+                    confidence = roomPattern.weight,
+                    createdAt = Date(roomPattern.createdAt),
+                    lastUsed = Date(roomPattern.createdAt)
+                )
+            }
+            
+            fieldType to PatternFieldStats(
                 totalPatterns = patterns.size,
                 averageConfidence = patterns.map { it.confidence }.average().takeIf { !it.isNaN() } ?: 0.0,
                 topPatterns = patterns.sortedByDescending { it.confidence }.take(5)
@@ -199,12 +230,13 @@ class PatternLearningEngine @Inject constructor(
 
     /**
      * Clear all learned patterns (for testing or reset)
+     * V2: Now clears Room database
      */
     suspend fun clearAllPatterns() = withContext(Dispatchers.IO) {
-        learnedPatterns.clear()
-        patternStats.clear()
-        prefs.edit().clear().apply()
-        Log.i(TAG, "All learned patterns cleared")
+        // V2: Clear all patterns from Room
+        val deletedCount = learnedPatternDao.deleteAllPatterns()
+        
+        Log.i(TAG, "All learned patterns cleared from Room: $deletedCount patterns deleted")
     }
 
     // Private helper methods
@@ -312,68 +344,73 @@ class PatternLearningEngine @Inject constructor(
         return "$contextPrefix($storePattern)"
     }
 
-    private fun recordPattern(
+    /**
+     * V2: Record pattern using Room database
+     * Replaces SharedPreferences-based storage
+     */
+    private suspend fun recordPattern(
         fieldType: FieldType,
         pattern: String,
         context: ExtractionContext,
         success: Boolean
-    ) {
-        val patterns = learnedPatterns.getOrPut(fieldType) { mutableListOf() }
+    ) = withContext(Dispatchers.IO) {
         
-        // Find existing pattern or create new one
-        val existingPattern = patterns.find { it.pattern == pattern }
+        val brand = context.brandHint
+        
+        // V2: Query existing patterns from Room
+        val existingPatterns = if (brand != null) {
+            learnedPatternDao.getPatternsByBrandAndField(brand, fieldType.name)
+        } else {
+            learnedPatternDao.getPatternsByField(fieldType.name)
+        }
+        
+        // Find if this exact pattern already exists
+        val existingPattern = existingPatterns.find { it.regex == pattern }
         
         if (existingPattern != null) {
-            // Update existing pattern statistics
-            val stats = patternStats.getOrPut(existingPattern.id) { 
-                PatternStats(successCount = 0, failureCount = 0, contexts = mutableSetOf()) 
-            }
+            // Update existing pattern in Room
+            val newSuccessCount = existingPattern.successCount + if (success) 1 else 0
+            val newAttemptCount = existingPattern.attemptCount + 1
+            val newWeight = newSuccessCount.toFloat() / newAttemptCount
             
-            if (success) {
-                stats.successCount++
-            } else {
-                stats.failureCount++
-            }
+            val updatedPattern = existingPattern.copy(
+                weight = newWeight,
+                successCount = newSuccessCount,
+                attemptCount = newAttemptCount
+            )
             
-            context.brandHint?.let { stats.contexts.add(it) }
-            
-            // Recalculate confidence
-            existingPattern.confidence = calculateConfidence(stats)
-            existingPattern.lastUsed = Date()
+            learnedPatternDao.updatePattern(updatedPattern)
+            Log.d(TAG, "Updated pattern in Room: $pattern (weight: $newWeight, attempts: $newAttemptCount)")
             
         } else {
-            // Create new pattern
-            val newPattern = LearnedPattern(
-                id = UUID.randomUUID().toString(),
-                fieldType = fieldType,
-                pattern = pattern,
-                confidence = if (success) 0.7f else 0.3f,
-                createdAt = Date(),
-                lastUsed = Date()
-            )
-            
-            patterns.add(newPattern)
-            
-            val stats = PatternStats(
+            // Create new pattern in Room
+            val newPattern = com.example.coupontracker.data.local.LearnedPattern(
+                brand = brand,
+                fieldType = fieldType.name,
+                regex = pattern,
+                weight = if (success) 0.7f else 0.3f,
+                source = "learned",
+                sampleValue = "",  // Empty string since we don't track sample values yet
+                createdAt = System.currentTimeMillis(),
                 successCount = if (success) 1 else 0,
-                failureCount = if (success) 0 else 1,
-                contexts = mutableSetOf<String>().apply { 
-                    context.brandHint?.let { add(it) }
-                }
+                attemptCount = 1
             )
-            patternStats[newPattern.id] = stats
+            
+            learnedPatternDao.insertPattern(newPattern)
+            Log.d(TAG, "Created new pattern in Room: $pattern (brand: $brand, field: ${fieldType.name})")
         }
         
-        // Limit number of patterns per field
-        if (patterns.size > MAX_PATTERNS_PER_FIELD) {
-            patterns.sortBy { it.confidence }
-            val toRemove = patterns.take(patterns.size - MAX_PATTERNS_PER_FIELD)
-            patterns.removeAll(toRemove.toSet())
-            toRemove.forEach { patternStats.remove(it.id) }
+        // V2: Enforce limit via Room queries
+        val allPatternsForField = learnedPatternDao.getPatternsByField(fieldType.name)
+        if (allPatternsForField.size > MAX_PATTERNS_PER_FIELD) {
+            // Delete lowest weighted patterns to enforce limit
+            val toDelete = allPatternsForField
+                .sortedBy { it.weight }
+                .take(allPatternsForField.size - MAX_PATTERNS_PER_FIELD)
+            
+            toDelete.forEach { learnedPatternDao.deletePattern(it.id) }
+            Log.d(TAG, "Deleted ${toDelete.size} low-weight patterns to enforce limit of $MAX_PATTERNS_PER_FIELD")
         }
-        
-        // Save to persistent storage
-        saveLearnedPatterns()
     }
 
     private fun calculateConfidence(stats: PatternStats): Float {

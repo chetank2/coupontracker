@@ -158,8 +158,9 @@ class UniversalExtractionService @Inject constructor(
 
     /**
      * Get extraction statistics for monitoring
+     * V2: Now suspend because patternLearner queries Room
      */
-    fun getExtractionStats(): ExtractionStats {
+    suspend fun getExtractionStats(): ExtractionStats {
         val patternStats = patternLearner.getPatternStats()
         val featureImportance = confidenceScorer.getFeatureImportance()
         

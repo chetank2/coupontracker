@@ -138,6 +138,28 @@ interface LearnedPatternDao {
     suspend fun getPatternsForField(fieldType: String): List<LearnedPattern>
     
     /**
+     * Get patterns by field type (alias for compatibility)
+     */
+    suspend fun getPatternsByField(fieldType: String): List<LearnedPattern> = getPatternsForField(fieldType)
+    
+    /**
+     * Get patterns by brand and field type
+     */
+    @Query("""
+        SELECT * FROM learned_patterns_v1 
+        WHERE fieldType = :fieldType 
+        AND brand = :brand
+        ORDER BY weight DESC, createdAt DESC
+    """)
+    suspend fun getPatternsByBrandAndField(brand: String, fieldType: String): List<LearnedPattern>
+    
+    /**
+     * Get all patterns
+     */
+    @Query("SELECT * FROM learned_patterns_v1")
+    suspend fun getAllPatterns(): List<LearnedPattern>
+    
+    /**
      * Get all patterns for a specific brand
      */
     @Query("""
