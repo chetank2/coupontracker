@@ -43,6 +43,12 @@ class BatchScannerViewModel @Inject constructor(
         private const val TAG = "BatchScannerViewModel"
     }
 
+    init {
+        // V2: Enable OCR network availability (critical for OCR_FIRST and HYBRID strategies)
+        multiEngineOCR.setNetworkAvailability(true)
+        Log.d(TAG, "MultiEngineOCR network availability enabled for batch processing")
+    }
+
     /**
      * Add images to the batch
      * @param uris List of image URIs to add
