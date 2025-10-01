@@ -136,7 +136,7 @@ class TextExtractor {
         }
 
         // Look for "Brand:" pattern
-        val brandPattern = Pattern.compile("(?i)Brand:\\s*([A-Za-z0-9]+)")
+        val brandPattern = Pattern.compile("(?i)Brand:\\s*([\\p{L}\\p{M}\\p{N}]+)", Pattern.UNICODE_CASE)
         val brandMatcher = brandPattern.matcher(text)
         if (brandMatcher.find()) {
             val brand = brandMatcher.group(1)
@@ -144,11 +144,11 @@ class TextExtractor {
             return brand
         }
 
-        val lowerText = text.lowercase(Locale.getDefault())
+        val lowerText = text.lowercase(Locale.ROOT)
         val wordFrequency = mutableMapOf<String, Int>()
-        val wordMatcher = Pattern.compile("\\b([A-Za-z][A-Za-z'\\-]*)\\b").matcher(text)
+        val wordMatcher = Pattern.compile("\\b([\\p{L}][\\p{L}\\p{M}'\\-]*)\\b", Pattern.UNICODE_CASE).matcher(text)
         while (wordMatcher.find()) {
-            val word = wordMatcher.group(1)?.lowercase(Locale.getDefault()) ?: continue
+            val word = wordMatcher.group(1)?.lowercase(Locale.ROOT) ?: continue
             wordFrequency[word] = wordFrequency.getOrDefault(word, 0) + 1
         }
 
@@ -157,8 +157,8 @@ class TextExtractor {
         val lines = text.lines()
 
         fun addCandidate(raw: String?, isTitleCase: Boolean, lineIndex: Int) {
-            val candidate = raw?.trim()?.takeIf { it.length >= 3 } ?: return
-            val normalized = candidate.lowercase(Locale.getDefault())
+            val candidate = cleanCandidate(raw) ?: return
+            val normalized = candidate.lowercase(Locale.ROOT)
             if (COMMON_WORDS.contains(normalized)) {
                 return
             }
@@ -182,14 +182,47 @@ class TextExtractor {
             }
         }
 
-        val titlePattern = Pattern.compile("\\b([A-Z][a-z]{2,})\\b")
-        val allCapsPattern = Pattern.compile("\\b([A-Z]{3,})\\b")
+        data class TitleToken(val text: String, val start: Int, val end: Int)
+
+        fun mergeAdjacentTitleTokens(line: String, tokens: List<TitleToken>): List<String> {
+            if (tokens.isEmpty()) return emptyList()
+
+            val merged = mutableListOf<String>()
+            var currentText = tokens[0].text
+            var currentEnd = tokens[0].end
+
+            for (i in 1 until tokens.size) {
+                val next = tokens[i]
+                val between = line.substring(currentEnd, next.start)
+                if (between.all { it.isWhitespace() }) {
+                    currentText = "$currentText ${next.text}"
+                    currentEnd = next.end
+                } else {
+                    merged.add(currentText)
+                    currentText = next.text
+                    currentEnd = next.end
+                }
+            }
+
+            merged.add(currentText)
+            return merged
+        }
+
+        val titlePattern = Pattern.compile("\\b([\\p{Lu}][\\p{L}\\p{M}]{2,})\\b", Pattern.UNICODE_CASE)
+        val allCapsPattern = Pattern.compile("\\b([\\p{Lu}\\p{N}]{3,})\\b", Pattern.UNICODE_CASE)
 
         lines.forEachIndexed { index, line ->
             val titleMatcher = titlePattern.matcher(line)
+            val titleTokens = mutableListOf<TitleToken>()
             while (titleMatcher.find()) {
-                addCandidate(titleMatcher.group(1), true, index)
+                val token = titleMatcher.group(1) ?: continue
+                titleTokens.add(TitleToken(token, titleMatcher.start(), titleMatcher.end()))
+                addCandidate(token, true, index)
             }
+
+            mergeAdjacentTitleTokens(line, titleTokens)
+                .filter { it.contains(' ') }
+                .forEach { combined -> addCandidate(combined, true, index) }
 
             val capsMatcher = allCapsPattern.matcher(line)
             while (capsMatcher.find()) {
@@ -208,22 +241,46 @@ class TextExtractor {
 
         // Try to find store names by common patterns
         val storePatterns = listOf(
-            Pattern.compile("(?i)from\\s+([A-Za-z0-9]+)"),
-            Pattern.compile("(?i)at\\s+([A-Za-z0-9]+)"),
-            Pattern.compile("(?i)on\\s+([A-Za-z0-9]+)"),
-            Pattern.compile("(?i)via\\s+([A-Za-z0-9]+)\\s+pay")
+            Pattern.compile("(?i)from\\s+(([\\p{L}\\p{M}\\p{N}]+(?:[&.'-]?\\s*[\\p{L}\\p{M}\\p{N}]+)*))", Pattern.UNICODE_CASE),
+            Pattern.compile("(?i)at\\s+(([\\p{L}\\p{M}\\p{N}]+(?:[&.'-]?\\s*[\\p{L}\\p{M}\\p{N}]+)*))", Pattern.UNICODE_CASE),
+            Pattern.compile("(?i)on\\s+(([\\p{L}\\p{M}\\p{N}]+(?:[&.'-]?\\s*[\\p{L}\\p{M}\\p{N}]+)*))", Pattern.UNICODE_CASE),
+            Pattern.compile("(?i)via\\s+(([\\p{L}\\p{M}\\p{N}]+(?:[&.'-]?\\s*[\\p{L}\\p{M}\\p{N}]+)*))\\s+pay", Pattern.UNICODE_CASE)
         )
 
         for (pattern in storePatterns) {
             val storeMatcher = pattern.matcher(text)
             if (storeMatcher.find()) {
-                val name = storeMatcher.group(1)
+                val name = cleanCandidate(storeMatcher.group(1)) ?: continue
                 Log.d(TAG, "Found store name from pattern: $name")
                 return name
             }
         }
 
         return null
+    }
+
+    private fun cleanCandidate(raw: String?): String? {
+        val initial = raw?.trim()?.takeIf { it.length >= 3 } ?: return null
+        val tokens = initial.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        if (tokens.isEmpty()) {
+            return null
+        }
+
+        val builder = mutableListOf<String>()
+        for (token in tokens) {
+            val trimmedToken = token.trim().trimEnd(',', '.', ';', ':')
+            if (trimmedToken.isEmpty()) continue
+
+            val leadingLetter = trimmedToken.firstOrNull { it.isLetter() }
+            if (builder.isNotEmpty() && leadingLetter != null && leadingLetter.isLowerCase()) {
+                break
+            }
+
+            builder.add(trimmedToken)
+        }
+
+        val cleaned = builder.joinToString(" ").trim()
+        return cleaned.takeIf { it.length >= 3 }
     }
 
     /**
