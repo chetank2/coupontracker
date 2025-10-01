@@ -176,6 +176,40 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         // Detect model format
         val isGguf = com.example.coupontracker.model.ModelPaths.isGgufModel(modelDir)
         
+        if (isGguf) {
+            // GGUF model detected - verify it's valid
+            val ggufFile = File(modelDir, "ggml-model-Q4_K_M.gguf")
+            Log.d(TAG, "✅ GGUF model detected: ${ggufFile.absolutePath}")
+            Log.d(TAG, "📦 Size: ${ggufFile.length() / 1_000_000}MB")
+            
+            // Verify GGUF file structure
+            val ggufLoader = GgufModelLoader(context)
+            val metadata = ggufLoader.verifyGgufFile(ggufFile)
+            
+            if (metadata == null) {
+                throw IllegalStateException("Invalid GGUF file format")
+            }
+            
+            Log.d(TAG, "✅ GGUF verification passed")
+            Log.d(TAG, "  Version: ${metadata.version}")
+            Log.d(TAG, "  Tensors: ${metadata.tensorCount}")
+            
+            // ⚠️ IMPORTANT: Real GGUF inference requires:
+            // 1. Vision model support (llama.cpp + LLaVA extensions)
+            // 2. Image preprocessing pipeline
+            // 3. Multimodal tensor handling
+            //
+            // Current JNI bridge is MOCK - see REAL_INFERENCE_GUIDE.md
+            //
+            // To enable real inference:
+            // 1. Build llama.cpp with vision support
+            // 2. Update JNI bridge (llama_jni.cpp)
+            // 3. Set -DBUILD_MOCK_JNI=OFF
+            
+            Log.w(TAG, "⚠️ GGUF model loaded but inference is MOCK")
+            Log.w(TAG, "⚠️ See REAL_INFERENCE_GUIDE.md for real inference setup")
+        }
+        
         // Load native library
         if (!MlcLlmNative.loadLibrary(context)) {
             throw IllegalStateException("Failed to load MLC-LLM native library")
@@ -187,7 +221,6 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         val handle = if (isGguf) {
             // For GGUF: pass the GGUF file path directly
             val ggufFile = File(modelDir, "ggml-model-Q4_K_M.gguf")
-            Log.d(TAG, "Loading GGUF model from: ${ggufFile.absolutePath}")
             
             nativeInterface.initializeModel(
                 ggufFile.absolutePath,  // GGUF file path

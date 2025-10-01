@@ -76,4 +76,12 @@ object LlmModule {
             initialize()
         }
     }
+    
+    @Provides
+    @Singleton
+    fun provideGgufModelLoader(
+        @ApplicationContext context: Context
+    ): com.example.coupontracker.llm.GgufModelLoader {
+        return com.example.coupontracker.llm.GgufModelLoader(context)
+    }
 }
