@@ -69,7 +69,13 @@ class CouponFormViewModel @Inject constructor(
                 // Convert to coupon info
                 val couponInfo = mapCouponToCouponInfo(coupon)
 
-                updateState { it.copy(isProcessing = false, couponInfo = couponInfo) }
+                updateState {
+                    it.copy(
+                        isProcessing = false,
+                        couponInfo = couponInfo,
+                        persistedImageUri = coupon.imageUri
+                    )
+                }
             } catch (e: Exception) {
                 handleError(e, "Error processing image")
             }
@@ -113,9 +119,11 @@ class CouponFormViewModel @Inject constructor(
                 }
 
                 // Create and save coupon object
+                val persistedImageUri = _uiState.value.persistedImageUri ?: imageUri
+
                 val coupon = createCoupon(
                     storeName, description, amount, code,
-                    expiryDate, category, imageUri
+                    expiryDate, category, persistedImageUri
                 )
                 val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
                 val savedCouponId = couponRepository.saveOrMergeCoupon(
@@ -240,7 +248,8 @@ data class CouponFormUiState(
     val couponInfo: CouponInfo? = null,
     val error: String? = null,
     val saveResult: CouponSaveResult? = null,
-    val savedCoupon: Coupon? = null
+    val savedCoupon: Coupon? = null,
+    val persistedImageUri: String? = null
 )
 
 enum class CouponSaveResult {
