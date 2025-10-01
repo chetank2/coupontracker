@@ -1106,13 +1106,9 @@ class LocalLlmOcrService(
                 Log.d(TAG, "Model-based OCR fallback result: $cleanedResult")
                 return@withContext cleanedResult
             } catch (e2: Exception) {
-                Log.e(TAG, "All OCR methods failed", e2)
-
-                // Return minimal CouponInfo as last resort
-                CouponInfo(
-                    storeName = "Unknown Store",
-                    description = cleanDescription("All OCR methods failed - please try again")
-                )
+                Log.e(TAG, "All OCR methods failed - propagating exception", e2)
+                // Don't return hardcoded errors - propagate exception to allow progressive pipeline fallback
+                throw e2
             }
         }
     }

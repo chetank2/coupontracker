@@ -89,15 +89,9 @@ class ModelBasedOCRService(
             Log.d(TAG, "Coupon processing complete: $combinedInfo")
             combinedInfo
         } catch (e: Exception) {
-            Log.e(TAG, "Error processing coupon image", e)
-            // Return a minimal coupon info object if processing fails
-            CouponInfo(
-                storeName = "Unknown Store",
-                description = "Error processing coupon",
-                expiryDate = null,
-                cashbackAmount = null,
-                redeemCode = null
-            )
+            Log.e(TAG, "Error processing coupon image - propagating exception", e)
+            // Don't return hardcoded errors - propagate exception to allow progressive pipeline fallback
+            throw e
         }
     }
 

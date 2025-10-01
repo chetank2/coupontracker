@@ -18,20 +18,21 @@ import java.io.IOException
 import java.util.Date
 
 /**
- * Utility class to process images and extract coupon information using Tesseract OCR
+ * Utility class to process images and extract coupon information using progressive extraction pipeline
  */
 class ImageProcessor(
     private val context: Context,
     private val ocrEngine: OcrEngine,
-    private val injectedLocalLlmOcrService: LocalLlmOcrService? = null
+    private val injectedLocalLlmOcrService: LocalLlmOcrService? = null,
+    private val progressiveExtractionService: com.example.coupontracker.extraction.ProgressiveExtractionService? = null
 ) {
     private val TAG = "ImageProcessor"
     private val textExtractor = TextExtractor()
 
-    // Coupon pattern recognizer
+    // Coupon pattern recognizer (legacy fallback)
     private var couponPatternRecognizer: CouponPatternRecognizer = CouponPatternRecognizer(context, ocrEngine)
 
-    // OCR services
+    // OCR services (legacy fallback)
     private var modelBasedOCRService: ModelBasedOCRService = ModelBasedOCRService(context, ocrEngine)
     private var localLlmOcrService: LocalLlmOcrService = injectedLocalLlmOcrService ?: LocalLlmOcrService(context, ocrEngine)
 
@@ -40,6 +41,9 @@ class ImageProcessor(
 
     // Secure preferences manager - lazy initialization to avoid ANR
     private val securePreferencesManager by lazy { SecurePreferencesManager(context) }
+    
+    // Feature flag for progressive extraction
+    private val USE_PROGRESSIVE_EXTRACTION = true  // Set to true to use new pipeline
 
     // SharedPreferences listener - we've simplified the OCR approach
     private val sharedPreferencesListener =
@@ -119,6 +123,15 @@ class ImageProcessor(
         try {
             Log.d(TAG, "Processing bitmap image")
 
+            // Check if progressive extraction is enabled and available
+            if (USE_PROGRESSIVE_EXTRACTION && progressiveExtractionService != null) {
+                Log.d(TAG, "✨ Using PROGRESSIVE extraction pipeline")
+                return@withContext processWithProgressivePipeline(bitmap, captureTimestamp)
+            }
+
+            // Legacy extraction flow (fallback)
+            Log.d(TAG, "Using LEGACY extraction flow")
+            
             // Get the selected API type from preferences
             val selectedApiType = securePreferencesManager.getSelectedApiType()
             val llmModelDownloaded = securePreferencesManager.getLlmModelDownloaded()
@@ -153,6 +166,55 @@ class ImageProcessor(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process image", e)
             throw IOException("Failed to process image: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Process image using progressive extraction pipeline
+     */
+    private suspend fun processWithProgressivePipeline(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo {
+        return withContext(Dispatchers.IO) {
+            try {
+                Log.d(TAG, "Step 1: Extracting OCR text")
+                val ocrText = ocrEngine.recognize(bitmap)
+                Log.d(TAG, "OCR extracted ${ocrText.length} characters")
+                
+                if (ocrText.isBlank()) {
+                    Log.w(TAG, "OCR text is empty, falling back to legacy")
+                    return@withContext fallbackToModelBasedOcr(bitmap, captureTimestamp)
+                }
+                
+                Log.d(TAG, "Step 2: Calling progressive extraction pipeline")
+                val progressiveResult = progressiveExtractionService!!.extractCoupon(
+                    image = bitmap,
+                    ocrText = ocrText,
+                    ocrBlocks = emptyList(),
+                    imageUri = "bitmap://${System.currentTimeMillis()}"
+                )
+                
+                Log.d(TAG, "✅ Progressive extraction complete: " +
+                    "store='${progressiveResult.coupon.storeName}', " +
+                    "desc='${progressiveResult.coupon.description.take(50)}...', " +
+                    "confidence=${progressiveResult.confidence}, " +
+                    "passes=${progressiveResult.passesUsed}")
+                
+                // Convert Coupon to CouponInfo
+                val couponInfo = CouponInfo(
+                    storeName = progressiveResult.coupon.storeName,
+                    description = progressiveResult.coupon.description,
+                    cashbackAmount = if (progressiveResult.coupon.cashbackAmount > 0.0) 
+                        progressiveResult.coupon.cashbackAmount else null,
+                    expiryDate = progressiveResult.coupon.expiryDate,
+                    redeemCode = progressiveResult.coupon.redeemCode
+                )
+                
+                Log.d(TAG, "Converted to CouponInfo: $couponInfo")
+                return@withContext couponInfo
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Progressive extraction failed, falling back to legacy", e)
+                return@withContext fallbackToModelBasedOcr(bitmap, captureTimestamp)
+            }
         }
     }
     
