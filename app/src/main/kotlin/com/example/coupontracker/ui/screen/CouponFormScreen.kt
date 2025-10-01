@@ -71,11 +71,15 @@ fun CouponFormScreen(
             description = info.description
             amount = info.cashbackAmount?.toString() ?: ""
             code = info.redeemCode ?: ""
+            category = info.category ?: ""
 
             // Format expiry date if available
-            info.expiryDate?.let { date ->
+            val expiryDate = info.expiryDate
+            if (expiryDate != null) {
                 val format = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
-                expiryDateString = format.format(date)
+                expiryDateString = format.format(expiryDate)
+            } else {
+                expiryDateString = ""
             }
         }
     }
