@@ -65,18 +65,21 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     /**
      * Check if the model is available on device
      * Verifies all required files exist and are not empty
+     * Supports both GGUF and legacy MLC formats
      * Note: Runtime .so is in APK, not in model directory
      */
     fun isModelAvailable(): Boolean {
-        // Check using ModelPaths constants (no .so required in models dir)
-        val requiredFiles = com.example.coupontracker.model.ModelPaths.REQUIRED_FILES.map { 
-            File(modelDir, it)
-        }
+        // Get required files based on what's actually in the directory
+        val requiredFiles = com.example.coupontracker.model.ModelPaths.getRequiredFiles(modelDir)
+        val isGguf = com.example.coupontracker.model.ModelPaths.isGgufModel(modelDir)
+        
+        Log.d(TAG, "Checking model availability (format: ${if (isGguf) "GGUF" else "Legacy MLC"})")
         
         val missingFiles = mutableListOf<String>()
-        for (file in requiredFiles) {
+        for (requiredPath in requiredFiles) {
+            val file = File(modelDir, requiredPath)
             if (!file.exists() || file.length() == 0L) {
-                missingFiles.add(file.name)
+                missingFiles.add(requiredPath)
             }
         }
         
@@ -162,6 +165,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     
     /**
      * Load model or throw exception (internal method)
+     * Supports both GGUF and legacy MLC formats
      */
     private suspend fun loadModelOrThrow(): Long {
         // Check if model files exist
@@ -169,19 +173,33 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             throw IllegalStateException("Model files not found. Please download the model first.")
         }
         
+        // Detect model format
+        val isGguf = com.example.coupontracker.model.ModelPaths.isGgufModel(modelDir)
+        
         // Load native library
         if (!MlcLlmNative.loadLibrary(context)) {
             throw IllegalStateException("Failed to load MLC-LLM native library")
         }
         
-        Log.d(TAG, "Loading MiniCPM-Llama3-V2.5 model...")
+        Log.d(TAG, "Loading MiniCPM-Llama3-V2.5 model (format: ${if (isGguf) "GGUF" else "Legacy MLC"})...")
         
         // Initialize model through native interface
-        // Pass model directory (not .so path - runtime is in APK)
-        val handle = nativeInterface.initializeModel(
-            modelDir.absolutePath,
-            configPath.absolutePath
-        )
+        val handle = if (isGguf) {
+            // For GGUF: pass the GGUF file path directly
+            val ggufFile = File(modelDir, "ggml-model-Q4_K_M.gguf")
+            Log.d(TAG, "Loading GGUF model from: ${ggufFile.absolutePath}")
+            
+            nativeInterface.initializeModel(
+                ggufFile.absolutePath,  // GGUF file path
+                modelDir.absolutePath   // Model directory as config (for future use)
+            )
+        } else {
+            // For legacy MLC: pass model directory and config
+            nativeInterface.initializeModel(
+                modelDir.absolutePath,
+                configPath.absolutePath
+            )
+        }
         
         if (handle == 0L) {
             throw IllegalStateException("Failed to initialize MiniCPM model")

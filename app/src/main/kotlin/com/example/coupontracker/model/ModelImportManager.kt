@@ -70,8 +70,9 @@ class ModelImportManager @Inject constructor(
             val modelDir = ModelPaths.modelDir(context)
             val stagingDir = File(modelRoot, "${ModelPaths.MODEL_ID}$STAGING_SUFFIX")
             
-            // Check available space (need ~2.5 GB)
-            val requiredSpace = 2_500_000_000L
+            // Check available space (need ~7.5 GB for GGUF, 2.5 GB for legacy)
+            // Use larger requirement to support both formats
+            val requiredSpace = 7_500_000_000L
             val availableSpace = modelRoot.usableSpace
             if (availableSpace < requiredSpace) {
                 return@withContext ImportResult.Failed(
@@ -111,8 +112,15 @@ class ModelImportManager @Inject constructor(
             
             onProgress(ImportResult.Progress(75, "Verifying required files..."))
             
+            // Detect format and get appropriate required files
+            val requiredFiles = ModelPaths.getRequiredFiles(stagingDir)
+            val minFileSizes = ModelPaths.getMinFileSizes(stagingDir)
+            val isGguf = ModelPaths.isGgufModel(stagingDir)
+            
+            Log.d(TAG, "Detected model format: ${if (isGguf) "GGUF" else "Legacy MLC"}")
+            
             // Verify all required files exist and meet size thresholds
-            for (requiredPath in ModelPaths.REQUIRED_FILES) {
+            for (requiredPath in requiredFiles) {
                 val file = File(stagingDir, requiredPath)
                 
                 if (!file.exists()) {
@@ -127,7 +135,7 @@ class ModelImportManager @Inject constructor(
                 }
                 
                 // Check minimum size thresholds
-                val minSize = ModelPaths.MIN_FILE_SIZES[requiredPath]
+                val minSize = minFileSizes[requiredPath]
                 if (minSize != null && actualSize < minSize) {
                     cleanupStaging(stagingDir)
                     return@withContext ImportResult.Failed(
@@ -358,6 +366,7 @@ class ModelImportManager @Inject constructor(
     
     /**
      * Check if model is currently installed
+     * Supports both GGUF and legacy MLC formats
      */
     fun isModelInstalled(): Boolean {
         val modelDir = ModelPaths.modelDir(context)
@@ -367,8 +376,11 @@ class ModelImportManager @Inject constructor(
             return false
         }
         
+        // Get required files based on what's actually installed
+        val requiredFiles = ModelPaths.getRequiredFiles(modelDir)
+        
         // Verify all required files still exist
-        return ModelPaths.REQUIRED_FILES.all { path ->
+        return requiredFiles.all { path ->
             val file = File(modelDir, path)
             file.exists() && file.length() > 0
         }
