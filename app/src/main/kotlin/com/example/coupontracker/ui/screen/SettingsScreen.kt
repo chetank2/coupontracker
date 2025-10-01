@@ -1001,24 +1001,39 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
             Spacer(modifier = Modifier.height(12.dp))
             
             // Action Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                // Import Button
-                if (!uiState.isModelInstalled) {
+            if (!uiState.isModelInstalled) {
+                // Import/Download options when model not installed
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Button(
+                        onClick = { modelImportViewModel.downloadModel() },
+                        enabled = !uiState.isImporting,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Download Model (~4.5MB)")
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    OutlinedButton(
                         onClick = {
                             filePicker.launch(arrayOf("application/zip", "application/octet-stream"))
                         },
                         enabled = !uiState.isImporting,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
+                        Icon(imageVector = Icons.Default.Memory, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Import")
+                        Text("Import from File")
                     }
-                } else {
+                }
+            } else {
+                // Test/Delete buttons when model is installed
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     // Test Button
                     OutlinedButton(
                         onClick = { modelImportViewModel.runSelfTest() },

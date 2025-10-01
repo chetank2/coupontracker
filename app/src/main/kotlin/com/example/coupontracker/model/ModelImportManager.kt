@@ -256,8 +256,8 @@ class ModelImportManager @Inject constructor(
                         throw SecurityException("Zip entry escapes target directory: $entryName")
                     }
                     
-                    // Reject symlinks
-                    if (file.exists() && Files.isSymbolicLink(file.toPath())) {
+                    // Reject symlinks (API 24+ compatible)
+                    if (file.exists() && isSymbolicLinkCompat(file)) {
                         throw SecurityException("Symlink detected in zip: $entryName")
                     }
                     
@@ -415,6 +415,29 @@ class ModelImportManager @Inject constructor(
             true
         } catch (e: Exception) {
             Log.e(TAG, "Error deleting model", e)
+            false
+        }
+    }
+    
+    /**
+     * Check if file is a symbolic link (API 24+ compatible)
+     * Uses java.nio.file.Files for API 26+ and canonical path comparison for API 24-25
+     */
+    private fun isSymbolicLinkCompat(file: File): Boolean {
+        return try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                // API 26+: Use Files.isSymbolicLink
+                Files.isSymbolicLink(file.toPath())
+            } else {
+                // API 24-25: Compare canonical vs absolute path
+                // Symlinks have different canonical and absolute paths
+                val canonical = file.canonicalPath
+                val absolute = file.absolutePath
+                canonical != absolute
+            }
+        } catch (e: Exception) {
+            // If we can't determine, assume it's not a symlink (fail open)
+            Log.w(TAG, "Could not check for symlink: ${file.path}", e)
             false
         }
     }

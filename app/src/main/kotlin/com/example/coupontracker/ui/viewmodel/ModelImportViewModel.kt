@@ -6,10 +6,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 data class ModelImportUiState(
@@ -28,7 +30,8 @@ data class ModelImportUiState(
 class ModelImportViewModel @Inject constructor(
     application: Application,
     private val modelImportManager: ModelImportManager,
-    private val modelSelfTest: ModelSelfTest
+    private val modelSelfTest: ModelSelfTest,
+    private val modelDownloadManager: com.example.coupontracker.llm.ModelDownloadManager
 ) : AndroidViewModel(application) {
     
     private val _uiState = MutableStateFlow(ModelImportUiState())
@@ -96,18 +99,25 @@ class ModelImportViewModel @Inject constructor(
     }
     
     fun runSelfTest() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                selfTestRunning = true,
-                selfTestResult = null
-            )
+        viewModelScope.launch(Dispatchers.IO) {
+            // Update UI state on main thread
+            withContext(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(
+                    selfTestRunning = true,
+                    selfTestResult = null
+                )
+            }
             
+            // Run heavy model loading on IO thread (prevents ANR)
             val result = modelSelfTest.runSelfTest()
             
-            _uiState.value = _uiState.value.copy(
-                selfTestRunning = false,
-                selfTestResult = result
-            )
+            // Update UI state on main thread
+            withContext(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(
+                    selfTestRunning = false,
+                    selfTestResult = result
+                )
+            }
         }
     }
     
@@ -125,6 +135,58 @@ class ModelImportViewModel @Inject constructor(
     
     fun clearError() {
         _uiState.value = _uiState.value.copy(importError = null)
+    }
+    
+    /**
+     * Download model from internet
+     * Alternative to importing via SAF
+     */
+    fun downloadModel() {
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                _uiState.value = _uiState.value.copy(
+                    isImporting = true,
+                    importProgress = 0,
+                    importMessage = "Starting download...",
+                    importError = null
+                )
+            }
+            
+            val result = modelDownloadManager.downloadModel { progress ->
+                viewModelScope.launch(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        importProgress = progress.progressPercent,
+                        importMessage = progress.statusMessage
+                    )
+                }
+            }
+            
+            withContext(Dispatchers.Main) {
+                when (result) {
+                    is com.example.coupontracker.llm.DownloadResult.Success -> {
+                        _uiState.value = _uiState.value.copy(
+                            isImporting = false,
+                            isModelInstalled = true,
+                            modelSizeMB = result.modelSizeMB.toInt(),
+                            importProgress = 100,
+                            importMessage = "Download complete"
+                        )
+                        
+                        // Check for updated model info
+                        checkInstalledModel()
+                        
+                        // Auto-run self-test
+                        runSelfTest()
+                    }
+                    is com.example.coupontracker.llm.DownloadResult.Error -> {
+                        _uiState.value = _uiState.value.copy(
+                            isImporting = false,
+                            importError = result.message
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
