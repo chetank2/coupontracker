@@ -135,6 +135,15 @@ class TextExtractorTest {
         assertNotNull("Store name should not be null", storeName)
         assertEquals("IXIGO", storeName)
     }
+
+    @Test
+    fun `extractStoreName handles accented mid sentence brand`() {
+        val text = "Enjoy a croissant at the Zepto Café kiosk before noon."
+
+        val storeName = extractor.extractStoreName(text)
+
+        assertEquals("Zepto Café", storeName)
+    }
     
     @Test
     fun `test extractDescription from IXIGO coupon`() {

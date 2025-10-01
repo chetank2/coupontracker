@@ -244,14 +244,20 @@ class UniversalFieldDetector @Inject constructor(
         
         // Look for explicit store indicators
         val storePatterns = listOf(
-            Regex("""(?:from|at|by|shop|store|brand)\s+([A-Za-z0-9\s&.'-]+)""", RegexOption.IGNORE_CASE),
-            Regex("""^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)"""), // Capitalized words at start
+            Regex(
+                """(?:from|at|by|shop|store|brand)\s+(([\p{L}\p{M}\p{N}&.'-]+(?:\s+[\p{L}\p{M}\p{N}&.'-]+)*))""",
+                setOf(RegexOption.IGNORE_CASE, RegexOption.UNICODE_CASE)
+            ),
+            Regex(
+                """\b([\p{Lu}][\p{L}\p{M}]+(?:\s+[\p{Lu}][\p{L}\p{M}]+)*)""",
+                RegexOption.UNICODE_CASE
+            ),
         )
         
         for (pattern in storePatterns) {
             pattern.findAll(text).forEach { match ->
-                val storeName = match.groupValues[1].trim()
-                if (storeName.length >= 3 && storeName.length <= 30) {
+                val storeName = cleanStoreCandidate(match.groupValues[1])
+                if (storeName.length in 3..30) {
                     val confidence = calculateStoreNameConfidence(storeName, text)
                     candidates.add(
                         ExtractionCandidate(
@@ -390,11 +396,35 @@ class UniversalFieldDetector @Inject constructor(
         var confidence = 0.4f
         
         // Boost confidence for known patterns
-        if (storeName.matches(Regex("[A-Z][a-z]+"))) confidence += 0.2f // Proper case
+        if (storeName.matches(Regex("""[\p{Lu}][\p{L}\p{M}]+(?:\s+[\p{Lu}][\p{L}\p{M}]+)*""", RegexOption.UNICODE_CASE))) {
+            confidence += 0.2f // Proper case
+        }
         if (storeName.length in 3..15) confidence += 0.1f // Reasonable length
         if (fullText.indexOf(storeName) < 100) confidence += 0.1f // Near beginning
-        
+
         return confidence.coerceAtMost(1.0f)
+    }
+
+    private fun cleanStoreCandidate(raw: String): String {
+        val tokens = raw.trim().split("\\s+".toRegex()).filter { it.isNotBlank() }
+        if (tokens.isEmpty()) {
+            return ""
+        }
+
+        val builder = mutableListOf<String>()
+        for (token in tokens) {
+            val trimmedToken = token.trim().trimEnd(',', '.', ';', ':')
+            if (trimmedToken.isEmpty()) {
+                continue
+            }
+            val leadingLetter = trimmedToken.firstOrNull { it.isLetter() }
+            if (builder.isNotEmpty() && leadingLetter != null && leadingLetter.isLowerCase()) {
+                break
+            }
+            builder.add(trimmedToken)
+        }
+
+        return builder.joinToString(" ").trim()
     }
     
     private suspend fun extractTextFromRegion(image: Bitmap, region: Region): String {

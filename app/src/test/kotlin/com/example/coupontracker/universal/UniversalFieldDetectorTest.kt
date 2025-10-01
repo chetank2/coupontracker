@@ -10,6 +10,7 @@ import com.example.coupontracker.universal.RegionType.CODE
 import com.example.coupontracker.universal.RegionType.LOGO
 import io.mockk.any
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.firstArg
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -50,6 +51,37 @@ class UniversalFieldDetectorTest {
         assertTrue(
             "Expected code candidates to include normalized code text",
             codeCandidates?.any { it.text == "SAVE20" && it.source == VISUAL_REGION } == true
+        )
+    }
+
+    @Test
+    fun detectStoreNames_handlesAccentedSequences() = runTest {
+        val patternLearner = mockk<PatternLearningEngine> {
+            coEvery { getRelevantPatterns(any(), any()) } returns emptyList()
+        }
+        val layoutAnalyzer = mockk<UniversalLayoutAnalyzer> {
+            coEvery { analyzeCouponStructure(any()) } returns CouponLayout()
+        }
+        val confidenceScorer = mockk<AdaptiveConfidenceScorer> {
+            coEvery { scoreCandidate(any(), any()) } answers { firstArg<ExtractionCandidate>().confidence }
+        }
+        val ocrEngine = mockk<OcrEngine> {
+            coEvery { recognize(any()) } returns ""
+            coEvery { recognizeWithBoxes(any()) } returns emptyList()
+            every { isReady() } returns true
+        }
+        val detector = UniversalFieldDetector(patternLearner, layoutAnalyzer, confidenceScorer, ocrEngine)
+
+        val bitmap = Bitmap.createBitmap(10, 10, Bitmap.Config.ARGB_8888)
+        val text = "Limited-time latte deal! Grab yours at Zepto Café before 5PM."
+
+        val results = detector.detectFields(bitmap, text, ExtractionContext())
+
+        val storeCandidates = results[FieldType.STORE_NAME].orEmpty()
+
+        assertTrue(
+            "Expected store candidates to include the accented store name",
+            storeCandidates.any { it.text == "Zepto Café" }
         )
     }
 
