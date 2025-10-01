@@ -47,6 +47,12 @@ fun CouponFormScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
 
+    val persistedImageUri = uiState.persistedImageUri
+    val previewImageUriString = persistedImageUri ?: imageUri
+    val previewImageUri = previewImageUriString
+        ?.takeIf { it.isNotBlank() }
+        ?.let { Uri.parse(it) }
+
     // Form fields
     var storeName by remember { mutableStateOf(uiState.couponInfo?.storeName ?: "") }
     var description by remember { mutableStateOf(uiState.couponInfo?.description ?: "") }
@@ -130,7 +136,7 @@ fun CouponFormScreen(
             onExpiryDateStringChange = { expiryDateString = it },
             category = category,
             onCategoryChange = { category = it },
-            imageUri = imageUri?.let { Uri.parse(it) },
+            imageUri = previewImageUri,
             onSave = {
                 val amountValue = amount.toDoubleOrNull() ?: 0.0
                 val expiryDate = try {
@@ -151,7 +157,7 @@ fun CouponFormScreen(
                     code = code,
                     expiryDate = expiryDate,
                     category = category,
-                    imageUri = imageUri
+                    imageUri = previewImageUriString?.takeIf { it.isNotBlank() }
                 )
             },
             isSaving = uiState.isSaving,
