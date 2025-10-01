@@ -20,7 +20,7 @@ class GgufModelLoader @Inject constructor(
 ) {
     companion object {
         private const val TAG = "GgufModelLoader"
-        private const val GGUF_MAGIC = 0x46554747  // "GGUF"
+        private const val GGUF_MAGIC = 0x47475546  // "GGUF"
     }
     
     data class GgufMetadata(
