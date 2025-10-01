@@ -178,7 +178,7 @@ class ModelImportViewModel @Inject constructor(
                 
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
-                        importMessage = "Downloading ${mainModel.filename} (~2.5GB)..."
+                        importMessage = "Downloading ${mainModel.filename} (~4.7GB)..."
                     )
                 }
                 

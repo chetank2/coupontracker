@@ -31,7 +31,7 @@ object RealModelConfig {
     val MAIN_MODEL = ModelFile(
         filename = "ggml-model-Q4_K_M.gguf",
         url = "$HF_BASE_URL/ggml-model-Q4_K_M.gguf",
-        expectedSize = 2_500_000_000L,  // ~2.5GB (approximate)
+        expectedSize = 4_681_089_344L,  // ~4.7GB actual size from Hugging Face
         sha256 = "COMPUTE_ON_FIRST_DOWNLOAD",  // Will be updated after verification
         required = true
     )
@@ -57,8 +57,8 @@ object RealModelConfig {
     val ALL_FILES = listOf(MAIN_MODEL, TOKENIZER, CONFIG)
     
     // Storage Requirements
-    const val REQUIRED_FREE_SPACE = 3_500_000_000L  // 3.5GB (model + buffer)
-    const val MIN_MODEL_SIZE = 2_000_000_000L       // 2GB minimum (reject if smaller)
+    const val REQUIRED_FREE_SPACE = 7_500_000_000L  // 7.5GB (model + buffer)
+    const val MIN_MODEL_SIZE = 3_500_000_000L       // 3.5GB minimum (reject if smaller)
     
     // Download Configuration
     const val DOWNLOAD_TIMEOUT_MS = 300_000L  // 5 minutes per chunk

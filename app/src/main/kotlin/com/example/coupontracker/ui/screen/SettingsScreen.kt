@@ -1044,7 +1044,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                     ) {
                         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Download Model (~2-3GB)")
+                        Text("Download Model (~4-5GB)")
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))

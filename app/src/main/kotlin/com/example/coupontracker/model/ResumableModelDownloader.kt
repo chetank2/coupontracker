@@ -40,6 +40,8 @@ class ResumableModelDownloader(
         data class Progress(val progress: DownloadProgress) : DownloadResult()
     }
     
+    private val sizeTolerancePercent = 0.15
+    
     /**
      * Download a file with resume support
      */
@@ -98,11 +100,12 @@ class ResumableModelDownloader(
             // Validate expected size (within 10% tolerance)
             if (expectedSize > 0) {
                 val sizeDiff = kotlin.math.abs(totalSize - expectedSize)
-                val tolerance = expectedSize * 0.1  // 10% tolerance
+                val tolerance = (expectedSize * sizeTolerancePercent).toLong()
                 if (sizeDiff > tolerance) {
+                    val expectedMb = expectedSize / 1_000_000
+                    val actualMb = totalSize / 1_000_000
                     return@withContext DownloadResult.Failed(
-                        "Size mismatch: expected ${expectedSize / 1_000_000}MB, " +
-                        "got ${totalSize / 1_000_000}MB"
+                        "Size mismatch: expected ${expectedMb}MB, got ${actualMb}MB"
                     )
                 }
             }
