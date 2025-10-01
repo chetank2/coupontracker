@@ -25,18 +25,16 @@ android {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
 
-        // CMake configuration for MLC-LLM
+        // CMake configuration for llama.cpp vision
         externalNativeBuild {
             cmake {
                 cppFlags += listOf("-std=c++17", "-frtti", "-fexceptions")
                 arguments += listOf(
                     "-DANDROID_STL=c++_shared",
-                    "-DANDROID_PLATFORM=android-26",
-                    "-DBUILD_MOCK_JNI=ON"
-                    // NOTE: MLC-LLM libraries in app/libs/mlc_llm/lib/ are placeholders
-                    // Real .so files require compilation from MLC-LLM source (GPU server, ~4-6 hours)
-                    // See MLC_LLM_INTEGRATION_GUIDE.md for instructions to build real libraries
-                    // Remove BUILD_MOCK_JNI=ON after populating with actual binaries
+                    "-DANDROID_PLATFORM=android-26"
+                    // NOTE: Uses llama_vision_jni.cpp for real vision inference
+                    // Works in simplified mode without llama.cpp (for development)
+                    // Add libllama.so to app/src/main/jniLibs/ for full inference
                 )
             }
         }
