@@ -52,6 +52,7 @@ class SecurePreferencesManager @Inject constructor(
         const val KEY_LLM_AUTO_DOWNLOAD_ENABLED = "llm_auto_download_enabled"
         const val KEY_LLM_DOWNLOAD_WIFI_ONLY = "llm_download_wifi_only"
         const val KEY_LLM_MODEL_BASE_URL_OVERRIDE = "llm_model_base_url_override"
+        const val KEY_MINICPM_LICENSE_ACCEPTED = "minicpm_license_accepted"
 
         // Key rotation period in days
         private const val KEY_ROTATION_PERIOD_DAYS = 90
@@ -455,6 +456,20 @@ class SecurePreferencesManager @Inject constructor(
                 putString(KEY_LLM_MODEL_BASE_URL_OVERRIDE, baseUrl)
             }
         }.apply()
+    }
+    
+    /**
+     * Check if user has accepted MiniCPM license terms
+     */
+    fun isMiniCpmLicenseAccepted(): Boolean {
+        return getBoolean(KEY_MINICPM_LICENSE_ACCEPTED, false)
+    }
+    
+    /**
+     * Set MiniCPM license acceptance status
+     */
+    fun setMiniCpmLicenseAccepted(accepted: Boolean) {
+        saveBoolean(KEY_MINICPM_LICENSE_ACCEPTED, accepted)
     }
     
     /**

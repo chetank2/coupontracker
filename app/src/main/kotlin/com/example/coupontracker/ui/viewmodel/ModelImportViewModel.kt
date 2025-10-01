@@ -138,52 +138,115 @@ class ModelImportViewModel @Inject constructor(
     }
     
     /**
-     * Download model from internet
-     * Alternative to importing via SAF
+     * Download REAL MiniCPM model from Hugging Face
+     * Downloads 2-3GB GGUF file with resume support
      */
     fun downloadModel() {
         viewModelScope.launch(Dispatchers.IO) {
-            withContext(Dispatchers.Main) {
-                _uiState.value = _uiState.value.copy(
-                    isImporting = true,
-                    importProgress = 0,
-                    importMessage = "Starting download...",
-                    importError = null
-                )
-            }
-            
-            val result = modelDownloadManager.downloadModel { progress ->
-                viewModelScope.launch(Dispatchers.Main) {
+            try {
+                // Initialize downloader
+                val downloader = com.example.coupontracker.model.ResumableModelDownloader(getApplication())
+                val modelConfig = com.example.coupontracker.model.RealModelConfig
+                
+                // Check storage space first
+                val requiredSpace = modelConfig.REQUIRED_FREE_SPACE
+                if (!downloader.checkStorageSpace(requiredSpace)) {
+                    withContext(Dispatchers.Main) {
+                        _uiState.value = _uiState.value.copy(
+                            isImporting = false,
+                            importError = "Insufficient storage. Need ${requiredSpace / 1_000_000_000}GB free space."
+                        )
+                    }
+                    return@launch
+                }
+                
+                withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
-                        importProgress = progress.progressPercent,
-                        importMessage = progress.statusMessage
+                        isImporting = true,
+                        importProgress = 0,
+                        importMessage = "Preparing download...",
+                        importError = null
                     )
                 }
-            }
-            
-            withContext(Dispatchers.Main) {
+                
+                // Download main model file
+                val modelDir = com.example.coupontracker.model.ModelPaths.modelDir(getApplication())
+                modelDir.mkdirs()
+                
+                val mainModel = modelConfig.MAIN_MODEL
+                val destFile = java.io.File(modelDir, mainModel.filename)
+                
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        importMessage = "Downloading ${mainModel.filename} (~2.5GB)..."
+                    )
+                }
+                
+                // Download with resume support
+                val result = downloader.downloadFile(
+                    url = modelConfig.getDownloadUrl(mainModel),
+                    destFile = destFile,
+                    expectedSize = mainModel.expectedSize,
+                    expectedSha256 = mainModel.sha256.takeIf { it != "COMPUTE_ON_FIRST_DOWNLOAD" },
+                    onProgress = { progress ->
+                        viewModelScope.launch(Dispatchers.Main) {
+                            _uiState.value = _uiState.value.copy(
+                                importProgress = progress.progressPercent,
+                                importMessage = progress.statusMessage
+                            )
+                        }
+                    }
+                )
+                
                 when (result) {
-                    is com.example.coupontracker.llm.DownloadResult.Success -> {
-                        _uiState.value = _uiState.value.copy(
-                            isImporting = false,
-                            isModelInstalled = true,
-                            modelSizeMB = result.modelSizeMB.toInt(),
-                            importProgress = 100,
-                            importMessage = "Download complete"
-                        )
+                    is com.example.coupontracker.model.ResumableModelDownloader.DownloadResult.Success -> {
+                        // Create .verified marker
+                        val verifiedFile = java.io.File(modelDir, ".verified")
+                        verifiedFile.writeText(result.sha256)
                         
-                        // Check for updated model info
-                        checkInstalledModel()
+                        // Update preferences
+                        val securePrefs = com.example.coupontracker.util.SecurePreferencesManager(getApplication())
+                        securePrefs.setLlmModelDownloaded(true)
+                        securePrefs.setLlmModelVersion(modelConfig.MODEL_VERSION)
+                        securePrefs.setLlmModelSizeMB((result.file.length() / 1_000_000f))
+                        securePrefs.setLlmModelChecksum(result.sha256)
                         
-                        // Auto-run self-test
-                        runSelfTest()
+                        withContext(Dispatchers.Main) {
+                            _uiState.value = _uiState.value.copy(
+                                isImporting = false,
+                                isModelInstalled = true,
+                                modelSizeMB = (result.file.length() / 1_000_000).toInt(),
+                                importProgress = 100,
+                                importMessage = "Download complete!"
+                            )
+                            
+                            // Check for updated model info
+                            checkInstalledModel()
+                            
+                            // Auto-run self-test
+                            runSelfTest()
+                        }
                     }
-                    is com.example.coupontracker.llm.DownloadResult.Error -> {
-                        _uiState.value = _uiState.value.copy(
-                            isImporting = false,
-                            importError = result.message
-                        )
+                    is com.example.coupontracker.model.ResumableModelDownloader.DownloadResult.Failed -> {
+                        withContext(Dispatchers.Main) {
+                            _uiState.value = _uiState.value.copy(
+                                isImporting = false,
+                                importError = result.reason
+                            )
+                        }
                     }
+                    else -> {
+                        // Progress updates handled in callback
+                    }
+                }
+                
+            } catch (e: Exception) {
+                android.util.Log.e("ModelImportViewModel", "Download failed", e)
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        isImporting = false,
+                        importError = "Download failed: ${e.message}"
+                    )
                 }
             }
         }

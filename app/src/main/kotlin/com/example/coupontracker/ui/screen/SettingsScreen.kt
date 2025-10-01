@@ -884,10 +884,37 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
     val modelImportViewModel: com.example.coupontracker.ui.viewmodel.ModelImportViewModel = hiltViewModel()
     val uiState by modelImportViewModel.uiState.collectAsState()
     
+    val securePrefsManager = remember { SecurePreferencesManager(context) }
+    var showLicenseGate by remember { mutableStateOf(false) }
+    var licenseAccepted by remember { mutableStateOf(securePrefsManager.isMiniCpmLicenseAccepted()) }
+    
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let { modelImportViewModel.importModel(it) }
+    }
+    
+    // License Gate Dialog
+    if (showLicenseGate) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showLicenseGate = false }
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                LicenseGateScreen(
+                    onLicenseAccepted = {
+                        licenseAccepted = true
+                        showLicenseGate = false
+                        // Proceed with download
+                        modelImportViewModel.downloadModel()
+                    },
+                    securePreferencesManager = securePrefsManager
+                )
+            }
+        }
     }
     
     Card(
@@ -1005,13 +1032,19 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                 // Import/Download options when model not installed
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Button(
-                        onClick = { modelImportViewModel.downloadModel() },
+                        onClick = {
+                            if (licenseAccepted) {
+                                modelImportViewModel.downloadModel()
+                            } else {
+                                showLicenseGate = true
+                            }
+                        },
                         enabled = !uiState.isImporting,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Download Model (~4.5MB)")
+                        Text("Download Model (~2-3GB)")
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))
