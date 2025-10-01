@@ -1,6 +1,7 @@
 package com.example.coupontracker.di
 
 import com.example.coupontracker.data.local.LearnedPatternDao
+import com.example.coupontracker.ocr.OcrEngine
 import com.example.coupontracker.universal.AdaptiveConfidenceScorer
 import com.example.coupontracker.universal.PatternLearningEngine
 import com.example.coupontracker.universal.UniversalExtractionService
@@ -43,9 +44,10 @@ object UniversalExtractionModule {
     fun provideUniversalFieldDetector(
         patternLearner: PatternLearningEngine,
         layoutAnalyzer: UniversalLayoutAnalyzer,
-        confidenceScorer: AdaptiveConfidenceScorer
+        confidenceScorer: AdaptiveConfidenceScorer,
+        ocrEngine: OcrEngine
     ): UniversalFieldDetector {
-        return UniversalFieldDetector(patternLearner, layoutAnalyzer, confidenceScorer)
+        return UniversalFieldDetector(patternLearner, layoutAnalyzer, confidenceScorer, ocrEngine)
     }
 
     @Provides

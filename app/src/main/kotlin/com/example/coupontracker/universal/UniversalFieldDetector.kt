@@ -3,11 +3,15 @@ package com.example.coupontracker.universal
 import android.graphics.Bitmap
 import android.util.Log
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.ocr.OcrEngine
 import com.example.coupontracker.util.IndianDateParser
 import com.example.coupontracker.util.IndianCurrencyParser
 import java.util.*
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Universal field detector that uses visual, textual, and learned patterns
@@ -17,7 +21,8 @@ import javax.inject.Singleton
 class UniversalFieldDetector @Inject constructor(
     private val patternLearner: PatternLearningEngine,
     private val layoutAnalyzer: UniversalLayoutAnalyzer,
-    private val confidenceScorer: AdaptiveConfidenceScorer
+    private val confidenceScorer: AdaptiveConfidenceScorer,
+    private val ocrEngine: OcrEngine
 ) {
     companion object {
         private const val TAG = "UniversalFieldDetector"
@@ -51,15 +56,29 @@ class UniversalFieldDetector @Inject constructor(
      */
     private suspend fun detectCouponCodes(
         image: Bitmap,
-        text: String, 
+        text: String,
         layout: CouponLayout,
         context: ExtractionContext
     ): List<ExtractionCandidate> {
-        
+
         val candidates = mutableListOf<ExtractionCandidate>()
-        
+        val seenRegionCodes = mutableSetOf<String>()
+
         // Strategy 1: Visual cues (boxes, highlighting, distinct fonts)
         layout.codeRegion?.let { region ->
+            val regionText = extractTextFromRegion(image, region)
+            val normalized = normalizeCodeText(regionText)
+            if (normalized.isNotEmpty() && seenRegionCodes.add(normalized)) {
+                candidates.add(
+                    ExtractionCandidate(
+                        text = normalized,
+                        confidence = 0.9f,
+                        source = ExtractionSource.VISUAL_REGION,
+                        context = mapOf("region" to "code")
+                    )
+                )
+            }
+
             val visualCandidates = detectVisuallyDistinctCodes(image, region)
             candidates.addAll(visualCandidates)
         }
@@ -205,14 +224,16 @@ class UniversalFieldDetector @Inject constructor(
     ): List<ExtractionCandidate> {
         
         val candidates = mutableListOf<ExtractionCandidate>()
-        
+        val seenRegionStores = mutableSetOf<String>()
+
         // Look for store names in logo region (usually top)
         layout.logoRegion?.let { region ->
             val logoText = extractTextFromRegion(image, region)
-            if (logoText.isNotBlank()) {
+            val normalized = normalizeRegionText(logoText)
+            if (normalized.isNotBlank() && seenRegionStores.add(normalized.lowercase(Locale.ROOT))) {
                 candidates.add(
                     ExtractionCandidate(
-                        text = logoText.trim(),
+                        text = normalized,
                         confidence = 0.8f, // High confidence for logo region
                         source = ExtractionSource.VISUAL_REGION,
                         context = mapOf("region" to "logo")
@@ -376,10 +397,42 @@ class UniversalFieldDetector @Inject constructor(
         return confidence.coerceAtMost(1.0f)
     }
     
-    private fun extractTextFromRegion(image: Bitmap, region: Region): String {
-        // TODO: Implement OCR on specific image region
-        // This would crop the image to the region and run OCR
-        return ""
+    private suspend fun extractTextFromRegion(image: Bitmap, region: Region): String {
+        var croppedBitmap: Bitmap? = null
+        return try {
+            val bounds = region.bounds
+            val left = bounds.left.coerceIn(0f, image.width.toFloat())
+            val top = bounds.top.coerceIn(0f, image.height.toFloat())
+            val right = bounds.right.coerceIn(0f, image.width.toFloat())
+            val bottom = bounds.bottom.coerceIn(0f, image.height.toFloat())
+
+            val x = left.roundToInt().coerceIn(0, image.width - 1)
+            val y = top.roundToInt().coerceIn(0, image.height - 1)
+            val width = max(1, min(image.width - x, max(1, (right - left).roundToInt())))
+            val height = max(1, min(image.height - y, max(1, (bottom - top).roundToInt())))
+
+            if (width <= 0 || height <= 0 || x + width > image.width || y + height > image.height) {
+                return ""
+            }
+
+            croppedBitmap = Bitmap.createBitmap(image, x, y, width, height)
+            ocrEngine.recognize(croppedBitmap!!).trim()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to extract text from region", e)
+            ""
+        } finally {
+            croppedBitmap?.takeIf { !it.isRecycled }?.recycle()
+        }
+    }
+
+    private fun normalizeRegionText(text: String): String {
+        return text.replace("\\s+".toRegex(), " ").trim()
+    }
+
+    private fun normalizeCodeText(text: String): String {
+        return text
+            .replace("[^A-Za-z0-9-_]".toRegex(), "")
+            .uppercase(Locale.ROOT)
     }
 }
 
