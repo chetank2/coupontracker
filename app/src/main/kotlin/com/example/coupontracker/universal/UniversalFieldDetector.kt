@@ -246,11 +246,11 @@ class UniversalFieldDetector @Inject constructor(
         val storePatterns = listOf(
             Regex(
                 """(?:from|at|by|shop|store|brand)\s+(([\p{L}\p{M}\p{N}&.'-]+(?:\s+[\p{L}\p{M}\p{N}&.'-]+)*))""",
-                setOf(RegexOption.IGNORE_CASE, RegexOption.UNICODE_CASE)
+                setOf(RegexOption.IGNORE_CASE)
             ),
             Regex(
                 """\b([\p{Lu}][\p{L}\p{M}]+(?:\s+[\p{Lu}][\p{L}\p{M}]+)*)""",
-                RegexOption.UNICODE_CASE
+                RegexOption.IGNORE_CASE
             ),
         )
         
@@ -396,7 +396,7 @@ class UniversalFieldDetector @Inject constructor(
         var confidence = 0.4f
         
         // Boost confidence for known patterns
-        if (storeName.matches(Regex("""[\p{Lu}][\p{L}\p{M}]+(?:\s+[\p{Lu}][\p{L}\p{M}]+)*""", RegexOption.UNICODE_CASE))) {
+        if (storeName.matches(Regex("""[\p{Lu}][\p{L}\p{M}]+(?:\s+[\p{Lu}][\p{L}\p{M}]+)*""", RegexOption.IGNORE_CASE))) {
             confidence += 0.2f // Proper case
         }
         if (storeName.length in 3..15) confidence += 0.1f // Reasonable length
