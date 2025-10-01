@@ -84,4 +84,12 @@ object LlmModule {
     ): com.example.coupontracker.llm.GgufModelLoader {
         return com.example.coupontracker.llm.GgufModelLoader(context)
     }
+    
+    @Provides
+    @Singleton
+    fun provideSecureModelDownloader(
+        @ApplicationContext context: Context
+    ): com.example.coupontracker.network.SecureModelDownloader {
+        return com.example.coupontracker.network.SecureModelDownloader(context)
+    }
 }

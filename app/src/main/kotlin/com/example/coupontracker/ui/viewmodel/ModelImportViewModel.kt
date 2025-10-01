@@ -31,7 +31,8 @@ class ModelImportViewModel @Inject constructor(
     application: Application,
     private val modelImportManager: ModelImportManager,
     private val modelSelfTest: ModelSelfTest,
-    private val modelDownloadManager: com.example.coupontracker.llm.ModelDownloadManager
+    private val modelDownloadManager: com.example.coupontracker.llm.ModelDownloadManager,
+    private val secureDownloader: com.example.coupontracker.network.SecureModelDownloader
 ) : AndroidViewModel(application) {
     
     private val _uiState = MutableStateFlow(ModelImportUiState())
@@ -140,17 +141,21 @@ class ModelImportViewModel @Inject constructor(
     /**
      * Download REAL MiniCPM model from Hugging Face
      * Downloads 2-3GB GGUF file with resume support
+     * 
+     * PRIVACY GUARANTEE:
+     * - Only downloads model files (GET requests to allowlisted hosts)
+     * - HTTPS only (enforced by network security config)
+     * - No user data ever uploaded
+     * - All inference is offline after download
      */
     fun downloadModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Initialize downloader
-                val downloader = com.example.coupontracker.model.ResumableModelDownloader(getApplication())
                 val modelConfig = com.example.coupontracker.model.RealModelConfig
                 
                 // Check storage space first
                 val requiredSpace = modelConfig.REQUIRED_FREE_SPACE
-                if (!downloader.checkStorageSpace(requiredSpace)) {
+                if (!secureDownloader.checkStorageSpace(requiredSpace)) {
                     withContext(Dispatchers.Main) {
                         _uiState.value = _uiState.value.copy(
                             isImporting = false,
@@ -182,8 +187,8 @@ class ModelImportViewModel @Inject constructor(
                     )
                 }
                 
-                // Download with resume support
-                val result = downloader.downloadFile(
+                // Download with secure downloader (HTTPS only, allowlisted hosts, no uploads)
+                val result = secureDownloader.downloadFile(
                     url = modelConfig.getDownloadUrl(mainModel),
                     destFile = destFile,
                     expectedSize = mainModel.expectedSize,
@@ -199,7 +204,7 @@ class ModelImportViewModel @Inject constructor(
                 )
                 
                 when (result) {
-                    is com.example.coupontracker.model.ResumableModelDownloader.DownloadResult.Success -> {
+                    is com.example.coupontracker.network.SecureModelDownloader.DownloadResult.Success -> {
                         // Create .verified marker
                         val verifiedFile = java.io.File(modelDir, ".verified")
                         verifiedFile.writeText(result.sha256)
@@ -227,7 +232,7 @@ class ModelImportViewModel @Inject constructor(
                             runSelfTest()
                         }
                     }
-                    is com.example.coupontracker.model.ResumableModelDownloader.DownloadResult.Failed -> {
+                    is com.example.coupontracker.network.SecureModelDownloader.DownloadResult.Failed -> {
                         withContext(Dispatchers.Main) {
                             _uiState.value = _uiState.value.copy(
                                 isImporting = false,
