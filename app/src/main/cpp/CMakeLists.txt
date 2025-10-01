@@ -1,4 +1,4 @@
-# CMakeLists.txt for MiniCPM Vision JNI Bridge
+# CMakeLists.txt for Real llama.cpp Integration
 cmake_minimum_required(VERSION 3.18.1)
 
 project("mlc_llm_android")
@@ -18,69 +18,47 @@ find_library(jnigraphics-lib jnigraphics)
 
 # Include directories
 include_directories(
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/native_bridge
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama
 )
 
-# Backend selection:
-#   -DUSE_MLC=ON    (default, vision-capable via dynamic runtime loading)
-#   -DUSE_LLAMA=ON  (text-only for now, vision TODO)
-if (NOT DEFINED USE_MLC AND NOT DEFINED USE_LLAMA)
-    set(USE_MLC ON)  # Default to MLC since it supports vision
-    message(STATUS "No backend specified, defaulting to MLC-LLM")
+message(STATUS "🚀 Building REAL llama.cpp JNI bridge")
+message(STATUS "   ABI: ${ANDROID_ABI}")
+message(STATUS "   Build type: ${CMAKE_BUILD_TYPE}")
+
+# Define path to prebuilt libllama.so
+set(LLAMA_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}")
+set(llama-lib "${LLAMA_LIB_DIR}/libllama.so")
+
+message(STATUS "   Looking for libllama.so in: ${LLAMA_LIB_DIR}")
+
+# Check if file exists
+if(EXISTS "${llama-lib}")
+    message(STATUS "   ✅ Found libllama.so: ${llama-lib}")
+else()
+    message(FATAL_ERROR "   ❌ libllama.so not found at ${llama-lib}")
 endif()
 
-if (USE_MLC)
-    message(STATUS "✅ Building with MLC-LLM backend (vision-capable)")
-    add_definitions(-DUSE_MLC)
-elseif (USE_LLAMA)
-    message(STATUS "✅ Building with llama.cpp backend (text-only, vision TODO)")
-    add_definitions(-DUSE_LLAMA)
-endif()
+# Import as prebuilt library
+add_library(llama SHARED IMPORTED)
+set_target_properties(llama PROPERTIES
+    IMPORTED_LOCATION "${llama-lib}"
+)
 
-# Create shared library
+# Create shared library with REAL implementation
 add_library(
     mlc_llm_android
     SHARED
-    native_bridge/MlcLlmNativeBridge.cpp
+    mlc_llm_jni_real.cpp
 )
 
-# Link Android libraries
+# Link libraries
 target_link_libraries(mlc_llm_android
+    llama
     ${log-lib}
     ${android-lib}
     ${jnigraphics-lib}
 )
-
-# If using llama.cpp, link against prebuilt libllama.so
-# (place libllama.so in app/src/main/jniLibs/<abi>/)
-if (USE_LLAMA)
-    set(LLAMA_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}")
-    find_library(llama-lib
-        NAMES llama
-        PATHS ${LLAMA_LIB_DIR}
-        NO_DEFAULT_PATH
-    )
-    
-    if(llama-lib)
-        message(STATUS "Found llama.cpp library: ${llama-lib}")
-        target_link_libraries(mlc_llm_android ${llama-lib})
-        target_compile_definitions(mlc_llm_android PRIVATE LLAMA_CPP_AVAILABLE)
-    else()
-        message(WARNING "llama.cpp library not found in ${LLAMA_LIB_DIR}")
-        message(WARNING "Build will succeed but runtime will fail")
-        message(WARNING "Place libllama.so in app/src/main/jniLibs/${ANDROID_ABI}/")
-    endif()
-endif()
-
-# If using MLC-LLM, we dlopen() the runtime from model directory at runtime
-# No static linking needed - the runtime .so is shipped with the model
-if (USE_MLC)
-    message(STATUS "MLC-LLM runtime will be loaded dynamically from model directory")
-    target_link_libraries(mlc_llm_android
-        dl  # For dlopen/dlsym
-    )
-endif()
 
 # Compiler flags
 target_compile_options(
@@ -90,6 +68,12 @@ target_compile_options(
     -Wextra
     -Werror=return-type
     -fvisibility=hidden
+)
+
+# Define that we're using real llama.cpp
+target_compile_definitions(mlc_llm_android PRIVATE 
+    LLAMA_CPP_REAL_INFERENCE
+    REAL_JNI
 )
 
 # Strip symbols in release builds
@@ -102,11 +86,6 @@ if(CMAKE_BUILD_TYPE STREQUAL "Release")
     )
 endif()
 
-# Print configuration summary
 message(STATUS "==============================================")
-message(STATUS "Configuration Summary:")
-message(STATUS "  Backend: ${USE_MLC}${USE_LLAMA}")
-message(STATUS "  ABI: ${ANDROID_ABI}")
-message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "  C++ standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "✅ Configuration complete - REAL inference enabled")
 message(STATUS "==============================================")
