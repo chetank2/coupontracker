@@ -25,11 +25,20 @@ object ModelPaths {
         File(root(context), modelId)
     
     /**
-     * Required files for GGUF model installation (MiniCPM-V-2.6 from Hugging Face)
-     * This is the NEW format from real HF downloads
+     * Required files for GGUF vision model (MiniCPM-V-2.6)
+     * Vision model requires BOTH base model and vision projector
      */
     val REQUIRED_FILES_GGUF = listOf(
-        "ggml-model-Q4_K_M.gguf"  // Main GGUF weight file (~4.7GB)
+        "base.gguf",    // Base text model (MiniCPM-Llama3-V2.5)
+        "mmproj.gguf"   // Vision projector (multimodal)
+    )
+    
+    /**
+     * Alternative: Single-file GGUF (for backwards compatibility)
+     * Some downloads may provide a combined model file
+     */
+    val REQUIRED_FILES_GGUF_SINGLE = listOf(
+        "ggml-model-Q4_K_M.gguf"  // Combined model file (~4.7GB)
     )
     
     /**
@@ -55,23 +64,37 @@ object ModelPaths {
     
     /**
      * Get required files based on what's in the directory
-     * Prefers GGUF format if present
+     * Checks for vision model (base.gguf + mmproj.gguf), then single GGUF, then legacy
      */
     fun getRequiredFiles(modelDir: File): List<String> {
-        // Check if GGUF model exists
-        val ggufFile = File(modelDir, REQUIRED_FILES_GGUF[0])
-        return if (ggufFile.exists()) {
-            REQUIRED_FILES_GGUF
-        } else {
-            REQUIRED_FILES_LEGACY
+        // Check for vision model format (base + mmproj)
+        val baseGguf = File(modelDir, "base.gguf")
+        val mmprojGguf = File(modelDir, "mmproj.gguf")
+        
+        return when {
+            baseGguf.exists() && mmprojGguf.exists() -> {
+                // Vision model with separate projector
+                REQUIRED_FILES_GGUF
+            }
+            File(modelDir, REQUIRED_FILES_GGUF_SINGLE[0]).exists() -> {
+                // Single combined GGUF file
+                REQUIRED_FILES_GGUF_SINGLE
+            }
+            else -> {
+                // Legacy MLC format
+                REQUIRED_FILES_LEGACY
+            }
         }
     }
     
     /**
      * Minimum file sizes for GGUF format
+     * Vision model: base (~2GB) + mmproj (~500MB-1GB)
      */
     val MIN_FILE_SIZES_GGUF = mapOf(
-        "ggml-model-Q4_K_M.gguf" to 3_500_000_000L,  // >= 3.5 GB (reject mocks)
+        "base.gguf" to 1_500_000_000L,                // >= 1.5 GB base model
+        "mmproj.gguf" to 300_000_000L,                // >= 300 MB vision projector
+        "ggml-model-Q4_K_M.gguf" to 3_500_000_000L,  // >= 3.5 GB (single file)
         "tokenizer.json" to 100_000L,                 // >= 100 KB (if present)
         "config.json" to 500L                         // >= 500 B (if present)
     )
@@ -101,10 +124,22 @@ object ModelPaths {
     }
     
     /**
-     * Check if model is GGUF format
+     * Check if model is GGUF format (vision or single file)
      */
     fun isGgufModel(modelDir: File): Boolean {
-        return File(modelDir, REQUIRED_FILES_GGUF[0]).exists()
+        val hasVisionModel = File(modelDir, "base.gguf").exists() && 
+                            File(modelDir, "mmproj.gguf").exists()
+        val hasSingleGguf = File(modelDir, "ggml-model-Q4_K_M.gguf").exists()
+        
+        return hasVisionModel || hasSingleGguf
+    }
+    
+    /**
+     * Check if model is vision model (base + mmproj)
+     */
+    fun isVisionModel(modelDir: File): Boolean {
+        return File(modelDir, "base.gguf").exists() && 
+               File(modelDir, "mmproj.gguf").exists()
     }
 }
 

@@ -15,7 +15,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 sealed class SelfTestResult {
-    data class Success(val durationMs: Long, val modelName: String) : SelfTestResult()
+    data class Success(val durationMs: Long, val modelName: String, val isRealInference: Boolean = false) : SelfTestResult()
     data class Failed(val reason: String, val error: Throwable? = null) : SelfTestResult()
 }
 
@@ -78,8 +78,19 @@ class ModelSelfTest @Inject constructor(
                 
                 if (result) {
                     val duration = System.currentTimeMillis() - startTime
-                    Log.d(TAG, "✓ Self-test PASSED in ${duration}ms")
-                    SelfTestResult.Success(duration, "MiniCPM-Llama3-V2.5")
+                    
+                    // Check if this is real inference or mock
+                    // Real vision model has base.gguf + mmproj.gguf
+                    val modelDir = com.example.coupontracker.model.ModelPaths.modelDir(context)
+                    val isRealInference = com.example.coupontracker.model.ModelPaths.isVisionModel(modelDir)
+                    
+                    if (isRealInference) {
+                        Log.d(TAG, "✓ Self-test PASSED with REAL vision inference in ${duration}ms")
+                    } else {
+                        Log.w(TAG, "⚠️ Self-test PASSED but using MOCK inference in ${duration}ms")
+                    }
+                    
+                    SelfTestResult.Success(duration, "MiniCPM-Llama3-V2.5", isRealInference)
                 } else {
                     SelfTestResult.Failed("Model test returned invalid result")
                 }
