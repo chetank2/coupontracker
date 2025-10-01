@@ -216,16 +216,37 @@ class CouponInputManager(
                 }
 
                 // Convert CouponInfo to Coupon
+                val normalizedDiscountType = when (couponInfo.discountType?.uppercase(Locale.ROOT)) {
+                    "PERCENTAGE" -> "percent"
+                    "AMOUNT" -> "amount"
+                    "TEXT" -> "text"
+                    else -> null
+                }
+                val cashbackValueNum = couponInfo.cashbackAmount
+                val category = couponInfo.category?.takeIf { it.isNotBlank() }
+                val status = couponInfo.status?.takeIf { it.isNotBlank() }
+                val paymentMethod = couponInfo.paymentMethod?.takeIf { it.isNotBlank() }
+                val platformType = couponInfo.platformType?.takeIf { it.isNotBlank() }
+                val rating = couponInfo.rating?.takeIf { it.isNotBlank() }
+
                 return@withContext Coupon(
                     id = 0,
                     storeName = couponInfo.storeName.ifBlank { "Unknown Store" },
                     description = couponInfo.description.ifBlank { "No description" },
                     expiryDate = normalizedExpiry,
-                    cashbackAmount = couponInfo.cashbackAmount ?: 0.0,
+                    cashbackAmount = cashbackValueNum ?: 0.0,
                     redeemCode = couponInfo.redeemCode,
                     imageUri = null, // We'll set this later in the ViewModel
-                    category = couponInfo.category,
-                    status = couponInfo.status ?: "Active",
+                    category = category,
+                    status = status ?: "Active",
+                    cashbackType = normalizedDiscountType,
+                    cashbackValueNum = cashbackValueNum,
+                    minimumPurchase = couponInfo.minimumPurchase,
+                    maximumDiscount = couponInfo.maximumDiscount,
+                    paymentMethod = paymentMethod,
+                    usageLimit = couponInfo.usageLimit,
+                    platformType = platformType,
+                    rating = rating,
                     createdAt = Date(),
                     updatedAt = Date()
                 )

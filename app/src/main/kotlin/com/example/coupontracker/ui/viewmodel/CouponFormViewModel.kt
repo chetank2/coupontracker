@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.util.CouponInfo
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -170,12 +172,33 @@ class CouponFormViewModel @Inject constructor(
      * Map a Coupon object to CouponInfo
      */
     private fun mapCouponToCouponInfo(coupon: Coupon): CouponInfo {
+        val cashbackInfo = coupon.getCashbackInfo()
+        val discountType = when (coupon.cashbackType?.lowercase(Locale.ROOT)) {
+            "percent" -> "PERCENTAGE"
+            "amount" -> "AMOUNT"
+            "text" -> "TEXT"
+            else -> when (cashbackInfo.type) {
+                CashbackType.PERCENT -> "PERCENTAGE"
+                CashbackType.AMOUNT -> "AMOUNT"
+                CashbackType.TEXT -> null
+            }
+        }
+
         return CouponInfo(
             storeName = coupon.storeName,
             description = coupon.description,
-            cashbackAmount = coupon.cashbackAmount,
+            expiryDate = coupon.expiryDate,
+            cashbackAmount = coupon.cashbackValueNum ?: cashbackInfo.valueNum,
             redeemCode = coupon.redeemCode,
-            expiryDate = coupon.expiryDate
+            category = coupon.category,
+            rating = coupon.rating,
+            status = coupon.status,
+            discountType = discountType,
+            minimumPurchase = coupon.minimumPurchase,
+            maximumDiscount = coupon.maximumDiscount,
+            paymentMethod = coupon.paymentMethod,
+            platformType = coupon.platformType,
+            usageLimit = coupon.usageLimit
         )
     }
 
