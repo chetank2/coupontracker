@@ -124,9 +124,15 @@ class ImageProcessor(
             Log.d(TAG, "Processing bitmap image")
 
             // Check if progressive extraction is enabled and available
-            if (USE_PROGRESSIVE_EXTRACTION && progressiveExtractionService != null) {
-                Log.d(TAG, "✨ Using PROGRESSIVE extraction pipeline")
-                return@withContext processWithProgressivePipeline(bitmap, captureTimestamp)
+            if (USE_PROGRESSIVE_EXTRACTION) {
+                if (progressiveExtractionService == null) {
+                    Log.e(TAG, "❌ Progressive extraction is ENABLED but service is NULL! Check Hilt injection.")
+                } else {
+                    Log.d(TAG, "✨ Using PROGRESSIVE extraction pipeline")
+                    return@withContext processWithProgressivePipeline(bitmap, captureTimestamp)
+                }
+            } else {
+                Log.d(TAG, "ℹ️  Progressive extraction is DISABLED via feature flag")
             }
 
             // Legacy extraction flow (fallback)
@@ -175,16 +181,30 @@ class ImageProcessor(
     private suspend fun processWithProgressivePipeline(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo {
         return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "Step 1: Extracting OCR text")
-                val ocrText = ocrEngine.recognize(bitmap)
+                Log.d(TAG, "🚀 Progressive Pipeline - Starting extraction")
+                
+                // Step 1: Extract OCR text
+                Log.d(TAG, "Step 1: Extracting OCR text using ${ocrEngine.javaClass.simpleName}")
+                val ocrText = try {
+                    ocrEngine.recognize(bitmap)
+                } catch (ocrException: Exception) {
+                    Log.e(TAG, "❌ OCR engine failed", ocrException)
+                    // Try to continue with empty text, let progressive pipeline handle it
+                    ""
+                }
+                
                 Log.d(TAG, "OCR extracted ${ocrText.length} characters")
+                if (ocrText.length > 0) {
+                    Log.d(TAG, "OCR preview: ${ocrText.take(100)}...")
+                }
                 
                 if (ocrText.isBlank()) {
-                    Log.w(TAG, "OCR text is empty, falling back to legacy")
+                    Log.w(TAG, "⚠️  OCR text is empty, falling back to legacy")
                     return@withContext fallbackToModelBasedOcr(bitmap, captureTimestamp)
                 }
                 
-                Log.d(TAG, "Step 2: Calling progressive extraction pipeline")
+                // Step 2: Call progressive extraction
+                Log.d(TAG, "Step 2: Calling progressive extraction service")
                 val progressiveResult = progressiveExtractionService!!.extractCoupon(
                     image = bitmap,
                     ocrText = ocrText,
@@ -192,11 +212,12 @@ class ImageProcessor(
                     imageUri = "bitmap://${System.currentTimeMillis()}"
                 )
                 
-                Log.d(TAG, "✅ Progressive extraction complete: " +
-                    "store='${progressiveResult.coupon.storeName}', " +
-                    "desc='${progressiveResult.coupon.description.take(50)}...', " +
-                    "confidence=${progressiveResult.confidence}, " +
-                    "passes=${progressiveResult.passesUsed}")
+                Log.d(TAG, "✅ Progressive extraction SUCCESS:")
+                Log.d(TAG, "  - Store: '${progressiveResult.coupon.storeName}'")
+                Log.d(TAG, "  - Description: '${progressiveResult.coupon.description.take(80)}...'")
+                Log.d(TAG, "  - Amount: ${progressiveResult.coupon.cashbackAmount}")
+                Log.d(TAG, "  - Confidence: ${progressiveResult.confidence}")
+                Log.d(TAG, "  - Passes used: ${progressiveResult.passesUsed}")
                 
                 // Convert Coupon to CouponInfo
                 val couponInfo = CouponInfo(
@@ -205,14 +226,18 @@ class ImageProcessor(
                     cashbackAmount = if (progressiveResult.coupon.cashbackAmount > 0.0) 
                         progressiveResult.coupon.cashbackAmount else null,
                     expiryDate = progressiveResult.coupon.expiryDate,
-                    redeemCode = progressiveResult.coupon.redeemCode
+                    redeemCode = progressiveResult.coupon.redeemCode,
+                    category = progressiveResult.coupon.category,
+                    status = progressiveResult.coupon.status
                 )
                 
-                Log.d(TAG, "Converted to CouponInfo: $couponInfo")
+                Log.d(TAG, "✅ Converted to CouponInfo successfully")
                 return@withContext couponInfo
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Progressive extraction failed, falling back to legacy", e)
+                Log.e(TAG, "❌ Progressive extraction FAILED with exception: ${e.message}", e)
+                Log.e(TAG, "Stack trace: ${e.stackTraceToString()}")
+                Log.d(TAG, "Falling back to legacy extraction flow")
                 return@withContext fallbackToModelBasedOcr(bitmap, captureTimestamp)
             }
         }
