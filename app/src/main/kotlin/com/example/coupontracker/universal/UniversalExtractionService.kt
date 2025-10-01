@@ -22,15 +22,18 @@ import javax.inject.Singleton
 class UniversalExtractionService @Inject constructor(
     private val fieldDetector: UniversalFieldDetector,
     private val patternLearner: PatternLearningEngine,
-    private val confidenceScorer: AdaptiveConfidenceScorer
+    private val confidenceScorer: AdaptiveConfidenceScorer,
+    private val progressiveExtractionService: com.example.coupontracker.extraction.ProgressiveExtractionService
 ) {
     companion object {
         private const val TAG = "UniversalExtractionService"
         private const val MIN_EXTRACTION_CONFIDENCE = 0.4f
+        private const val USE_PROGRESSIVE_PIPELINE = true  // Feature flag for new pipeline
     }
 
     /**
      * Extract coupon information using universal patterns
+     * Now delegates to progressive extraction pipeline for better results
      */
     suspend fun extractCoupon(
         image: Bitmap,
@@ -38,7 +41,13 @@ class UniversalExtractionService @Inject constructor(
         context: ExtractionContext = ExtractionContext()
     ): UniversalExtractionResult = withContext(Dispatchers.Default) {
         
-        Log.d(TAG, "Starting universal extraction")
+        if (USE_PROGRESSIVE_PIPELINE) {
+            Log.d(TAG, "✨ Using NEW progressive extraction pipeline")
+            return@withContext extractWithProgressivePipeline(image, ocrText, context)
+        }
+        
+        // Legacy extraction (kept for comparison/fallback)
+        Log.d(TAG, "Starting legacy universal extraction")
         
         try {
             // Detect all fields using universal patterns
@@ -61,7 +70,7 @@ class UniversalExtractionService @Inject constructor(
             // Convert to Coupon object
             val coupon = buildCouponFromFields(extractedFields, image.toString())
             
-            // Calculate overall extraction confidence
+            // Calculate overall confidence
             val overallConfidence = calculateOverallConfidence(extractedFields)
             
             UniversalExtractionResult(
@@ -82,6 +91,82 @@ class UniversalExtractionService @Inject constructor(
                 success = false,
                 error = e.message
             )
+        }
+    }
+    
+    /**
+     * Extract using new progressive pipeline and convert result to UniversalExtractionResult
+     */
+    private suspend fun extractWithProgressivePipeline(
+        image: Bitmap,
+        ocrText: String,
+        context: ExtractionContext
+    ): UniversalExtractionResult {
+        try {
+            val progressiveResult = progressiveExtractionService.extractCoupon(
+                image = image,
+                ocrText = ocrText,
+                ocrBlocks = emptyList(),
+                imageUri = image.toString()
+            )
+            
+            // Convert ProgressiveExtractionResult to UniversalExtractionResult
+            val extractedFields = progressiveResult.extractedFields.mapValues { (_, fieldCandidate) ->
+                ExtractionCandidate(
+                    text = fieldCandidate.value,
+                    confidence = fieldCandidate.confidence,
+                    source = when (fieldCandidate.source) {
+                        "explicit_pattern", "all_caps", "title_case_early", "repeated_word" -> ExtractionSource.PATTERN_MATCHING
+                        "compound_cashback", "simple_amount", "percentage", "upto_amount" -> ExtractionSource.PATTERN_MATCHING
+                        "relative_date", "absolute_date", "valid_until" -> ExtractionSource.PATTERN_MATCHING
+                        "context_code", "generic_code", "no_code_indicator" -> ExtractionSource.CONTEXT_CLUES
+                        "semantic_from", "semantic_cashback", "semantic_via" -> ExtractionSource.CONTEXT_CLUES
+                        "semantic_cashback_amount", "semantic_discount_percent", "semantic_discount_amount" -> ExtractionSource.CONTEXT_CLUES
+                        "semantic_last_amount", "semantic_offer_sentence", "semantic_substantial_sentence" -> ExtractionSource.CONTEXT_CLUES
+                        "heuristic_capital", "heuristic_number", "heuristic_first_sentence" -> ExtractionSource.PATTERN_MATCHING
+                        "default_first_line", "default_ocr_text", "default_zero", "default_no_code" -> ExtractionSource.PATTERN_MATCHING
+                        "learned_pattern" -> ExtractionSource.LEARNED_PATTERN
+                        else -> ExtractionSource.PATTERN_MATCHING
+                    },
+                    context = mapOf(
+                        "source" to fieldCandidate.source,
+                        "context" to (fieldCandidate.context ?: ""),
+                        "passes_used" to progressiveResult.passesUsed.toString()
+                    )
+                )
+            }
+            
+            Log.d(TAG, "✅ Progressive pipeline: ${extractedFields.size} fields, confidence: ${progressiveResult.confidence}, passes: ${progressiveResult.passesUsed}")
+            
+            return UniversalExtractionResult(
+                coupon = progressiveResult.coupon,
+                confidence = progressiveResult.confidence,
+                extractedFields = extractedFields,
+                allCandidates = emptyMap(),
+                success = progressiveResult.success,
+                error = progressiveResult.error
+            )
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Progressive extraction failed, falling back to legacy", e)
+            // Fallback to legacy by disabling flag temporarily
+            val legacyContext = context
+            return withContext(Dispatchers.Default) {
+                val detectedFields = fieldDetector.detectFields(image, ocrText, legacyContext)
+                val extractedFields = mutableMapOf<FieldType, ExtractionCandidate>()
+                for ((fieldType, candidates) in detectedFields) {
+                    val bestCandidate = candidates.filter { it.confidence >= MIN_EXTRACTION_CONFIDENCE }.maxByOrNull { it.confidence }
+                    if (bestCandidate != null) extractedFields[fieldType] = bestCandidate
+                }
+                val coupon = buildCouponFromFields(extractedFields, image.toString())
+                UniversalExtractionResult(
+                    coupon = coupon,
+                    confidence = calculateOverallConfidence(extractedFields),
+                    extractedFields = extractedFields,
+                    allCandidates = detectedFields,
+                    success = extractedFields.isNotEmpty()
+                )
+            }
         }
     }
 

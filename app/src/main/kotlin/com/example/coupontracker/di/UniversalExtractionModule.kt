@@ -55,9 +55,10 @@ object UniversalExtractionModule {
     fun provideUniversalExtractionService(
         fieldDetector: UniversalFieldDetector,
         patternLearner: PatternLearningEngine,
-        confidenceScorer: AdaptiveConfidenceScorer
+        confidenceScorer: AdaptiveConfidenceScorer,
+        progressiveExtractionService: com.example.coupontracker.extraction.ProgressiveExtractionService
     ): UniversalExtractionService {
-        return UniversalExtractionService(fieldDetector, patternLearner, confidenceScorer)
+        return UniversalExtractionService(fieldDetector, patternLearner, confidenceScorer, progressiveExtractionService)
     }
 
     @Provides
