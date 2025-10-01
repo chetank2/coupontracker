@@ -186,33 +186,11 @@ void bridge_get_mem(BridgeSession& s, int out[3]) {
 }
 
 /**
- * Cleanup on session destruction
- */
-static void destroy(BridgeSession& s) {
-    auto* impl = (MlcImpl*)s.impl;
-    if (!impl) return;
-    
-    LOGI("Releasing MLC runtime");
-    
-    if (impl->api.release) {
-        impl->api.release();
-    }
-    
-    if (impl->handle) {
-        dlclose(impl->handle);
-    }
-    
-    delete impl;
-    s.impl = nullptr;
-}
-
-/**
  * Called when library is unloaded
  */
 __attribute__((destructor))
 static void on_unload() {
-    // Higher level (JNI) should call releaseModel
-    // This is just a safety net
+    // Cleanup handled by higher-level releaseModel
     LOGI("MLC bridge unloading");
 }
 

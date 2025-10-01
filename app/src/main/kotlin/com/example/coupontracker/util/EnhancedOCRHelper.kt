@@ -120,7 +120,8 @@ class EnhancedOCRHelper(
             while (myntraMatcher.find()) {
                 val potentialCode = myntraMatcher.group(1)
                 // Ensure it has both letters and numbers for higher confidence
-                if (potentialCode.contains(Regex("[A-Z]")) &&
+                if (potentialCode != null &&
+                    potentialCode.contains(Regex("[A-Z]")) &&
                     potentialCode.contains(Regex("[0-9]")) &&
                     potentialCode.length >= 10) {
                     val sanitized = RedeemCodeSanitizer.sanitize(potentialCode)

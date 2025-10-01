@@ -116,13 +116,13 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
     }
     
     if (!pSess || !(*pSess)) {
-        LOGE("❌ Invalid handle: %ld", handle);
+        LOGE("❌ Invalid handle: %lld", (long long)handle);
         return env->NewStringUTF("{\"error\":\"invalid_handle\"}");
     }
 
     const char* prompt = env->GetStringUTFChars(jPrompt, nullptr);
     
-    LOGI("runVisionInference(handle=%ld)", handle);
+    LOGI("runVisionInference(handle=%lld)", (long long)handle);
     LOGI("  Prompt: %.100s...", prompt);
 
     // Get image data
@@ -174,7 +174,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
 JNIEXPORT void JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_warmupModel(
         JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
-    LOGI("warmupModel(handle=%ld)", handle);
+    LOGI("warmupModel(handle=%lld)", (long long)handle);
     // Warmup is already done in bridge_initialize
 }
 
@@ -185,8 +185,8 @@ JNIEXPORT void JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_setInferenceParams(
         JNIEnv* /*env*/, jobject /*thiz*/,
         jlong handle, jfloat temperature, jint maxTokens, jfloat topP) {
-    LOGI("setInferenceParams(handle=%ld, temp=%.2f, max_tokens=%d, top_p=%.2f)",
-         handle, temperature, maxTokens, topP);
+    LOGI("setInferenceParams(handle=%lld, temp=%.2f, max_tokens=%d, top_p=%.2f)",
+         (long long)handle, temperature, maxTokens, topP);
     // TODO: Store these in session and use in runVisionInference
 }
 
@@ -222,7 +222,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_getMemoryStats(
 JNIEXPORT void JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_releaseModel(
         JNIEnv* /*env*/, jobject /*thiz*/, jlong handle) {
-    LOGI("releaseModel(handle=%ld)", handle);
+    LOGI("releaseModel(handle=%lld)", (long long)handle);
     
     std::lock_guard<std::mutex> lk(g_map_mtx);
     auto it = g_sessions.find((long)handle);
@@ -231,7 +231,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_releaseModel(
         g_sessions.erase(it);
         LOGI("✅ Session released");
     } else {
-        LOGW("⚠️ Handle not found: %ld", handle);
+        LOGW("⚠️ Handle not found: %lld", (long long)handle);
     }
 }
 
