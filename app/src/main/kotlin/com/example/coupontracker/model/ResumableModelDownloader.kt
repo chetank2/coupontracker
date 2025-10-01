@@ -5,13 +5,11 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStream
+import java.io.IOException
 import java.io.RandomAccessFile
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import kotlin.math.min
 
 /**
  * Resumable downloader for large model files (2-3GB)
@@ -55,156 +53,231 @@ class ResumableModelDownloader(
         try {
             Log.d(TAG, "Starting download: $url")
             Log.d(TAG, "Destination: ${destFile.absolutePath}")
-            
+
             // Create parent directories
             destFile.parentFile?.mkdirs()
-            
-            // Check if partially downloaded
-            val existingSize = if (destFile.exists()) destFile.length() else 0L
-            Log.d(TAG, "Existing file size: $existingSize bytes")
-            
-            // Open connection with Range support
-            val connection = URL(url).openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 30_000
-            connection.readTimeout = 30_000
-            
-            // Request resume from existing size
-            if (existingSize > 0) {
-                connection.setRequestProperty("Range", "bytes=$existingSize-")
-                Log.d(TAG, "Resuming from byte: $existingSize")
-            }
-            
-            connection.connect()
-            
-            val responseCode = connection.responseCode
-            Log.d(TAG, "Response code: $responseCode")
-            
-            // Check if server supports resume
-            val supportsResume = responseCode == HttpURLConnection.HTTP_PARTIAL
-            if (!supportsResume && existingSize > 0) {
-                Log.w(TAG, "Server doesn't support resume, restarting download")
-                destFile.delete()
-            }
-            
-            // Get total size
-            val contentLength = connection.contentLengthLong
-            val totalSize = if (supportsResume) {
-                existingSize + contentLength
-            } else {
-                contentLength
-            }
-            
-            Log.d(TAG, "Total size: $totalSize bytes (${totalSize / 1_000_000}MB)")
-            
-            // Validate expected size (within 10% tolerance)
-            if (expectedSize > 0) {
-                val sizeDiff = kotlin.math.abs(totalSize - expectedSize)
-                val tolerance = (expectedSize * sizeTolerancePercent).toLong()
-                if (sizeDiff > tolerance) {
-                    val expectedMb = expectedSize / 1_000_000
-                    val actualMb = totalSize / 1_000_000
-                    return@withContext DownloadResult.Failed(
-                        "Size mismatch: expected ${expectedMb}MB, got ${actualMb}MB"
-                    )
-                }
-            }
-            
-            // Download the file
-            connection.inputStream.use { input ->
-                RandomAccessFile(destFile, "rw").use { output ->
-                    // Seek to end if resuming
-                    if (supportsResume && existingSize > 0) {
-                        output.seek(existingSize)
+
+            var attempt = 0
+            var lastError: IOException? = null
+            var lastKnownTotalSize = if (expectedSize > 0) expectedSize else -1L
+
+            while (attempt < RealModelConfig.MAX_RETRIES) {
+                val existingSize = if (destFile.exists()) destFile.length() else 0L
+                Log.d(TAG, "Existing file size: $existingSize bytes (attempt ${attempt + 1})")
+
+                var connection: HttpURLConnection? = null
+                var attemptTotalSize = lastKnownTotalSize
+
+                try {
+                    // Open connection with Range support
+                    connection = URL(url).openConnection() as HttpURLConnection
+                    connection.requestMethod = "GET"
+                    connection.connectTimeout = 30_000
+                    connection.readTimeout = 30_000
+
+                    // Request resume from existing size
+                    if (existingSize > 0) {
+                        connection.setRequestProperty("Range", "bytes=$existingSize-")
+                        Log.d(TAG, "Resuming from byte: $existingSize")
                     }
-                    
-                    val buffer = ByteArray(BUFFER_SIZE)
-                    var bytesRead: Int
-                    var totalBytesDownloaded = if (supportsResume) existingSize else 0L
-                    var lastProgressUpdate = System.currentTimeMillis()
-                    var lastBytesForSpeed = totalBytesDownloaded
-                    val startTime = System.currentTimeMillis()
-                    
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
-                        totalBytesDownloaded += bytesRead
-                        
-                        // Update progress every 500ms
-                        val now = System.currentTimeMillis()
-                        if (now - lastProgressUpdate > 500) {
-                            val elapsed = (now - lastProgressUpdate) / 1000.0
-                            val bytesSinceLastUpdate = totalBytesDownloaded - lastBytesForSpeed
-                            val speed = (bytesSinceLastUpdate / elapsed).toLong()
-                            
-                            val progress = DownloadProgress(
-                                bytesDownloaded = totalBytesDownloaded,
-                                totalBytes = totalSize,
-                                progressPercent = ((totalBytesDownloaded * 100) / totalSize).toInt(),
-                                speedBytesPerSecond = speed,
-                                statusMessage = formatProgress(totalBytesDownloaded, totalSize, speed)
+
+                    connection.connect()
+
+                    val responseCode = connection.responseCode
+                    Log.d(TAG, "Response code: $responseCode")
+
+                    if (responseCode != HttpURLConnection.HTTP_OK &&
+                        responseCode != HttpURLConnection.HTTP_PARTIAL
+                    ) {
+                        return@withContext DownloadResult.Failed("HTTP error: $responseCode")
+                    }
+
+                    // Check if server supports resume
+                    val supportsResume = responseCode == HttpURLConnection.HTTP_PARTIAL && existingSize > 0
+                    if (!supportsResume && existingSize > 0) {
+                        Log.w(TAG, "Server doesn't support resume, restarting download")
+                        destFile.delete()
+                    }
+
+                    val resumeOffset = if (supportsResume) existingSize else 0L
+
+                    // Get total size
+                    val contentLength = connection.contentLengthLong
+                    val totalSize = if (supportsResume) {
+                        resumeOffset + contentLength
+                    } else {
+                        contentLength
+                    }
+
+                    attemptTotalSize = totalSize
+                    if (totalSize > 0) {
+                        lastKnownTotalSize = totalSize
+                    }
+
+                    Log.d(TAG, "Total size: $totalSize bytes (${totalSize / 1_000_000}MB)")
+
+                    // Validate expected size (within 10% tolerance)
+                    if (expectedSize > 0 && totalSize > 0) {
+                        val sizeDiff = kotlin.math.abs(totalSize - expectedSize)
+                        val tolerance = (expectedSize * sizeTolerancePercent).toLong()
+                        if (sizeDiff > tolerance) {
+                            val expectedMb = expectedSize / 1_000_000
+                            val actualMb = totalSize / 1_000_000
+                            return@withContext DownloadResult.Failed(
+                                "Size mismatch: expected ${expectedMb}MB, got ${actualMb}MB"
                             )
-                            
-                            onProgress(progress)
-                            
-                            lastProgressUpdate = now
-                            lastBytesForSpeed = totalBytesDownloaded
                         }
                     }
-                    
-                    Log.d(TAG, "Download complete: $totalBytesDownloaded bytes")
-                }
-            }
-            
-            connection.disconnect()
-            
-            // Final progress update
-            onProgress(DownloadProgress(
-                bytesDownloaded = totalSize,
-                totalBytes = totalSize,
-                progressPercent = 100,
-                speedBytesPerSecond = 0,
-                statusMessage = "Download complete, verifying..."
-            ))
-            
-            // Verify SHA-256 if provided
-            if (expectedSha256 != null && expectedSha256 != "COMPUTE_ON_FIRST_DOWNLOAD") {
-                Log.d(TAG, "Verifying SHA-256...")
-                val actualSha256 = computeSha256(destFile) { progress ->
+
+                    // Download the file
+                    connection.inputStream.use { input ->
+                        RandomAccessFile(destFile, "rw").use { output ->
+                            // Seek to end if resuming
+                            if (resumeOffset > 0) {
+                                output.seek(resumeOffset)
+                            }
+
+                            val buffer = ByteArray(BUFFER_SIZE)
+                            var bytesRead: Int
+                            var totalBytesDownloaded = resumeOffset
+                            var lastProgressUpdate = System.currentTimeMillis()
+                            var lastBytesForSpeed = totalBytesDownloaded
+
+                            while (input.read(buffer).also { bytesRead = it } != -1) {
+                                output.write(buffer, 0, bytesRead)
+                                totalBytesDownloaded += bytesRead
+
+                                // Update progress every 500ms
+                                val now = System.currentTimeMillis()
+                                if (now - lastProgressUpdate > 500) {
+                                    val elapsed = (now - lastProgressUpdate) / 1000.0
+                                    val bytesSinceLastUpdate = totalBytesDownloaded - lastBytesForSpeed
+                                    val speed = if (elapsed > 0) {
+                                        (bytesSinceLastUpdate / elapsed).toLong()
+                                    } else {
+                                        0L
+                                    }
+
+                                    val percent = if (totalSize > 0) {
+                                        ((totalBytesDownloaded * 100) / totalSize).toInt()
+                                    } else {
+                                        0
+                                    }
+
+                                    val progress = DownloadProgress(
+                                        bytesDownloaded = totalBytesDownloaded,
+                                        totalBytes = if (totalSize > 0) totalSize else totalBytesDownloaded,
+                                        progressPercent = percent,
+                                        speedBytesPerSecond = speed,
+                                        statusMessage = formatProgress(totalBytesDownloaded, if (totalSize > 0) totalSize else totalBytesDownloaded, speed)
+                                    )
+
+                                    onProgress(progress)
+
+                                    lastProgressUpdate = now
+                                    lastBytesForSpeed = totalBytesDownloaded
+                                }
+                            }
+
+                            Log.d(TAG, "Download complete: $totalBytesDownloaded bytes")
+                        }
+                    }
+
+                    // Final progress update
+                    val finalTotal = if (totalSize > 0) totalSize else destFile.length()
                     onProgress(DownloadProgress(
-                        bytesDownloaded = totalSize,
-                        totalBytes = totalSize,
+                        bytesDownloaded = finalTotal,
+                        totalBytes = finalTotal,
                         progressPercent = 100,
                         speedBytesPerSecond = 0,
-                        statusMessage = "Verifying: ${progress}%"
+                        statusMessage = "Download complete, verifying..."
                     ))
+
+                    // Verify SHA-256 if provided
+                    if (expectedSha256 != null && expectedSha256 != "COMPUTE_ON_FIRST_DOWNLOAD") {
+                        Log.d(TAG, "Verifying SHA-256...")
+                        val actualSha256 = computeSha256(destFile) { progress ->
+                            onProgress(DownloadProgress(
+                                bytesDownloaded = finalTotal,
+                                totalBytes = finalTotal,
+                                progressPercent = 100,
+                                speedBytesPerSecond = 0,
+                                statusMessage = "Verifying: ${progress}%"
+                            ))
+                        }
+
+                        return@withContext if (actualSha256.equals(expectedSha256, ignoreCase = true)) {
+                            Log.d(TAG, "✓ SHA-256 verified")
+                            DownloadResult.Success(destFile, actualSha256)
+                        } else {
+                            Log.e(TAG, "SHA-256 mismatch!")
+                            Log.e(TAG, "Expected: $expectedSha256")
+                            Log.e(TAG, "Actual:   $actualSha256")
+                            destFile.delete()
+                            DownloadResult.Failed("Checksum verification failed")
+                        }
+                    } else {
+                        // Compute SHA-256 for first download
+                        Log.d(TAG, "Computing SHA-256 for verification...")
+                        val sha256 = computeSha256(destFile) { progress ->
+                            onProgress(DownloadProgress(
+                                bytesDownloaded = finalTotal,
+                                totalBytes = finalTotal,
+                                progressPercent = 100,
+                                speedBytesPerSecond = 0,
+                                statusMessage = "Computing checksum: ${progress}%"
+                            ))
+                        }
+                        Log.d(TAG, "SHA-256: $sha256")
+                        return@withContext DownloadResult.Success(destFile, sha256)
+                    }
+                } catch (ioe: IOException) {
+                    lastError = ioe
+                    Log.w(TAG, "Download attempt ${attempt + 1} failed", ioe)
+
+                    val persistedBytes = if (destFile.exists()) destFile.length() else existingSize
+                    val totalForProgress = when {
+                        attemptTotalSize > 0 -> attemptTotalSize
+                        lastKnownTotalSize > 0 -> lastKnownTotalSize
+                        expectedSize > 0 -> expectedSize
+                        persistedBytes > 0 -> persistedBytes
+                        else -> 1L
+                    }
+
+                    val percent = if (totalForProgress > 0) {
+                        ((persistedBytes * 100) / totalForProgress).toInt().coerceAtMost(100)
+                    } else {
+                        0
+                    }
+
+                    onProgress(
+                        DownloadProgress(
+                            bytesDownloaded = persistedBytes,
+                            totalBytes = totalForProgress,
+                            progressPercent = percent,
+                            speedBytesPerSecond = 0,
+                            statusMessage = "Retrying download (${attempt + 1}/${RealModelConfig.MAX_RETRIES})"
+                        )
+                    )
+
+                    attempt++
+                    if (attempt < RealModelConfig.MAX_RETRIES) {
+                        Thread.sleep(RealModelConfig.RETRY_DELAY_MS)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Download failed", e)
+                    return@withContext DownloadResult.Failed("Download error: ${e.message}", e)
+                } finally {
+                    connection?.disconnect()
                 }
-                
-                if (actualSha256.equals(expectedSha256, ignoreCase = true)) {
-                    Log.d(TAG, "✓ SHA-256 verified")
-                    DownloadResult.Success(destFile, actualSha256)
-                } else {
-                    Log.e(TAG, "SHA-256 mismatch!")
-                    Log.e(TAG, "Expected: $expectedSha256")
-                    Log.e(TAG, "Actual:   $actualSha256")
-                    destFile.delete()
-                    DownloadResult.Failed("Checksum verification failed")
-                }
-            } else {
-                // Compute SHA-256 for first download
-                Log.d(TAG, "Computing SHA-256 for verification...")
-                val sha256 = computeSha256(destFile) { progress ->
-                    onProgress(DownloadProgress(
-                        bytesDownloaded = totalSize,
-                        totalBytes = totalSize,
-                        progressPercent = 100,
-                        speedBytesPerSecond = 0,
-                        statusMessage = "Computing checksum: ${progress}%"
-                    ))
-                }
-                Log.d(TAG, "SHA-256: $sha256")
-                DownloadResult.Success(destFile, sha256)
             }
-            
+
+            Log.e(TAG, "Download failed after ${RealModelConfig.MAX_RETRIES} attempts", lastError)
+            DownloadResult.Failed(
+                "Download failed after ${RealModelConfig.MAX_RETRIES} attempts",
+                lastError
+            )
+
         } catch (e: Exception) {
             Log.e(TAG, "Download failed", e)
             DownloadResult.Failed("Download error: ${e.message}", e)
