@@ -26,19 +26,35 @@ class TesseractOcrEngine @Inject constructor(
         private const val TAG = "TesseractOcrEngine"
         private const val TESSDATA_DIR = "tessdata"
         private const val LANG = "eng"
+        
+        // Shared lock for thread-safe initialization
+        private val initLock = Any()
     }
     
     private var tessBaseAPI: TessBaseAPI? = null
     private val tessDataDir = File(context.filesDir, TESSDATA_DIR)
+    @Volatile
     private var isInitialized = false
     
     init {
-        initializeTesseract()
+        // Synchronize initialization across all threads
+        synchronized(initLock) {
+            if (!isInitialized) {
+                initializeTesseract()
+            }
+        }
     }
     
+    @Synchronized
     private fun initializeTesseract() {
+        // Double-check inside synchronized block
+        if (isInitialized) {
+            Log.d(TAG, "Already initialized, skipping")
+            return
+        }
+        
         try {
-            Log.d(TAG, "Initializing Tesseract OCR...")
+            Log.d(TAG, "🔧 Initializing Tesseract OCR [Thread: ${Thread.currentThread().name}]...")
             
             // Copy tessdata from assets if not already present
             val tessDataFile = File(tessDataDir, "$LANG.traineddata")
@@ -52,28 +68,46 @@ class TesseractOcrEngine @Inject constructor(
                     }
                 }
                 Log.d(TAG, "✓ Tessdata copied: ${tessDataFile.length()} bytes")
+            } else {
+                Log.d(TAG, "Tessdata already exists: ${tessDataFile.length()} bytes")
+            }
+            
+            // Verify file is readable
+            if (!tessDataFile.canRead()) {
+                throw IllegalStateException("Tessdata file is not readable: ${tessDataFile.absolutePath}")
             }
             
             // Initialize Tesseract
+            val dataPath = context.filesDir.absolutePath
+            Log.d(TAG, "Initializing with dataPath: $dataPath, lang: $LANG")
+            
             tessBaseAPI = TessBaseAPI().apply {
-                val success = init(context.filesDir.absolutePath, LANG)
+                val success = init(dataPath, LANG)
                 if (!success) {
-                    throw IllegalStateException("Tesseract init() returned false")
+                    val errorMsg = "Tesseract init() returned false. " +
+                        "Path: $dataPath, Lang: $LANG, " +
+                        "File exists: ${tessDataFile.exists()}, " +
+                        "File size: ${tessDataFile.length()}, " +
+                        "File readable: ${tessDataFile.canRead()}"
+                    Log.e(TAG, errorMsg)
+                    throw IllegalStateException(errorMsg)
                 }
                 
                 // Set page segmentation mode for better coupon recognition
-                pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO_OSD
+                // Try simpler mode first (PSM_AUTO instead of PSM_AUTO_OSD)
+                pageSegMode = TessBaseAPI.PageSegMode.PSM_AUTO
                 
-                Log.d(TAG, "✓ Tesseract initialized successfully")
+                Log.d(TAG, "✅ Tesseract initialized successfully [PSM: PSM_AUTO]")
             }
             
             isInitialized = true
             
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize Tesseract", e)
+            Log.e(TAG, "❌ Failed to initialize Tesseract", e)
             tessBaseAPI?.end()
             tessBaseAPI = null
             isInitialized = false
+            throw e  // Re-throw to make failure explicit for calling code
         }
     }
     
