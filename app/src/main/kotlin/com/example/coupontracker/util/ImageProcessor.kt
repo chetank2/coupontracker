@@ -94,7 +94,7 @@ class ImageProcessor(
     suspend fun processImage(imageUri: Uri): CouponInfo = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Processing image: $imageUri")
-            
+
             // Extract capture timestamp from image metadata
             val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
             if (captureTimestamp != null) {
@@ -106,7 +106,7 @@ class ImageProcessor(
             val bitmap = getBitmapFromUri(imageUri)
             Log.d(TAG, "Successfully loaded bitmap from URI")
 
-            return@withContext processImage(bitmap, captureTimestamp)
+            return@withContext processImage(bitmap, captureTimestamp, imageUri.toString())
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process image", e)
             throw IOException("Failed to process image: ${e.message}", e)
@@ -119,7 +119,11 @@ class ImageProcessor(
      * @param captureTimestamp The timestamp when the image was captured (for relative date calculations)
      * @return The extracted coupon information
      */
-    suspend fun processImage(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo = withContext(Dispatchers.IO) {
+    suspend fun processImage(
+        bitmap: Bitmap,
+        captureTimestamp: Date? = null,
+        originalImageUri: String? = null
+    ): CouponInfo = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "Processing bitmap image")
 
@@ -129,7 +133,7 @@ class ImageProcessor(
                     Log.e(TAG, "❌ Progressive extraction is ENABLED but service is NULL! Check Hilt injection.")
                 } else {
                     Log.d(TAG, "✨ Using PROGRESSIVE extraction pipeline")
-                    return@withContext processWithProgressivePipeline(bitmap, captureTimestamp)
+                    return@withContext processWithProgressivePipeline(bitmap, captureTimestamp, originalImageUri)
                 }
             } else {
                 Log.d(TAG, "ℹ️  Progressive extraction is DISABLED via feature flag")
@@ -178,7 +182,11 @@ class ImageProcessor(
     /**
      * Process image using progressive extraction pipeline
      */
-    private suspend fun processWithProgressivePipeline(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo {
+    private suspend fun processWithProgressivePipeline(
+        bitmap: Bitmap,
+        captureTimestamp: Date? = null,
+        originalImageUri: String? = null
+    ): CouponInfo {
         return withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "🚀 Progressive Pipeline - Starting extraction")
@@ -210,7 +218,7 @@ class ImageProcessor(
                     image = bitmap,
                     ocrText = ocrText,
                     ocrBlocks = emptyList(),
-                    imageUri = "bitmap://${System.currentTimeMillis()}"
+                    imageUri = originalImageUri ?: "bitmap://${System.currentTimeMillis()}"
                 )
                 
                 Log.d(TAG, "✅ Progressive extraction SUCCESS:")
