@@ -214,6 +214,12 @@ dependencies {
     // OCR Libraries - Fully offline Tesseract OCR
     implementation("com.rmtheis:tess-two:9.1.0")
     
+    // ML Kit Text Recognition (offline, more reliable than Tesseract)
+    implementation("com.google.mlkit:text-recognition:16.0.0")
+    
+    // Kotlin coroutines support for Google Play Services tasks
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    
     // Keep barcode scanning if needed (uses bundled model)
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
 

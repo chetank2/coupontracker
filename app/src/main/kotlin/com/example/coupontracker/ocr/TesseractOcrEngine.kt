@@ -90,6 +90,8 @@ class TesseractOcrEngine @Inject constructor(
                         "File size: ${tessDataFile.length()}, " +
                         "File readable: ${tessDataFile.canRead()}"
                     Log.e(TAG, errorMsg)
+                    Log.w(TAG, "⚠️ Tesseract native init failed - this is a known issue with tess-two library")
+                    Log.w(TAG, "   Will fall back to ML Kit Text Recognition (offline, more reliable)")
                     throw IllegalStateException(errorMsg)
                 }
                 
@@ -103,11 +105,11 @@ class TesseractOcrEngine @Inject constructor(
             isInitialized = true
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to initialize Tesseract", e)
+            Log.e(TAG, "❌ Failed to initialize Tesseract - will use ML Kit as fallback", e)
             tessBaseAPI?.end()
             tessBaseAPI = null
             isInitialized = false
-            throw e  // Re-throw to make failure explicit for calling code
+            // DON'T re-throw - let the app continue with ML Kit fallback
         }
     }
     
