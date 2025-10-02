@@ -3,8 +3,6 @@ package com.example.coupontracker.util
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -87,16 +85,6 @@ class SecurePreferencesManager @Inject constructor(
                 // Create or retrieve the Master Key for encryption/decryption
                 val masterKey = MasterKey.Builder(context)
                     .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .setKeyGenParameterSpec(
-                        KeyGenParameterSpec.Builder(
-                            MasterKey.DEFAULT_MASTER_KEY_ALIAS,
-                            KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
-                        )
-                        .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                        .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                        .setKeySize(256)
-                        .build()
-                    )
                     .build()
 
                 // Create the EncryptedSharedPreferences
