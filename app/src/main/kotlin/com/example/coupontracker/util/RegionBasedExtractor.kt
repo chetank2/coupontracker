@@ -78,19 +78,6 @@ class RegionBasedExtractor(
      */
     private fun extractStoreName(fullText: String, bitmap: Bitmap): String? {
         try {
-            // First check for specific store names in HEADER region
-            val knownStores = listOf(
-                "Myntra", "ABHIBUS", "NEWMEE", "IXIGO", "BOAT", "XYXX", "Mivi"
-            )
-
-            // Look for exact matches of known stores first
-            for (store in knownStores) {
-                if (fullText.contains(store, ignoreCase = true)) {
-                    Log.d(TAG, "Found exact match for known store: $store")
-                    return store
-                }
-            }
-
             // Look for logo-like text in the header region (often all caps)
             val headerTextLines = fullText.split("\n")
                 .take(3) // Usually in the first few lines
@@ -455,9 +442,6 @@ class RegionBasedExtractor(
             val miviCodeMatcher = miviCodePattern.matcher(fullText)
             if (miviCodeMatcher.find()) {
                 data["redeemCode"] = miviCodeMatcher.group(1)!!.uppercase()
-            } else if (fullText.contains("Cred", ignoreCase = true) && fullText.contains("80", ignoreCase = true)) {
-                // Fallback to constructed code if "Cred" and "80" are both present
-                data["redeemCode"] = "CREDS80"
             }
 
             // Set description

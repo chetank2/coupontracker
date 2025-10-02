@@ -89,7 +89,7 @@ class ModelDownloadManager(
     }
     
     private val securePrefs = SecurePreferencesManager(context)
-    private val modelDir = File(context.filesDir, "models")
+    private val modelDir = com.example.coupontracker.model.ModelPaths.modelDir(context)
 
     private data class VerificationCache(val version: String?, val result: Boolean)
 
@@ -199,6 +199,11 @@ class ModelDownloadManager(
             if (!allFilesPresent) {
                 return@withContext DownloadResult.Error("Model files incomplete")
             }
+            
+            // Create .verified marker (required by LlmRuntimeManager)
+            val verifiedMarker = File(modelDir, ".verified")
+            verifiedMarker.writeText("Model verified: $MODEL_VERSION\nTimestamp: ${System.currentTimeMillis()}")
+            Log.d(TAG, "Created .verified marker: ${verifiedMarker.absolutePath}")
             
             // Update preferences
             val modelSizeMB = getModelSizeMB()

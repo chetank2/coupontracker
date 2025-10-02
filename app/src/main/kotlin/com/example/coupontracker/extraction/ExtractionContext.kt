@@ -2,6 +2,7 @@ package com.example.coupontracker.extraction
 
 import android.graphics.RectF
 import com.example.coupontracker.data.model.FieldType
+import java.util.Date
 
 /**
  * Context for extraction that preserves all data throughout the pipeline.
@@ -12,7 +13,8 @@ data class ExtractionContext(
     val ocrText: String,
     val ocrBlocks: List<TextBlock> = emptyList(),
     val metadata: Map<String, String> = emptyMap(),
-    val attempts: MutableList<ExtractionAttempt> = mutableListOf()
+    val attempts: MutableList<ExtractionAttempt> = mutableListOf(),
+    val captureTimestamp: Date? = null  // Screenshot/image capture timestamp for relative date calculation
 )
 
 /**

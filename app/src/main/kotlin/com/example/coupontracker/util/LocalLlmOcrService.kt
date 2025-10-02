@@ -304,6 +304,22 @@ class LocalLlmOcrService(
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor() // Fallback
     
+    init {
+        Log.d(TAG, "🔍 LocalLlmOcrService initialization started")
+        
+        // Check if model is available
+        val modelInfo = llmRuntime.getModelInfo()
+        if (modelInfo.isAvailable) {
+            Log.d(TAG, "✅ MiniCPM model available:")
+            Log.d(TAG, "   Version: ${modelInfo.version}")
+            Log.d(TAG, "   Size: ${modelInfo.sizeMB}MB")
+            Log.d(TAG, "   Loaded: ${modelInfo.isLoaded}")
+        } else {
+            Log.w(TAG, "⚠️  MiniCPM model NOT available - extraction will use pattern fallbacks")
+            Log.w(TAG, "   Download the model from Settings to enable AI-powered extraction")
+        }
+    }
+    
     /**
      * Check if the LLM service is available
      */

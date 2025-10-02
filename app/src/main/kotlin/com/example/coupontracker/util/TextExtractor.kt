@@ -126,15 +126,6 @@ class TextExtractor {
      * @return The extracted store name or null if not found
      */
     fun extractStoreName(text: String): String? {
-        // First check for specific store names we know
-        val knownStores = listOf("Myntra", "ABHIBUS", "NEWMEE", "IXIGO", "BOAT", "XYXX")
-        for (store in knownStores) {
-            if (text.contains(store, ignoreCase = true)) {
-                Log.d(TAG, "Found known store name: $store")
-                return store
-            }
-        }
-
         // Look for "Brand:" pattern
         val brandPattern = Pattern.compile("(?i)Brand:\\s*([\\p{L}\\p{M}\\p{N}]+)", Pattern.UNICODE_CASE)
         val brandMatcher = brandPattern.matcher(text)

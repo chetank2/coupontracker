@@ -1,5 +1,6 @@
 package com.example.coupontracker.di
 
+import android.content.Context
 import com.example.coupontracker.data.local.LearnedPatternDao
 import com.example.coupontracker.ocr.OcrEngine
 import com.example.coupontracker.universal.AdaptiveConfidenceScorer
@@ -11,6 +12,7 @@ import com.google.gson.Gson
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
@@ -53,12 +55,13 @@ object UniversalExtractionModule {
     @Provides
     @Singleton
     fun provideUniversalExtractionService(
+        @ApplicationContext context: Context,
         fieldDetector: UniversalFieldDetector,
         patternLearner: PatternLearningEngine,
         confidenceScorer: AdaptiveConfidenceScorer,
         progressiveExtractionService: com.example.coupontracker.extraction.ProgressiveExtractionService
     ): UniversalExtractionService {
-        return UniversalExtractionService(fieldDetector, patternLearner, confidenceScorer, progressiveExtractionService)
+        return UniversalExtractionService(context, fieldDetector, patternLearner, confidenceScorer, progressiveExtractionService)
     }
 
     @Provides

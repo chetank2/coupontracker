@@ -206,6 +206,7 @@ class ImageProcessor(
                 // Step 2: Call progressive extraction
                 Log.d(TAG, "Step 2: Calling progressive extraction service")
                 val progressiveResult = progressiveExtractionService!!.extractCoupon(
+                    androidContext = context,
                     image = bitmap,
                     ocrText = ocrText,
                     ocrBlocks = emptyList(),

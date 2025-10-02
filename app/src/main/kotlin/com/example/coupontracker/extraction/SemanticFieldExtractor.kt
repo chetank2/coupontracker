@@ -196,21 +196,35 @@ class SemanticFieldExtractor {
     private fun extractDescriptionFromSentence(sentence: String): FieldCandidate? {
         // If sentence contains offer-related words and has substance, use it
         val offerKeywords = listOf("get", "offer", "save", "discount", "cashback", "off", "free", "win", "won")
-        val hasOfferKeyword = offerKeywords.any { sentence.contains(it, ignoreCase = true) }
+        val conditionKeywords = listOf("above", "minimum", "min", "orders over", "on orders", "spend")
         
+        val hasOfferKeyword = offerKeywords.any { sentence.contains(it, ignoreCase = true) }
+        val hasCondition = conditionKeywords.any { sentence.contains(it, ignoreCase = true) }
+        
+        // HIGHEST priority: Sentences with both offer AND conditions
+        if (hasOfferKeyword && hasCondition && sentence.length >= 20) {
+            return FieldCandidate(
+                value = sentence.trim(),
+                confidence = 0.85f,  // Higher confidence
+                source = "semantic_offer_with_condition",
+                context = "Sentence contains offer keywords and conditions"
+            )
+        }
+        
+        // HIGH priority: Sentences with offer keywords
         if (hasOfferKeyword && sentence.length >= 20) {
             return FieldCandidate(
-                value = sentence,
-                confidence = 0.7f,
+                value = sentence.trim(),
+                confidence = 0.70f,
                 source = "semantic_offer_sentence",
                 context = "Sentence contains offer keywords"
             )
         }
         
-        // If sentence is substantial (not just a code or date), use it
+        // MEDIUM priority: Substantial sentences (fallback)
         if (sentence.length >= 30 && sentence.split(" ").size >= 5) {
             return FieldCandidate(
-                value = sentence,
+                value = sentence.trim(),
                 confidence = 0.5f,
                 source = "semantic_substantial_sentence",
                 context = "Substantial sentence"

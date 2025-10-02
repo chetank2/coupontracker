@@ -1,5 +1,6 @@
 package com.example.coupontracker.universal
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import com.example.coupontracker.data.model.CashbackInfo
@@ -8,6 +9,7 @@ import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.util.IndianCurrencyParser
 import com.example.coupontracker.util.IndianDateParser
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.*
@@ -20,6 +22,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class UniversalExtractionService @Inject constructor(
+    @ApplicationContext private val androidContext: Context,
     private val fieldDetector: UniversalFieldDetector,
     private val patternLearner: PatternLearningEngine,
     private val confidenceScorer: AdaptiveConfidenceScorer,
@@ -104,6 +107,7 @@ class UniversalExtractionService @Inject constructor(
     ): UniversalExtractionResult {
         try {
             val progressiveResult = progressiveExtractionService.extractCoupon(
+                androidContext = androidContext,
                 image = image,
                 ocrText = ocrText,
                 ocrBlocks = emptyList(),

@@ -20,7 +20,14 @@ class StructuredFieldExtractor {
         private val COMMON_WORDS = setOf(
             "THE", "AND", "FOR", "YOU", "GET", "WITH", "FROM", "EXPIRES", "CODE",
             "COUPON", "OFFER", "VALID", "UPTO", "FLAT", "OFF", "CASHBACK", "THIS",
-            "THAT", "YOUR", "USE", "APPLY", "SAVE", "DISCOUNT", "VIA", "PAY", "ONLY"
+            "THAT", "YOUR", "USE", "APPLY", "SAVE", "DISCOUNT", "VIA", "PAY", "ONLY",
+            "WON", "WIN", "NEXT", "ORDER", "PURCHASE", "BUY", "DETAILS", "NOW", "NEW"
+        )
+        
+        // Payment methods - NOT store names
+        private val PAYMENT_METHODS = setOf(
+            "CRED", "UPI", "CARD", "WALLET", "PAYTM", "GPAY", "PHONEPE", "BHIM",
+            "CASH", "COD", "NET", "BANKING", "DEBIT", "CREDIT"
         )
     }
     
@@ -72,11 +79,12 @@ class StructuredFieldExtractor {
     ): List<FieldCandidate> {
         val candidates = mutableListOf<FieldCandidate>()
         
-        // Strategy 1: Explicit context patterns ("from X", "at Y", "via Z")
-        val explicitPattern = Regex("""(?:from|at|via|by)\s+([A-Z][A-Za-z0-9&.'\-]{1,20})""", RegexOption.IGNORE_CASE)
+        // Strategy 1: Explicit context patterns ("from X", "at Y") - but NOT payment methods
+        val explicitPattern = Regex("""(?:from|at|on)\s+([A-Z][A-Za-z0-9&.'\-]{1,20})""", RegexOption.IGNORE_CASE)
         explicitPattern.findAll(context.ocrText).forEach { match ->
             val storeName = match.groupValues[1]
-            if (storeName.length >= 3) {
+            // Skip payment methods like "via CRED", "via UPI"
+            if (storeName.length >= 3 && storeName.uppercase() !in PAYMENT_METHODS) {
                 candidates.add(FieldCandidate(
                     value = storeName,
                     confidence = 0.8f,
@@ -86,36 +94,67 @@ class StructuredFieldExtractor {
             }
         }
         
-        // Strategy 2: ALL CAPS words (likely brand names)
+        // Strategy 2: ALL CAPS words (likely brand names) - prioritize early text + validate
         val allCapsPattern = Regex("""\b([A-Z]{2,})\b""")
-        allCapsPattern.findAll(context.ocrText).forEach { match ->
+        allCapsPattern.findAll(context.ocrText).forEachIndexed { index, match ->
             val word = match.value
-            if (word !in COMMON_WORDS && word.length in 3..15) {
+            if (word !in COMMON_WORDS && word.uppercase() !in PAYMENT_METHODS && word.length in 3..15 && isValidBrandName(word)) {
+                // Higher confidence for words in first 30% of text
+                val position = match.range.first.toFloat() / context.ocrText.length
+                val confidence = if (position < 0.3f) 0.70f else 0.5f  // Increased from 0.65
+                
                 candidates.add(FieldCandidate(
                     value = word,
-                    confidence = 0.5f,
-                    source = "all_caps",
+                    confidence = confidence,
+                    source = "all_caps_validated",
                     context = getWordContext(context.ocrText, match.range)
                 ))
             }
         }
         
-        // Strategy 3: Title Case words in first 20% of text
-        val textLength = context.ocrText.length
-        if (textLength > 0) {
-            val earlyText = context.ocrText.take((textLength * 0.2).toInt().coerceAtLeast(50))
-            val titleCasePattern = Regex("""\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,2})\b""")
-            titleCasePattern.findAll(earlyText).forEach { match ->
-                val storeName = match.value
-                if (storeName.lowercase() !in COMMON_WORDS.map { it.lowercase() }) {
-                    candidates.add(FieldCandidate(
-                        value = storeName,
-                        confidence = 0.6f,
-                        source = "title_case_early",
-                        context = "Found in first 20% of text"
-                    ))
-                }
+        // Strategy 3: Title Case brands with SMART position-based confidence
+        val titleCasePattern = Regex("""\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,2})\b""")
+        
+        titleCasePattern.findAll(context.ocrText).forEach { match ->
+            val storeName = match.value
+            val words = storeName.split("\\s+".toRegex())
+            val wordCount = words.size
+            
+            // Skip if all words are common
+            val isAllCommon = words.all { it.uppercase() in COMMON_WORDS }
+            if (isAllCommon) return@forEach
+            
+            // Validate brand name quality (reject OCR garbage like "Pastm Patm")
+            if (!isValidBrandName(storeName)) return@forEach
+            
+            // Calculate position-based confidence
+            val position = match.range.first.toFloat() / context.ocrText.length
+            val lineIndex = context.ocrText.substring(0, match.range.first).count { it == '\n' }
+            val isInFirstFewLines = lineIndex < 3
+            
+            // SMART CONFIDENCE LOGIC:
+            // 1. Single word in first 3 lines = HIGHEST (likely brand name/logo)
+            // 2. Multi-word in first 3 lines = HIGH
+            // 3. Multi-word later = MEDIUM (could be description)
+            // 4. Single word later = LOW
+            val confidence = when {
+                wordCount == 1 && isInFirstFewLines -> 0.90f  // "Myntra", "Swiggy" at top
+                wordCount >= 2 && isInFirstFewLines -> 0.85f  // "Zepto Cafe" at top
+                wordCount >= 2 && position < 0.5f -> 0.70f    // "Big Fashion" in middle
+                wordCount == 1 && position < 0.3f -> 0.65f    // Single word early
+                else -> 0.50f                                  // Low confidence
             }
+            
+            candidates.add(FieldCandidate(
+                value = storeName,
+                confidence = confidence,
+                source = when {
+                    wordCount == 1 && isInFirstFewLines -> "brand_name_top"
+                    wordCount >= 2 && isInFirstFewLines -> "multi_word_brand_top"
+                    else -> "title_case"
+                },
+                context = "$wordCount-word at line $lineIndex (${(position * 100).toInt()}%)"
+            ))
         }
         
         // Strategy 4: Repeated words (brand names often repeat)
@@ -193,16 +232,35 @@ class StructuredFieldExtractor {
             ))
         }
         
-        // Pattern 3: Percentage
+        // Pattern 3: Percentage (filter spurious like "030%")
         val percentPattern = Regex(
-            """([0-9]+(?:\.[0-9]{1,2})?)\s*%\s*(off|discount|cashback)?""",
+            """(?<![0-9])([1-9][0-9]?|100)(?:\.[0-9]{1,2})?\s*%\s*(off|discount|cashback)?""",
             RegexOption.IGNORE_CASE
         )
         percentPattern.findAll(context.ocrText).forEach { match ->
+            val percentage = match.groupValues[1].toIntOrNull() ?: 0
+            // Valid percentages are 1-100
+            if (percentage in 1..100) {
+                candidates.add(FieldCandidate(
+                    value = "${match.groupValues[1]}%",
+                    confidence = 0.75f,
+                    source = "percentage",
+                    context = match.value
+                ))
+            }
+        }
+        
+        // Pattern 3b: "flat X off" without currency symbol
+        val flatAmountPattern = Regex(
+            """(?:flat|get|win|won)\s+([0-9]{1,5})\s+(?:off|cashback|discount|rupees?)""",
+            RegexOption.IGNORE_CASE
+        )
+        flatAmountPattern.findAll(context.ocrText).forEach { match ->
+            val amount = match.groupValues[1]
             candidates.add(FieldCandidate(
-                value = "${match.groupValues[1]}%",
-                confidence = 0.8f,
-                source = "percentage",
+                value = "₹$amount",
+                confidence = 0.85f,  // High confidence for explicit "flat X off"
+                source = "flat_amount",
                 context = match.value
             ))
         }
@@ -244,7 +302,13 @@ class StructuredFieldExtractor {
             val count = match.groupValues[1].toIntOrNull() ?: return@forEach
             val unit = match.groupValues[2].lowercase()
             
+            // Use screenshot timestamp if available, otherwise use current time
             val calendar = Calendar.getInstance()
+            if (context.captureTimestamp != null) {
+                calendar.time = context.captureTimestamp
+            }
+            val baseDate = calendar.clone() as Calendar
+            
             when {
                 unit.startsWith("day") -> calendar.add(Calendar.DAY_OF_YEAR, count)
                 unit.startsWith("week") -> calendar.add(Calendar.WEEK_OF_YEAR, count)
@@ -252,8 +316,12 @@ class StructuredFieldExtractor {
             }
             
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            val calculatedDate = dateFormat.format(calendar.time)
+            
+            android.util.Log.d(TAG, "📅 Expiry: OCR='${match.value}' → Base=${dateFormat.format(baseDate.time)} + $count $unit = $calculatedDate (capture timestamp: ${context.captureTimestamp != null})")
+            
             candidates.add(FieldCandidate(
-                value = dateFormat.format(calendar.time),
+                value = calculatedDate,
                 confidence = 0.9f,
                 source = "relative_date",
                 context = match.value
@@ -304,9 +372,9 @@ class StructuredFieldExtractor {
     ): List<FieldCandidate> {
         val candidates = mutableListOf<FieldCandidate>()
         
-        // Pattern 1: Explicit code with context
+        // Pattern 1: Explicit code with context (supports hyphens)
         val contextCodePattern = Regex(
-            """(?:code|coupon|promo|voucher)\s*:?\s*([A-Z0-9]{4,20})""",
+            """(?:code|coupon|promo|voucher)\s*:?\s*([A-Z0-9\-]{4,40})""",
             RegexOption.IGNORE_CASE
         )
         contextCodePattern.findAll(context.ocrText).forEach { match ->
@@ -321,8 +389,8 @@ class StructuredFieldExtractor {
             }
         }
         
-        // Pattern 2: Generic alphanumeric code
-        val genericCodePattern = Regex("""\b([A-Z0-9]{6,15})\b""")
+        // Pattern 2: Generic alphanumeric code (supports hyphens, longer codes)
+        val genericCodePattern = Regex("""\b([A-Z0-9\-]{6,40})\b""")
         genericCodePattern.findAll(context.ocrText).forEach { match ->
             val code = match.value
             if (code !in COMMON_WORDS && isValidCodePattern(code)) {
@@ -361,14 +429,49 @@ class StructuredFieldExtractor {
      * Validate if a string is a valid code pattern
      */
     private fun isValidCodePattern(code: String): Boolean {
+        // Remove hyphens for validation
+        val cleanCode = code.replace("-", "")
+        
         // Must have at least one digit
-        if (!code.any { it.isDigit() }) return false
+        if (!cleanCode.any { it.isDigit() }) return false
         
         // Must have at least one letter
-        if (!code.any { it.isLetter() }) return false
+        if (!cleanCode.any { it.isLetter() }) return false
         
-        // Shouldn't be all the same character
-        if (code.toSet().size == 1) return false
+        // Shouldn't be all the same character (excluding hyphens)
+        if (cleanCode.toSet().size == 1) return false
+        
+        // Don't allow codes that are just hyphens or too short
+        if (cleanCode.length < 4) return false
+        
+        return true
+    }
+    
+    /**
+     * Validate if a string looks like a real brand name (NOT OCR garbage)
+     */
+    private fun isValidBrandName(name: String): Boolean {
+        val cleanName = name.trim()
+        
+        // Too short or too long
+        if (cleanName.length < 3 || cleanName.length > 25) return false
+        
+        // Must have at least one vowel (brands need to be pronounceable)
+        val hasVowel = cleanName.any { it.lowercaseChar() in "aeiou" }
+        if (!hasVowel) return false
+        
+        // Reject if it has too many consonants in a row (like "Pastm")
+        val maxConsecutiveConsonants = cleanName.windowed(4, 1, partialWindows = false)
+            .count { window -> window.all { char -> char.isLetter() && char.lowercaseChar() !in "aeiou" } }
+        if (maxConsecutiveConsonants > 0) return false
+        
+        // Reject if contains too many special characters
+        val specialCharCount = cleanName.count { !it.isLetterOrDigit() && it != ' ' }
+        if (specialCharCount > 2) return false
+        
+        // Reject OCR-like garbage: repeated character patterns like "aa", "mm", "tt"
+        val hasRepeatedChars = cleanName.lowercase().zipWithNext().any { (a, b) -> a == b && a.isLetter() }
+        if (hasRepeatedChars && cleanName.length < 6) return false  // Allow in longer names like "Mississippi"
         
         return true
     }
