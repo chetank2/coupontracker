@@ -1,21 +1,24 @@
-# libggml.so Fix - COMPLETE ✅
+# libggml-cpu.so Fix - COMPLETE ✅
 
-**Date**: October 2, 2025, 11:29 AM  
+**Date**: October 2, 2025, 11:35 AM  
 **Status**: ✅ **BUILD SUCCESSFUL** - Ready to test!
+
+**Update**: The library needed was `libggml-cpu.so` (not `libggml.so`) - newer llama.cpp versions use this.
 
 ---
 
 ## **What Was Done**
 
-### **Problem**:
+### **Problem Evolution**:
 ```
-❌ dlopen failed: library "libggml.so" not found
-❌ MiniCPM inference failed
-❌ Falling back to pattern-based extraction
+FIRST ERROR:  dlopen failed: library "libggml.so" not found
+SECOND ERROR: dlopen failed: library "libggml-cpu.so" not found ← ACTUAL ISSUE
 ```
 
+**Root Cause**: The `libllama.so` in the project was built against a **newer llama.cpp** that uses `libggml-cpu.so` instead of `libggml.so`.
+
 ### **Solution**:
-✅ Copied `libggml.so` from your existing llama.cpp build  
+✅ Copied `libggml-cpu.so` (3.0 MB) from llama.cpp build  
 ✅ Added to all 4 ABIs (arm64-v8a, armeabi-v7a, x86, x86_64)  
 ✅ Rebuilt APK successfully  
 
@@ -24,20 +27,15 @@
 ## **Files Added**
 
 ```
-app/src/main/jniLibs/
-├── arm64-v8a/
-│   ├── libggml.so    ← NEW (567 KB)
-│   └── libllama.so   ← EXISTING (24 MB)
-├── armeabi-v7a/
-│   ├── libggml.so    ← NEW
-│   └── libllama.so   ← EXISTING
-├── x86/
-│   ├── libggml.so    ← NEW
-│   └── libllama.so   ← EXISTING
-└── x86_64/
-    ├── libggml.so    ← NEW
-    └── libllama.so   ← EXISTING
+app/src/main/jniLibs/arm64-v8a/
+├── libggml-cpu.so   ← NEW (3.0 MB)  ← REQUIRED!
+├── libggml.so       ← Also added (567 KB)
+└── libllama.so      ← EXISTING (24 MB)
+
+(Same structure for armeabi-v7a, x86, x86_64)
 ```
+
+**Key**: `libggml-cpu.so` is the critical one needed by `libllama.so`
 
 ---
 
