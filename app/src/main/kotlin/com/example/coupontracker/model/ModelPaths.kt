@@ -7,11 +7,29 @@ import java.io.File
  * Central constants for model storage paths
  * All model files are stored under filesDir/models/
  * 
- * UPDATED FOR GGUF: Now supports both legacy MLC format and new GGUF format
+ * UPDATED FOR MULTI-MODEL SUPPORT:
+ * - Qwen2-1.5B-Instruct: Text-only, fast, mobile-optimized (DEFAULT)
+ * - MiniCPM-Llama3-V2.5: Vision-capable, slower, desktop-optimized (LEGACY)
  */
 object ModelPaths {
     const val MODELS_ROOT = "models"
-    const val MODEL_ID = "minicpm_llama3_v25_q4"
+    
+    // ===== MODEL IDS =====
+    const val MODEL_ID_QWEN2 = "qwen2_1.5b_instruct_q4"
+    const val MODEL_ID_MINICPM = "minicpm_llama3_v25_q4"
+    
+    // ===== DEFAULT MODEL =====
+    const val DEFAULT_MODEL_ID = MODEL_ID_QWEN2  // Qwen2 is now the default
+    
+    // ===== MODEL FILES =====
+    const val QWEN2_MODEL_FILE = "qwen2-1_5b-instruct-q4_k_m.gguf"
+    const val MINICPM_MODEL_FILE = "ggml-model-Q4_K_M.gguf"
+    const val MINICPM_MMPROJ_FILE = "mmproj-model-f16.gguf"
+    
+    // ===== MODEL SIZES (bytes) =====
+    const val QWEN2_MODEL_SIZE_BYTES = 976_506_880L      // 931 MB
+    const val MINICPM_MODEL_SIZE_BYTES = 4_967_641_088L  // 4.9 GB
+    const val MINICPM_MMPROJ_SIZE_BYTES = 857_407_488L   // 817 MB
     
     /**
      * Get root models directory
@@ -21,125 +39,155 @@ object ModelPaths {
     /**
      * Get specific model directory
      */
-    fun modelDir(context: Context, modelId: String = MODEL_ID): File = 
+    fun modelDir(context: Context, modelId: String = DEFAULT_MODEL_ID): File = 
         File(root(context), modelId)
     
     /**
-     * Required files for GGUF vision model (MiniCPM-V-2.6)
-     * Vision model requires BOTH base model and vision projector
+     * Get model file path
      */
-    val REQUIRED_FILES_GGUF = listOf(
-        "base.gguf",    // Base text model (MiniCPM-Llama3-V2.5)
-        "mmproj.gguf"   // Vision projector (multimodal)
-    )
+    fun getModelFile(context: Context, modelId: String = DEFAULT_MODEL_ID): File {
+        val dir = modelDir(context, modelId)
+        val filename = when (modelId) {
+            MODEL_ID_QWEN2 -> QWEN2_MODEL_FILE
+            MODEL_ID_MINICPM -> MINICPM_MODEL_FILE
+            else -> QWEN2_MODEL_FILE
+        }
+        return File(dir, filename)
+    }
     
     /**
-     * Alternative: Single-file GGUF (for backwards compatibility)
-     * Some downloads may provide a combined model file
+     * Get required files for a model
      */
-    val REQUIRED_FILES_GGUF_SINGLE = listOf(
-        "ggml-model-Q4_K_M.gguf"  // Combined model file (~4.7GB)
-    )
-    
-    /**
-     * Optional files for GGUF model (if included in download)
-     */
-    val OPTIONAL_FILES_GGUF = listOf(
-        "tokenizer.json",         // Tokenizer config
-        "config.json"             // Model config
-    )
-    
-    /**
-     * Legacy required files for old MLC format (kept for backwards compatibility)
-     * Only used if GGUF files are not present
-     */
-    val REQUIRED_FILES_LEGACY = listOf(
-        "mlc-chat-config.json",
-        "tokenizer.json",
-        "vision_config.json",
-        "params/ndarray-cache.json",
-        "weights/model.bin",
-        "tokenizer/tokenizer.model"
-    )
-    
-    /**
-     * Get required files based on what's in the directory
-     * Checks for vision model (base.gguf + mmproj.gguf), then single GGUF, then legacy
-     */
-    fun getRequiredFiles(modelDir: File): List<String> {
-        // Check for vision model format (base + mmproj)
-        val baseGguf = File(modelDir, "base.gguf")
-        val mmprojGguf = File(modelDir, "mmproj.gguf")
-        
-        return when {
-            baseGguf.exists() && mmprojGguf.exists() -> {
-                // Vision model with separate projector
-                REQUIRED_FILES_GGUF
+    fun getRequiredFiles(modelId: String): List<String> {
+        return when (modelId) {
+            MODEL_ID_QWEN2 -> {
+                listOf(QWEN2_MODEL_FILE, ".verified")
             }
-            File(modelDir, REQUIRED_FILES_GGUF_SINGLE[0]).exists() -> {
-                // Single combined GGUF file
-                REQUIRED_FILES_GGUF_SINGLE
+            MODEL_ID_MINICPM -> {
+                listOf(MINICPM_MODEL_FILE, MINICPM_MMPROJ_FILE, ".verified")
             }
             else -> {
-                // Legacy MLC format
-                REQUIRED_FILES_LEGACY
+                listOf(QWEN2_MODEL_FILE, ".verified")
             }
         }
     }
     
     /**
-     * Minimum file sizes for GGUF format
-     * Vision model: base (~2GB) + mmproj (~500MB-1GB)
+     * Get expected total size for download
      */
-    val MIN_FILE_SIZES_GGUF = mapOf(
-        "base.gguf" to 1_500_000_000L,                // >= 1.5 GB base model
-        "mmproj.gguf" to 300_000_000L,                // >= 300 MB vision projector
-        "ggml-model-Q4_K_M.gguf" to 3_500_000_000L,  // >= 3.5 GB (single file)
-        "tokenizer.json" to 100_000L,                 // >= 100 KB (if present)
-        "config.json" to 500L                         // >= 500 B (if present)
-    )
-    
-    /**
-     * Minimum file sizes for legacy format
-     */
-    val MIN_FILE_SIZES_LEGACY = mapOf(
-        "weights/model.bin" to 1_500_000_000L,      // >= 1.5 GB
-        "tokenizer/tokenizer.model" to 200_000L,    // >= 200 KB
-        "params/ndarray-cache.json" to 1_000L,      // >= 1 KB
-        "mlc-chat-config.json" to 1_000L,           // >= 1 KB
-        "tokenizer.json" to 1_000_000L,             // >= 1 MB
-        "vision_config.json" to 1_000L              // >= 1 KB
-    )
-    
-    /**
-     * Get minimum file sizes based on what's in the directory
-     */
-    fun getMinFileSizes(modelDir: File): Map<String, Long> {
-        val ggufFile = File(modelDir, REQUIRED_FILES_GGUF[0])
-        return if (ggufFile.exists()) {
-            MIN_FILE_SIZES_GGUF
-        } else {
-            MIN_FILE_SIZES_LEGACY
+    fun getExpectedSize(modelId: String): Long {
+        return when (modelId) {
+            MODEL_ID_QWEN2 -> QWEN2_MODEL_SIZE_BYTES
+            MODEL_ID_MINICPM -> MINICPM_MODEL_SIZE_BYTES + MINICPM_MMPROJ_SIZE_BYTES
+            else -> QWEN2_MODEL_SIZE_BYTES
         }
     }
     
     /**
-     * Check if model is GGUF format (vision or single file)
+     * Check if model has vision support
      */
-    fun isGgufModel(modelDir: File): Boolean {
-        val hasVisionModel = File(modelDir, "base.gguf").exists() && 
-                            File(modelDir, "mmproj.gguf").exists()
-        val hasSingleGguf = File(modelDir, "ggml-model-Q4_K_M.gguf").exists()
-        
-        return hasVisionModel || hasSingleGguf
+    fun hasVisionSupport(modelId: String): Boolean {
+        return when (modelId) {
+            MODEL_ID_QWEN2 -> false  // Text-only
+            MODEL_ID_MINICPM -> true // Vision-capable
+            else -> false
+        }
     }
     
     /**
-     * Check if model is vision model (base + mmproj)
+     * Get human-readable model name
      */
-    fun isVisionModel(modelDir: File): Boolean {
-        return File(modelDir, "base.gguf").exists() && 
-               File(modelDir, "mmproj.gguf").exists()
+    fun getModelName(modelId: String): String {
+        return when (modelId) {
+            MODEL_ID_QWEN2 -> "Qwen2-1.5B-Instruct"
+            MODEL_ID_MINICPM -> "MiniCPM-Llama3-V2.5"
+            else -> "Qwen2-1.5B-Instruct"
+        }
     }
+    
+    /**
+     * Get human-readable model size
+     */
+    fun getModelSizeFormatted(modelId: String): String {
+        val bytes = getExpectedSize(modelId)
+        val mb = bytes / (1024 * 1024)
+        val gb = bytes / (1024 * 1024 * 1024)
+        return if (gb > 1) {
+            String.format("%.1f GB", gb.toFloat())
+        } else {
+            "$mb MB"
+        }
+    }
+    
+    /**
+     * Check if model is downloaded and verified
+     */
+    fun isModelVerified(context: Context, modelId: String = DEFAULT_MODEL_ID): Boolean {
+        val dir = modelDir(context, modelId)
+        val verifiedFile = File(dir, ".verified")
+        val modelFile = getModelFile(context, modelId)
+        
+        return verifiedFile.exists() && modelFile.exists() && modelFile.length() > 0
+    }
+    
+    /**
+     * Get model info for UI display
+     */
+    data class ModelInfo(
+        val id: String,
+        val name: String,
+        val size: String,
+        val hasVision: Boolean,
+        val isDefault: Boolean,
+        val description: String
+    )
+    
+    /**
+     * Get all available models
+     */
+    fun getAllModels(): List<ModelInfo> {
+        return listOf(
+            ModelInfo(
+                id = MODEL_ID_QWEN2,
+                name = "Qwen2-1.5B-Instruct",
+                size = "931 MB",
+                hasVision = false,
+                isDefault = true,
+                description = "Fast text-only model optimized for mobile. Best for coupon extraction. Inference: 10-15s."
+            ),
+            ModelInfo(
+                id = MODEL_ID_MINICPM,
+                name = "MiniCPM-Llama3-V2.5",
+                size = "5.8 GB",
+                hasVision = true,
+                isDefault = false,
+                description = "Vision-capable model for desktop. Requires GPU. Inference: 60-90s on mobile CPU."
+            )
+        )
+    }
+    
+    // ===== LEGACY COMPATIBILITY =====
+    
+    /**
+     * Minimum file sizes for validation
+     */
+    fun getMinFileSize(modelId: String, filename: String): Long {
+        return when {
+            filename == QWEN2_MODEL_FILE -> 900_000_000L  // >= 900 MB
+            filename == MINICPM_MODEL_FILE -> 4_500_000_000L  // >= 4.5 GB
+            filename == MINICPM_MMPROJ_FILE -> 800_000_000L  // >= 800 MB
+            filename == ".verified" -> 1L
+            else -> 1L
+        }
+    }
+    
+    /**
+     * Check if model is GGUF format (all new models are GGUF)
+     */
+    fun isGgufModel(modelId: String): Boolean = true
+    
+    /**
+     * Check if model is vision model
+     */
+    fun isVisionModel(modelId: String): Boolean = hasVisionSupport(modelId)
 }
-

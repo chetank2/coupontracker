@@ -30,8 +30,9 @@ class LocalLlmOcrService(
     companion object {
         private const val TAG = "LocalLlmOcrService"
 
-        // Inference timeout (30 seconds)
-        private const val INFERENCE_TIMEOUT_MS = 30000L
+        // Inference timeout (120 seconds - increased for slow mobile CPUs)
+        // With n_ctx=512, this should be enough for most devices
+        private const val INFERENCE_TIMEOUT_MS = 120000L
 
         // Model version tracking
         private const val SERVICE_VERSION = "1.0.0"
@@ -479,33 +480,36 @@ class LocalLlmOcrService(
                 throw IllegalStateException("LLM model not available on device")
             }
             
-            // Step 3: Preprocess image for MiniCPM (768px long side, RGB format)
-            val preprocessedBitmap = preprocessForMiniCPM(bitmap)
-            Log.d(TAG, "Preprocessed image for MiniCPM: ${preprocessedBitmap.width}x${preprocessedBitmap.height}")
+            // Step 3: Extract OCR text from image
+            Log.d(TAG, "Extracting OCR text from image...")
+            val ocrText = captureRawOcrText(bitmap)
+            if (ocrText.isNullOrBlank()) {
+                throw IllegalStateException("OCR text extraction failed or returned empty text")
+            }
+            Log.d(TAG, "OCR extracted ${ocrText.length} chars: ${ocrText.take(200)}...")
             
             // Step 4: Create structured extraction prompt
             val prompt = createCouponExtractionPrompt()
             
-            // Step 5: Run LLM inference with timeout and memory tracking
+            // Step 5: Run TEXT-ONLY LLM inference with OCR text
+            Log.d(TAG, "========================================")
+            Log.d(TAG, "🤖 Running MiniCPM TEXT-ONLY inference...")
+            Log.d(TAG, "⏱️  First run: ~60s (model warmup)")
+            Log.d(TAG, "⏱️  Subsequent runs: ~10s")
+            Log.d(TAG, "⏳ Please wait... (max ${INFERENCE_TIMEOUT_MS / 1000}s)")
+            Log.d(TAG, "========================================")
             memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
+            val inferenceStartTime = System.currentTimeMillis()
             val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
-                llmRuntime.runInference(preprocessedBitmap, prompt)
+                llmRuntime.runTextInference(ocrText, prompt)
             }
+            val inferenceElapsed = System.currentTimeMillis() - inferenceStartTime
+            Log.d(TAG, "⏱️  Inference completed in ${inferenceElapsed / 1000}s")
 
             // Step 6: Parse and validate response
             val couponInfo = if (llmResponse != null) {
-                val rawOcrText = try {
-                    captureRawOcrText(bitmap).also {
-                        if (!it.isNullOrBlank()) {
-                            Log.d(TAG, "Captured OCR text sample: ${it.take(80)}")
-                        }
-                    }
-                } catch (ocrError: Exception) {
-                    Log.w(TAG, "Failed to capture supporting OCR text", ocrError)
-                    null
-                }
-
-                val parsedInfo = parseLlmResponseToCouponInfo(llmResponse, rawOcrText)
+                // We already have OCR text from Step 3, no need to extract again
+                val parsedInfo = parseLlmResponseToCouponInfo(llmResponse, ocrText)
                 
                 // CRITICAL: Detect mock responses and fall back to OCR
                 if (isMockLlmResponse(parsedInfo)) {
@@ -622,41 +626,66 @@ class LocalLlmOcrService(
      * Create optimized structured prompt for coupon extraction with strict schema and typed cashback
      */
     private fun createCouponExtractionPrompt(): String {
-        return """
-        You are a strict coupon extractor. Output ONLY valid JSON with this exact schema:
-        {
-            "storeName": string|null,
-            "description": string|null,
-            "cashback": {
-                "type": "percent"|"amount"|"text",
-                "valueNum": number,
-                "currency": "INR"|"USD"|null
-            }|null,
-            "offerText": string|null,
-            "redeemCode": string|null,
-            "expiryDate": string|null,
-            "minOrderAmount": string|null
+        // Detect which model is running
+        val modelInfo = llmRuntime.getModelInfo()
+        val isQwen2 = modelInfo.name.contains("Qwen", ignoreCase = true)
+        
+        val systemMessage = """You are a strict coupon extractor. Output ONLY valid JSON with this exact schema:
+{
+    "storeName": string|null,
+    "description": string|null,
+    "cashback": {
+        "type": "percent"|"amount"|"text",
+        "valueNum": number,
+        "currency": "INR"|"USD"|null
+    }|null,
+    "offerText": string|null,
+    "redeemCode": string|null,
+    "expiryDate": string|null,
+    "minOrderAmount": string|null
+}
+
+CRITICAL CASHBACK RULES:
+- For "75% Off" → {"type":"percent", "valueNum":75}
+- For "₹500 Off" → {"type":"amount", "valueNum":500, "currency":"INR"}
+- For unclear text → {"type":"text", "valueNum":0}
+- NEVER show percentages as rupee amounts
+- offerText = exact banner text ("Flat 75% Off*")
+
+OTHER RULES:
+- If a field is not explicitly present, output null
+- Do not invent values. Do not include notes
+- For codes: exact alphanumeric text (APR25PPM2OP6ZZ)
+- For dates: preserve format (31 May, 2025, 11:59 PM)
+- No code needed = redeemCode: null"""
+
+        val userMessage = "Extract coupon information from the provided text and output ONLY the JSON. No explanations, no notes, ONLY valid JSON."
+        
+        return if (isQwen2) {
+            // Qwen2 uses ChatML format with <|im_start|> and <|im_end|>
+            // CRITICAL: Add JSON example to force JSON output mode
+            """<|im_start|>system
+$systemMessage<|im_end|>
+<|im_start|>user
+$userMessage
+
+Example output format:
+{"storeName":"Lenskart","description":"Free Gold Max Membership for 1 year","cashback":{"type":"percent","valueNum":0},"offerText":"Free* Gold MaX Membership","redeemCode":"AFFLPHG-UFPJ-TDOAB","expiryDate":"31 May, 2025, 11:59 PM","minOrderAmount":null}<|im_end|>
+<|im_start|>assistant
+{"""
+        } else {
+            // MiniCPM / legacy format (plain text)
+            """
+$systemMessage
+
+$userMessage
+
+Example:
+{"storeName":"ACwO","description":"Flat 75% Off on purchase of ACwO Earbuds and BT-Calling Smartwatches","cashback":{"type":"percent","valueNum":75},"offerText":"Flat 75% Off*","redeemCode":"APR25PPM2OP6ZZ","expiryDate":"31 May, 2025, 11:59 PM","minOrderAmount":null}
+
+Extract from the coupon image:
+""".trimIndent()
         }
-
-        CRITICAL CASHBACK RULES:
-        - For "75% Off" → {"type":"percent", "valueNum":75}
-        - For "₹500 Off" → {"type":"amount", "valueNum":500, "currency":"INR"}
-        - For unclear text → {"type":"text", "valueNum":0}
-        - NEVER show percentages as rupee amounts
-        - offerText = exact banner text ("Flat 75% Off*")
-
-        OTHER RULES:
-        - If a field is not explicitly present, output null
-        - Do not invent values. Do not include notes
-        - For codes: exact alphanumeric text (APR25PPM2OP6ZZ)
-        - For dates: preserve format (31 May, 2025, 11:59 PM)
-        - No code needed = redeemCode: null
-
-        Example:
-        {"storeName":"ACwO","description":"Flat 75% Off on purchase of ACwO Earbuds and BT-Calling Smartwatches","cashback":{"type":"percent","valueNum":75},"offerText":"Flat 75% Off*","redeemCode":"APR25PPM2OP6ZZ","expiryDate":"31 May, 2025, 11:59 PM","minOrderAmount":null}
-
-        Extract from the coupon image:
-        """.trimIndent()
     }
 
     private suspend fun captureRawOcrText(bitmap: Bitmap): String? {
@@ -696,11 +725,17 @@ class LocalLlmOcrService(
     private fun parseLlmResponseToCouponInfo(response: String, rawOcrText: String?): CouponInfo {
         return try {
             // Clean response (remove any markdown formatting)
-            val cleanResponse = response.trim()
+            var cleanResponse = response.trim()
                 .removePrefix("```json")
                 .removePrefix("```")
                 .removeSuffix("```")
                 .trim()
+            
+            // CRITICAL: If response doesn't start with {, prepend it
+            // (because we prime the model with { in the prompt)
+            if (!cleanResponse.startsWith("{")) {
+                cleanResponse = "{$cleanResponse"
+            }
             
             // Use strict JSON validation
             val json = CouponJsonValidator.parseStrict(cleanResponse)

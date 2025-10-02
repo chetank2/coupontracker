@@ -117,6 +117,12 @@ class MlcLlmNative {
      * @param prompt Text prompt for the model
      * @return Generated response text
      */
+    external fun runTextInference(
+        modelHandle: Long,
+        ocrText: String,
+        prompt: String
+    ): String?
+    
     external fun runVisionInference(
         modelHandle: Long,
         imageData: ByteArray,

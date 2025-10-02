@@ -81,8 +81,8 @@ class ModelSelfTest @Inject constructor(
                     
                     // Check if this is real inference or mock
                     // Real vision model has base.gguf + mmproj.gguf
-                    val modelDir = com.example.coupontracker.model.ModelPaths.modelDir(context)
-                    val isRealInference = com.example.coupontracker.model.ModelPaths.isVisionModel(modelDir)
+                    val modelId = com.example.coupontracker.model.ModelPaths.DEFAULT_MODEL_ID
+                    val isRealInference = com.example.coupontracker.model.ModelPaths.isVisionModel(modelId)
                     
                     if (isRealInference) {
                         Log.d(TAG, "✓ Self-test PASSED with REAL vision inference in ${duration}ms")

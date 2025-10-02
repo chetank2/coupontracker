@@ -31,6 +31,19 @@ class SafeMlcLlmNative(context: Context) {
         }
     }
 
+    fun runTextInference(
+        modelHandle: Long,
+        ocrText: String,
+        prompt: String
+    ): String {
+        return try {
+            nativeInterface.runTextInference(modelHandle, ocrText, prompt)
+                ?: throw IllegalStateException("Native text inference returned null response")
+        } catch (error: UnsatisfiedLinkError) {
+            throw IllegalStateException("Native runTextInference() unavailable", error)
+        }
+    }
+    
     fun runVisionInference(
         modelHandle: Long,
         imageData: ByteArray,

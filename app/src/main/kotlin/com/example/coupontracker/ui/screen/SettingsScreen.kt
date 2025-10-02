@@ -379,7 +379,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "MiniCPM Model",
+                    text = "Qwen2-1.5B Model",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -486,7 +486,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                     ) {
                         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Download Model (~4-5GB)")
+                        Text("Download Qwen2 Model (931 MB)")
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))

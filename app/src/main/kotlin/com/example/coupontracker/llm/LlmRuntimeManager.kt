@@ -29,9 +29,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             }
         }
         
-        // Model configuration constants
-        private const val MODEL_NAME = "minicpm_llama3_v25_q4"
-        private const val MODEL_FILE = "minicpm_llm_q4f16_1.so"
+        // Model configuration constants (legacy - kept for backwards compatibility)
         private const val CONFIG_FILE = "mlc-chat-config.json"
         private const val TOKENIZER_FILE = "tokenizer.json"
         
@@ -51,11 +49,16 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     private var modelHandle: Long? = null
     private val referenceCount = AtomicInteger(0)
     private val lifecycleMutex = Mutex()
+    private val inferenceMutex = Mutex()  // CRITICAL: Serialize inference to prevent concurrent access
     private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    
+    // CRITICAL: Detected model ID must be declared BEFORE modelDir property
+    // Because modelDir getter accesses detectedModelId during initialization
+    private var detectedModelId: String = com.example.coupontracker.model.ModelPaths.DEFAULT_MODEL_ID
     
     // Model paths - now uses ModelPaths for consistency
     private val modelDir: File
-        get() = com.example.coupontracker.model.ModelPaths.modelDir(context)
+        get() = com.example.coupontracker.model.ModelPaths.modelDir(context, detectedModelId)
     private val configPath = File(modelDir, CONFIG_FILE)
     private val tokenizerPath = File(modelDir, TOKENIZER_FILE)
     
@@ -63,23 +66,63 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     private var autoUnloadJob: Job? = null
     
     /**
+     * Detect which model is installed (Qwen2 or MiniCPM)
+     * Returns the model ID of the installed model, or DEFAULT_MODEL_ID if none found
+     */
+    private fun detectInstalledModel(): String {
+        val qwen2Dir = com.example.coupontracker.model.ModelPaths.modelDir(
+            context,
+            com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN2
+        )
+        val minicpmDir = com.example.coupontracker.model.ModelPaths.modelDir(
+            context,
+            com.example.coupontracker.model.ModelPaths.MODEL_ID_MINICPM
+        )
+        
+        // Check Qwen2 first (it's the default)
+        val qwen2File = File(qwen2Dir, com.example.coupontracker.model.ModelPaths.QWEN2_MODEL_FILE)
+        val qwen2Verified = File(qwen2Dir, ".verified")
+        
+        if (qwen2File.exists() && qwen2Verified.exists()) {
+            Log.d(TAG, "✅ Detected Qwen2-1.5B model")
+            return com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN2
+        }
+        
+        // Check MiniCPM
+        val minicpmFile = File(minicpmDir, com.example.coupontracker.model.ModelPaths.MINICPM_MODEL_FILE)
+        val minicpmVerified = File(minicpmDir, ".verified")
+        
+        if (minicpmFile.exists() && minicpmVerified.exists()) {
+            Log.d(TAG, "✅ Detected MiniCPM-Llama3-V2.5 model")
+            return com.example.coupontracker.model.ModelPaths.MODEL_ID_MINICPM
+        }
+        
+        // No model found, return default
+        Log.d(TAG, "⚠️ No model detected, defaulting to ${com.example.coupontracker.model.ModelPaths.DEFAULT_MODEL_ID}")
+        return com.example.coupontracker.model.ModelPaths.DEFAULT_MODEL_ID
+    }
+    
+    /**
      * Check if the model is available on device
      * Verifies all required files exist and are not empty
-     * Supports both GGUF and legacy MLC formats
-     * Note: Runtime .so is in APK, not in model directory
+     * Supports both Qwen2 and MiniCPM models
      */
     fun isModelAvailable(): Boolean {
-        // Get required files based on what's actually in the directory
-        val requiredFiles = com.example.coupontracker.model.ModelPaths.getRequiredFiles(modelDir)
-        val isGguf = com.example.coupontracker.model.ModelPaths.isGgufModel(modelDir)
+        // Detect which model is installed
+        detectedModelId = detectInstalledModel()
         
-        Log.d(TAG, "Checking model availability (format: ${if (isGguf) "GGUF" else "Legacy MLC"})")
+        // Get required files for the detected model
+        val requiredFiles = com.example.coupontracker.model.ModelPaths.getRequiredFiles(detectedModelId)
+        val modelName = com.example.coupontracker.model.ModelPaths.getModelName(detectedModelId)
+        
+        Log.d(TAG, "Checking model availability: $modelName")
+        Log.d(TAG, "Model directory: ${modelDir.absolutePath}")
         
         val missingFiles = mutableListOf<String>()
-        for (requiredPath in requiredFiles) {
-            val file = File(modelDir, requiredPath)
+        for (requiredFile in requiredFiles) {
+            val file = File(modelDir, requiredFile)
             if (!file.exists() || file.length() == 0L) {
-                missingFiles.add(requiredPath)
+                missingFiles.add(requiredFile)
             }
         }
         
@@ -88,14 +131,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             return false
         }
         
-        // Also check if .verified marker exists
-        val verifiedFile = File(modelDir, ".verified")
-        if (!verifiedFile.exists()) {
-            Log.d(TAG, "Model not verified (missing .verified marker)")
-            return false
-        }
-        
-        Log.d(TAG, "✅ All required model files are present and valid")
+        Log.d(TAG, "✅ All required model files are present and valid ($modelName)")
         return true
     }
     
@@ -104,6 +140,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
      */
     fun getModelInfo(): ModelInfo {
         val isAvailable = isModelAvailable()
+        val modelName = com.example.coupontracker.model.ModelPaths.getModelName(detectedModelId)
         val sizeBytes = if (isAvailable) {
             modelDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
         } else {
@@ -111,8 +148,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         }
         
         return ModelInfo(
-            name = MODEL_NAME,
-            version = "v2.5-q4-android",
+            name = modelName,
+            version = detectedModelId,
             isAvailable = isAvailable,
             isLoaded = modelHandle != null,
             sizeBytes = sizeBytes,
@@ -165,7 +202,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     
     /**
      * Load model or throw exception (internal method)
-     * Supports both GGUF and legacy MLC formats
+     * Supports both Qwen2 and MiniCPM models
      */
     private suspend fun loadModelOrThrow(): Long {
         // Check if model files exist
@@ -173,41 +210,34 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             throw IllegalStateException("Model files not found. Please download the model first.")
         }
         
-        // Detect model format
-        val isGguf = com.example.coupontracker.model.ModelPaths.isGgufModel(modelDir)
+        val modelName = com.example.coupontracker.model.ModelPaths.getModelName(detectedModelId)
+        val modelFile = com.example.coupontracker.model.ModelPaths.getModelFile(context, detectedModelId)
         
-        if (isGguf) {
-            // GGUF model detected - verify it's valid
-            val ggufFile = File(modelDir, "ggml-model-Q4_K_M.gguf")
-            Log.d(TAG, "✅ GGUF model detected: ${ggufFile.absolutePath}")
-            Log.d(TAG, "📦 Size: ${ggufFile.length() / 1_000_000}MB")
-            
-            // Verify GGUF file structure
-            val ggufLoader = GgufModelLoader(context)
-            val metadata = ggufLoader.verifyGgufFile(ggufFile)
-            
-            if (metadata == null) {
-                throw IllegalStateException("Invalid GGUF file format")
-            }
-            
-            Log.d(TAG, "✅ GGUF verification passed")
-            Log.d(TAG, "  Version: ${metadata.version}")
-            Log.d(TAG, "  Tensors: ${metadata.tensorCount}")
-            
-            // ⚠️ IMPORTANT: Real GGUF inference requires:
-            // 1. Vision model support (llama.cpp + LLaVA extensions)
-            // 2. Image preprocessing pipeline
-            // 3. Multimodal tensor handling
-            //
-            // Current JNI bridge is MOCK - see REAL_INFERENCE_GUIDE.md
-            //
-            // To enable real inference:
-            // 1. Build llama.cpp with vision support
-            // 2. Update JNI bridge (llama_jni.cpp)
-            // 3. Set -DBUILD_MOCK_JNI=OFF
-            
-            Log.w(TAG, "⚠️ GGUF model loaded but inference is MOCK")
-            Log.w(TAG, "⚠️ See REAL_INFERENCE_GUIDE.md for real inference setup")
+        Log.d(TAG, "========================================")
+        Log.d(TAG, "🚀 Loading model: $modelName")
+        Log.d(TAG, "📦 Model ID: $detectedModelId")
+        Log.d(TAG, "📁 Model file: ${modelFile.absolutePath}")
+        Log.d(TAG, "📏 Model size: ${modelFile.length() / 1_000_000} MB")
+        Log.d(TAG, "========================================")
+        
+        // Verify GGUF file structure
+        val ggufLoader = GgufModelLoader(context)
+        val metadata = ggufLoader.verifyGgufFile(modelFile)
+        
+        if (metadata == null) {
+            throw IllegalStateException("Invalid GGUF file format")
+        }
+        
+        Log.d(TAG, "✅ GGUF verification passed")
+        Log.d(TAG, "  Version: ${metadata.version}")
+        Log.d(TAG, "  Tensors: ${metadata.tensorCount}")
+        
+        // Check if model has vision support
+        val hasVision = com.example.coupontracker.model.ModelPaths.hasVisionSupport(detectedModelId)
+        if (hasVision) {
+            Log.d(TAG, "✅ Model has vision support (MiniCPM)")
+        } else {
+            Log.d(TAG, "ℹ️  Text-only model (Qwen2) - optimized for speed")
         }
         
         // Load native library
@@ -215,28 +245,19 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             throw IllegalStateException("Failed to load MLC-LLM native library")
         }
         
-        Log.d(TAG, "Loading MiniCPM-Llama3-V2.5 model (format: ${if (isGguf) "GGUF" else "Legacy MLC"})...")
+        Log.d(TAG, "Initializing $modelName model...")
         
         // Initialize model through native interface
-        val handle = if (isGguf) {
-            // For GGUF: pass the GGUF file path directly
-            val ggufFile = File(modelDir, "ggml-model-Q4_K_M.gguf")
-            
-            nativeInterface.initializeModel(
-                ggufFile.absolutePath,  // GGUF file path
-                modelDir.absolutePath   // Model directory as config (for future use)
-            )
-        } else {
-            // For legacy MLC: pass model directory and config
-            nativeInterface.initializeModel(
-                modelDir.absolutePath,
-                configPath.absolutePath
-            )
-        }
+        val handle = nativeInterface.initializeModel(
+            modelFile.absolutePath,  // GGUF file path
+            modelDir.absolutePath    // Model directory (for mmproj if vision model)
+        )
         
         if (handle == 0L) {
-            throw IllegalStateException("Failed to initialize MiniCPM model")
+            throw IllegalStateException("Failed to initialize $modelName model")
         }
+        
+        Log.d(TAG, "✅ Model initialized successfully (handle: $handle)")
         
         // Warm up the model for faster inference
         nativeInterface.warmupModel(handle)
@@ -283,14 +304,20 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 // Convert bitmap to byte array for native interface
                 val imageData = bitmapToByteArray(processedImage)
                 
-                // Run inference through native interface
-                val response = nativeInterface.runVisionInference(
-                    currentHandle,
-                    imageData,
-                    processedImage.width,
-                    processedImage.height,
-                    prompt
-                )
+                // CRITICAL: Lock to prevent concurrent inference (llama.cpp is not thread-safe)
+                val response = inferenceMutex.withLock {
+                    Log.d(TAG, "🔒 Acquired inference lock")
+                    // Run inference through native interface
+                    nativeInterface.runVisionInference(
+                        currentHandle,
+                        imageData,
+                        processedImage.width,
+                        processedImage.height,
+                        prompt
+                    ).also {
+                        Log.d(TAG, "🔓 Released inference lock")
+                    }
+                }
                 
                 Log.d(TAG, "Inference completed, response length: ${response?.length ?: 0}")
                 return@withContext response
@@ -302,6 +329,49 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             
         } catch (e: Exception) {
             Log.e(TAG, "Inference failed", e)
+            return@withContext null
+        }
+    }
+    
+    /**
+     * Run TEXT-ONLY inference with OCR text
+     * This is MUCH faster than vision inference (5-10s vs 15-30 min)
+     * and still uses MiniCPM's intelligence to understand the text
+     */
+    suspend fun runTextInference(ocrText: String, prompt: String): String? = withContext(Dispatchers.IO) {
+        try {
+            // Acquire model (loads if needed)
+            acquireModel()
+            
+            try {
+                val currentHandle = modelHandle ?: throw IllegalStateException("Model handle is null after acquire")
+                
+                Log.d(TAG, "Running MiniCPM TEXT-ONLY inference...")
+                Log.d(TAG, "OCR text length: ${ocrText.length} chars")
+                
+                // CRITICAL: Lock to prevent concurrent inference (llama.cpp is not thread-safe)
+                val response = inferenceMutex.withLock {
+                    Log.d(TAG, "🔒 Acquired inference lock (text-only)")
+                    // Run text inference through native interface
+                    nativeInterface.runTextInference(
+                        currentHandle,
+                        ocrText,
+                        prompt
+                    ).also {
+                        Log.d(TAG, "🔓 Released inference lock (text-only)")
+                    }
+                }
+                
+                Log.d(TAG, "Text inference completed, response length: ${response?.length ?: 0}")
+                return@withContext response
+                
+            } finally {
+                // Always release model after use
+                releaseModel()
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Text inference failed", e)
             return@withContext null
         }
     }

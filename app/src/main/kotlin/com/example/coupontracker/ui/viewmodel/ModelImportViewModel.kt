@@ -139,11 +139,11 @@ class ModelImportViewModel @Inject constructor(
     }
     
     /**
-     * Download REAL MiniCPM model from Hugging Face
-     * Downloads 2-3GB GGUF file with resume support
+     * Download REAL MiniCPM model with VISION support (mmproj)
+     * Downloads 5.8GB total: 4.7GB main model + 1.1GB vision projector
      * 
      * PRIVACY GUARANTEE:
-     * - Only downloads model files (GET requests to allowlisted hosts)
+     * - Only downloads model files (GET requests to HuggingFace)
      * - HTTPS only (enforced by network security config)
      * - No user data ever uploaded
      * - All inference is offline after download
@@ -151,78 +151,34 @@ class ModelImportViewModel @Inject constructor(
     fun downloadModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val modelConfig = com.example.coupontracker.model.RealModelConfig
-                
-                // Check storage space first
-                val requiredSpace = modelConfig.REQUIRED_FREE_SPACE
-                if (!secureDownloader.checkStorageSpace(requiredSpace)) {
-                    withContext(Dispatchers.Main) {
-                        _uiState.value = _uiState.value.copy(
-                            isImporting = false,
-                            importError = "Insufficient storage. Need ${requiredSpace / 1_000_000_000}GB free space."
-                        )
-                    }
-                    return@launch
-                }
-                
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
                         isImporting = true,
                         importProgress = 0,
-                        importMessage = "Preparing download...",
+                        importMessage = "Preparing download (Qwen2-1.5B, 931 MB)...",
                         importError = null
                     )
                 }
                 
-                // Download main model file
-                val modelDir = com.example.coupontracker.model.ModelPaths.modelDir(getApplication())
-                modelDir.mkdirs()
-                
-                val mainModel = modelConfig.MAIN_MODEL
-                val destFile = java.io.File(modelDir, mainModel.filename)
-                
-                withContext(Dispatchers.Main) {
-                    _uiState.value = _uiState.value.copy(
-                        importMessage = "Downloading ${mainModel.filename} (~4.7GB)..."
-                    )
+                // Download Qwen2-1.5B model (text-only, optimized for mobile)
+                val result = modelDownloadManager.downloadQwen2Model { progress ->
+                    viewModelScope.launch(Dispatchers.Main) {
+                        _uiState.value = _uiState.value.copy(
+                            importProgress = progress.progressPercent,
+                            importMessage = progress.statusMessage
+                        )
+                    }
                 }
                 
-                // Download with secure downloader (HTTPS only, allowlisted hosts, no uploads)
-                val result = secureDownloader.downloadFile(
-                    url = modelConfig.getDownloadUrl(mainModel),
-                    destFile = destFile,
-                    expectedSize = mainModel.expectedSize,
-                    expectedSha256 = mainModel.sha256.takeIf { it != "COMPUTE_ON_FIRST_DOWNLOAD" },
-                    onProgress = { progress ->
-                        viewModelScope.launch(Dispatchers.Main) {
-                            _uiState.value = _uiState.value.copy(
-                                importProgress = progress.progressPercent,
-                                importMessage = progress.statusMessage
-                            )
-                        }
-                    }
-                )
-                
                 when (result) {
-                    is com.example.coupontracker.network.SecureModelDownloader.DownloadResult.Success -> {
-                        // Create .verified marker
-                        val verifiedFile = java.io.File(modelDir, ".verified")
-                        verifiedFile.writeText(result.sha256)
-                        
-                        // Update preferences
-                        val securePrefs = com.example.coupontracker.util.SecurePreferencesManager(getApplication())
-                        securePrefs.setLlmModelDownloaded(true)
-                        securePrefs.setLlmModelVersion(modelConfig.MODEL_VERSION)
-                        securePrefs.setLlmModelSizeMB((result.file.length() / 1_000_000f))
-                        securePrefs.setLlmModelChecksum(result.sha256)
-                        
+                    is com.example.coupontracker.llm.DownloadResult.Success -> {
                         withContext(Dispatchers.Main) {
                             _uiState.value = _uiState.value.copy(
                                 isImporting = false,
                                 isModelInstalled = true,
-                                modelSizeMB = (result.file.length() / 1_000_000).toInt(),
+                                modelSizeMB = result.modelSizeMB.toInt(),
                                 importProgress = 100,
-                                importMessage = "Download complete!"
+                                importMessage = "Download complete - Vision enabled!"
                             )
                             
                             // Check for updated model info
@@ -232,16 +188,13 @@ class ModelImportViewModel @Inject constructor(
                             runSelfTest()
                         }
                     }
-                    is com.example.coupontracker.network.SecureModelDownloader.DownloadResult.Failed -> {
+                    is com.example.coupontracker.llm.DownloadResult.Error -> {
                         withContext(Dispatchers.Main) {
                             _uiState.value = _uiState.value.copy(
                                 isImporting = false,
-                                importError = result.reason
+                                importError = result.message
                             )
                         }
-                    }
-                    else -> {
-                        // Progress updates handled in callback
                     }
                 }
                 

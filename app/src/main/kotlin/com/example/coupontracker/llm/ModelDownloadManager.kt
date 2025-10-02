@@ -36,17 +36,27 @@ class ModelDownloadManager(
     companion object {
         private const val TAG = "ModelDownloadManager"
         
-        // Model download configuration
+        // ===== QWEN2 MODEL (NEW DEFAULT) =====
+        private const val QWEN2_BASE_URL = "https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF/resolve/main"
+        private const val QWEN2_MODEL_FILE = "qwen2-1_5b-instruct-q4_k_m.gguf"
+        private const val QWEN2_MODEL_SIZE = 976_506_880L  // 931 MB
+        private const val QWEN2_VERSION = "1.5b-q4-instruct"
+        
+        // ===== MINICPM MODEL (LEGACY) =====
+        // Model download configuration (GGUF repository with mmproj support)
         private const val DEFAULT_MODEL_BASE_URL =
-            "https://github.com/chetank2/coupontracker/releases/download/v2.0.0-production"
-        private const val MODEL_ZIP_NAME = "minicpm_llama3_v25_android.zip"
+            "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5-gguf/resolve/main"
+        
+        // Model files
+        private const val MODEL_FILE = "ggml-model-Q4_K_M.gguf"
+        private const val MMPROJ_FILE = "mmproj-model-f16.gguf"
         private const val MODEL_VERSION = "v2.5-q4-android"
         
-        // Expected SHA-256 checksum for the complete model ZIP file
-        // Real checksum for MiniCPM-Llama3-V2.5 4-bit quantized Android package
+        // Legacy support
+        private const val MODEL_ZIP_NAME = "minicpm_llama3_v25_android.zip"
         private const val EXPECTED_ZIP_CHECKSUM = "bfc31f09be000e56c88d0a9f6360d342f401b36abc63f3c144a64e97224fb8f9"
 
-        // Expected model files with their individual checksums (real MiniCPM structure)
+        // Expected model files with their individual checksums
         private val REQUIRED_FILES = mapOf(
         "minicpm_llm_q4f16_1.so" to "65d9139e97c5a196b48ae08facc468bcc41fef82ef1325ecab2c32e85e1fbbde",
         "model.bin" to "94d7d225fbf28a20ec30534207ec1a0ea017a20cf25674cde166a6d4f0c7bad1",
@@ -54,6 +64,12 @@ class ModelDownloadManager(
         "mlc-chat-config.json" to "c039de2a0c0ec44016207af64a896f7cd3b6940962709c3e49c9321d6c666ff6",
         "tokenizer.model" to "fd635c2e01878a509339a2d4a269c3600531d0e2c8757b553ab4dee59a215869"
     )
+        
+        // GGUF model files (NEW for vision support)
+        private val REQUIRED_GGUF_FILES = mapOf(
+            MODEL_FILE to 4_700_000_000L,  // ~4.7 GB
+            MMPROJ_FILE to 1_100_000_000L  // ~1.1 GB (vision projector)
+        )
         
         // Minimum expected model size (90% of actual size for validation)
         private const val MIN_MODEL_SIZE = 4231152L // 4.03MB (90% of 4.7MB)
@@ -220,6 +236,194 @@ class ModelDownloadManager(
             
         } catch (e: Exception) {
             Log.e(TAG, "Model download failed", e)
+            DownloadResult.Error(resolveErrorMessage(e))
+        }
+    }
+    
+    /**
+     * Download GGUF models (main model + mmproj for vision)
+     * NEW: Supports downloading both base model and vision projector
+     */
+    suspend fun downloadGgufModels(progressCallback: (DownloadProgress) -> Unit): DownloadResult = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Starting GGUF model download (with vision support)...")
+            
+            // Check network conditions
+            if (!shouldProceedWithDownload()) {
+                val message = if (securePrefs.getLlmDownloadWifiOnly()) {
+                    "WiFi connection required for download"
+                } else {
+                    "No network connection available"
+                }
+                return@withContext DownloadResult.Error(message)
+            }
+            
+            val baseUrl = resolveModelBaseUrl()
+            var totalDownloaded = 0L
+            val totalSize = REQUIRED_GGUF_FILES.values.sum()
+            
+            // Download main model (4.7 GB)
+            progressCallback(DownloadProgress(0, "Downloading main model (4.7 GB)..."))
+            val mainModelFile = File(modelDir, MODEL_FILE)
+            
+            val mainResult = downloadFile(
+                url = "$baseUrl/$MODEL_FILE",
+                outputFile = mainModelFile,
+                progressCallback = { progress ->
+                    val overallProgress = ((progress.progressPercent / 100.0 * REQUIRED_GGUF_FILES[MODEL_FILE]!!) / totalSize * 100).toInt()
+                    progressCallback(DownloadProgress(
+                        overallProgress,
+                        "Downloading main model... ${progress.progressPercent}%"
+                    ))
+                }
+            )
+            
+            mainResult.getOrElse { error ->
+                mainModelFile.delete()
+                return@withContext DownloadResult.Error("Main model download failed: ${resolveErrorMessage(error)}")
+            }
+            
+            totalDownloaded += mainModelFile.length()
+            Log.d(TAG, "Main model downloaded: ${mainModelFile.length() / 1_000_000} MB")
+            
+            // Download mmproj (1.1 GB)
+            val mmprojProgress = (totalDownloaded.toFloat() / totalSize * 100).toInt()
+            progressCallback(DownloadProgress(mmprojProgress, "Downloading vision projector (1.1 GB)..."))
+            val mmprojFile = File(modelDir, MMPROJ_FILE)
+            
+            val mmprojResult = downloadFile(
+                url = "$baseUrl/$MMPROJ_FILE",
+                outputFile = mmprojFile,
+                progressCallback = { progress ->
+                    val baseProgress = (totalDownloaded.toFloat() / totalSize * 100).toInt()
+                    val currentProgress = ((progress.progressPercent / 100.0 * REQUIRED_GGUF_FILES[MMPROJ_FILE]!!) / totalSize * 100).toInt()
+                    val overallProgress = baseProgress + currentProgress
+                    progressCallback(DownloadProgress(
+                        overallProgress.coerceAtMost(99),
+                        "Downloading vision projector... ${progress.progressPercent}%"
+                    ))
+                }
+            )
+            
+            mmprojResult.getOrElse { error ->
+                mmprojFile.delete()
+                return@withContext DownloadResult.Error("Vision projector download failed: ${resolveErrorMessage(error)}")
+            }
+            
+            totalDownloaded += mmprojFile.length()
+            Log.d(TAG, "Vision projector downloaded: ${mmprojFile.length() / 1_000_000} MB")
+            
+            // Verify file sizes
+            progressCallback(DownloadProgress(99, "Verifying downloads..."))
+            
+            if (mainModelFile.length() < REQUIRED_GGUF_FILES[MODEL_FILE]!! * 0.95) {
+                mainModelFile.delete()
+                mmprojFile.delete()
+                return@withContext DownloadResult.Error("Main model file size incorrect")
+            }
+            
+            if (mmprojFile.length() < REQUIRED_GGUF_FILES[MMPROJ_FILE]!! * 0.95) {
+                mmprojFile.delete()
+                return@withContext DownloadResult.Error("Vision projector file size incorrect")
+            }
+            
+            // Create .verified marker
+            val verifiedMarker = File(modelDir, ".verified")
+            verifiedMarker.writeText("GGUF Model with Vision verified: $MODEL_VERSION\nTimestamp: ${System.currentTimeMillis()}\nFiles: $MODEL_FILE, $MMPROJ_FILE")
+            Log.d(TAG, "Created .verified marker with vision support")
+            
+            // Update preferences
+            val totalSizeMB = (totalDownloaded / (1024f * 1024f))
+            securePrefs.setLlmModelDownloaded(true)
+            securePrefs.setLlmModelVersion("$MODEL_VERSION-vision")
+            securePrefs.setLlmModelSizeMB(totalSizeMB)
+            
+            verificationCache = VerificationCache("$MODEL_VERSION-vision", true)
+            Log.d(TAG, "✅ GGUF model download completed: ${"%.1f".format(totalSizeMB)} MB (with vision support)")
+            progressCallback(DownloadProgress(100, "Download complete - Vision enabled!"))
+            
+            DownloadResult.Success(totalSizeMB)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "GGUF model download failed", e)
+            DownloadResult.Error(resolveErrorMessage(e))
+        }
+    }
+
+    /**
+     * Download Qwen2 model (text-only, optimized for mobile)
+     * NEW: Replaces MiniCPM as the default model for coupon extraction
+     */
+    suspend fun downloadQwen2Model(
+        modelId: String = com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN2,
+        progressCallback: (DownloadProgress) -> Unit
+    ): DownloadResult = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Starting Qwen2 model download...")
+            
+            // Check network conditions
+            if (!shouldProceedWithDownload()) {
+                val message = if (securePrefs.getLlmDownloadWifiOnly()) {
+                    "WiFi connection required for download"
+                } else {
+                    "No network connection available"
+                }
+                return@withContext DownloadResult.Error(message)
+            }
+            
+            // Get model directory
+            val modelDir = com.example.coupontracker.model.ModelPaths.modelDir(context, modelId)
+            modelDir.mkdirs()
+            
+            // Download model file
+            progressCallback(DownloadProgress(0, "Downloading Qwen2-1.5B model (931 MB)..."))
+            val modelFile = File(modelDir, QWEN2_MODEL_FILE)
+            
+            val downloadResult = downloadFile(
+                url = "$QWEN2_BASE_URL/$QWEN2_MODEL_FILE",
+                outputFile = modelFile,
+                progressCallback = { progress ->
+                    progressCallback(DownloadProgress(
+                        progress.progressPercent,
+                        "Downloading... ${progress.statusMessage}"
+                    ))
+                }
+            )
+            
+            downloadResult.getOrElse { error ->
+                modelFile.delete()
+                return@withContext DownloadResult.Error("Download failed: ${resolveErrorMessage(error)}")
+            }
+            
+            // Verify file size
+            progressCallback(DownloadProgress(99, "Verifying download..."))
+            
+            if (modelFile.length() < QWEN2_MODEL_SIZE * 0.95) {
+                modelFile.delete()
+                return@withContext DownloadResult.Error("Model file size incorrect. Expected ~931 MB, got ${modelFile.length() / 1_000_000} MB")
+            }
+            
+            Log.d(TAG, "Model downloaded: ${modelFile.length() / 1_000_000} MB")
+            
+            // Create .verified marker
+            val verifiedMarker = File(modelDir, ".verified")
+            verifiedMarker.writeText("Qwen2 Model verified: $QWEN2_VERSION\nTimestamp: ${System.currentTimeMillis()}\nFile: $QWEN2_MODEL_FILE")
+            Log.d(TAG, "Created .verified marker for Qwen2")
+            
+            // Update preferences
+            val sizeMB = (modelFile.length() / (1024f * 1024f))
+            securePrefs.setLlmModelDownloaded(true)
+            securePrefs.setLlmModelVersion(QWEN2_VERSION)
+            securePrefs.setLlmModelSizeMB(sizeMB)
+            
+            verificationCache = VerificationCache(QWEN2_VERSION, true)
+            Log.d(TAG, "✅ Qwen2 model download completed: ${"%.1f".format(sizeMB)} MB")
+            progressCallback(DownloadProgress(100, "Download complete!"))
+            
+            DownloadResult.Success(sizeMB)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Qwen2 model download failed", e)
             DownloadResult.Error(resolveErrorMessage(e))
         }
     }

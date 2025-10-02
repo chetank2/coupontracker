@@ -20,29 +20,44 @@ find_library(jnigraphics-lib jnigraphics)
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/llama
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama_cpp  # ⭐ NEW: For tools/mtmd/clip.h access
 )
 
 message(STATUS "🚀 Building REAL llama.cpp JNI bridge")
 message(STATUS "   ABI: ${ANDROID_ABI}")
 message(STATUS "   Build type: ${CMAKE_BUILD_TYPE}")
 
-# Define path to prebuilt libllama.so
+# Define path to prebuilt libraries
 set(LLAMA_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../jniLibs/${ANDROID_ABI}")
 set(llama-lib "${LLAMA_LIB_DIR}/libllama.so")
+set(mtmd-lib "${LLAMA_LIB_DIR}/libmtmd.so")  # ⭐ NEW: MTMD multimodal library
 
-message(STATUS "   Looking for libllama.so in: ${LLAMA_LIB_DIR}")
+message(STATUS "   Looking for libraries in: ${LLAMA_LIB_DIR}")
 
-# Check if file exists
+# Check if libllama.so exists
 if(EXISTS "${llama-lib}")
     message(STATUS "   ✅ Found libllama.so: ${llama-lib}")
 else()
     message(FATAL_ERROR "   ❌ libllama.so not found at ${llama-lib}")
 endif()
 
-# Import as prebuilt library
+# ⭐ Check if libmtmd.so exists
+if(EXISTS "${mtmd-lib}")
+    message(STATUS "   ✅ Found libmtmd.so: ${mtmd-lib}")
+else()
+    message(FATAL_ERROR "   ❌ libmtmd.so not found at ${mtmd-lib}")
+endif()
+
+# Import libllama as prebuilt library
 add_library(llama SHARED IMPORTED)
 set_target_properties(llama PROPERTIES
     IMPORTED_LOCATION "${llama-lib}"
+)
+
+# ⭐ Import libmtmd as prebuilt library
+add_library(mtmd SHARED IMPORTED)
+set_target_properties(mtmd PROPERTIES
+    IMPORTED_LOCATION "${mtmd-lib}"
 )
 
 # Create shared library with REAL implementation
@@ -55,6 +70,7 @@ add_library(
 # Link libraries
 target_link_libraries(mlc_llm_android
     llama
+    mtmd        # ⭐ NEW: Link MTMD for vision support
     ${log-lib}
     ${android-lib}
     ${jnigraphics-lib}

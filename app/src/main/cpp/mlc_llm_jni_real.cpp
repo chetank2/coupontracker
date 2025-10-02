@@ -1,13 +1,17 @@
 #include <jni.h>
 #include <string>
 #include <android/log.h>
+#include <android/bitmap.h>  // ⭐ NEW: For Bitmap handling
 #include <memory>
 #include <unordered_map>
 #include <mutex>
 #include <sstream>
+#include <vector>            // ⭐ NEW: For image data
 
 // Include llama.cpp headers
 #include "llama/llama.h"
+#include "tools/mtmd/clip.h"      // ⭐ NEW: CLIP/MTMD vision library
+#include "tools/mtmd/clip-impl.h" // ⭐ NEW: CLIP implementation (for struct definitions)
 
 #define LOG_TAG "MLC_LLM_JNI_REAL"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -20,8 +24,10 @@ struct ModelContext {
     llama_model* model = nullptr;
     llama_context* ctx = nullptr;
     llama_sampler* sampler = nullptr;
+    clip_ctx* vision_ctx = nullptr;  // ⭐ UPDATED: CLIP vision context (was llama_model*)
     bool has_vision = false;
     std::string model_path;
+    std::string mmproj_path;  // Path to mmproj file
 };
 
 // Model handle management
@@ -45,7 +51,168 @@ jstring string_to_jstring(JNIEnv* env, const std::string& str) {
     return env->NewStringUTF(str.c_str());
 }
 
+// ⭐ Phase 2: Convert Android Bitmap to RGB pixels for CLIP
+std::vector<uint8_t> bitmapToRGB(JNIEnv* env, jbyteArray image_data, jint width, jint height) {
+    jbyte* image_bytes = env->GetByteArrayElements(image_data, nullptr);
+    jsize image_size = env->GetArrayLength(image_data);
+    
+    std::vector<uint8_t> rgb_pixels(width * height * 3);
+    
+    // Assume input is RGB or RGBA, convert to RGB
+    int bytes_per_pixel = image_size / (width * height);
+    
+    for (int i = 0; i < width * height; i++) {
+        rgb_pixels[i * 3 + 0] = image_bytes[i * bytes_per_pixel + 0]; // R
+        rgb_pixels[i * 3 + 1] = image_bytes[i * bytes_per_pixel + 1]; // G
+        rgb_pixels[i * 3 + 2] = image_bytes[i * bytes_per_pixel + 2]; // B
+    }
+    
+    env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
+    return rgb_pixels;
+}
+
 extern "C" {
+
+JNIEXPORT jstring JNICALL
+Java_com_example_coupontracker_llm_MlcLlmNative_runTextInference(
+    JNIEnv* env,
+    jobject /* this */,
+    jlong model_handle,
+    jstring ocr_text,
+    jstring prompt
+) {
+    LOGI("========================================");
+    LOGI("📝 TEXT-ONLY INFERENCE REQUEST");
+    LOGI("========================================");
+    
+    // Validate model handle
+    auto it = g_model_handles.find(model_handle);
+    if (it == g_model_handles.end()) {
+        LOGE("❌ Invalid model handle: %ld", model_handle);
+        return string_to_jstring(env, "{\"error\": \"Invalid model handle\"}");
+    }
+    
+    ModelContext* ctx = it->second;
+    std::string ocr_text_str = jstring_to_string(env, ocr_text);
+    std::string prompt_str = jstring_to_string(env, prompt);
+    
+    LOGI("OCR text length: %zu chars", ocr_text_str.length());
+    LOGD("OCR text preview: %.200s...", ocr_text_str.c_str());
+    LOGD("Prompt: %.100s...", prompt_str.c_str());
+    LOGI("========================================");
+    
+    try {
+        // Build full prompt with OCR text
+        std::string full_prompt = prompt_str + "\n\nCoupon Text (from OCR):\n" + ocr_text_str;
+        
+        LOGI("Step 1: Tokenizing prompt (%zu chars)...", full_prompt.length());
+        const llama_vocab* vocab = llama_model_get_vocab(ctx->model);
+        std::vector<llama_token> tokens;
+        tokens.resize(full_prompt.size() + 512);
+        
+        int n_tokens = llama_tokenize(
+            vocab,
+            full_prompt.c_str(),
+            full_prompt.size(),
+            tokens.data(),
+            tokens.size(),
+            true,  // add_bos
+            true   // special tokens
+        );
+        
+        if (n_tokens < 0) {
+            tokens.resize(-n_tokens);
+            n_tokens = llama_tokenize(vocab, full_prompt.c_str(), full_prompt.size(),
+                                     tokens.data(), tokens.size(), true, true);
+        }
+        tokens.resize(n_tokens);
+        LOGI("  ✅ Tokenized: %d tokens", n_tokens);
+        
+        // CRITICAL: Check if token count exceeds batch size
+        int n_batch = llama_n_batch(ctx->ctx);
+        if (n_tokens > n_batch) {
+            LOGE("❌ Token count (%d) exceeds batch size (%d)", n_tokens, n_batch);
+            LOGE("   This will cause llama.cpp to abort!");
+            LOGE("   Try using a shorter prompt or increase batch size in code");
+            return string_to_jstring(env, "{\"error\": \"Prompt too long for batch size\"}");
+        }
+        LOGI("  ✅ Token count (%d) fits within batch size (%d)", n_tokens, n_batch);
+        
+        // Step 2: Run inference
+        LOGI("Step 2: Running LLM inference...");
+        llama_batch llm_batch = llama_batch_get_one(tokens.data(), n_tokens);
+        int decode_result = llama_decode(ctx->ctx, llm_batch);
+        
+        if (decode_result != 0) {
+            LOGE("❌ LLM decode failed with code: %d", decode_result);
+            return string_to_jstring(env, "{\"error\": \"LLM decode failed\"}");
+        }
+        
+        LOGI("  ✅ Context processed");
+        
+        // Step 3: Generate response
+        LOGI("Step 3: Generating response...");
+        std::vector<llama_token> output_tokens;
+        int max_tokens = 256;  // Reduced for mobile speed (JSON is compact)
+        llama_token eos_token = llama_vocab_eos(vocab);
+        llama_token new_token = llama_sampler_sample(ctx->sampler, ctx->ctx, -1);
+        
+        for (int i = 0; i < max_tokens && new_token != eos_token; i++) {
+            output_tokens.push_back(new_token);
+            llama_batch next_batch = llama_batch_get_one(&new_token, 1);
+            llama_decode(ctx->ctx, next_batch);
+            new_token = llama_sampler_sample(ctx->sampler, ctx->ctx, -1);
+        }
+        
+        LOGI("  ✅ Generated %zu tokens", output_tokens.size());
+        
+        // Step 4: Detokenize response
+        LOGI("Step 4: Detokenizing response...");
+        std::string response_text;
+        response_text.resize(output_tokens.size() * 8);
+        int text_len = llama_detokenize(
+            vocab,
+            output_tokens.data(),
+            output_tokens.size(),
+            &response_text[0],
+            response_text.size(),
+            false,
+            false
+        );
+        response_text.resize(text_len > 0 ? text_len : 0);
+        
+        LOGI("========================================");
+        LOGI("✅ TEXT-ONLY INFERENCE COMPLETE!");
+        LOGI("========================================");
+        LOGI("Response (%zu chars): %.300s...", response_text.length(), response_text.c_str());
+        LOGI("========================================");
+        
+        // CRITICAL: Clear KV cache and reset sampler for next inference
+        llama_memory_t mem = llama_get_memory(ctx->ctx);
+        llama_memory_seq_rm(mem, 0, -1, -1);  // Remove all tokens from sequence 0
+        llama_sampler_reset(ctx->sampler);
+        LOGI("🧹 KV cache cleared and sampler reset for next inference");
+        
+        return string_to_jstring(env, response_text);
+        
+    } catch (const std::exception& e) {
+        LOGE("❌ Text inference failed: %s", e.what());
+        
+        // CRITICAL: Clear KV cache and reset sampler even on error
+        auto it = g_model_handles.find(model_handle);
+        if (it != g_model_handles.end() && it->second->ctx) {
+            llama_memory_t mem = llama_get_memory(it->second->ctx);
+            llama_memory_seq_rm(mem, 0, -1, -1);
+            if (it->second->sampler) {
+                llama_sampler_reset(it->second->sampler);
+            }
+            LOGI("🧹 KV cache cleared and sampler reset after error");
+        }
+        
+        std::string error_json = "{\"error\": \"" + std::string(e.what()) + "\"}";
+        return string_to_jstring(env, error_json);
+    }
+}
 
 JNIEXPORT jlong JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
@@ -102,16 +269,50 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         
         LOGI("✅ Model loaded successfully!");
         
-        // Check if model has vision/encoder capabilities
+        // Check if model has vision/encoder capabilities (built-in)
         LOGI("Step 4: Checking vision capabilities...");
         ctx->has_vision = llama_model_has_encoder(ctx->model);
         LOGI("  - Has encoder: %s", ctx->has_vision ? "YES" : "NO");
         
-        if (ctx->has_vision) {
-            LOGI("✅ Model has VISION encoder!");
+        // NEW: Try to load mmproj file for vision support
+        if (!ctx->has_vision) {
+            LOGI("Step 4b: Attempting to load mmproj (vision projector)...");
+            
+            // Extract model directory from model path
+            std::string model_dir = model_path_str.substr(0, model_path_str.find_last_of("/"));
+            std::string mmproj_path = model_dir + "/mmproj-model-f16.gguf";
+            
+            LOGI("  - Looking for: %s", mmproj_path.c_str());
+            
+            // Check if mmproj file exists
+            FILE* test_file = fopen(mmproj_path.c_str(), "rb");
+            if (test_file) {
+                fclose(test_file);
+                
+                LOGI("  - Found mmproj file, loading with CLIP...");
+                
+                // ⭐ Use clip_init() to load vision projector (new API with params)
+                clip_context_params clip_params;
+                clip_params.verbosity = GGML_LOG_LEVEL_INFO;  // Enable logging
+                clip_init_result clip_result = clip_init(mmproj_path.c_str(), clip_params);
+                ctx->vision_ctx = clip_result.ctx_v;  // Get vision context
+                
+                if (ctx->vision_ctx) {
+                    ctx->mmproj_path = mmproj_path;
+                    ctx->has_vision = true;  // Enable vision support
+                    LOGI("✅ Vision projector (mmproj) loaded with CLIP!");
+                    LOGI("✅ VISION ENABLED - Ready for multimodal inference");
+                } else {
+                    LOGE("❌ Failed to load mmproj with clip_init()");
+                    LOGW("⚠️  Falling back to text-only mode");
+                }
+            } else {
+                LOGW("⚠️  mmproj file not found at: %s", mmproj_path.c_str());
+                LOGW("⚠️  Model will operate in text-only mode");
+                LOGW("⚠️  Download mmproj-model-f16.gguf for vision support");
+            }
         } else {
-            LOGW("⚠️  Model does NOT have vision encoder");
-            LOGW("⚠️  Need mmproj file for vision inference");
+            LOGI("✅ Model has BUILT-IN vision encoder!");
         }
         
         // Get model metadata
@@ -128,8 +329,8 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         // Create context parameters
         LOGI("Step 6: Creating inference context...");
         llama_context_params ctx_params = llama_context_default_params();
-        ctx_params.n_ctx = 2048;           // Context size
-        ctx_params.n_batch = 512;          // Batch size
+        ctx_params.n_ctx = 1024;           // Increased: Prompt w/ JSON example = ~550 tokens
+        ctx_params.n_batch = 1024;         // CRITICAL: Must be >= prompt tokens to avoid SIGABRT
         ctx_params.n_threads = 4;          // CPU threads
         ctx_params.n_threads_batch = 4;    // Batch threads
         
@@ -156,13 +357,27 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         auto sparams = llama_sampler_chain_default_params();
         ctx->sampler = llama_sampler_chain_init(sparams);
         
+        // Add repetition penalty to prevent garbage output (comma spam, etc.)
         llama_sampler_chain_add(ctx->sampler,
-            llama_sampler_init_temp(0.7f));
+            llama_sampler_init_penalties(
+                64,      // penalty_last_n: consider last 64 tokens
+                1.1f,    // penalty_repeat: slight penalty for repetition
+                0.0f,    // penalty_freq: no frequency penalty
+                0.0f     // penalty_present: no presence penalty
+            ));
+        
+        // Add top-p (nucleus) sampling for better quality
+        llama_sampler_chain_add(ctx->sampler,
+            llama_sampler_init_top_p(0.9f, 1));  // top_p=0.9, min_keep=1
+        
+        // Lower temperature for more focused, deterministic output (less garbage)
+        llama_sampler_chain_add(ctx->sampler,
+            llama_sampler_init_temp(0.3f));  // Reduced from 0.7 to 0.3
         
         llama_sampler_chain_add(ctx->sampler,
             llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
         
-        LOGI("✅ Sampler initialized");
+        LOGI("✅ Sampler initialized (temp=0.3, top_p=0.9, repeat_penalty=1.1)");
         
         // Store context and return handle
         jlong handle = g_next_handle++;
@@ -217,42 +432,215 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
     try {
         std::stringstream result;
         
-        if (ctx->has_vision) {
-            // Model has vision encoder built-in
-            LOGI("✅ Model has vision encoder");
-            LOGW("⚠️  Full vision inference requires mmproj integration");
-            LOGW("⚠️  This is Phase 2 (coming next)");
+        if (ctx->has_vision && ctx->vision_ctx) {
+            // ⭐ PHASE 2: FULL CLIP VISION INFERENCE
+            LOGI("✅ Vision context loaded - Running full CLIP inference");
             
-            result << "{";
-            result << "\"storeName\": \"Vision Model Ready\",";
-            result << "\"description\": \"Model loaded with vision encoder. Need mmproj for full inference.\",";
-            result << "\"cashbackAmount\": \"0.00\",";
-            result << "\"redeemCode\": \"\",";
-            result << "\"expiryDate\": \"\",";
-            result << "\"status\": \"VISION_ENCODER_DETECTED\",";
-            result << "\"note\": \"Phase 2: Integrate CLIP/mmproj for image encoding\"";
-            result << "}";
+            // Step 1: Convert byte array to RGB pixels
+            LOGI("Step 1: Converting image to RGB...");
+            std::vector<uint8_t> rgb_pixels = bitmapToRGB(env, image_data, width, height);
+            LOGI("  ✅ Converted %dx%d image to RGB (%zu bytes)", width, height, rgb_pixels.size());
+            
+            // Step 2: Initialize CLIP image structure
+            LOGI("Step 2: Initializing CLIP image structure...");
+            clip_image_u8* img = clip_image_u8_init();
+            if (!img) {
+                LOGE("❌ Failed to initialize clip_image_u8");
+                env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
+                return string_to_jstring(env, "{\"error\": \"Failed to initialize CLIP image\"}");
+            }
+            
+            // Step 3: Build image from RGB pixels
+            LOGI("Step 3: Building CLIP image from pixels...");
+            clip_build_img_from_pixels(rgb_pixels.data(), width, height, img);
+            LOGI("  ✅ CLIP image built");
+            
+            // Step 4: Initialize preprocessing batch
+            LOGI("Step 4: Preprocessing image...");
+            clip_image_f32_batch* batch = clip_image_f32_batch_init();
+            if (!batch) {
+                LOGE("❌ Failed to initialize clip_image_f32_batch");
+                clip_image_u8_free(img);
+                env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
+                return string_to_jstring(env, "{\"error\": \"Failed to initialize preprocessing batch\"}");
+            }
+            
+            // Step 5: Preprocess image (resize, normalize, etc.)
+            bool preprocess_ok = clip_image_preprocess(ctx->vision_ctx, img, batch);
+            clip_image_u8_free(img); // Free u8 image after preprocessing
+            
+            if (!preprocess_ok) {
+                LOGE("❌ Failed to preprocess image");
+                clip_image_f32_batch_free(batch);
+                env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
+                return string_to_jstring(env, "{\"error\": \"Image preprocessing failed\"}");
+            }
+            
+            size_t n_images = clip_image_f32_batch_n_images(batch);
+            LOGI("  ✅ Preprocessed into %zu image(s)", n_images);
+            
+            // Step 6: Encode images with CLIP to get embeddings
+            LOGI("Step 5: Encoding images with CLIP...");
+            int embd_size = clip_n_mmproj_embd(ctx->vision_ctx);
+            LOGI("  - Embedding size: %d dimensions", embd_size);
+            LOGI("  - Number of images: %zu", n_images);
+            LOGI("  - Total embedding buffer: %d floats", embd_size * (int)n_images);
+            
+            std::vector<float> image_embeddings(embd_size * n_images);
+            
+            // ⚠️ WARNING: CLIP encoding is VERY slow on CPU (minutes per image)
+            // For now, skip vision encoding to avoid app freeze
+            // TODO: Implement async encoding or use text-only inference
+            LOGW("⚠️  CLIP vision encoding is extremely slow on CPU");
+            LOGW("⚠️  Skipping vision encoding to prevent app freeze");
+            LOGW("⚠️  Falling back to text-only inference with OCR");
+            
+            bool encode_ok = false;  // Force fallback to text-only
+            
+            // Uncomment below to enable SLOW vision encoding (5-30 min per image):
+            /*
+            bool encode_ok = true;
+            for (size_t i = 0; i < n_images && encode_ok; i++) {
+                LOGI("  - Encoding image %zu/%zu... (this may take 5-30 minutes)", i + 1, n_images);
+                struct clip_image_f32* single_img = clip_image_f32_get_img(batch, i);
+                
+                if (!single_img) {
+                    LOGE("❌ Failed to get image %zu from batch", i);
+                    encode_ok = false;
+                    break;
+                }
+                
+                float* embd_ptr = image_embeddings.data() + (i * embd_size);
+                auto start = std::chrono::high_resolution_clock::now();
+                encode_ok = clip_image_encode(ctx->vision_ctx, 4, single_img, embd_ptr);
+                auto end = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
+                
+                if (!encode_ok) {
+                    LOGE("❌ Failed to encode image %zu", i);
+                    break;
+                }
+                LOGI("  ✅ Image %zu encoded in %ld seconds", i + 1, duration);
+            }
+            */
+            
+            clip_image_f32_batch_free(batch); // Free batch after encoding
+            
+            if (!encode_ok) {
+                LOGW("⚠️  Vision encoding skipped (too slow on mobile CPU)");
+                LOGI("→ Using text-only MiniCPM inference with OCR text");
+                env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
+                
+                // Return status indicating we need GPU or should use text-only mode
+                result << "{";
+                result << "\"storeName\": \"Text Mode\",";
+                result << "\"description\": \"Vision encoding requires GPU acceleration. Using OCR-based extraction.\",";
+                result << "\"cashbackAmount\": \"0.00\",";
+                result << "\"redeemCode\": \"\",";
+                result << "\"expiryDate\": \"\",";
+                result << "\"status\": \"VISION_TOO_SLOW\",";
+                result << "\"note\": \"CLIP encoding takes 5-30 min on CPU. Consider GPU device or use OCR-only mode.\"";
+                result << "}";
+                
+                std::string result_str = result.str();
+                return string_to_jstring(env, result_str);
+            }
+            
+            LOGI("  ✅ All images encoded to %d-dimensional embeddings", embd_size);
+            LOGI("========================================");
+            LOGI("✅ CLIP VISION ENCODING COMPLETE!");
+            LOGI("========================================");
+            
+            // Step 7: Build multimodal prompt
+            // For MiniCPM-V, the format is typically: <image>prompt
+            std::string full_prompt = prompt_str;  // Embeddings are handled separately
+            LOGI("Step 6: Running multimodal LLM inference...");
+            LOGD("  Prompt: %.100s...", full_prompt.c_str());
+            
+            // Step 8: Tokenize and run inference (simplified - production needs image token injection)
+            const llama_vocab* vocab = llama_model_get_vocab(ctx->model);
+            std::vector<llama_token> tokens;
+            tokens.resize(full_prompt.size() + 512);
+            
+            int n_tokens = llama_tokenize(
+                vocab,
+                full_prompt.c_str(),
+                full_prompt.size(),
+                tokens.data(),
+                tokens.size(),
+                true,  // add_bos
+                true   // special tokens
+            );
+            
+            if (n_tokens < 0) {
+                tokens.resize(-n_tokens);
+                n_tokens = llama_tokenize(vocab, full_prompt.c_str(), full_prompt.size(),
+                                         tokens.data(), tokens.size(), true, true);
+            }
+            tokens.resize(n_tokens);
+            
+            LOGI("  ✅ Tokenized: %d tokens", n_tokens);
+            
+            // Step 9: Run inference
+            llama_batch llm_batch = llama_batch_get_one(tokens.data(), n_tokens);
+            llama_decode(ctx->ctx, llm_batch);
+            
+            // Step 10: Generate response
+            LOGI("Step 7: Generating response...");
+            std::vector<llama_token> output_tokens;
+            int max_tokens = 512;  // Increased for detailed coupon info
+            llama_token eos_token = llama_token_eos(vocab);
+            llama_token new_token = llama_sampler_sample(ctx->sampler, ctx->ctx, -1);
+            
+            for (int i = 0; i < max_tokens && new_token != eos_token; i++) {
+                output_tokens.push_back(new_token);
+                llama_batch next_batch = llama_batch_get_one(&new_token, 1);
+                llama_decode(ctx->ctx, next_batch);
+                new_token = llama_sampler_sample(ctx->sampler, ctx->ctx, -1);
+            }
+            
+            // Step 11: Detokenize response
+            std::string response_text;
+            response_text.resize(output_tokens.size() * 8);
+            int text_len = llama_detokenize(
+                vocab,
+                output_tokens.data(),
+                output_tokens.size(),
+                &response_text[0],
+                response_text.size(),
+                false,
+                false
+            );
+            response_text.resize(text_len > 0 ? text_len : 0);
+            
+            LOGI("========================================");
+            LOGI("✅ MULTIMODAL INFERENCE COMPLETE!");
+            LOGI("========================================");
+            LOGI("Response (%zu chars): %.300s...", response_text.length(), response_text.c_str());
+            
+            // Return LLM response (should be JSON from MiniCPM)
+            result << response_text;
             
         } else {
             // Model doesn't have vision encoder - need mmproj
-            LOGW("⚠️  Model does NOT have vision encoder");
+            LOGW("⚠️  Vision context not available");
             LOGW("⚠️  Need to download mmproj file");
             
             result << "{";
             result << "\"storeName\": \"Model Loaded\",";
-            result << "\"description\": \"Text model loaded successfully. Download mmproj file for vision support.\",";
+            result << "\"description\": \"Text model loaded. Download mmproj file for vision support.\",";
             result << "\"cashbackAmount\": \"0.00\",";
             result << "\"redeemCode\": \"\",";
             result << "\"expiryDate\": \"\",";
-            result << "\"status\": \"MODEL_READY_NEED_MMPROJ\",";
-            result << "\"note\": \"Next: Download mmproj-model-f16.gguf from Hugging Face\"";
+            result << "\"status\": \"NEED_MMPROJ\",";
+            result << "\"note\": \"Download mmproj-model-f16.gguf from Settings\"";
             result << "}";
         }
         
         env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
         
         std::string result_str = result.str();
-        LOGI("✅ Inference diagnostic complete");
+        LOGI("✅ Vision inference complete");
         LOGI("========================================");
         
         return string_to_jstring(env, result_str);
@@ -390,6 +778,12 @@ Java_com_example_coupontracker_llm_MlcLlmNative_releaseModel(
     if (ctx->ctx) {
         llama_free(ctx->ctx);
         LOGI("✅ Context freed");
+    }
+    
+    // ⭐ Free CLIP vision context (mmproj)
+    if (ctx->vision_ctx) {
+        clip_free(ctx->vision_ctx);
+        LOGI("✅ Vision projector (CLIP) freed");
     }
     
     // Free model

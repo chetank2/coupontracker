@@ -68,7 +68,7 @@ class ModelImportManager @Inject constructor(
             
             val modelRoot = ModelPaths.root(context)
             val modelDir = ModelPaths.modelDir(context)
-            val stagingDir = File(modelRoot, "${ModelPaths.MODEL_ID}$STAGING_SUFFIX")
+            val stagingDir = File(modelRoot, "${ModelPaths.DEFAULT_MODEL_ID}$STAGING_SUFFIX")
             
             // Check available space (need ~7.5 GB for GGUF, 2.5 GB for legacy)
             // Use larger requirement to support both formats
@@ -113,9 +113,9 @@ class ModelImportManager @Inject constructor(
             onProgress(ImportResult.Progress(75, "Verifying required files..."))
             
             // Detect format and get appropriate required files
-            val requiredFiles = ModelPaths.getRequiredFiles(stagingDir)
-            val minFileSizes = ModelPaths.getMinFileSizes(stagingDir)
-            val isGguf = ModelPaths.isGgufModel(stagingDir)
+            val modelId = ModelPaths.DEFAULT_MODEL_ID
+            val requiredFiles = ModelPaths.getRequiredFiles(modelId)
+            val isGguf = ModelPaths.isGgufModel(modelId)
             
             Log.d(TAG, "Detected model format: ${if (isGguf) "GGUF" else "Legacy MLC"}")
             
@@ -135,8 +135,8 @@ class ModelImportManager @Inject constructor(
                 }
                 
                 // Check minimum size thresholds
-                val minSize = minFileSizes[requiredPath]
-                if (minSize != null && actualSize < minSize) {
+                val minSize = ModelPaths.getMinFileSize(modelId, requiredPath)
+                if (actualSize < minSize) {
                     cleanupStaging(stagingDir)
                     return@withContext ImportResult.Failed(
                         "$requiredPath is too small (${actualSize / 1_000_000} MB). " +
@@ -377,7 +377,8 @@ class ModelImportManager @Inject constructor(
         }
         
         // Get required files based on what's actually installed
-        val requiredFiles = ModelPaths.getRequiredFiles(modelDir)
+        val modelId = ModelPaths.DEFAULT_MODEL_ID
+        val requiredFiles = ModelPaths.getRequiredFiles(modelId)
         
         // Verify all required files still exist
         return requiredFiles.all { path ->
