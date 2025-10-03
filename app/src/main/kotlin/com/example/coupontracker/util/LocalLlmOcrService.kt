@@ -643,23 +643,22 @@ class LocalLlmOcrService(
      * Qwen2.5 has better instruction-following than Qwen2
      */
     private fun buildQwenPrompt(sanitizedOcr: String): String = """<|im_start|>system
-You are a JSON generator. Extract coupon information and output ONLY valid JSON.
+You are a JSON extractor. Output ONLY the JSON object with NO explanation text before or after.
 
-Required schema:
-{"storeName":string|null,"description":string|null,"cashback":{"type":"percent"|"amount"|"text","valueNum":number,"currency":"INR"|"USD"|null}|null,"offerText":string|null,"redeemCode":string|null,"expiryDate":string|null,"minOrderAmount":string|null}
+Schema (use exact key order):
+{"storeName":str|null,"description":str|null,"cashback":{"type":"percent"|"amount"|"text","valueNum":num,"currency":"INR"|"USD"|null}|null,"offerText":str|null,"redeemCode":str|null,"expiryDate":str|null,"minOrderAmount":str|null}
 
 Rules:
-- Include ALL keys in exact order shown
-- Missing fields → null
-- Cashback: "75% Off" → type:"percent", valueNum:75, currency:null
-- Cashback: "₹500 Off" → type:"amount", valueNum:500, currency:"INR"
-- Output ONLY JSON, no prose
-- First char "{", last char "}"<|im_end|>
+- All keys required (use null if missing)
+- Cashback: "75% Off" = type:"percent", valueNum:75, currency:null
+- Cashback: "₹500 Off" = type:"amount", valueNum:500, currency:"INR"
+- DO NOT write "Cashback Details:" or any prose
+- Start with "{" and end with "}"<|im_end|>
 <|im_start|>user
-Extract from this OCR text:
+Extract coupon from OCR:
 $sanitizedOcr<|im_end|>
 <|im_start|>assistant
-{""".trimIndent()
+{"storeName":""".trimIndent()
 
     private suspend fun captureRawOcrText(bitmap: Bitmap): String? {
         customOcrTextProvider?.let { provider ->

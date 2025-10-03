@@ -359,17 +359,17 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         llama_sampler_chain_add(ctx->sampler,
             llama_sampler_init_penalties(
                 1024,      // penalty_last_n: large window to avoid repeating prompt tokens
-                1.25f,     // penalty_repeat: higher to discourage echo
+                1.35f,     // penalty_repeat: VERY strong to prevent "Cashback Details:" echo
                 0.0f,      // penalty_freq
                 0.0f       // penalty_present
             ));
         llama_sampler_chain_add(ctx->sampler,
-            llama_sampler_init_top_p(0.85f, 1));  // Slightly restrictive for structure
+            llama_sampler_init_top_p(1.0f, 1));   // No top-p filtering (greedy mode)
         llama_sampler_chain_add(ctx->sampler,
-            llama_sampler_init_temp(0.15f));      // Low but not zero for valid JSON
+            llama_sampler_init_temp(0.0f));       // temp=0 → GREEDY (most probable token only)
         llama_sampler_chain_add(ctx->sampler,
             llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
-        LOGI("✅ Sampler initialized (temp=0.15, top_p=0.85, repeat_penalty=1.25, last_n=1024)");
+        LOGI("✅ Sampler initialized (temp=0.0 GREEDY, top_p=1.0, repeat_penalty=1.35, last_n=1024)");
         
         // Store context and return handle
         jlong handle = g_next_handle++;
