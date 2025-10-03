@@ -639,31 +639,12 @@ class LocalLlmOcrService(
     }
 
     private fun buildQwenPrompt(sanitizedOcr: String): String = """<|im_start|>system
-You are a JSON generator. Your ONLY task is to output valid JSON. Never output plain text, explanations, or markdown.
+Extract coupon data from OCR text and return it as JSON. Use this exact structure:
+{"storeName":"value","description":"value","cashback":{"type":"percent","valueNum":75,"currency":null},"offerText":"value","redeemCode":"CODE","expiryDate":"13 days","minOrderAmount":"value"}
 
-Output format (required):
-{"storeName":null,"description":null,"cashback":{"type":"text","valueNum":0,"currency":null},"offerText":null,"redeemCode":null,"expiryDate":null,"minOrderAmount":null}
-
-Field rules:
-- storeName: Extract brand/store name or null
-- description: Brief offer description or null
-- cashback.type: "percent" for "%", "amount" for "₹", "text" otherwise
-- cashback.valueNum: Numeric value or 0
-- cashback.currency: "INR" for ₹, "USD" for $, null for %
-- offerText: Exact banner text or null
-- redeemCode: Alphanumeric code or null
-- expiryDate: Date string or null
-- minOrderAmount: Minimum order value or null
-
-DO NOT output: explanations, headers, labels, markdown, or anything except the JSON object.
-<|im_end|>
+All values must be strings (quote them) or null. cashback.type must be one of: "percent", "amount", "text". Put the JSON on a single line with no extra text before or after it.<|im_end|>
 <|im_start|>user
-<ocr>
-$sanitizedOcr
-</ocr>
-
-Output the JSON object:
-<|im_end|>
+$sanitizedOcr<|im_end|>
 <|im_start|>assistant
 {"storeName":""".trimIndent()
 
