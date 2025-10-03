@@ -643,15 +643,43 @@ class LocalLlmOcrService(
      * Qwen2.5 has better instruction-following than Qwen2
      */
     private fun buildQwenPrompt(sanitizedOcr: String): String = """<|im_start|>system
-Extract coupon data as JSON. Output format:
-{"storeName":null,"description":null,"cashback":null,"offerText":null,"redeemCode":null,"expiryDate":null,"minOrderAmount":null}
+You are a JSON extractor. Extract coupon data and output ONLY valid JSON.
+
+Schema (exact key order):
+{"storeName":str|null,"description":str|null,"cashback":obj|null,"offerText":str|null,"redeemCode":str|null,"expiryDate":str|null,"minOrderAmount":str|null}
 
 Rules:
-- Output ONLY JSON (no text before/after)
-- All keys required in order shown
-- Missing data = null
-- Cashback format: {"type":"percent","valueNum":75,"currency":null}<|im_end|>
+- All keys required (use null if data missing)
+- NO explanatory text before or after JSON
+- Start with "{" and end with "}"
+
+Field Extraction Guide:
+
+1. storeName: Brand/store name only (e.g., "Amazon", "Flipkart", "AJIO")
+
+2. redeemCode: ONLY the coupon code itself
+   - Strip ALL extra text and spaces
+   - Example: "Code: SAVE50" → extract "SAVE50" (NOT "Code: SAVE50")
+   - Example: "TBNEIZNOL5FSUZY" → extract "TBNEIZNOL5FSUZY"
+   - NO expiry info, NO extra words
+
+3. expiryDate: Extract date EXACTLY as shown, do NOT reformat
+   - "Expires on 31 May, 2025, 11:59 PM" → extract "31 May, 2025"
+   - "Valid till 2025-12-31" → extract "2025-12-31"
+   - Do NOT hallucinate or change the date format
+
+4. cashback: Structured discount object
+   - "50% off" → {"type":"percent","valueNum":50,"currency":null}
+   - "₹200 off" → {"type":"amount","valueNum":200,"currency":"INR"}
+   - "Flat 11% Off" → {"type":"percent","valueNum":11,"currency":null}
+
+5. minOrderAmount: Minimum order value (e.g., "₹999", "₹500")
+
+6. offerText: Full offer details with conditions
+
+7. description: Brief summary of the offer<|im_end|>
 <|im_start|>user
+Extract coupon from OCR:
 $sanitizedOcr<|im_end|>
 <|im_start|>assistant
 {""".trimIndent()
