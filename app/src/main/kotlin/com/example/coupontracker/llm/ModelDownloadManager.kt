@@ -38,7 +38,7 @@ class ModelDownloadManager(
         
         // ===== QWEN2.5 MODEL (NEW DEFAULT) =====
         private const val QWEN25_BASE_URL = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main"
-        private const val QWEN25_MODEL_FILE = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+        private const val QWEN25_MODEL_FILE = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
         private const val QWEN25_MODEL_SIZE = 1_203_081_216L  // 1.12 GB
         private const val QWEN25_VERSION = "2.5-1.5b-q4-instruct"
         

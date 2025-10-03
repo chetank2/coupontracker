@@ -73,7 +73,7 @@ curl -I <URL> | grep "HTTP/2 200"
 // Qwen2.5-1.5B-Instruct (Primary - Better JSON)
 const val QWEN25_MODEL_ID = "qwen25_1.5b_instruct_q4"
 const val QWEN25_MODEL_DIR = "qwen25_1.5b_instruct_q4"
-const val QWEN25_MODEL_FILE = "qwen25-1_5b-instruct-q4_k_m.gguf"
+const val QWEN25_MODEL_FILE = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
 const val QWEN25_MODEL_SIZE_MB = 950L  // Adjust based on actual file
 const val QWEN25_MODEL_CHECKSUM = "TBD_AFTER_DOWNLOAD"  // Fill after downloading
 ```
@@ -247,19 +247,19 @@ Text(
 1. **Download from HuggingFace** (using URL from Step 1.1):
 ```bash
 cd ~/Downloads
-wget <HUGGINGFACE_URL> -O qwen25-1_5b-instruct-q4_k_m.gguf
+wget <HUGGINGFACE_URL> -O Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
 
 # OR using curl
-curl -L <HUGGINGFACE_URL> -o qwen25-1_5b-instruct-q4_k_m.gguf
+curl -L <HUGGINGFACE_URL> -o Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
 ```
 
 2. **Verify download**:
 ```bash
-ls -lh qwen25-1_5b-instruct-q4_k_m.gguf
+ls -lh Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
 # Should show ~950MB file
 
 # Calculate checksum
-shasum -a 256 qwen25-1_5b-instruct-q4_k_m.gguf
+shasum -a 256 Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
 # Save this checksum for ModelPaths.kt
 ```
 
@@ -279,9 +279,9 @@ const val QWEN25_MODEL_SIZE_MB = <ACTUAL_SIZE>L
 ```bash
 cd ~/Downloads
 mkdir -p qwen25_package
-cp qwen25-1_5b-instruct-q4_k_m.gguf qwen25_package/
+cp Qwen2.5-1.5B-Instruct-Q4_K_M.gguf qwen25_package/
 cd qwen25_package
-zip -9 ../qwen25-1_5b-instruct-q4_k_m.zip qwen25-1_5b-instruct-q4_k_m.gguf
+zip -9 ../Qwen2.5-1.5B-Instruct-Q4_K_M.zip Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
 cd ..
 ```
 
@@ -296,16 +296,16 @@ cd ..
      
      - Better JSON output compliance than Qwen2
      - Improved instruction following
-     - File: qwen25-1_5b-instruct-q4_k_m.gguf
+     - File: Qwen2.5-1.5B-Instruct-Q4_K_M.gguf
      - Size: ~950MB
      - Checksum (SHA256): <CHECKSUM>
      ```
-   - Upload file: `qwen25-1_5b-instruct-q4_k_m.zip`
+   - Upload file: `Qwen2.5-1.5B-Instruct-Q4_K_M.zip`
    - Publish release
 
 3. **Verify release URL**:
 ```bash
-curl -I https://github.com/chetank2/coupontracker/releases/download/v1.0-qwen25/qwen25-1_5b-instruct-q4_k_m.zip
+curl -I https://github.com/chetank2/coupontracker/releases/download/v1.0-qwen25/Qwen2.5-1.5B-Instruct-Q4_K_M.zip
 # Should return HTTP 200
 ```
 
