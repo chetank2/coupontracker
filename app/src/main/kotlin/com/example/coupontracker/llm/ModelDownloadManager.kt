@@ -81,7 +81,7 @@ class ModelDownloadManager(
         private const val MIN_MODEL_SIZE = 4231152L // 4.03MB (90% of 4.7MB)
 
         // Download configuration
-        private const val DOWNLOAD_TIMEOUT_MS = 30_000L
+        private const val DOWNLOAD_TIMEOUT_MS = 900_000L  // 15 minutes (1.12 GB at ~1.3 MB/s)
         private const val BUFFER_SIZE = 8192
         private const val PROGRESS_UPDATE_INTERVAL = 100L
 
