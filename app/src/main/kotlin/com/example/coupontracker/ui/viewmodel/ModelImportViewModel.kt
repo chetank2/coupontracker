@@ -155,7 +155,7 @@ class ModelImportViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isImporting = true,
                         importProgress = 0,
-                        importMessage = "Preparing download (Qwen2.5-1.5B, 1.04 GB)...",
+                        importMessage = "Preparing download (Qwen2.5-1.5B, 940 MB)...",
                         importError = null
                     )
                 }

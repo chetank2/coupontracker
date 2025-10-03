@@ -30,7 +30,7 @@ object ModelPaths {
     const val MINICPM_MMPROJ_FILE = "mmproj-model-f16.gguf"
     
     // ===== MODEL SIZES (bytes) =====
-    const val QWEN25_MODEL_SIZE_BYTES = 1_117_320_736L  // 1.04 GB (verified from HuggingFace)
+    const val QWEN25_MODEL_SIZE_BYTES = 986_048_768L  // 940 MB (bartowski Q4_K_M)
     const val QWEN2_MODEL_SIZE_BYTES = 976_506_880L      // 931 MB
     const val MINICPM_MODEL_SIZE_BYTES = 4_967_641_088L  // 4.9 GB
     const val MINICPM_MMPROJ_SIZE_BYTES = 857_407_488L   // 817 MB

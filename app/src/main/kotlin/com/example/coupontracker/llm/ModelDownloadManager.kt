@@ -39,7 +39,7 @@ class ModelDownloadManager(
         // ===== QWEN2.5 MODEL (NEW DEFAULT) =====
         private const val QWEN25_BASE_URL = "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main"
         private const val QWEN25_MODEL_FILE = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
-        private const val QWEN25_MODEL_SIZE = 1_117_320_736L  // 1.04 GB (actual HuggingFace file size)
+        private const val QWEN25_MODEL_SIZE = 986_048_768L  // 940 MB (actual bartowski repo file size)
         private const val QWEN25_VERSION = "2.5-1.5b-q4-instruct"
         
         // ===== QWEN2 MODEL (LEGACY) =====
@@ -393,7 +393,7 @@ class ModelDownloadManager(
             modelDir.mkdirs()
             
             // Download model file
-            progressCallback(DownloadProgress(0, "Downloading Qwen2.5-1.5B model (1.04 GB)..."))
+            progressCallback(DownloadProgress(0, "Downloading Qwen2.5-1.5B model (940 MB)..."))
             val modelFile = File(modelDir, QWEN25_MODEL_FILE)
             
             val downloadResult = downloadFile(
@@ -417,7 +417,7 @@ class ModelDownloadManager(
             
             if (modelFile.length() < QWEN25_MODEL_SIZE * 0.95) {
                 modelFile.delete()
-                return@withContext DownloadResult.Error("Model file size incorrect. Expected ~1.04 GB, got ${modelFile.length() / 1_000_000} MB")
+                return@withContext DownloadResult.Error("Model file size incorrect. Expected ~940 MB, got ${modelFile.length() / 1_000_000} MB")
             }
             
             Log.d(TAG, "Model downloaded: ${modelFile.length() / 1_000_000} MB")
