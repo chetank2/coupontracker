@@ -152,14 +152,20 @@ object IndianDateParser {
     /**
      * Parse expiry date with IST timezone and confidence scoring
      */
-    fun parseExpiryIST(rawDate: String, now: LocalDate = LocalDate.now()): DateParseResult {
+    fun parseExpiryIST(rawDate: String, now: LocalDate = LocalDate.now(), depth: Int = 0): DateParseResult {
         if (rawDate.isBlank()) {
             return DateParseResult(null, 0.0f, "Empty date string")
         }
         
+        // Prevent infinite recursion (max 2 levels: original + 1 fuzzy attempt)
+        if (depth > 1) {
+            Log.w(TAG, "⚠️ Recursion depth limit reached for: '$rawDate'")
+            return DateParseResult(null, 0.0f, "Recursion depth limit exceeded")
+        }
+        
         // Clean and normalize the date string
         val cleanedDate = cleanDateString(rawDate)
-        Log.d(TAG, "Parsing date: '$rawDate' -> '$cleanedDate'")
+        Log.d(TAG, "Parsing date: '$rawDate' -> '$cleanedDate' (depth: $depth)")
         
         // Try each format in priority order
         for ((index, format) in DATE_FORMATS.withIndex()) {
@@ -188,10 +194,12 @@ object IndianDateParser {
             }
         }
         
-        // Try fuzzy parsing for common variations
-        val fuzzyResult = tryFuzzyParsing(cleanedDate, now)
-        if (fuzzyResult.date != null) {
-            return fuzzyResult
+        // Try fuzzy parsing for common variations (only at depth 0)
+        if (depth == 0) {
+            val fuzzyResult = tryFuzzyParsing(cleanedDate, now, depth + 1)
+            if (fuzzyResult.date != null) {
+                return fuzzyResult
+            }
         }
         
         Log.w(TAG, "Failed to parse date: '$rawDate'")
@@ -205,6 +213,13 @@ object IndianDateParser {
         var cleaned = rawDate.trim()
             .replace(Regex("\\s+"), " ") // Normalize whitespace
             .replace(",", "") // Remove commas initially for parsing
+        
+        // Remove time components that aren't part of the date
+        // E.g., "24 Midnight 2025" -> "24 2025" (invalid but won't cause recursion)
+        cleaned = cleaned.replace(Regex("\\b(?:midnight|noon|am|pm)\\b", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("\\d{1,2}:\\d{2}(?::\\d{2})?"), "") // Remove times like "8:20"
+            .trim()
+            .replace(Regex("\\s+"), " ") // Normalize again after removals
         
         // Normalize month names
         for ((key, value) in MONTH_REPLACEMENTS) {
@@ -291,11 +306,11 @@ object IndianDateParser {
     /**
      * Try fuzzy parsing for common variations
      */
-    private fun tryFuzzyParsing(cleanedDate: String, now: LocalDate): DateParseResult {
+    private fun tryFuzzyParsing(cleanedDate: String, now: LocalDate, depth: Int): DateParseResult {
         // Handle "30 Sept" -> "30 Sep" (common typo)
         val septVariation = cleanedDate.replace("Sept", "Sep")
         if (septVariation != cleanedDate) {
-            val result = parseExpiryIST(septVariation, now)
+            val result = parseExpiryIST(septVariation, now, depth)
             if (result.date != null) {
                 return result.copy(confidence = result.confidence * 0.95f, reason = "Fuzzy: Sept->Sep")
             }
@@ -307,7 +322,7 @@ object IndianDateParser {
         if (match != null) {
             val (day, month) = match.destructured
             val withYear = "$day $month ${now.year}"
-            val result = parseExpiryIST(withYear, now)
+            val result = parseExpiryIST(withYear, now, depth)
             if (result.date != null) {
                 return result.copy(confidence = result.confidence * 0.8f, reason = "Fuzzy: Added current year")
             }
