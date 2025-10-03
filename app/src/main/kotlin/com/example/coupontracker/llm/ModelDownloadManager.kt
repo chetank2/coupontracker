@@ -37,7 +37,7 @@ class ModelDownloadManager(
         private const val TAG = "ModelDownloadManager"
         
         // ===== QWEN2.5 MODEL (NEW DEFAULT) =====
-        private const val QWEN25_BASE_URL = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main"
+        private const val QWEN25_BASE_URL = "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main"
         private const val QWEN25_MODEL_FILE = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
         private const val QWEN25_MODEL_SIZE = 1_203_081_216L  // 1.12 GB
         private const val QWEN25_VERSION = "2.5-1.5b-q4-instruct"
@@ -161,6 +161,17 @@ class ModelDownloadManager(
             ?.trimEnd('/')
 
         return (override?.takeIf { it.isNotEmpty() } ?: DEFAULT_MODEL_BASE_URL).trimEnd('/')
+    }
+
+    /**
+     * Resolve the Qwen2.5 base URL, allowing remote configuration or staged rollouts to change mirrors.
+     */
+    private fun resolveQwen25BaseUrl(): String {
+        val override = securePrefs.getQwen25ModelBaseUrlOverride()
+            ?.trim()
+            ?.trimEnd('/')
+
+        return (override?.takeIf { it.isNotEmpty() } ?: QWEN25_BASE_URL).trimEnd('/')
     }
     
     /**
@@ -386,7 +397,7 @@ class ModelDownloadManager(
             val modelFile = File(modelDir, QWEN25_MODEL_FILE)
             
             val downloadResult = downloadFile(
-                url = "$QWEN25_BASE_URL/$QWEN25_MODEL_FILE",
+                url = "${resolveQwen25BaseUrl()}/$QWEN25_MODEL_FILE",
                 outputFile = modelFile,
                 progressCallback = { progress ->
                     progressCallback(DownloadProgress(
