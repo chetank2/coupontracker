@@ -643,22 +643,18 @@ class LocalLlmOcrService(
      * Qwen2.5 has better instruction-following than Qwen2
      */
     private fun buildQwenPrompt(sanitizedOcr: String): String = """<|im_start|>system
-You are a JSON extractor. Output ONLY the JSON object with NO explanation text before or after.
-
-Schema (use exact key order):
-{"storeName":str|null,"description":str|null,"cashback":{"type":"percent"|"amount"|"text","valueNum":num,"currency":"INR"|"USD"|null}|null,"offerText":str|null,"redeemCode":str|null,"expiryDate":str|null,"minOrderAmount":str|null}
+Extract coupon data as JSON. Output format:
+{"storeName":null,"description":null,"cashback":null,"offerText":null,"redeemCode":null,"expiryDate":null,"minOrderAmount":null}
 
 Rules:
-- All keys required (use null if missing)
-- Cashback: "75% Off" = type:"percent", valueNum:75, currency:null
-- Cashback: "₹500 Off" = type:"amount", valueNum:500, currency:"INR"
-- DO NOT write "Cashback Details:" or any prose
-- Start with "{" and end with "}"<|im_end|>
+- Output ONLY JSON (no text before/after)
+- All keys required in order shown
+- Missing data = null
+- Cashback format: {"type":"percent","valueNum":75,"currency":null}<|im_end|>
 <|im_start|>user
-Extract coupon from OCR:
 $sanitizedOcr<|im_end|>
 <|im_start|>assistant
-{"storeName":""".trimIndent()
+{""".trimIndent()
 
     private suspend fun captureRawOcrText(bitmap: Bitmap): String? {
         customOcrTextProvider?.let { provider ->
