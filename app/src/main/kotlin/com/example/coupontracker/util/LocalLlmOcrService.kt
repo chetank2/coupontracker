@@ -16,8 +16,8 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Local LLM OCR Service using MiniCPM-Llama3-V2.5
- * Provides structured coupon extraction using on-device vision-language model
+ * Local LLM OCR Service using Qwen2-1.5B (text-only)
+ * Provides structured coupon extraction using on-device LLM with OCR input
  */
 class LocalLlmOcrService(
     private val context: Context,
@@ -31,12 +31,14 @@ class LocalLlmOcrService(
         private const val TAG = "LocalLlmOcrService"
 
         // Inference timeout (120 seconds - increased for slow mobile CPUs)
-        // With n_ctx=512, this should be enough for most devices
-        private const val INFERENCE_TIMEOUT_MS = 120000L
+        // With n_ctx=1024, this should be enough for most devices
+        private const val INFERENCE_TIMEOUT_MS = 120_000L
 
         // Model version tracking
-        private const val SERVICE_VERSION = "1.0.0"
-        private const val SUPPORTED_MODEL_VERSION = "v2.5-q4-android"
+        private const val SERVICE_VERSION = "1.3.0"
+        private const val SUPPORTED_MODEL_VERSION = "qwen2_1.5b_instruct_q4"
+
+        private const val OCR_SNIPPET_MAX_CHARS = 2000
 
         private val RUPEE_VARIANT_PATTERN = Regex(
             pattern = """(^|\s+|[^\w₹])((?:₹|₨|૱|रु|रू|rs\.?))[\s:=-]*([+-]?\d[\d,]*(?:\.\d+)?)""",
@@ -357,7 +359,7 @@ class LocalLlmOcrService(
         val triedStages = mutableListOf<String>()
         
         try {
-            Log.d(TAG, "Processing coupon with MiniCPM-Llama3-V2.5 (typed)")
+            Log.d(TAG, "Processing coupon with Qwen2-1.5B (text-only, typed)")
             triedStages.add("LLM")
             
             // Step 1: Validate input
@@ -376,22 +378,27 @@ class LocalLlmOcrService(
                 )
             }
             
-            // Step 3: Preprocess image for MiniCPM
-            val preprocessedBitmap = preprocessForMiniCPM(bitmap)
-            Log.d(TAG, "Preprocessed image for MiniCPM: ${preprocessedBitmap.width}x${preprocessedBitmap.height}")
+            // Step 3: Capture OCR text (used for prompt and post-processing)
+            val rawOcrText = captureRawOcrText(bitmap)
+                ?: return@coroutineScope ExtractResult.Failed(
+                    stage = ExtractionStage.LLM,
+                    error = IllegalStateException("OCR returned blank text; cannot build prompt")
+                )
+            val prompt = createCouponExtractionPrompt(rawOcrText)
             
-            // Step 4: Create structured extraction prompt
-            val prompt = createCouponExtractionPrompt()
-            
-            // Step 5: Run LLM inference with timeout and memory tracking
+            // Step 4: Run LLM inference with timeout and memory tracking
             memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
             val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
-                llmRuntime.runInference(preprocessedBitmap, prompt)
+                llmRuntime.runTextInference(rawOcrText, prompt)
             }
 
-            // Step 6: Parse and validate response
+            // Step 5: Parse and validate response
             if (llmResponse != null) {
-                val rawOcrText = captureRawOcrText(preprocessedBitmap)
+                val trimmedResponse = llmResponse.trimStart()
+                if (!trimmedResponse.startsWith("{")) {
+                    Log.e(TAG, "LLM response did not start with '{': ${trimmedResponse.take(200)}")
+                    throw IllegalStateException("LLM response not JSON (missing opening brace)")
+                }
                 val couponInfo = parseLlmResponseToCouponInfo(llmResponse, rawOcrText)
                 
                 // CRITICAL: Detect mock responses and reject them
@@ -468,7 +475,7 @@ class LocalLlmOcrService(
         var fallbackUsed: String? = null
         
         try {
-            Log.d(TAG, "Processing coupon with MiniCPM-Llama3-V2.5")
+            Log.d(TAG, "Processing coupon with Qwen2-1.5B (text-only)")
             
             // Step 1: Validate input
             if (bitmap.isRecycled) {
@@ -489,7 +496,7 @@ class LocalLlmOcrService(
             Log.d(TAG, "OCR extracted ${ocrText.length} chars: ${ocrText.take(200)}...")
             
             // Step 4: Create structured extraction prompt
-            val prompt = createCouponExtractionPrompt()
+            val prompt = createCouponExtractionPrompt(ocrText)
             
             // Step 5: Run TEXT-ONLY LLM inference with OCR text
             Log.d(TAG, "========================================")
@@ -547,6 +554,7 @@ class LocalLlmOcrService(
             // Record failure
             val duration = System.currentTimeMillis() - startTime
             val errorType = when {
+                e.message?.contains("too short", ignoreCase = true) == true -> "SHORT_RESPONSE"
                 e.message?.contains("timeout", ignoreCase = true) == true -> "TIMEOUT"
                 e.message?.contains("memory", ignoreCase = true) == true -> "MEMORY"
                 e.message?.contains("model", ignoreCase = true) == true -> "MODEL_ERROR"
@@ -625,68 +633,50 @@ class LocalLlmOcrService(
     /**
      * Create optimized structured prompt for coupon extraction with strict schema and typed cashback
      */
-    private fun createCouponExtractionPrompt(): String {
-        // Detect which model is running
-        val modelInfo = llmRuntime.getModelInfo()
-        val isQwen2 = modelInfo.name.contains("Qwen", ignoreCase = true)
-        
-        val systemMessage = """You are a strict coupon extractor. Output ONLY valid JSON with this exact schema:
+    private fun createCouponExtractionPrompt(ocrText: String): String {
+        val sanitizedOcr = sanitizeOcrSnippet(ocrText)
+        return buildQwenPrompt(sanitizedOcr)
+    }
+
+    private fun buildQwenPrompt(sanitizedOcr: String): String = """<|im_start|>system
+You are a strict coupon extractor. Respond with ONE valid JSON object matching this exact schema and key order:
 {
-    "storeName": string|null,
-    "description": string|null,
-    "cashback": {
-        "type": "percent"|"amount"|"text",
-        "valueNum": number,
-        "currency": "INR"|"USD"|null
-    }|null,
-    "offerText": string|null,
-    "redeemCode": string|null,
-    "expiryDate": string|null,
-    "minOrderAmount": string|null
+  "storeName": string|null,
+  "description": string|null,
+  "cashback": {
+    "type": "percent"|"amount"|"text",
+    "valueNum": number,
+    "currency": "INR"|"USD"|null
+  }|null,
+  "offerText": string|null,
+  "redeemCode": string|null,
+  "expiryDate": string|null,
+  "minOrderAmount": string|null
 }
 
-CRITICAL CASHBACK RULES:
-- For "75% Off" → {"type":"percent", "valueNum":75}
-- For "₹500 Off" → {"type":"amount", "valueNum":500, "currency":"INR"}
-- For unclear text → {"type":"text", "valueNum":0}
-- NEVER show percentages as rupee amounts
-- offerText = exact banner text ("Flat 75% Off*")
-
-OTHER RULES:
-- If a field is not explicitly present, output null
-- Do not invent values. Do not include notes
-- For codes: exact alphanumeric text (APR25PPM2OP6ZZ)
-- For dates: preserve format (31 May, 2025, 11:59 PM)
-- No code needed = redeemCode: null"""
-
-        val userMessage = "Extract coupon information from the provided text and output ONLY the JSON. No explanations, no notes, ONLY valid JSON."
-        
-        return if (isQwen2) {
-            // Qwen2 uses ChatML format with <|im_start|> and <|im_end|>
-            // CRITICAL: Add JSON example to force JSON output mode
-            """<|im_start|>system
-$systemMessage<|im_end|>
+Rules:
+- Output JSON only. No prose, no markdown, no comments.
+- First character must be "{" and last must be "}".
+- Include ALL keys in the exact order shown above.
+- If a field is missing, use null (not empty string).
+- Cashback mapping:
+  • "75% Off" → {"type":"percent","valueNum":75,"currency":null}
+  • "₹500 Off" → {"type":"amount","valueNum":500,"currency":"INR"}
+  • Unclear → {"type":"text","valueNum":0,"currency":null}
+- Never convert % into ₹ or vice versa.
+- offerText must be the exact banner phrase if present.
+- redeemCode must be exact alphanumeric (A–Z, 0–9, _, -). If no code, use null.
+- Do not copy any text from inside <ocr>…</ocr> verbatim; extract the values only.
+<|im_end|>
 <|im_start|>user
-$userMessage
+Extract coupon information from this OCR text and return ONLY the JSON object.
 
-Example output format:
-{"storeName":"Lenskart","description":"Free Gold Max Membership for 1 year","cashback":{"type":"percent","valueNum":0},"offerText":"Free* Gold MaX Membership","redeemCode":"AFFLPHG-UFPJ-TDOAB","expiryDate":"31 May, 2025, 11:59 PM","minOrderAmount":null}<|im_end|>
+<ocr>
+$sanitizedOcr
+</ocr>
+<|im_end|>
 <|im_start|>assistant
-{"""
-        } else {
-            // MiniCPM / legacy format (plain text)
-            """
-$systemMessage
-
-$userMessage
-
-Example:
-{"storeName":"ACwO","description":"Flat 75% Off on purchase of ACwO Earbuds and BT-Calling Smartwatches","cashback":{"type":"percent","valueNum":75},"offerText":"Flat 75% Off*","redeemCode":"APR25PPM2OP6ZZ","expiryDate":"31 May, 2025, 11:59 PM","minOrderAmount":null}
-
-Extract from the coupon image:
-""".trimIndent()
-        }
-    }
+{""".trimIndent()
 
     private suspend fun captureRawOcrText(bitmap: Bitmap): String? {
         customOcrTextProvider?.let { provider ->
@@ -696,7 +686,7 @@ Extract from the coupon image:
         }
 
         return try {
-            val ocrText = performMlKitOcr(bitmap)
+            val ocrText = performOfflineOcr(bitmap)
             if (ocrText.isBlank()) {
                 Log.w(TAG, "OCR returned blank text during capture")
                 null
@@ -719,6 +709,19 @@ Extract from the coupon image:
         }
     }
 
+    private fun sanitizeOcrSnippet(ocrText: String): String {
+        if (ocrText.isBlank()) return "(no OCR text captured)"
+        val normalized = ocrText.trim().replace("\r", "")
+        return if (normalized.length <= OCR_SNIPPET_MAX_CHARS) normalized
+        else normalized.substring(0, OCR_SNIPPET_MAX_CHARS).trimEnd() + "…"
+    }
+
+    private fun extractJsonSlice(text: String): String? {
+        val start = text.indexOf('{')
+        val end = text.lastIndexOf('}')
+        return if (start >= 0 && end > start) text.substring(start, end + 1) else null
+    }
+
     /**
      * Parse LLM JSON response to CouponInfo object with strict validation
      */
@@ -733,12 +736,14 @@ Extract from the coupon image:
             
             // CRITICAL: If response doesn't start with {, prepend it
             // (because we prime the model with { in the prompt)
-            if (!cleanResponse.startsWith("{")) {
-                cleanResponse = "{$cleanResponse"
+            if (cleanResponse.length < 20) {
+                throw IllegalStateException("LLM response too short to contain JSON")
             }
+            val jsonCandidate = extractJsonSlice(cleanResponse)
+                ?: throw IllegalStateException("No JSON object found in LLM output")
             
             // Use strict JSON validation
-            val json = CouponJsonValidator.parseStrict(cleanResponse)
+            val json = CouponJsonValidator.parseStrict(jsonCandidate)
             if (json == null) {
                 Log.w(TAG, "JSON failed strict validation, falling back to OCR")
                 throw IllegalArgumentException("Invalid JSON schema")
@@ -769,12 +774,7 @@ Extract from the coupon image:
                 else -> cleanedDescription.take(100)
             }
             
-            // Note: 'amount' field is handled by cashbackAmount, keeping for future use
-            // val amount = json.optString("amount").let {
-            //     if (it.isBlank() || it == "Unknown") null else it
-            // }
-            
-            // Use universal code validation instead of brand-specific patterns
+        // Use universal code validation instead of brand-specific patterns
             val code = (json.optString("redeemCode").takeIf { it.isNotBlank() && it != "Unknown" }
                 ?: json.optString("code").takeIf { it.isNotBlank() && it != "Unknown" })
                 ?.let { rawCode ->
@@ -794,40 +794,20 @@ Extract from the coupon image:
                 if (it.isBlank() || it == "Unknown") null else it
             }
             
-            // Parse new typed cashback or fallback to legacy field
-            val (cashbackAmountRaw, cashbackTypeInfo) = if (json.has("cashback") && !json.isNull("cashback")) {
-                val cashbackObj = json.getJSONObject("cashback")
-                val type = cashbackObj.optString("type", "text")
-                val valueNum = cashbackObj.optDouble("valueNum", 0.0)
-                val currency = cashbackObj.optString("currency", "INR")
-                
-                val displayText = when (type) {
-                    "percent" -> "${valueNum.toInt()}%"
-                    "amount" -> when (currency) {
-                        "INR" -> "₹${valueNum.toInt()}"
-                        "USD" -> "$${valueNum.toInt()}"
-                        else -> "${valueNum.toInt()}"
-                    }
-                    else -> json.optString("offerText", "")
-                }
-                
-                Pair(displayText, Triple(type, valueNum, currency))
-            } else {
-                // Fallback to legacy cashbackAmount field
-                val legacy = json.optString("cashbackAmount").let {
-                    if (it.isBlank() || it == "Unknown") null else it
-                }
-                Pair(legacy, null)
+        val cashbackData = json.optJSONObject("cashback")
+        val cashbackTriple = cashbackData?.let {
+            val type = it.optString("type", "text")
+            val valueNum = it.optDouble("valueNum", 0.0)
+            val currency = it.optString("currency", "").takeIf { c -> c.isNotBlank() }
+            Triple(type, valueNum, currency)
+        }
+        val validatedCashback = cashbackTriple?.takeIf { (type, valueNum, _) ->
+            when (type) {
+                "percent" -> valueNum > 0 && hasSupportingDigits("${valueNum}", rawOcrText, cleanedDescription)
+                "amount" -> valueNum > 0 && hasSupportingDigits("${valueNum}", rawOcrText, cleanedDescription)
+                else -> true
             }
-
-            val validatedCashback = cashbackAmountRaw?.takeIf {
-                hasSupportingDigits(it, rawOcrText, cleanedDescription)
-            } ?: run {
-                if (!cashbackAmountRaw.isNullOrBlank()) {
-                    Log.w(TAG, "Rejecting cashback amount '$cashbackAmountRaw' due to missing OCR support")
-                }
-                null
-            }
+        }
             
             val minOrderAmount = json.optString("minOrderAmount").let {
                 if (it.isBlank() || it == "Unknown") null else it
@@ -878,13 +858,25 @@ Extract from the coupon image:
                 }
             }
             
+            val (cashbackType, cashbackValue, _) = validatedCashback ?: Triple("text", 0.0, null)
+            val normalizedCashback = when (cashbackType) {
+                "percent" -> cashbackValue
+                "amount" -> cashbackValue
+                else -> null
+            }
+
             return CouponInfo(
                 storeName = finalStoreName,
                 description = description,
                 expiryDate = parsedExpiryDate,
-                cashbackAmount = parseNumericValue(validatedCashback),
+                cashbackAmount = normalizedCashback,
                 redeemCode = finalCode,
-                minimumPurchase = parseNumericValue(minOrderAmount)
+                minimumPurchase = parseNumericValue(minOrderAmount),
+                discountType = when (cashbackType) {
+                    "percent" -> "PERCENTAGE"
+                    "amount" -> "AMOUNT"
+                    else -> null
+                }
             )
             
         } catch (e: JSONException) {
@@ -1121,7 +1113,7 @@ Extract from the coupon image:
         
         try {
             // Use Tesseract for text recognition
-            val ocrText = performMlKitOcr(bitmap)
+            val ocrText = performOfflineOcr(bitmap)
             Log.d(TAG, "OCR extracted text: ${ocrText.take(100)}...")
             
             // Validate that we got real text, not empty/whitespace
@@ -1167,7 +1159,7 @@ Extract from the coupon image:
     /**
      * Perform OCR on bitmap using Tesseract
      */
-    private suspend fun performMlKitOcr(bitmap: Bitmap): String = withContext(Dispatchers.IO) {
+    private suspend fun performOfflineOcr(bitmap: Bitmap): String = withContext(Dispatchers.IO) {
         return@withContext try {
             val extractedText = ocrEngine.recognize(bitmap)
             Log.d(TAG, "Tesseract OCR success: ${extractedText.length} chars")

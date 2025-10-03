@@ -352,32 +352,24 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         
         LOGI("✅ Inference context created");
         
-        // Create sampler
+        // Create sampler (deterministic for JSON output, prevent echo)
         LOGI("Step 7: Initializing sampler...");
         auto sparams = llama_sampler_chain_default_params();
         ctx->sampler = llama_sampler_chain_init(sparams);
-        
-        // Add repetition penalty to prevent garbage output (comma spam, etc.)
         llama_sampler_chain_add(ctx->sampler,
             llama_sampler_init_penalties(
-                64,      // penalty_last_n: consider last 64 tokens
-                1.1f,    // penalty_repeat: slight penalty for repetition
-                0.0f,    // penalty_freq: no frequency penalty
-                0.0f     // penalty_present: no presence penalty
+                1024,      // penalty_last_n: large window to avoid repeating prompt tokens
+                1.25f,     // penalty_repeat: higher to discourage echo
+                0.0f,      // penalty_freq
+                0.0f       // penalty_present
             ));
-        
-        // Add top-p (nucleus) sampling for better quality
         llama_sampler_chain_add(ctx->sampler,
-            llama_sampler_init_top_p(0.9f, 1));  // top_p=0.9, min_keep=1
-        
-        // Lower temperature for more focused, deterministic output (less garbage)
+            llama_sampler_init_top_p(0.85f, 1));  // Slightly restrictive for structure
         llama_sampler_chain_add(ctx->sampler,
-            llama_sampler_init_temp(0.3f));  // Reduced from 0.7 to 0.3
-        
+            llama_sampler_init_temp(0.15f));      // Low but not zero for valid JSON
         llama_sampler_chain_add(ctx->sampler,
             llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
-        
-        LOGI("✅ Sampler initialized (temp=0.3, top_p=0.9, repeat_penalty=1.1)");
+        LOGI("✅ Sampler initialized (temp=0.15, top_p=0.85, repeat_penalty=1.25, last_n=1024)");
         
         // Store context and return handle
         jlong handle = g_next_handle++;
