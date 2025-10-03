@@ -27,7 +27,7 @@ Migrated to **Qwen2.5-1.5B-Instruct** (Q4_K_M, 1.12 GB) for **significantly impr
 ```kotlin
 // Added Qwen2.5 support
 const val MODEL_ID_QWEN25 = "qwen25_1.5b_instruct_q4"
-const val QWEN25_MODEL_FILE = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+const val QWEN25_MODEL_FILE = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
 const val QWEN25_MODEL_SIZE_BYTES = 1_203_081_216L  // 1.12 GB
 const val DEFAULT_MODEL_ID = MODEL_ID_QWEN25  // NEW DEFAULT
 ```
@@ -120,7 +120,7 @@ Text("Download Qwen2.5 Model (1.12 GB)")
 ## 📦 Model Package Details
 
 ### **Model File**
-- **Filename**: `qwen2.5-1.5b-instruct-q4_k_m.gguf`
+- **Filename**: `Qwen2.5-1.5B-Instruct-Q4_K_M.gguf`
 - **Size**: 1.12 GB (1,203,081,216 bytes)
 - **Quantization**: Q4_K_M
 - **Source**: https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF
@@ -132,7 +132,7 @@ Text("Download Qwen2.5 Model (1.12 GB)")
 - **Size**: 1.0 GB (compressed)
 - **SHA256**: `3b49192eecbbdcb914c6dbe6bb4f19a19383f52b428b8f9e5c25e2fe04c5aafa`
 - **Contents**:
-  - `qwen25_1.5b_instruct_q4/qwen2.5-1.5b-instruct-q4_k_m.gguf`
+  - `qwen25_1.5b_instruct_q4/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf`
   - `qwen25_1.5b_instruct_q4/README.txt`
 
 ---
@@ -254,7 +254,7 @@ MiniCPM (legacy, vision model)
    ```bash
    adb shell ls -lh /data/data/com.example.coupontracker/files/models/qwen25_1.5b_instruct_q4/
    ```
-   Should show `qwen2.5-1.5b-instruct-q4_k_m.gguf` (1.12 GB)
+   Should show `Qwen2.5-1.5B-Instruct-Q4_K_M.gguf` (1.12 GB)
 
 ### **Rollback to Qwen2**:
 If Qwen2.5 doesn't work:

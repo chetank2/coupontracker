@@ -24,7 +24,7 @@ object ModelPaths {
     const val DEFAULT_MODEL_ID = MODEL_ID_QWEN25  // Qwen2.5 is now the default
     
     // ===== MODEL FILES =====
-    const val QWEN25_MODEL_FILE = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    const val QWEN25_MODEL_FILE = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
     const val QWEN2_MODEL_FILE = "qwen2-1_5b-instruct-q4_k_m.gguf"
     const val MINICPM_MODEL_FILE = "ggml-model-Q4_K_M.gguf"
     const val MINICPM_MMPROJ_FILE = "mmproj-model-f16.gguf"
