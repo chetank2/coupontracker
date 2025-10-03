@@ -8,25 +8,29 @@ import java.io.File
  * All model files are stored under filesDir/models/
  * 
  * UPDATED FOR MULTI-MODEL SUPPORT:
- * - Qwen2-1.5B-Instruct: Text-only, fast, mobile-optimized (DEFAULT)
+ * - Qwen2.5-1.5B-Instruct: Text-only, improved JSON output (DEFAULT)
+ * - Qwen2-1.5B-Instruct: Text-only, legacy (FALLBACK)
  * - MiniCPM-Llama3-V2.5: Vision-capable, slower, desktop-optimized (LEGACY)
  */
 object ModelPaths {
     const val MODELS_ROOT = "models"
     
     // ===== MODEL IDS =====
+    const val MODEL_ID_QWEN25 = "qwen25_1.5b_instruct_q4"
     const val MODEL_ID_QWEN2 = "qwen2_1.5b_instruct_q4"
     const val MODEL_ID_MINICPM = "minicpm_llama3_v25_q4"
     
     // ===== DEFAULT MODEL =====
-    const val DEFAULT_MODEL_ID = MODEL_ID_QWEN2  // Qwen2 is now the default
+    const val DEFAULT_MODEL_ID = MODEL_ID_QWEN25  // Qwen2.5 is now the default
     
     // ===== MODEL FILES =====
+    const val QWEN25_MODEL_FILE = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
     const val QWEN2_MODEL_FILE = "qwen2-1_5b-instruct-q4_k_m.gguf"
     const val MINICPM_MODEL_FILE = "ggml-model-Q4_K_M.gguf"
     const val MINICPM_MMPROJ_FILE = "mmproj-model-f16.gguf"
     
     // ===== MODEL SIZES (bytes) =====
+    const val QWEN25_MODEL_SIZE_BYTES = 1_203_081_216L  // 1.12 GB (actual from HF)
     const val QWEN2_MODEL_SIZE_BYTES = 976_506_880L      // 931 MB
     const val MINICPM_MODEL_SIZE_BYTES = 4_967_641_088L  // 4.9 GB
     const val MINICPM_MMPROJ_SIZE_BYTES = 857_407_488L   // 817 MB
@@ -48,9 +52,10 @@ object ModelPaths {
     fun getModelFile(context: Context, modelId: String = DEFAULT_MODEL_ID): File {
         val dir = modelDir(context, modelId)
         val filename = when (modelId) {
+            MODEL_ID_QWEN25 -> QWEN25_MODEL_FILE
             MODEL_ID_QWEN2 -> QWEN2_MODEL_FILE
             MODEL_ID_MINICPM -> MINICPM_MODEL_FILE
-            else -> QWEN2_MODEL_FILE
+            else -> QWEN25_MODEL_FILE
         }
         return File(dir, filename)
     }
@@ -60,6 +65,9 @@ object ModelPaths {
      */
     fun getRequiredFiles(modelId: String): List<String> {
         return when (modelId) {
+            MODEL_ID_QWEN25 -> {
+                listOf(QWEN25_MODEL_FILE, ".verified")
+            }
             MODEL_ID_QWEN2 -> {
                 listOf(QWEN2_MODEL_FILE, ".verified")
             }
@@ -67,7 +75,7 @@ object ModelPaths {
                 listOf(MINICPM_MODEL_FILE, MINICPM_MMPROJ_FILE, ".verified")
             }
             else -> {
-                listOf(QWEN2_MODEL_FILE, ".verified")
+                listOf(QWEN25_MODEL_FILE, ".verified")
             }
         }
     }
@@ -77,9 +85,10 @@ object ModelPaths {
      */
     fun getExpectedSize(modelId: String): Long {
         return when (modelId) {
+            MODEL_ID_QWEN25 -> QWEN25_MODEL_SIZE_BYTES
             MODEL_ID_QWEN2 -> QWEN2_MODEL_SIZE_BYTES
             MODEL_ID_MINICPM -> MINICPM_MODEL_SIZE_BYTES + MINICPM_MMPROJ_SIZE_BYTES
-            else -> QWEN2_MODEL_SIZE_BYTES
+            else -> QWEN25_MODEL_SIZE_BYTES
         }
     }
     

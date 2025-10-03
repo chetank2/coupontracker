@@ -379,7 +379,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Qwen2-1.5B Model",
+                    text = "Qwen2.5-1.5B Model",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -486,7 +486,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                     ) {
                         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Download Qwen2 Model (931 MB)")
+                        Text("Download Qwen2.5 Model (1.12 GB)")
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))

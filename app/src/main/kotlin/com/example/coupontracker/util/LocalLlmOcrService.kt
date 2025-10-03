@@ -35,8 +35,8 @@ class LocalLlmOcrService(
         private const val INFERENCE_TIMEOUT_MS = 120_000L
 
         // Model version tracking
-        private const val SERVICE_VERSION = "1.3.0"
-        private const val SUPPORTED_MODEL_VERSION = "qwen2_1.5b_instruct_q4"
+        private const val SERVICE_VERSION = "1.4.0"  // Qwen2.5 migration
+        private const val SUPPORTED_MODEL_VERSION = "qwen25_1.5b_instruct_q4"
 
         private const val OCR_SNIPPET_MAX_CHARS = 2000
 
@@ -638,15 +638,28 @@ class LocalLlmOcrService(
         return buildQwenPrompt(sanitizedOcr)
     }
 
+    /**
+     * Qwen2.5-optimized prompt for structured JSON extraction
+     * Qwen2.5 has better instruction-following than Qwen2
+     */
     private fun buildQwenPrompt(sanitizedOcr: String): String = """<|im_start|>system
-Extract coupon data from OCR text and return it as JSON. Use this exact structure:
-{"storeName":"value","description":"value","cashback":{"type":"percent","valueNum":75,"currency":null},"offerText":"value","redeemCode":"CODE","expiryDate":"13 days","minOrderAmount":"value"}
+You are a JSON generator. Extract coupon information and output ONLY valid JSON.
 
-All values must be strings (quote them) or null. cashback.type must be one of: "percent", "amount", "text". Put the JSON on a single line with no extra text before or after it.<|im_end|>
+Required schema:
+{"storeName":string|null,"description":string|null,"cashback":{"type":"percent"|"amount"|"text","valueNum":number,"currency":"INR"|"USD"|null}|null,"offerText":string|null,"redeemCode":string|null,"expiryDate":string|null,"minOrderAmount":string|null}
+
+Rules:
+- Include ALL keys in exact order shown
+- Missing fields → null
+- Cashback: "75% Off" → type:"percent", valueNum:75, currency:null
+- Cashback: "₹500 Off" → type:"amount", valueNum:500, currency:"INR"
+- Output ONLY JSON, no prose
+- First char "{", last char "}"<|im_end|>
 <|im_start|>user
+Extract from this OCR text:
 $sanitizedOcr<|im_end|>
 <|im_start|>assistant
-{"storeName":""".trimIndent()
+{""".trimIndent()
 
     private suspend fun captureRawOcrText(bitmap: Bitmap): String? {
         customOcrTextProvider?.let { provider ->

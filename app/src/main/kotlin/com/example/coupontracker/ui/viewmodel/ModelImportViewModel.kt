@@ -155,13 +155,13 @@ class ModelImportViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isImporting = true,
                         importProgress = 0,
-                        importMessage = "Preparing download (Qwen2-1.5B, 931 MB)...",
+                        importMessage = "Preparing download (Qwen2.5-1.5B, 1.12 GB)...",
                         importError = null
                     )
                 }
                 
-                // Download Qwen2-1.5B model (text-only, optimized for mobile)
-                val result = modelDownloadManager.downloadQwen2Model { progress ->
+                // Download Qwen2.5-1.5B model (improved JSON output, text-only)
+                val result = modelDownloadManager.downloadQwen25Model { progress ->
                     viewModelScope.launch(Dispatchers.Main) {
                         _uiState.value = _uiState.value.copy(
                             importProgress = progress.progressPercent,

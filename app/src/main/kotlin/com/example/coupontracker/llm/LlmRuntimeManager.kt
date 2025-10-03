@@ -70,6 +70,10 @@ class LlmRuntimeManager private constructor(private val context: Context) {
      * Returns the model ID of the installed model, or DEFAULT_MODEL_ID if none found
      */
     private fun detectInstalledModel(): String {
+        val qwen25Dir = com.example.coupontracker.model.ModelPaths.modelDir(
+            context,
+            com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN25
+        )
         val qwen2Dir = com.example.coupontracker.model.ModelPaths.modelDir(
             context,
             com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN2
@@ -79,12 +83,21 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             com.example.coupontracker.model.ModelPaths.MODEL_ID_MINICPM
         )
         
-        // Check Qwen2 first (it's the default)
+        // Check Qwen2.5 first (it's the new default)
+        val qwen25File = File(qwen25Dir, com.example.coupontracker.model.ModelPaths.QWEN25_MODEL_FILE)
+        val qwen25Verified = File(qwen25Dir, ".verified")
+        
+        if (qwen25File.exists() && qwen25Verified.exists()) {
+            Log.d(TAG, "✅ Detected Qwen2.5-1.5B model")
+            return com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN25
+        }
+        
+        // Check Qwen2 (legacy fallback)
         val qwen2File = File(qwen2Dir, com.example.coupontracker.model.ModelPaths.QWEN2_MODEL_FILE)
         val qwen2Verified = File(qwen2Dir, ".verified")
         
         if (qwen2File.exists() && qwen2Verified.exists()) {
-            Log.d(TAG, "✅ Detected Qwen2-1.5B model")
+            Log.d(TAG, "✅ Detected Qwen2-1.5B model (legacy)")
             return com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN2
         }
         

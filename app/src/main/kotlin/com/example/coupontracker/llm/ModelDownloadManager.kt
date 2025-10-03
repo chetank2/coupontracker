@@ -36,7 +36,13 @@ class ModelDownloadManager(
     companion object {
         private const val TAG = "ModelDownloadManager"
         
-        // ===== QWEN2 MODEL (NEW DEFAULT) =====
+        // ===== QWEN2.5 MODEL (NEW DEFAULT) =====
+        private const val QWEN25_BASE_URL = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main"
+        private const val QWEN25_MODEL_FILE = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+        private const val QWEN25_MODEL_SIZE = 1_203_081_216L  // 1.12 GB
+        private const val QWEN25_VERSION = "2.5-1.5b-q4-instruct"
+        
+        // ===== QWEN2 MODEL (LEGACY) =====
         private const val QWEN2_BASE_URL = "https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF/resolve/main"
         private const val QWEN2_MODEL_FILE = "qwen2-1_5b-instruct-q4_k_m.gguf"
         private const val QWEN2_MODEL_SIZE = 976_506_880L  // 931 MB
@@ -351,15 +357,15 @@ class ModelDownloadManager(
     }
 
     /**
-     * Download Qwen2 model (text-only, optimized for mobile)
-     * NEW: Replaces MiniCPM as the default model for coupon extraction
+     * Download Qwen2.5 model (improved JSON output, text-only)
+     * NEW: Replaces Qwen2 for better instruction-following
      */
-    suspend fun downloadQwen2Model(
-        modelId: String = com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN2,
+    suspend fun downloadQwen25Model(
+        modelId: String = com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN25,
         progressCallback: (DownloadProgress) -> Unit
     ): DownloadResult = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Starting Qwen2 model download...")
+            Log.d(TAG, "Starting Qwen2.5 model download...")
             
             // Check network conditions
             if (!shouldProceedWithDownload()) {
@@ -376,11 +382,11 @@ class ModelDownloadManager(
             modelDir.mkdirs()
             
             // Download model file
-            progressCallback(DownloadProgress(0, "Downloading Qwen2-1.5B model (931 MB)..."))
-            val modelFile = File(modelDir, QWEN2_MODEL_FILE)
+            progressCallback(DownloadProgress(0, "Downloading Qwen2.5-1.5B model (1.12 GB)..."))
+            val modelFile = File(modelDir, QWEN25_MODEL_FILE)
             
             val downloadResult = downloadFile(
-                url = "$QWEN2_BASE_URL/$QWEN2_MODEL_FILE",
+                url = "$QWEN25_BASE_URL/$QWEN25_MODEL_FILE",
                 outputFile = modelFile,
                 progressCallback = { progress ->
                     progressCallback(DownloadProgress(
@@ -398,32 +404,32 @@ class ModelDownloadManager(
             // Verify file size
             progressCallback(DownloadProgress(99, "Verifying download..."))
             
-            if (modelFile.length() < QWEN2_MODEL_SIZE * 0.95) {
+            if (modelFile.length() < QWEN25_MODEL_SIZE * 0.95) {
                 modelFile.delete()
-                return@withContext DownloadResult.Error("Model file size incorrect. Expected ~931 MB, got ${modelFile.length() / 1_000_000} MB")
+                return@withContext DownloadResult.Error("Model file size incorrect. Expected ~1.12 GB, got ${modelFile.length() / 1_000_000} MB")
             }
             
             Log.d(TAG, "Model downloaded: ${modelFile.length() / 1_000_000} MB")
             
             // Create .verified marker
             val verifiedMarker = File(modelDir, ".verified")
-            verifiedMarker.writeText("Qwen2 Model verified: $QWEN2_VERSION\nTimestamp: ${System.currentTimeMillis()}\nFile: $QWEN2_MODEL_FILE")
-            Log.d(TAG, "Created .verified marker for Qwen2")
+            verifiedMarker.writeText("Qwen2.5 Model verified: $QWEN25_VERSION\nTimestamp: ${System.currentTimeMillis()}\nFile: $QWEN25_MODEL_FILE")
+            Log.d(TAG, "Created .verified marker for Qwen2.5")
             
             // Update preferences
             val sizeMB = (modelFile.length() / (1024f * 1024f))
             securePrefs.setLlmModelDownloaded(true)
-            securePrefs.setLlmModelVersion(QWEN2_VERSION)
+            securePrefs.setLlmModelVersion(QWEN25_VERSION)
             securePrefs.setLlmModelSizeMB(sizeMB)
             
-            verificationCache = VerificationCache(QWEN2_VERSION, true)
-            Log.d(TAG, "✅ Qwen2 model download completed: ${"%.1f".format(sizeMB)} MB")
+            verificationCache = VerificationCache(QWEN25_VERSION, true)
+            Log.d(TAG, "✅ Qwen2.5 model download completed: ${"%.1f".format(sizeMB)} MB")
             progressCallback(DownloadProgress(100, "Download complete!"))
             
             DownloadResult.Success(sizeMB)
             
         } catch (e: Exception) {
-            Log.e(TAG, "Qwen2 model download failed", e)
+            Log.e(TAG, "Qwen2.5 model download failed", e)
             DownloadResult.Error(resolveErrorMessage(e))
         }
     }
