@@ -11,11 +11,12 @@ import org.json.JSONObject
 object CouponJsonValidator {
     private const val TAG = "CouponJsonValidator"
     
-    // Allowed keys in the JSON schema
+    // Allowed keys in the JSON schema (updated for Qwen2.5 typed cashback format)
     private val ALLOWED_KEYS = setOf(
         "storeName",
         "description", 
-        "cashbackAmount",
+        "cashback",  // Changed from cashbackAmount to support typed object
+        "offerText", // Added to match prompt schema
         "redeemCode",
         "expiryDate",
         "minOrderAmount"
