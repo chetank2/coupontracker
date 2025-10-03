@@ -639,44 +639,33 @@ class LocalLlmOcrService(
     }
 
     private fun buildQwenPrompt(sanitizedOcr: String): String = """<|im_start|>system
-You are a strict coupon extractor. Respond with ONE valid JSON object matching this exact schema and key order:
-{
-  "storeName": string|null,
-  "description": string|null,
-  "cashback": {
-    "type": "percent"|"amount"|"text",
-    "valueNum": number,
-    "currency": "INR"|"USD"|null
-  }|null,
-  "offerText": string|null,
-  "redeemCode": string|null,
-  "expiryDate": string|null,
-  "minOrderAmount": string|null
-}
+You are a JSON generator. Your ONLY task is to output valid JSON. Never output plain text, explanations, or markdown.
 
-Rules:
-- Output JSON only. No prose, no markdown, no comments.
-- First character must be "{" and last must be "}".
-- Include ALL keys in the exact order shown above.
-- If a field is missing, use null (not empty string).
-- Cashback mapping:
-  • "75% Off" → {"type":"percent","valueNum":75,"currency":null}
-  • "₹500 Off" → {"type":"amount","valueNum":500,"currency":"INR"}
-  • Unclear → {"type":"text","valueNum":0,"currency":null}
-- Never convert % into ₹ or vice versa.
-- offerText must be the exact banner phrase if present.
-- redeemCode must be exact alphanumeric (A–Z, 0–9, _, -). If no code, use null.
-- Do not copy any text from inside <ocr>…</ocr> verbatim; extract the values only.
+Output format (required):
+{"storeName":null,"description":null,"cashback":{"type":"text","valueNum":0,"currency":null},"offerText":null,"redeemCode":null,"expiryDate":null,"minOrderAmount":null}
+
+Field rules:
+- storeName: Extract brand/store name or null
+- description: Brief offer description or null
+- cashback.type: "percent" for "%", "amount" for "₹", "text" otherwise
+- cashback.valueNum: Numeric value or 0
+- cashback.currency: "INR" for ₹, "USD" for $, null for %
+- offerText: Exact banner text or null
+- redeemCode: Alphanumeric code or null
+- expiryDate: Date string or null
+- minOrderAmount: Minimum order value or null
+
+DO NOT output: explanations, headers, labels, markdown, or anything except the JSON object.
 <|im_end|>
 <|im_start|>user
-Extract coupon information from this OCR text and return ONLY the JSON object.
-
 <ocr>
 $sanitizedOcr
 </ocr>
+
+Output the JSON object:
 <|im_end|>
 <|im_start|>assistant
-{""".trimIndent()
+{"storeName":""".trimIndent()
 
     private suspend fun captureRawOcrText(bitmap: Bitmap): String? {
         customOcrTextProvider?.let { provider ->
@@ -734,11 +723,16 @@ $sanitizedOcr
                 .removeSuffix("```")
                 .trim()
             
-            // CRITICAL: If response doesn't start with {, prepend it
-            // (because we prime the model with { in the prompt)
-            if (cleanResponse.length < 20) {
-                throw IllegalStateException("LLM response too short to contain JSON")
+            // Prepend the assistant primer if response doesn't start with {
+            // (we prime with `{"storeName":` in the prompt)
+            if (!cleanResponse.startsWith("{")) {
+                cleanResponse = """{"storeName":$cleanResponse"""
             }
+            
+            if (cleanResponse.length < 20) {
+                throw IllegalStateException("LLM response too short to contain JSON (got ${cleanResponse.length} chars)")
+            }
+            
             val jsonCandidate = extractJsonSlice(cleanResponse)
                 ?: throw IllegalStateException("No JSON object found in LLM output")
             
