@@ -1,0 +1,38 @@
+# Coupon JSON Schema Grammar (GBNF format for llama.cpp)
+# This grammar forces the LLM to generate ONLY valid JSON matching our coupon schema
+
+root ::= object
+object ::= "{" ws members ws "}"
+
+members ::= 
+  "\"storeName\"" ws ":" ws value ws "," ws
+  "\"description\"" ws ":" ws value ws "," ws
+  "\"cashback\"" ws ":" ws (cashback-obj | null-value) ws "," ws
+  "\"offerText\"" ws ":" ws value ws "," ws
+  "\"redeemCode\"" ws ":" ws value ws "," ws
+  "\"expiryDate\"" ws ":" ws value ws "," ws
+  "\"minOrderAmount\"" ws ":" ws value
+
+# Cashback object with strict structure
+cashback-obj ::= "{" ws 
+  "\"type\"" ws ":" ws string-value ws "," ws
+  "\"valueNum\"" ws ":" ws number ws "," ws
+  "\"currency\"" ws ":" ws value ws
+"}"
+
+# Value types
+value ::= string-value | number | null-value
+null-value ::= "null"
+string-value ::= "\"" string-content "\""
+string-content ::= [^"\\]* | "\\" escape-char string-content
+escape-char ::= "\"" | "\\" | "/" | "b" | "f" | "n" | "r" | "t"
+
+# Number definition
+number ::= integer fraction? exponent?
+integer ::= "-"? ("0" | [1-9] [0-9]*)
+fraction ::= "." [0-9]+
+exponent ::= [eE] [+-]? [0-9]+
+
+# Whitespace
+ws ::= [ \t\n\r]*
+

@@ -28,6 +28,8 @@ struct ModelContext {
     bool has_vision = false;
     std::string model_path;
     std::string mmproj_path;  // Path to mmproj file
+    std::string grammar_str;     // ⭐ NEW: Loaded grammar string
+    bool use_grammar = false;    // ⭐ NEW: Whether grammar enforcement is enabled
 };
 
 // Model handle management
@@ -49,6 +51,33 @@ std::string jstring_to_string(JNIEnv* env, jstring jstr) {
 // Helper function to create jstring from std::string
 jstring string_to_jstring(JNIEnv* env, const std::string& str) {
     return env->NewStringUTF(str.c_str());
+}
+
+// ⭐ NEW: Helper function to load grammar file from assets
+std::string load_grammar_file(const std::string& grammar_path) {
+    FILE* file = fopen(grammar_path.c_str(), "r");
+    if (!file) {
+        LOGE("❌ Failed to open grammar file: %s", grammar_path.c_str());
+        return "";
+    }
+    
+    // Get file size
+    fseek(file, 0, SEEK_END);
+    long file_size = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    
+    // Read entire file
+    std::string grammar_str(file_size, '\0');
+    size_t bytes_read = fread(&grammar_str[0], 1, file_size, file);
+    fclose(file);
+    
+    if (bytes_read != static_cast<size_t>(file_size)) {
+        LOGE("❌ Failed to read grammar file completely");
+        return "";
+    }
+    
+    LOGI("✅ Loaded grammar file: %ld bytes", file_size);
+    return grammar_str;
 }
 
 // ⭐ Phase 2: Convert Android Bitmap to RGB pixels for CLIP
@@ -352,10 +381,49 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         
         LOGI("✅ Inference context created");
         
+        // ⭐ Step 6.5: Load grammar file (if available)
+        std::string model_dir_str = model_path_str.substr(0, model_path_str.find_last_of("/"));
+        std::string grammar_path = model_dir_str + "/coupon_schema.gbnf";
+        
+        LOGI("Step 6.5: Checking for grammar file...");
+        LOGI("  - Looking for: %s", grammar_path.c_str());
+        
+        FILE* grammar_test = fopen(grammar_path.c_str(), "r");
+        if (grammar_test) {
+            fclose(grammar_test);
+            ctx->grammar_str = load_grammar_file(grammar_path);
+            if (!ctx->grammar_str.empty()) {
+                ctx->use_grammar = true;
+                LOGI("✅ Grammar file loaded (%zu bytes)", ctx->grammar_str.size());
+                LOGI("  🎯 JSON GRAMMAR ENFORCEMENT ENABLED!");
+            }
+        } else {
+            LOGW("⚠️  Grammar file not found, using standard sampling");
+        }
+        
         // Create sampler (deterministic for JSON output, prevent echo)
         LOGI("Step 7: Initializing sampler...");
         auto sparams = llama_sampler_chain_default_params();
         ctx->sampler = llama_sampler_chain_init(sparams);
+        
+        // ⭐ If grammar is loaded, add grammar sampler FIRST (highest priority)
+        if (ctx->use_grammar) {
+            const llama_vocab* vocab = llama_model_get_vocab(ctx->model);
+            llama_sampler* grammar_sampler = llama_sampler_init_grammar(
+                vocab, 
+                ctx->grammar_str.c_str(), 
+                "root"  // Grammar root rule name
+            );
+            if (grammar_sampler) {
+                llama_sampler_chain_add(ctx->sampler, grammar_sampler);
+                LOGI("  ✅ Grammar sampler added (STRICT JSON enforcement)");
+            } else {
+                LOGE("  ❌ Failed to create grammar sampler, falling back to standard");
+                ctx->use_grammar = false;
+            }
+        }
+        
+        // Add standard samplers (grammar overrides these if enabled)
         llama_sampler_chain_add(ctx->sampler,
             llama_sampler_init_penalties(
                 1024,      // penalty_last_n: large window to avoid repeating prompt tokens
@@ -369,7 +437,12 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
             llama_sampler_init_temp(0.0f));       // temp=0 → GREEDY (most probable token only)
         llama_sampler_chain_add(ctx->sampler,
             llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
-        LOGI("✅ Sampler initialized (temp=0.0 GREEDY, top_p=1.0, repeat_penalty=1.35, last_n=1024)");
+        
+        if (ctx->use_grammar) {
+            LOGI("✅ Sampler initialized (GRAMMAR + temp=0.0, repeat_penalty=1.35)");
+        } else {
+            LOGI("✅ Sampler initialized (temp=0.0 GREEDY, top_p=1.0, repeat_penalty=1.35, last_n=1024)");
+        }
         
         // Store context and return handle
         jlong handle = g_next_handle++;
