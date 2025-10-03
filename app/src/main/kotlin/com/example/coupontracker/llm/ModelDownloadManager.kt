@@ -422,9 +422,13 @@ class ModelDownloadManager(
             
             Log.d(TAG, "Model downloaded: ${modelFile.length() / 1_000_000} MB")
             
+            // ⭐ NEW: Deploy JSON grammar file for structured output enforcement
+            progressCallback(DownloadProgress(99, "Deploying grammar file..."))
+            deployGrammarFile(modelDir)
+            
             // Create .verified marker
             val verifiedMarker = File(modelDir, ".verified")
-            verifiedMarker.writeText("Qwen2.5 Model verified: $QWEN25_VERSION\nTimestamp: ${System.currentTimeMillis()}\nFile: $QWEN25_MODEL_FILE")
+            verifiedMarker.writeText("Qwen2.5 Model verified: $QWEN25_VERSION\nTimestamp: ${System.currentTimeMillis()}\nFile: $QWEN25_MODEL_FILE\nGrammar: coupon_schema.gbnf")
             Log.d(TAG, "Created .verified marker for Qwen2.5")
             
             // Update preferences
@@ -445,6 +449,30 @@ class ModelDownloadManager(
         }
     }
 
+    /**
+     * Deploy JSON grammar file from assets to model directory
+     * This enables strict JSON output formatting by constraining LLM token generation
+     */
+    private fun deployGrammarFile(modelDir: File) {
+        try {
+            val grammarFile = File(modelDir, "coupon_schema.gbnf")
+            
+            // Copy grammar from assets to model directory
+            context.assets.open("coupon_schema.gbnf").use { input ->
+                grammarFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            
+            Log.d(TAG, "✅ Deployed grammar file: ${grammarFile.absolutePath} (${grammarFile.length()} bytes)")
+            Log.d(TAG, "   🎯 JSON grammar enforcement will be enabled during inference")
+            
+        } catch (e: Exception) {
+            // Non-fatal: grammar is optional, model will work without it
+            Log.w(TAG, "⚠️  Failed to deploy grammar file (will use standard sampling): ${e.message}")
+        }
+    }
+    
     private fun resolveErrorMessage(throwable: Throwable): String {
         return if (isConnectivityIssue(throwable)) {
             context.getString(R.string.llm_download_error_network)
