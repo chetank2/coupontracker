@@ -1,28 +1,25 @@
 # Coupon JSON Schema Grammar (GBNF format for llama.cpp)
-# Simplified grammar that forces valid JSON structure
+# Based on llama.cpp official JSON grammar syntax
 
-root ::= ws "{" ws 
-  "\"storeName\"" ws ":" ws value ws "," ws
-  "\"description\"" ws ":" ws value ws "," ws
-  "\"cashback\"" ws ":" ws (cashback-obj | "null") ws "," ws
-  "\"offerText\"" ws ":" ws value ws "," ws
-  "\"redeemCode\"" ws ":" ws value ws "," ws
-  "\"expiryDate\"" ws ":" ws value ws "," ws
-  "\"minOrderAmount\"" ws ":" ws value ws
-"}" ws
+root ::= object
+ws ::= ([ \t\n\r])?
 
-# Cashback must be object or null (not individual null fields)
-cashback-obj ::= "{" ws
-  "\"type\"" ws ":" ws ("\"percent\"" | "\"amount\"" | "\"text\"") ws "," ws
-  "\"valueNum\"" ws ":" ws number ws "," ws
-  "\"currency\"" ws ":" ws (string | "null") ws
-"}"
+# Main coupon object
+object ::= "{" ws "\"storeName\"" ws ":" ws value ws "," ws "\"description\"" ws ":" ws value ws "," ws "\"cashback\"" ws ":" ws cashback-value ws "," ws "\"offerText\"" ws ":" ws value ws "," ws "\"redeemCode\"" ws ":" ws value ws "," ws "\"expiryDate\"" ws ":" ws value ws "," ws "\"minOrderAmount\"" ws ":" ws value ws "}" ws
 
-# Basic value types
+# Cashback can be null or object
+cashback-value ::= "null" | cashback-object
+cashback-object ::= "{" ws "\"type\"" ws ":" ws cashback-type ws "," ws "\"valueNum\"" ws ":" ws number ws "," ws "\"currency\"" ws ":" ws currency-value ws "}" ws
+cashback-type ::= "\"percent\"" | "\"amount\"" | "\"text\""
+currency-value ::= "null" | string
+
+# Values
 value ::= string | number | "null"
-string ::= "\"" ([^"\\] | "\\" ["\\/bfnrt])* "\""
-number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
 
-# Whitespace (optional)
-ws ::= [ \t\n\r]*
+# String: simple pattern without complex escapes
+string ::= "\"" string-char* "\""
+string-char ::= [^"\\\x00-\x1F] | "\\" ["\\/bfnrt]
+
+# Number: integer and decimal
+number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)?
 
