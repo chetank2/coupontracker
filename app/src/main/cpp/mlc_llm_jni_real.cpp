@@ -182,7 +182,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runTextInference(
         // Step 3: Generate response
         LOGI("Step 3: Generating response...");
         std::vector<llama_token> output_tokens;
-        int max_tokens = 300;  // Increased for complete JSON output with all fields
+        int max_tokens = 400;  // Sufficient for verbose JSON with long descriptions and all 7 fields
         llama_token eos_token = llama_vocab_eos(vocab);
         llama_token new_token = llama_sampler_sample(ctx->sampler, ctx->ctx, -1);
         
