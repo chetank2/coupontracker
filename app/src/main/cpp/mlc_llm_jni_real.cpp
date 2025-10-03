@@ -131,8 +131,9 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runTextInference(
     LOGI("========================================");
     
     try {
-        // Build full prompt with OCR text
-        std::string full_prompt = prompt_str + "\n\nCoupon Text (from OCR):\n" + ocr_text_str;
+        // Use prompt as-is - Kotlin side already embedded OCR text in proper ChatML format
+        // Adding more text here would break the assistant primer and conversation structure
+        std::string full_prompt = prompt_str;
         
         LOGI("Step 1: Tokenizing prompt (%zu chars)...", full_prompt.length());
         const llama_vocab* vocab = llama_model_get_vocab(ctx->model);

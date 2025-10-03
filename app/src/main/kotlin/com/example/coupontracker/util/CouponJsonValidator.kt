@@ -89,10 +89,30 @@ object CouponJsonValidator {
             issues.add("Invalid coupon code format: $redeemCode")
         }
         
-        // Validate cashbackAmount format if present
-        val cashbackAmount = json.optString("cashbackAmount")
-        if (cashbackAmount.isNotBlank() && !isValidCashbackAmount(cashbackAmount)) {
-            issues.add("Invalid cashback amount format: $cashbackAmount")
+        // Validate typed cashback object if present (replaces legacy cashbackAmount)
+        if (json.has("cashback") && !json.isNull("cashback")) {
+            val cashback = json.optJSONObject("cashback")
+            if (cashback != null) {
+                // Validate cashback.type (required)
+                val type = cashback.optString("type")
+                if (type.isBlank() || type !in setOf("percent", "amount", "text")) {
+                    issues.add("Invalid cashback.type: must be 'percent', 'amount', or 'text'")
+                }
+                
+                // Validate cashback.valueNum (required numeric)
+                if (!cashback.has("valueNum") || cashback.isNull("valueNum")) {
+                    issues.add("Missing cashback.valueNum (required numeric field)")
+                } else {
+                    val valueNum = cashback.optDouble("valueNum", -1.0)
+                    if (valueNum < 0) {
+                        issues.add("Invalid cashback.valueNum: must be non-negative number")
+                    }
+                }
+                
+                // currency is optional, can be null or string
+            } else {
+                issues.add("cashback must be object or null, not other type")
+            }
         }
         
         // Validate expiryDate format if present
