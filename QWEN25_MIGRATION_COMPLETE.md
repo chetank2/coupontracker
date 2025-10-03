@@ -123,7 +123,8 @@ Text("Download Qwen2.5 Model (1.12 GB)")
 - **Filename**: `Qwen2.5-1.5B-Instruct-Q4_K_M.gguf`
 - **Size**: 1.12 GB (1,203,081,216 bytes)
 - **Quantization**: Q4_K_M
-- **Source**: https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF
+- **Source**: https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF (verified mirror)
+- **Configurable Mirror**: Override via secure preference `qwen25_model_base_url_override` for staged rollouts
 - **SHA256**: `6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e`
 
 ### **ZIP Package for Android**

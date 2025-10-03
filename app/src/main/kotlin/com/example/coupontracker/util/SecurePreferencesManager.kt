@@ -50,6 +50,7 @@ class SecurePreferencesManager @Inject constructor(
         const val KEY_LLM_AUTO_DOWNLOAD_ENABLED = "llm_auto_download_enabled"
         const val KEY_LLM_DOWNLOAD_WIFI_ONLY = "llm_download_wifi_only"
         const val KEY_LLM_MODEL_BASE_URL_OVERRIDE = "llm_model_base_url_override"
+        const val KEY_QWEN25_MODEL_BASE_URL_OVERRIDE = "qwen25_model_base_url_override"
         const val KEY_MINICPM_LICENSE_ACCEPTED = "minicpm_license_accepted"
 
         // Key rotation period in days
@@ -442,6 +443,26 @@ class SecurePreferencesManager @Inject constructor(
                 remove(KEY_LLM_MODEL_BASE_URL_OVERRIDE)
             } else {
                 putString(KEY_LLM_MODEL_BASE_URL_OVERRIDE, baseUrl)
+            }
+        }.apply()
+    }
+
+    /**
+     * Get the preferred mirror for the Qwen2.5 model if one has been configured.
+     */
+    fun getQwen25ModelBaseUrlOverride(): String? {
+        return securePrefs.getString(KEY_QWEN25_MODEL_BASE_URL_OVERRIDE, null)?.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * Persist or clear the preferred Qwen2.5 model mirror.
+     */
+    fun setQwen25ModelBaseUrlOverride(baseUrl: String?) {
+        securePrefs.edit().apply {
+            if (baseUrl.isNullOrBlank()) {
+                remove(KEY_QWEN25_MODEL_BASE_URL_OVERRIDE)
+            } else {
+                putString(KEY_QWEN25_MODEL_BASE_URL_OVERRIDE, baseUrl)
             }
         }.apply()
     }
