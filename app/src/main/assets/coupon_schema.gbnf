@@ -21,5 +21,6 @@ string ::= "\"" string-char* "\""
 string-char ::= [a-zA-Z0-9 .,!?@#$%&*()\-_+=;:'/\[\]{}]
 
 # Positive number only (no negatives for cashback)
-positive-number ::= ("0" | [1-9] [0-9]*) ("." [0-9]+)?
+# Note: Must explicitly exclude minus sign at token level
+positive-number ::= [0-9]+ ("." [0-9]+)?
 

@@ -686,8 +686,9 @@ cashback:
 - Convert to object:
   * Percentage: {"type":"percent","valueNum":50,"currency":null}
   * Amount: {"type":"amount","valueNum":200,"currency":"INR"}
-- valueNum must be positive number
-- If NO discount in OCR, use null
+- valueNum must be positive number (never negative, never -1, never 0)
+- If NO discount in OCR, set cashback to null (NOT an object with -1 or 0)
+- Bonus cash, winnings, or rewards are NOT cashback discounts → use null
 
 offerText:
 - Full offer description with conditions
