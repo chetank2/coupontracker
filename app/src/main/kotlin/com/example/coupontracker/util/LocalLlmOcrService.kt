@@ -648,41 +648,60 @@ class LocalLlmOcrService(
      * Qwen2.5 has better instruction-following than Qwen2
      */
     private fun buildQwenPrompt(sanitizedOcr: String): String = """<|im_start|>system
-You are a JSON extractor. Extract coupon data and output ONLY valid JSON.
+You are a precise JSON extractor. Your ONLY job is to copy data from OCR text into JSON format.
 
-Schema (exact key order):
+CRITICAL RULES:
+1. ONLY extract data that EXISTS in the OCR text
+2. DO NOT invent, generate, or hallucinate ANY data
+3. COPY dates EXACTLY as written - do NOT change format or create timestamps
+4. If data is missing, use null
+5. Output ONLY the JSON object, NO explanations
+
+Schema (all 7 keys required):
 {"storeName":str|null,"description":str|null,"cashback":obj|null,"offerText":str|null,"redeemCode":str|null,"expiryDate":str|null,"minOrderAmount":str|null}
 
-Rules:
-- All keys required (use null if data missing)
-- NO explanatory text before or after JSON
-- Start with "{" and end with "}"
+EXTRACTION GUIDE:
 
-Field Extraction Guide:
+storeName:
+- Brand name ONLY (e.g., "PUMA", "Amazon", "Flipkart")
+- Must appear in OCR text
 
-1. storeName: Brand/store name only (e.g., "Amazon", "Flipkart", "AJIO")
+redeemCode:
+- Search for: "Code:", "Coupon:", or standalone alphanumeric codes
+- Strip prefixes: "Code: SAVE50" → "SAVE50"
+- If NO code in OCR, use null
+- DO NOT invent codes
 
-2. redeemCode: ONLY the coupon code itself
-   - Strip ALL extra text and spaces
-   - Example: "Code: SAVE50" → extract "SAVE50" (NOT "Code: SAVE50")
-   - Example: "TBNEIZNOL5FSUZY" → extract "TBNEIZNOL5FSUZY"
-   - NO expiry info, NO extra words
+expiryDate:
+- Search for: "Expires on", "Valid till", "Expires:"
+- COPY the date EXACTLY as written in OCR
+- Example: OCR says "Expires on 05 May, 2025, 11:59 PM" → extract "05 May, 2025"
+- Example: OCR says "Valid till 2025-12-31" → extract "2025-12-31"
+- DO NOT create ISO timestamps like "2024-06-07T18:09:00Z"
+- If NO date in OCR, use null
 
-3. expiryDate: Extract date EXACTLY as shown, do NOT reformat
-   - "Expires on 31 May, 2025, 11:59 PM" → extract "31 May, 2025"
-   - "Valid till 2025-12-31" → extract "2025-12-31"
-   - Do NOT hallucinate or change the date format
+cashback:
+- Look for discount text: "50% off", "₹200 off", "Flat 11% Off"
+- Convert to object:
+  * Percentage: {"type":"percent","valueNum":50,"currency":null}
+  * Amount: {"type":"amount","valueNum":200,"currency":"INR"}
+- valueNum must be positive number
+- If NO discount in OCR, use null
 
-4. cashback: Structured discount object
-   - "50% off" → {"type":"percent","valueNum":50,"currency":null}
-   - "₹200 off" → {"type":"amount","valueNum":200,"currency":"INR"}
-   - "Flat 11% Off" → {"type":"percent","valueNum":11,"currency":null}
+offerText:
+- Full offer description with conditions
+- Example: "Get Upto 50% Off + Extra 33% Off"
+- If missing, use null
 
-5. minOrderAmount: Minimum order value (e.g., "₹999", "₹500")
+description:
+- Brief summary of the offer (1-2 sentences)
+- If missing, use null
 
-6. offerText: Full offer details with conditions
+minOrderAmount:
+- Minimum order value (e.g., "₹999", "₹500")
+- If missing, use null
 
-7. description: Brief summary of the offer<|im_end|>
+REMEMBER: ONLY extract data that you can SEE in the OCR text. DO NOT make up data.<|im_end|>
 <|im_start|>user
 Extract coupon from OCR:
 $sanitizedOcr<|im_end|>
