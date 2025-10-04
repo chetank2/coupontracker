@@ -1206,7 +1206,10 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    private fun mergeValidatedFields(primary: MutableMap<String, String>, fallback: Map<String, String>) {
+    @VisibleForTesting
+    internal fun mergeValidatedFields(primary: MutableMap<String, String>, fallback: Map<String, String>) {
+        val fallbackCode = fallback["code"]?.trim()?.takeIf { it.isNotEmpty() }
+
         fallback.forEach { (key, value) ->
             val sanitized = value.trim()
             if (sanitized.isEmpty()) {
@@ -1214,15 +1217,31 @@ class ScannerViewModel @Inject constructor(
             }
 
             val existing = primary[key]
-            if (shouldReplaceExisting(existing, sanitized, key)) {
+            val extractedCode = primary["code"]
+            if (shouldReplaceExisting(existing, sanitized, key, extractedCode, fallbackCode)) {
                 primary[key] = sanitized
             }
         }
     }
 
-    private fun shouldReplaceExisting(existing: String?, candidate: String, key: String): Boolean {
+    @VisibleForTesting
+    internal fun shouldReplaceExisting(
+        existing: String?,
+        candidate: String,
+        key: String,
+        extractedCode: String?,
+        fallbackCode: String?
+    ): Boolean {
         if (candidate.isBlank()) {
             return false
+        }
+
+        if (key == "storeName") {
+            if (fieldHeuristics.areDuplicateFields(candidate, extractedCode) ||
+                fieldHeuristics.areDuplicateFields(candidate, fallbackCode)
+            ) {
+                return false
+            }
         }
 
         if (existing.isNullOrBlank()) {

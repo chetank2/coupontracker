@@ -1,6 +1,7 @@
 package com.example.coupontracker.extraction
 
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.util.GenericFieldHeuristics
 
 /**
  * Heuristic field extraction - Pass 3 of progressive pipeline.
@@ -26,13 +27,22 @@ class HeuristicFieldExtractor {
     ): Map<FieldType, List<FieldCandidate>> {
         
         val results = mutableMapOf<FieldType, MutableList<FieldCandidate>>()
-        
+        val detectedCode = context.metadata["code"]?.takeIf { it.isNotBlank() }
+            ?: context.attempts.asReversed().asSequence()
+                .mapNotNull { attempt ->
+                    attempt.fieldsExtracted[FieldType.COUPON_CODE]?.value?.takeIf { it.isNotBlank() }
+                }
+                .firstOrNull()
+
         // Store: ANY capitalized word (not in common words)
         if (FieldType.STORE_NAME in missingFields) {
             val capitalPattern = Regex("""\b([A-Z][A-Za-z0-9]{2,})\b""")
             capitalPattern.findAll(context.ocrText).forEach { match ->
                 val word = match.value
-                if (word.lowercase() !in COMMON_WORDS) {
+                if (word.lowercase() !in COMMON_WORDS &&
+                    !GenericFieldHeuristics.isGenericOrMissing(word) &&
+                    (detectedCode == null || !GenericFieldHeuristics.areDuplicateFields(word, detectedCode))
+                ) {
                     results.getOrPut(FieldType.STORE_NAME) { mutableListOf() }.add(
                         FieldCandidate(
                             value = word,
