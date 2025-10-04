@@ -30,9 +30,10 @@ class LocalLlmOcrService(
     companion object {
         private const val TAG = "LocalLlmOcrService"
 
-        // Inference timeout (150 seconds - increased for first-run model warmup)
-        // First run: ~129s (model warmup + generation), subsequent runs: ~10s
-        private const val INFERENCE_TIMEOUT_MS = 150_000L
+        // Inference timeout (180 seconds - accommodates longer prompts + larger OCR text)
+        // First run: ~148s (model warmup + long prompt + generation), subsequent runs: ~10s
+        // Increased from 150s due to expanded anti-hallucination prompt (655 tokens vs 596)
+        private const val INFERENCE_TIMEOUT_MS = 180_000L
 
         // Model version tracking
         private const val SERVICE_VERSION = "1.4.0"  // Qwen2.5 migration
