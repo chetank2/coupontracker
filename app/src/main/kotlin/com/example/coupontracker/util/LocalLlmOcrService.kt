@@ -30,9 +30,9 @@ class LocalLlmOcrService(
     companion object {
         private const val TAG = "LocalLlmOcrService"
 
-        // Inference timeout (120 seconds - increased for slow mobile CPUs)
-        // With n_ctx=1024, this should be enough for most devices
-        private const val INFERENCE_TIMEOUT_MS = 120_000L
+        // Inference timeout (150 seconds - increased for first-run model warmup)
+        // First run: ~129s (model warmup + generation), subsequent runs: ~10s
+        private const val INFERENCE_TIMEOUT_MS = 150_000L
 
         // Model version tracking
         private const val SERVICE_VERSION = "1.4.0"  // Qwen2.5 migration
