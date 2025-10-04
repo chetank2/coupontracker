@@ -236,6 +236,50 @@ class LocalLlmOcrServiceTest {
     }
 
     @Test
+    fun `cleanDescription returns empty string for JSON null literal`() {
+        // Test lowercase "null"
+        val cleanedLower = LocalLlmOcrService.cleanDescription("null")
+        assertEquals("", cleanedLower)
+        
+        // Test uppercase "NULL"
+        val cleanedUpper = LocalLlmOcrService.cleanDescription("NULL")
+        assertEquals("", cleanedUpper)
+        
+        // Test mixed case "Null"
+        val cleanedMixed = LocalLlmOcrService.cleanDescription("Null")
+        assertEquals("", cleanedMixed)
+    }
+
+    @Test
+    fun `should handle JSON null description and fallback to default`() = runTest {
+        // Arrange: LLM returns JSON with "description": null (which becomes "null" string)
+        val nullDescriptionResponse = """
+        {
+            "storeName": "Amazon",
+            "description": null,
+            "redeemCode": "SAVE20",
+            "cashbackAmount": "20%",
+            "expiryDate": "2024-12-31",
+            "minOrderAmount": "₹1000"
+        }
+        """.trimIndent()
+        
+        every { mockLlmRuntime.runInference(any(), any()) } returns nullDescriptionResponse
+        
+        // Act: Process the image
+        val result = localLlmOcrService.processCouponImage(mockBitmap)
+        
+        // Assert: Description should fallback to default "Coupon offer"
+        assertEquals("Amazon", result.storeName)
+        assertEquals("Coupon offer", result.description) // Should NOT be "Null"
+        assertEquals("SAVE20", result.redeemCode)
+        assertEquals(20.0, result.cashbackAmount, 0.01)
+        
+        // Should still pass validation (store and code are valid)
+        verify { mockTelemetryService.recordInference(any(), true, any(), any(), null) }
+    }
+
+    @Test
     fun `cleanDescription removes noise and normalizes casing`() {
         val rawDescription = "12:40 9 X\nfree body mist OF YOUR CHOICE"
 

@@ -53,6 +53,11 @@ class LocalLlmOcrService(
             if (raw.isNullOrBlank()) {
                 return ""
             }
+            
+            // Handle JSON null serialized as literal "null" string
+            if (raw.equals("null", ignoreCase = true)) {
+                return ""
+            }
 
             val timestampPattern = Regex("^\\d{1,2}:\\d{2}")
             val singleLetterPattern = Regex("""^[A-Za-z]$""")
