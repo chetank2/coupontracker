@@ -1,25 +1,25 @@
 # Coupon JSON Schema Grammar (GBNF format for llama.cpp)
-# Based on llama.cpp official JSON grammar syntax
+# Relaxed grammar: allows null for any field to prevent hallucination
 
 root ::= object
-ws ::= ([ \t\n\r])?
+ws ::= [ \t\n\r]*
 
-# Main coupon object
+# Main coupon object with all 7 required keys
 object ::= "{" ws "\"storeName\"" ws ":" ws value ws "," ws "\"description\"" ws ":" ws value ws "," ws "\"cashback\"" ws ":" ws cashback-value ws "," ws "\"offerText\"" ws ":" ws value ws "," ws "\"redeemCode\"" ws ":" ws value ws "," ws "\"expiryDate\"" ws ":" ws value ws "," ws "\"minOrderAmount\"" ws ":" ws value ws "}" ws
 
-# Cashback can be null or object
+# Cashback: null or typed object
 cashback-value ::= "null" | cashback-object
-cashback-object ::= "{" ws "\"type\"" ws ":" ws cashback-type ws "," ws "\"valueNum\"" ws ":" ws number ws "," ws "\"currency\"" ws ":" ws currency-value ws "}" ws
+cashback-object ::= "{" ws "\"type\"" ws ":" ws cashback-type ws "," ws "\"valueNum\"" ws ":" ws positive-number ws "," ws "\"currency\"" ws ":" ws currency-value ws "}" ws
 cashback-type ::= "\"percent\"" | "\"amount\"" | "\"text\""
 currency-value ::= "null" | string
 
-# Values
-value ::= string | number | "null"
+# Values: string, null (NO bare numbers for text fields)
+value ::= string | "null"
 
-# String: simple pattern without complex escapes
+# String: simple chars, no URL encoding
 string ::= "\"" string-char* "\""
-string-char ::= [^"\\\x00-\x1F] | "\\" ["\\/bfnrt]
+string-char ::= [a-zA-Z0-9 .,!?@#$%&*()\-_+=;:'/\[\]{}]
 
-# Number: integer and decimal
-number ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)?
+# Positive number only (no negatives for cashback)
+positive-number ::= ("0" | [1-9] [0-9]*) ("." [0-9]+)?
 
