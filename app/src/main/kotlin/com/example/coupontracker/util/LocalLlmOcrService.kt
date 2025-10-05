@@ -1092,27 +1092,43 @@ $sanitizedOcr<|im_end|>
     }
     
     /**
-     * CRITICAL FIX: Sanitize -1 sentinel values in cashback object
-     * LLM sometimes generates -1 as a programming convention for "missing data"
-     * This causes validation failure and triggers unwanted fallback to pattern matching
+     * CRITICAL FIX: Sanitize sentinel values that LLM uses as "missing data" placeholders
      * 
-     * STRATEGY: Convert -1 to null BEFORE validation to accept the LLM result
+     * PROBLEMS:
+     * 1. LLM generates {"cashback":{"valueNum":-1}} → validation fails → fallback
+     * 2. LLM generates {"redeemCode":"NULL"} → wrong code shows in UI
+     * 
+     * STRATEGY: Convert sentinel values to null BEFORE validation
      */
     private fun sanitizeSentinelValues(json: org.json.JSONObject) {
         try {
+            // 1. Sanitize cashback.valueNum: -1, 0, negative → null
             if (json.has("cashback") && !json.isNull("cashback")) {
                 val cashback = json.optJSONObject("cashback")
                 if (cashback != null) {
                     val valueNum = cashback.optDouble("valueNum", 0.0)
                     
-                    // CRITICAL: If valueNum is -1, 0, or negative, remove the entire cashback object
-                    // This prevents validation failure and lets the LLM result be accepted
                     if (valueNum <= 0) {
-                        Log.w(TAG, "⚠️ Sanitizing invalid cashback.valueNum: $valueNum → null (accepting LLM result)")
+                        Log.w(TAG, "⚠️ Sanitizing invalid cashback.valueNum: $valueNum → null")
                         json.put("cashback", org.json.JSONObject.NULL)
                     }
                 }
             }
+            
+            // 2. Sanitize redeemCode: "NULL", "null", "N/A", "NA" → null
+            if (json.has("redeemCode") && !json.isNull("redeemCode")) {
+                val code = json.optString("redeemCode", "")
+                val sentinelCodes = setOf("NULL", "null", "Null", "N/A", "NA", "n/a", "na", "NONE", "None", "none")
+                
+                if (code in sentinelCodes) {
+                    Log.w(TAG, "⚠️ Sanitizing sentinel redeemCode: '$code' → null")
+                    json.put("redeemCode", org.json.JSONObject.NULL)
+                }
+            }
+            
+            // 3. Sanitize description: "null", "NULL" → null (already handled in cleanDescription)
+            // No action needed here, cleanDescription handles it
+            
         } catch (e: Exception) {
             Log.w(TAG, "Error sanitizing sentinel values", e)
         }
