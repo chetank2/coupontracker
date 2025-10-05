@@ -794,6 +794,11 @@ $sanitizedOcr<|im_end|>
                 throw IllegalArgumentException("Invalid JSON schema")
             }
             
+            // CRITICAL FIX: Sanitize -1 sentinel values BEFORE validation
+            // LLM sometimes uses -1 as a programming convention for "missing data"
+            // Convert -1 to null to prevent validation failure and fallback to pattern matching
+            sanitizeSentinelValues(json)
+            
             // Validate field constraints
             val validation = CouponJsonValidator.validateFieldConstraints(json)
             if (validation is JsonValidationResult.Invalid) {
@@ -1084,6 +1089,33 @@ $sanitizedOcr<|im_end|>
         Log.d(TAG, "MiniCPM preprocessing: ${originalWidth}x${originalHeight} -> ${newWidth}x${newHeight} (scale: $scale)")
         
         return rgbBitmap
+    }
+    
+    /**
+     * CRITICAL FIX: Sanitize -1 sentinel values in cashback object
+     * LLM sometimes generates -1 as a programming convention for "missing data"
+     * This causes validation failure and triggers unwanted fallback to pattern matching
+     * 
+     * STRATEGY: Convert -1 to null BEFORE validation to accept the LLM result
+     */
+    private fun sanitizeSentinelValues(json: org.json.JSONObject) {
+        try {
+            if (json.has("cashback") && !json.isNull("cashback")) {
+                val cashback = json.optJSONObject("cashback")
+                if (cashback != null) {
+                    val valueNum = cashback.optDouble("valueNum", 0.0)
+                    
+                    // CRITICAL: If valueNum is -1, 0, or negative, remove the entire cashback object
+                    // This prevents validation failure and lets the LLM result be accepted
+                    if (valueNum <= 0) {
+                        Log.w(TAG, "⚠️ Sanitizing invalid cashback.valueNum: $valueNum → null (accepting LLM result)")
+                        json.put("cashback", org.json.JSONObject.NULL)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error sanitizing sentinel values", e)
+        }
     }
     
     /**
