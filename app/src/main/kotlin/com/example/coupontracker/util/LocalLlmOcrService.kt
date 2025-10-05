@@ -676,10 +676,10 @@ redeemCode:
 expiryDate:
 - Search for: "Expires on", "Valid till", "Expires:", "Expiry:"
 - COPY the date EXACTLY as written in OCR
-- Handle truncated text: "Expires on 31 May, ..." → extract "31 May" and infer current/next year
-- Example: OCR says "Expires on 05 May, 2025, 11:59 PM" → extract "05 May, 2025"
+- Handle truncated text: If date ends with "...", infer current/next year from context
+- Example: OCR says "Expires on 15 Dec, 2025, 11:59 PM" → extract "15 Dec, 2025"
 - Example: OCR says "Valid till 2025-12-31" → extract "2025-12-31"
-- Example: OCR says "31 May, ..." → extract "31 May, 2025" (infer year from context)
+- Example: OCR says "Valid till 20 Jan, ..." → extract "20 Jan, 2026" (infer year)
 - DO NOT create ISO timestamps like "2024-06-07T18:09:00Z"
 - If NO date in OCR, use null
 
@@ -699,7 +699,8 @@ offerText:
 
 description:
 - Brief summary of the offer (1-2 sentences)
-- Combine multi-line text: "Buy any 4 products at\n699*" → "Buy any 4 products at ₹699*"
+- Combine multi-line text when amount/offer spans lines
+- Example: "Flat 50% off\non orders" → "Flat 50% off on orders"
 - If offer text exists, use it as description
 - If missing, use null
 
