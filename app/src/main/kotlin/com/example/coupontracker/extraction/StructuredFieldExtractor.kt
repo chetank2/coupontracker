@@ -232,7 +232,7 @@ class StructuredFieldExtractor {
             ))
         }
         
-        // Pattern 3: Percentage (filter spurious like "030%")
+        // Pattern 3: Percentage (filter spurious like "030%" and battery indicators)
         val percentPattern = Regex(
             """(?<![0-9])([1-9][0-9]?|100)(?:\.[0-9]{1,2})?\s*%\s*(off|discount|cashback)?""",
             RegexOption.IGNORE_CASE
@@ -241,12 +241,24 @@ class StructuredFieldExtractor {
             val percentage = match.groupValues[1].toIntOrNull() ?: 0
             // Valid percentages are 1-100
             if (percentage in 1..100) {
-                candidates.add(FieldCandidate(
-                    value = "${match.groupValues[1]}%",
-                    confidence = 0.75f,
-                    source = "percentage",
-                    context = match.value
-                ))
+                // Get surrounding context to filter false positives
+                val startPos = maxOf(0, match.range.first - 10)
+                val endPos = minOf(context.ocrText.length, match.range.last + 10)
+                val surroundingText = context.ocrText.substring(startPos, endPos).lowercase()
+                
+                // Skip if this looks like a battery/signal indicator
+                val isBatteryIndicator = surroundingText.contains(Regex("""[0-9]g\s*${percentage}%""")) ||
+                                        surroundingText.contains(Regex("""${percentage}%\s*[0-9]g""")) ||
+                                        (percentage < 50 && surroundingText.contains(Regex("""[45]g""")))
+                
+                if (!isBatteryIndicator) {
+                    candidates.add(FieldCandidate(
+                        value = "${match.groupValues[1]}%",
+                        confidence = 0.75f,
+                        source = "percentage",
+                        context = match.value
+                    ))
+                }
             }
         }
         
