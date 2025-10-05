@@ -655,8 +655,9 @@ CRITICAL RULES:
 1. ONLY extract data that EXISTS in the OCR text
 2. DO NOT invent, generate, or hallucinate ANY data
 3. COPY dates EXACTLY as written - do NOT change format or create timestamps
-4. If data is missing, use null
-5. Output ONLY the JSON object, NO explanations
+4. If data is missing, use null (NOT -1, NOT 0, NOT empty object)
+5. NEVER use negative numbers or placeholder values like -1
+6. Output ONLY the JSON object, NO explanations
 
 Schema (all 7 keys required):
 {"storeName":str|null,"description":str|null,"cashback":obj|null,"offerText":str|null,"redeemCode":str|null,"expiryDate":str|null,"minOrderAmount":str|null}
@@ -688,9 +689,11 @@ cashback:
 - Convert to object:
   * Percentage: {"type":"percent","valueNum":50,"currency":null}
   * Amount: {"type":"amount","valueNum":200,"currency":"INR"}
-- valueNum must be positive number (never negative, never -1, never 0)
-- If NO discount in OCR, set cashback to null (NOT an object with -1 or 0)
-- Bonus cash, winnings, or rewards are NOT cashback discounts → use null
+- CRITICAL: valueNum must be a POSITIVE number (1 or greater)
+- NEVER use: -1, 0, negative numbers, or placeholder values
+- If NO discount exists in OCR → cashback must be null (NOT an object)
+- DO NOT create cashback object if no discount found
+- "Free membership", "bonus cash", "rewards" are NOT cashback → use null
 
 offerText:
 - Full offer description with conditions
