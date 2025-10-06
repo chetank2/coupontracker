@@ -63,7 +63,7 @@ class SchemaValidatorTest {
         assertFalse("Should reject JSON missing required field", result.isValid())
         assertTrue(
             "Error should mention missing field",
-            result.getIssues().any { it.contains("storeName") }
+            result.getIssuesList().any { it.contains("storeName") }
         )
     }
     
@@ -104,7 +104,7 @@ class SchemaValidatorTest {
         assertFalse("Should reject unknown keys", result.isValid())
         assertTrue(
             "Error should mention unknown key",
-            result.getIssues().any { it.contains("unknownField") }
+            result.getIssuesList().any { it.contains("unknownField") }
         )
     }
     
@@ -126,7 +126,7 @@ class SchemaValidatorTest {
         assertFalse("Should reject invalid type", result.isValid())
         assertTrue(
             "Error should mention type mismatch",
-            result.getIssues().any { it.contains("string") || it.contains("number") }
+            result.getIssuesList().any { it.contains("string") || it.contains("number") }
         )
     }
     
@@ -195,7 +195,7 @@ class SchemaValidatorTest {
         assertFalse("Should reject missing required nested field", result.isValid())
         assertTrue(
             "Error should mention missing 'type' field",
-            result.getIssues().any { it.contains("type") }
+            result.getIssuesList().any { it.contains("type") }
         )
     }
     
@@ -221,7 +221,7 @@ class SchemaValidatorTest {
         assertFalse("Should reject invalid nested type", result.isValid())
         assertTrue(
             "Error should mention valueNum type issue",
-            result.getIssues().any { it.contains("valueNum") }
+            result.getIssuesList().any { it.contains("valueNum") }
         )
     }
     
@@ -238,7 +238,7 @@ class SchemaValidatorTest {
         assertFalse("Should reject malformed JSON", result.isValid())
         assertTrue(
             "Error should mention JSON syntax",
-            result.getIssues().any { it.contains("JSON") || it.contains("syntax") }
+            result.getIssuesList().any { it.contains("JSON") || it.contains("syntax") }
         )
     }
     
@@ -255,7 +255,7 @@ class SchemaValidatorTest {
         val result = SchemaValidator.validate(invalidJson, schema)
         assertFalse("Should reject invalid JSON", result.isValid())
         
-        val issues = result.getIssues()
+        val issues = result.getIssuesList()
         assertTrue("Should have multiple issues", issues.size > 1)
     }
     
@@ -289,11 +289,11 @@ class SchemaValidatorTest {
     fun `ValidationResult provides helper methods`() {
         val validResult = ValidationResult.Valid
         assertTrue("isValid should return true for Valid", validResult.isValid())
-        assertTrue("getIssues should return empty for Valid", validResult.getIssues().isEmpty())
+        assertTrue("getIssuesList should return empty for Valid", validResult.getIssuesList().isEmpty())
         
         val invalidResult = ValidationResult.Invalid(listOf("Error 1", "Error 2"))
         assertFalse("isValid should return false for Invalid", invalidResult.isValid())
-        assertEquals("getIssues should return issues", 2, invalidResult.getIssues().size)
+        assertEquals("getIssuesList should return issues", 2, invalidResult.getIssuesList().size)
     }
 }
 

@@ -245,6 +245,6 @@ sealed class ValidationResult {
     data class Invalid(val issues: List<String>) : ValidationResult()
     
     fun isValid(): Boolean = this is Valid
-    fun getIssues(): List<String> = if (this is Invalid) issues else emptyList()
+    fun getIssuesList(): List<String> = if (this is Invalid) issues else emptyList()
 }
 
