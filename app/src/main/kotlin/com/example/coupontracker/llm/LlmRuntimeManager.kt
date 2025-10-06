@@ -362,6 +362,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 Log.d(TAG, "Running MiniCPM TEXT-ONLY inference...")
                 Log.d(TAG, "OCR text length: ${ocrText.length} chars")
                 
+                val inferenceStart = System.currentTimeMillis()
+                
                 // CRITICAL: Lock to prevent concurrent inference (llama.cpp is not thread-safe)
                 val response = inferenceMutex.withLock {
                     Log.d(TAG, "🔒 Acquired inference lock (text-only)")
@@ -375,7 +377,14 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                     }
                 }
                 
-                Log.d(TAG, "Text inference completed, response length: ${response?.length ?: 0}")
+                val inferenceTime = System.currentTimeMillis() - inferenceStart
+                Log.d(TAG, "Text inference completed in ${inferenceTime}ms, response length: ${response?.length ?: 0}")
+                
+                // Performance warning if inference is unexpectedly slow
+                if (inferenceTime > 30_000) {
+                    Log.w(TAG, "⚠️  Slow inference detected: ${inferenceTime}ms (expected ~10-20s after warmup)")
+                    Log.w(TAG, "⚠️  Check KV cache clearing and model state reset")
+                }
                 return@withContext response
                 
             } finally {

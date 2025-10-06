@@ -18,6 +18,8 @@ object IndianDateParser {
     private val DATE_FORMATS = listOf(
         "d/M/uuuu",           // 5/12/2024 (DD/MM/YYYY Indian format)
         "dd/MM/uuuu",         // 05/12/2024
+        "d/MMM, uuuu",        // 10/Nov, 2025 (LLM output format)
+        "dd/MMM, uuuu",       // 10/Nov, 2025
         "dd-MM-uuuu",         // 05-12-2024
         "dd MMM uuuu",        // 05 Dec 2024
         "d MMM uuuu",         // 5 Dec 2024

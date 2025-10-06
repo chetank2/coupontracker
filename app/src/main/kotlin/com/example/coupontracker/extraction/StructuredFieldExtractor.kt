@@ -232,21 +232,44 @@ class StructuredFieldExtractor {
             ))
         }
         
-        // Pattern 3: Percentage (filter spurious like "030%")
+        // Pattern 3: Percentage (filter spurious like "030%" and battery indicators)
+        // CRITICAL: Filter out battery/signal indicators (5G 36%, LTE 45%, Ở 38%)
         val percentPattern = Regex(
             """(?<![0-9])([1-9][0-9]?|100)(?:\.[0-9]{1,2})?\s*%\s*(off|discount|cashback)?""",
             RegexOption.IGNORE_CASE
         )
+        
+        // UI chrome patterns to exclude (battery, signal, time indicators)
+        val uiNoisePattern = Regex(
+            """(?:5G|4G|LTE|VoLTE|Ở|🔋|📶|battery|signal|wifi)\s+\d+%""",
+            RegexOption.IGNORE_CASE
+        )
+        
         percentPattern.findAll(context.ocrText).forEach { match ->
             val percentage = match.groupValues[1].toIntOrNull() ?: 0
-            // Valid percentages are 1-100
-            if (percentage in 1..100) {
-                candidates.add(FieldCandidate(
-                    value = "${match.groupValues[1]}%",
-                    confidence = 0.75f,
-                    source = "percentage",
-                    context = match.value
-                ))
+            val matchContext = context.ocrText.substring(
+                maxOf(0, match.range.first - 10),
+                minOf(context.ocrText.length, match.range.last + 10)
+            )
+            
+            // Valid percentages are 1-100 AND not part of UI chrome
+            if (percentage in 1..100 && !uiNoisePattern.containsMatchIn(matchContext)) {
+                // Extra validation: check if percentage appears in first 3 lines (likely UI chrome)
+                val lines = context.ocrText.lines()
+                val matchLine = context.ocrText.substring(0, match.range.first).count { it == '\n' }
+                
+                // Reduce confidence if in first 3 lines and isolated (likely status bar)
+                val isLikelyUiChrome = matchLine < 3 && !match.value.lowercase().contains(Regex("off|discount|cashback|save"))
+                val confidence = if (isLikelyUiChrome) 0.3f else 0.75f
+                
+                if (confidence >= 0.5f) {  // Only add if confidence threshold met
+                    candidates.add(FieldCandidate(
+                        value = "${match.groupValues[1]}%",
+                        confidence = confidence,
+                        source = "percentage",
+                        context = match.value
+                    ))
+                }
             }
         }
         

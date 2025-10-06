@@ -19,7 +19,7 @@ object CouponJsonValidator {
     
     // Feature flag: Use schema-driven validation
     // Set to true to enable schema-driven validation, false to use manual validation
-    private const val USE_SCHEMA_VALIDATION = false
+    private const val USE_SCHEMA_VALIDATION = true
     
     // Allowed keys in the JSON schema (updated for Qwen2.5 typed cashback format)
     private val ALLOWED_KEYS = setOf(

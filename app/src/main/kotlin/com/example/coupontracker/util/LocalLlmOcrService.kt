@@ -34,9 +34,10 @@ class LocalLlmOcrService(
     companion object {
         private const val TAG = "LocalLlmOcrService"
 
-        // Inference timeout (120 seconds - increased for slow mobile CPUs)
-        // With n_ctx=1024, this should be enough for most devices
-        private const val INFERENCE_TIMEOUT_MS = 120_000L
+        // Inference timeout (180 seconds - accommodates warmup + generation)
+        // First run: ~68s (model warmup), subsequent runs: ~10-20s
+        // Increased from 120s after observing 138s timeouts on device
+        private const val INFERENCE_TIMEOUT_MS = 180_000L
 
         // Model version tracking
         private const val SERVICE_VERSION = "1.4.0"  // Qwen2.5 migration
@@ -46,8 +47,8 @@ class LocalLlmOcrService(
         
         // Feature flags for schema-driven architecture
         // Set to true to enable schema-driven prompts/validation, false to use manual/legacy
-        private const val USE_SCHEMA_PROMPTS = false
-        private const val USE_SCHEMA_VALIDATION = false
+        private const val USE_SCHEMA_PROMPTS = true
+        private const val USE_SCHEMA_VALIDATION = true
 
         private val RUPEE_VARIANT_PATTERN = Regex(
             pattern = """(^|\s+|[^\w₹])((?:₹|₨|૱|रु|रू|rs\.?))[\s:=-]*([+-]?\d[\d,]*(?:\.\d+)?)""",
