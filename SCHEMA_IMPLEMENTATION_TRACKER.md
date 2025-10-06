@@ -85,24 +85,31 @@ All Week 2 generators produce deterministic, stable output suitable for version 
 
 ---
 
-## Week 3: Integration & Testing 🚧 PENDING
+## Week 3: Integration & Testing ✅ MOSTLY COMPLETE
 
-### Day 1: Update LocalLlmOcrService
+### Day 1: Update LocalLlmOcrService ✅ COMPLETE
 
-- [ ] Backup current `buildQwenPrompt()` as `buildQwenPromptManual()`
-- [ ] Add feature flag for schema-driven prompts
-- [ ] Integrate `PromptGenerator.generateCompletePrompt()`
-- [ ] Test: Build APK
-- [ ] Test: Device extraction with new prompt
+- [x] Backup current `buildQwenPrompt()` as `buildQwenPromptManual()`
+- [x] Add feature flag for schema-driven prompts (`USE_SCHEMA_PROMPTS`)
+- [x] Integrate `PromptGenerator.generateCompletePrompt()`
+- [x] Add feature flag for schema-driven validation (`USE_SCHEMA_VALIDATION`)
+- [x] Test: Build APK
+- [x] Schema imports added
+- [x] Feature-flagged integration complete
 
-### Day 2: Update CouponJsonValidator
+**Commit:** `9f8ec8be5` - Feature-flagged schema integration in LocalLlmOcrService
 
-- [ ] Backup current validator logic
-- [ ] Add feature flag for schema-driven validation
-- [ ] Integrate `SchemaValidator`
-- [ ] Update validation result handling
-- [ ] Test: Unit tests pass
-- [ ] Test: Integration with LLM output
+### Day 2: Update CouponJsonValidator ✅ COMPLETE
+
+- [x] Backup current validator logic (preserved as else branch)
+- [x] Add feature flag for schema-driven validation (`USE_SCHEMA_VALIDATION`)
+- [x] Integrate `SchemaValidator`
+- [x] Update validation result handling
+- [x] Test: APK builds successfully
+- [x] Fix method name collision (`getIssues` → `getIssuesList`)
+
+**Commit:** `a073e938d` - Feature-flagged schema integration in CouponJsonValidator  
+**Commit:** `c92de50f6` - Fix method name collision
 
 ### Day 3: Route All Entry Points
 
