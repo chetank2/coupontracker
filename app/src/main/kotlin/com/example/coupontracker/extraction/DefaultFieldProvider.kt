@@ -1,6 +1,7 @@
 package com.example.coupontracker.extraction
 
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.util.OcrTextCleaner
 
 /**
  * Provides conservative default values for missing fields.
@@ -19,32 +20,40 @@ class DefaultFieldProvider {
         
         val defaults = mutableMapOf<FieldType, FieldCandidate>()
         
-        // Store: Use first non-empty line or "Coupon"
+        // Store: Use first meaningful line (skip UI chrome) or "Coupon"
         if (FieldType.STORE_NAME in missingFields) {
-            val firstLine = context.ocrText.lines()
-                .firstOrNull { it.trim().isNotEmpty() }
-                ?.trim()
-                ?.take(30) // Truncate long lines
-                ?: "Coupon"
+            val firstLine = OcrTextCleaner.getFirstMeaningfulLine(context.ocrText, 30) ?: "Coupon"
             
             defaults[FieldType.STORE_NAME] = FieldCandidate(
                 value = firstLine,
                 confidence = 0.1f,
                 source = "default_first_line",
-                context = "No store found, using first line"
+                context = "No store found, using first meaningful line"
             )
         }
         
-        // Description: Always use full OCR text (truncated to reasonable length)
+        // Description: Use cleaned OCR text (no UI chrome, truncated to reasonable length)
         // This ensures we NEVER show "Error processing coupon"
-        val description = context.ocrText.take(200).trim()
+        val cleanedOcr = OcrTextCleaner.cleanOcrText(context.ocrText)
+        val description = cleanedOcr.take(200).trim()
         if (description.isNotBlank()) {
             defaults[FieldType.DESCRIPTION] = FieldCandidate(
                 value = description,
                 confidence = 0.5f,
                 source = "default_ocr_text",
-                context = "Using OCR text as description"
+                context = "Using cleaned OCR text as description"
             )
+        } else {
+            // Fallback to raw OCR if cleaning removed everything
+            val rawDescription = context.ocrText.take(200).trim()
+            if (rawDescription.isNotBlank()) {
+                defaults[FieldType.DESCRIPTION] = FieldCandidate(
+                    value = rawDescription,
+                    confidence = 0.3f,
+                    source = "default_raw_ocr",
+                    context = "Using raw OCR text as description (cleaning too aggressive)"
+                )
+            }
         }
         
         // Amount: 0.0 (but marked as uncertain)
