@@ -20,7 +20,8 @@ value ::= string | "null"
 string ::= "\"" string-char* "\""
 string-char ::= [a-zA-Z0-9 .,!?@#$%&*()\-_+=;:'/\[\]{}]
 
-# Positive number only (rejects 0, leading zeros, and negative signs)
-# Note: Must explicitly exclude minus sign at token level
-positive-number ::= ("0." ([0-9]* [1-9] [0-9]*)) | ([1-9][0-9]* ("." [0-9]+)?)
+# Positive number only (STRICT: must be >= 1, no decimals < 1, no negatives)
+# Explicitly blocks: -1, 0, 0.5, -0.5, leading zeros
+# Allows: 1, 1.0, 50, 99.99, 100
+positive-number ::= [1-9] [0-9]* ("." [0-9]+)?
 

@@ -787,8 +787,11 @@ $sanitizedOcr<|im_end|>
             val jsonCandidate = extractJsonSlice(cleanResponse)
                 ?: throw IllegalStateException("No JSON object found in LLM output")
             
+            // CRITICAL FIX: Repair incomplete JSON (e.g., missing closing braces due to token limit)
+            val repairedJson = repairIncompleteJson(jsonCandidate)
+            
             // Use strict JSON validation
-            val json = CouponJsonValidator.parseStrict(jsonCandidate)
+            val json = CouponJsonValidator.parseStrict(repairedJson)
             if (json == null) {
                 Log.w(TAG, "JSON failed strict validation, falling back to OCR")
                 throw IllegalArgumentException("Invalid JSON schema")
@@ -1089,6 +1092,48 @@ $sanitizedOcr<|im_end|>
         Log.d(TAG, "MiniCPM preprocessing: ${originalWidth}x${originalHeight} -> ${newWidth}x${newHeight} (scale: $scale)")
         
         return rgbBitmap
+    }
+    
+    /**
+     * Repair incomplete JSON that was truncated due to token limits
+     * Adds missing closing braces and quotes to make it parseable
+     */
+    private fun repairIncompleteJson(jsonStr: String): String {
+        var repaired = jsonStr.trim()
+        
+        // Count opening and closing braces
+        val openBraces = repaired.count { it == '{' }
+        val closeBraces = repaired.count { it == '}' }
+        val openBrackets = repaired.count { it == '[' }
+        val closeBrackets = repaired.count { it == ']' }
+        
+        // Check if JSON is incomplete
+        if (openBraces > closeBraces || openBrackets > closeBrackets) {
+            Log.w(TAG, "⚠️ Incomplete JSON detected: { open=$openBraces, close=$closeBraces }")
+            
+            // Close any unclosed strings
+            val quoteCount = repaired.count { it == '"' && (repaired.indexOf(it) == 0 || repaired[repaired.indexOf(it) - 1] != '\\') }
+            if (quoteCount % 2 != 0) {
+                repaired += "\""
+                Log.d(TAG, "  → Added closing quote")
+            }
+            
+            // Close any unclosed arrays
+            repeat(openBrackets - closeBrackets) {
+                repaired += "]"
+                Log.d(TAG, "  → Added closing bracket")
+            }
+            
+            // Close any unclosed objects
+            repeat(openBraces - closeBraces) {
+                repaired += "}"
+                Log.d(TAG, "  → Added closing brace")
+            }
+            
+            Log.i(TAG, "✅ Repaired JSON: $repaired")
+        }
+        
+        return repaired
     }
     
     /**
