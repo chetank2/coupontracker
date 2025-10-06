@@ -644,7 +644,11 @@ class LocalLlmOcrService(
      * Create optimized structured prompt for coupon extraction with strict schema and typed cashback
      */
     private fun createCouponExtractionPrompt(ocrText: String): String {
-        val sanitizedOcr = sanitizeOcrSnippet(ocrText)
+        // CRITICAL: Clean OCR text first to remove UI chrome (battery, signal, status bar)
+        val cleanedOcr = com.example.coupontracker.util.OcrTextCleaner.cleanOcrText(ocrText)
+        val finalOcr = cleanedOcr.ifBlank { ocrText }  // Fallback to raw if cleaning too aggressive
+        
+        val sanitizedOcr = sanitizeOcrSnippet(finalOcr)
         return if (USE_SCHEMA_PROMPTS) {
             // Schema-driven prompt generation
             PromptGenerator.generateCompletePrompt(CouponSchema.SCHEMA, sanitizedOcr)
