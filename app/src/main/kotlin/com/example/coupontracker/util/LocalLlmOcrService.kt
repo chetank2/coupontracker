@@ -49,6 +49,10 @@ class LocalLlmOcrService(
         // Set to true to enable schema-driven prompts/validation, false to use manual/legacy
         private const val USE_SCHEMA_PROMPTS = true
         private const val USE_SCHEMA_VALIDATION = true
+        
+        // Prompt optimization: Use compact prompts to reduce token count (920 → ~350 tokens)
+        // Compact prompts rely on grammar enforcement for structure, reducing verbosity
+        private const val USE_COMPACT_PROMPTS = true
 
         private val RUPEE_VARIANT_PATTERN = Regex(
             pattern = """(^|\s+|[^\w₹])((?:₹|₨|૱|रु|रू|rs\.?))[\s:=-]*([+-]?\d[\d,]*(?:\.\d+)?)""",
@@ -651,7 +655,16 @@ class LocalLlmOcrService(
         val sanitizedOcr = sanitizeOcrSnippet(finalOcr)
         return if (USE_SCHEMA_PROMPTS) {
             // Schema-driven prompt generation
-            PromptGenerator.generateCompletePrompt(CouponSchema.SCHEMA, sanitizedOcr)
+            if (USE_COMPACT_PROMPTS) {
+                // Compact: ~350 tokens (relies on grammar for structure)
+                com.example.coupontracker.schema.CompactPromptGenerator.generateCompletePrompt(
+                    CouponSchema.SCHEMA, 
+                    sanitizedOcr
+                )
+            } else {
+                // Verbose: ~920 tokens (includes all examples and hints)
+                PromptGenerator.generateCompletePrompt(CouponSchema.SCHEMA, sanitizedOcr)
+            }
         } else {
             // Manual prompt (legacy)
             buildQwenPromptManual(sanitizedOcr)

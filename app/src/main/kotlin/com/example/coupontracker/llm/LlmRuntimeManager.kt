@@ -275,12 +275,12 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         // Warm up the model for faster inference
         nativeInterface.warmupModel(handle)
         
-        // Set inference parameters
+        // Set inference parameters (optimized for strict JSON with grammar)
         nativeInterface.setInferenceParams(
             handle,
-            temperature = 0.3f,
+            temperature = 0.1f,  // Lower for deterministic output (was 0.3)
             maxTokens = MAX_TOKENS,
-            topP = 0.9f
+            topP = 0.85f  // Slightly lower for less randomness (was 0.9)
         )
         
         Log.d(TAG, "MiniCPM model loaded successfully (handle: $handle)")
