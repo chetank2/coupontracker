@@ -55,7 +55,8 @@ ${generateCompactFieldGuide(schema)}
                 is FieldType.DateType -> "str"
                 is FieldType.EnumType -> "str"
                 is FieldType.ObjectType -> "obj"
-                is FieldType.AnyType -> "any"
+                is FieldType.ArrayType -> "arr"
+                is FieldType.NullableType -> "null"
             }
             json.put(field.name, "$typeStr|null")
         }
