@@ -261,8 +261,9 @@ object IndianDateParser {
         val daysDifference = java.time.temporal.ChronoUnit.DAYS.between(now, date).toInt()
         
         return when {
-            // Past dates are usually invalid (except very recent ones)
-            daysDifference < -7 -> DateValidation(false, daysDifference, "Date is more than 7 days in the past")
+            // RELAXED: Accept dates from old screenshots (up to 6 months past)
+            // This allows processing screenshots taken months ago
+            daysDifference < -180 -> DateValidation(false, daysDifference, "Date is more than 6 months in the past")
             
             // Very far future dates are suspicious
             daysDifference > 730 -> DateValidation(false, daysDifference, "Date is more than 2 years in the future")
@@ -270,7 +271,7 @@ object IndianDateParser {
             // Perfect range
             daysDifference in 0..365 -> DateValidation(true, daysDifference, "Date is in optimal range")
             
-            // Acceptable range
+            // Acceptable range (includes expired coupons from recent screenshots)
             else -> DateValidation(true, daysDifference, "Date is acceptable")
         }
     }

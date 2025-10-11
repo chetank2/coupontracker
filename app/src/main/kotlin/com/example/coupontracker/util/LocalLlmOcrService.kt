@@ -711,33 +711,41 @@ redeemCode:
 - DO NOT invent codes
 
 expiryDate:
-- Search for: "Expires on", "Valid till", "Expires:", "Expiry:"
-- COPY the date EXACTLY as written in OCR
-- Handle truncated text: If date ends with "...", infer current/next year from context
-- Example: OCR says "Expires on 15 Dec, 2025, 11:59 PM" → extract "15 Dec, 2025"
-- Example: OCR says "Valid till 2025-12-31" → extract "2025-12-31"
-- Example: OCR says "Valid till 20 Jan, ..." → extract "20 Jan, 2026" (infer year)
+- Search for: "Expires on", "Valid till", "Expires:", "Expiry:", "EXPIRES IN"
+- Extract the date but CLEAN IT:
+  * Remove timestamps: "3 May, 2024 23:59 PM" → "3 May 2024" or "05 May 2025"
+  * Keep only: day, month, year
+  * Format: "3 May 2024" or "05 May, 2025" or "2025-05-03"
+- If year looks wrong (old/past), use the screenshot date context to infer correct year
+- Handle truncated text: If date ends with "...", infer year from context
 - DO NOT create ISO timestamps like "2024-06-07T18:09:00Z"
 - If NO date in OCR, use null
 
+Examples:
+  * OCR: "Expires on 15 Dec, 2025, 11:59 PM" → "15 Dec 2025"
+  * OCR: "Valid till 2025-12-31" → "2025-12-31"  
+  * OCR: "Expires on 05 May, 2025, 11:59 PM" → "05 May 2025"
+
 cashback:
-- Look for discount text: "50% off", "₹200 off", "Flat 11% Off", "flat 50 off"
-- Convert to object:
+⚠️ IMPORTANT: If you cannot CLEARLY identify the discount amount, set cashback to null
+- Only extract if discount is EXPLICIT: "50% off", "₹200 off", "Flat 11% Off"
+- If amount is unclear, misprinted, or ambiguous → use null
+- If multiple amounts are confusing → use null
+- The description field is more important than getting amount wrong
+
+- Convert clear discounts to object:
   * Percentage: {"type":"percent","valueNum":50,"currency":null}
   * Amount: {"type":"amount","valueNum":200,"currency":"INR"}
 - CRITICAL: valueNum must be a POSITIVE number (1 or greater)
 - NEVER use: -1, 0, negative numbers, or placeholder values
 - If NO discount exists in OCR → cashback must be null (NOT an object)
-- DO NOT create cashback object if no discount found
-- "Free membership", "bonus cash", "rewards" are NOT cashback → use null
 
-⚠️ CRITICAL DISAMBIGUATION:
-- "flat X off" or "₹X off" (even without ₹) = FIXED AMOUNT, not percentage
-  Example: "flat 50 off" → {"type":"amount","valueNum":50,"currency":"INR"}
-- Small numbers (< 5) near "Details", "Redeem Now", buttons = APP RATINGS, IGNORE THEM
-  Example: "Zepto Cafe 4.38" → 4.38 is a RATING, NOT cashback
-- Numbers with stars (⭐) or near restaurant/store names = RATINGS, IGNORE
-- Only use numbers that appear WITH discount keywords ("off", "cashback", "discount")
+⚠️ SKIP CASHBACK IF:
+- OCR text is garbled/unclear around numbers
+- Multiple discount amounts are present (confusing)
+- Numbers don't have clear "off"/"discount" keywords nearby
+- Small numbers (< 5) near "Details", "Redeem Now" = APP RATINGS
+- Numbers with stars (⭐) or near store names = RATINGS
 
 offerText:
 - Full offer description with conditions
@@ -745,14 +753,17 @@ offerText:
 - If missing, use null
 
 description:
-- Brief summary of the offer (1-2 sentences)
-- Combine multi-line text when amount/offer spans lines
-- Example: "Flat 50% off\non orders" → "Flat 50% off on orders"
-- Example: "you won flat 50 off on your next\nZepto Cafe order" → "Flat ₹50 off on your next Zepto Cafe order"
-- Include the main benefit/offer in description
-- If offer text exists, use it as description
-- DO NOT leave description empty if there's an offer - extract the offer text
-- If truly missing, use null
+⭐ MOST IMPORTANT FIELD - Focus on getting this right!
+- Extract the FULL offer text from the coupon
+- Combine multi-line text to form complete sentences
+- Examples:
+  * "Flat 50% off\non orders" → "Flat 50% off on orders"
+  * "you won flat ₹100 off + ₹50 cashback\non your next order" → "Flat ₹100 Off + ₹50 Cashback on your next order"
+  * "Flat 75% Off on Radiance Kit from beminimalist.co" → "Flat 75% Off on Radiance Kit from beminimalist.co"
+- Include ALL key details: discount, product, conditions
+- Clean up OCR noise but keep the offer intact
+- DO NOT leave empty - if there's ANY offer text, extract it
+- Only use null if absolutely no offer information exists
 
 minOrderAmount:
 - Minimum order value (e.g., "₹999", "₹500")
