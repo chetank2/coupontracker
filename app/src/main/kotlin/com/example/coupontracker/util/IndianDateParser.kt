@@ -219,6 +219,7 @@ object IndianDateParser {
         // Remove time components that aren't part of the date
         // E.g., "24 Midnight 2025" -> "24 2025" (invalid but won't cause recursion)
         cleaned = cleaned.replace(Regex("\\b(?:midnight|noon|am|pm)\\b", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("T\\d{1,2}:\\d{2}(?::\\d{2})?Z?", RegexOption.IGNORE_CASE), " ") // Remove ISO time tails (T23:59Z)
             .replace(Regex("\\d{1,2}:\\d{2}(?::\\d{2})?"), "") // Remove times like "8:20"
             .trim()
             .replace(Regex("\\s+"), " ") // Normalize again after removals
@@ -237,6 +238,15 @@ object IndianDateParser {
             val month = normalizeMonthToken(match.groupValues[1])
             val year = match.groupValues[2]
             val day = match.groupValues[3]
+            "$day $month $year"
+        }
+
+        // Reorder month-day-year artifacts (e.g., "May-31-2025" -> "31 May 2025")
+        val monthDayYearPattern = Regex("""\\b([A-Za-z]{3,9})[-/, ]*(\\d{1,2})[-/, ]*(20\\d{2})\\b""")
+        cleaned = monthDayYearPattern.replace(cleaned) { match ->
+            val month = normalizeMonthToken(match.groupValues[1])
+            val day = match.groupValues[2]
+            val year = match.groupValues[3]
             "$day $month $year"
         }
         
