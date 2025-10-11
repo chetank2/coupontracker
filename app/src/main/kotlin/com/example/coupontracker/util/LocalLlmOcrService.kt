@@ -721,7 +721,7 @@ expiryDate:
 - If NO date in OCR, use null
 
 cashback:
-- Look for discount text: "50% off", "₹200 off", "Flat 11% Off"
+- Look for discount text: "50% off", "₹200 off", "Flat 11% Off", "flat 50 off"
 - Convert to object:
   * Percentage: {"type":"percent","valueNum":50,"currency":null}
   * Amount: {"type":"amount","valueNum":200,"currency":"INR"}
@@ -730,6 +730,14 @@ cashback:
 - If NO discount exists in OCR → cashback must be null (NOT an object)
 - DO NOT create cashback object if no discount found
 - "Free membership", "bonus cash", "rewards" are NOT cashback → use null
+
+⚠️ CRITICAL DISAMBIGUATION:
+- "flat X off" or "₹X off" (even without ₹) = FIXED AMOUNT, not percentage
+  Example: "flat 50 off" → {"type":"amount","valueNum":50,"currency":"INR"}
+- Small numbers (< 5) near "Details", "Redeem Now", buttons = APP RATINGS, IGNORE THEM
+  Example: "Zepto Cafe 4.38" → 4.38 is a RATING, NOT cashback
+- Numbers with stars (⭐) or near restaurant/store names = RATINGS, IGNORE
+- Only use numbers that appear WITH discount keywords ("off", "cashback", "discount")
 
 offerText:
 - Full offer description with conditions
@@ -740,8 +748,11 @@ description:
 - Brief summary of the offer (1-2 sentences)
 - Combine multi-line text when amount/offer spans lines
 - Example: "Flat 50% off\non orders" → "Flat 50% off on orders"
+- Example: "you won flat 50 off on your next\nZepto Cafe order" → "Flat ₹50 off on your next Zepto Cafe order"
+- Include the main benefit/offer in description
 - If offer text exists, use it as description
-- If missing, use null
+- DO NOT leave description empty if there's an offer - extract the offer text
+- If truly missing, use null
 
 minOrderAmount:
 - Minimum order value (e.g., "₹999", "₹500")

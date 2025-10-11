@@ -11,6 +11,10 @@ object OcrTextCleaner {
         // Time displays
         Regex("""^\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)?\s*$"""),
         
+        // App ratings (1.0-5.0 range, often mistaken for cashback)
+        Regex("""^[1-5]\.\d{1,2}$"""),  // Matches: 4.38, 4.5, 3.87, etc.
+        Regex("""\b⭐?\s*[1-5]\.\d{1,2}\s*⭐?\b"""),  // Matches: ⭐ 4.38, 4.5 ⭐
+        
         // Battery/Signal indicators
         Regex("""\b(?:5G|4G|LTE|VoLTE|Wi-?Fi|Bluetooth)\b""", RegexOption.IGNORE_CASE),
         Regex("""\b(?:battery|signal|charging)\b""", RegexOption.IGNORE_CASE),
