@@ -106,7 +106,12 @@ object IndianDateParser {
                 }
                 
                 if (result.date != null) {
-                    return result.copy(confidence = result.confidence * (1.0f - index * 0.1f)) // Prefer earlier patterns
+                    val penalty = (1.0f - index * 0.1f).coerceAtLeast(0.5f)
+                    val adjustedConfidence = (result.confidence * penalty).coerceAtLeast(0.2f)
+                    return result.copy(
+                        confidence = adjustedConfidence,
+                        reason = result.reason + " | pattern=$index"
+                    ) // Prefer earlier patterns but never drop below usable range
                 }
             }
         }
