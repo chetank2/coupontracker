@@ -178,7 +178,7 @@ object CouponSchema {
             SchemaField(
                 name = "redeemCode",
                 type = FieldType.StringType,
-                required = false,
+                required = true,  // CRITICAL: Coupon code is the whole point!
                 metadata = FieldMetadata(
                     description = "Coupon code to be entered at checkout",
                     examples = listOf(
@@ -208,7 +208,7 @@ object CouponSchema {
             SchemaField(
                 name = "expiryDate",
                 type = FieldType.StringType, // Keep as string to preserve original format
-                required = false,
+                required = true,  // 🚨 CRITICAL: Most important field for app reminders!
                 metadata = FieldMetadata(
                     description = "Expiration date of the coupon",
                     examples = listOf(

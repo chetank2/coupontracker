@@ -686,6 +686,13 @@ class LocalLlmOcrService(
     private fun buildQwenPromptManual(sanitizedOcr: String): String = """<|im_start|>system
 You are a JSON extractor. Extract coupon data and output ONLY valid JSON.
 
+🚨 MANDATORY FIELDS (MUST ALWAYS INCLUDE):
+1. "redeemCode" - THE coupon code (search for "Code:" in OCR)
+2. "expiryDate" - THE expiry date (search for "Expires on" in OCR)
+3. "storeName" - Store/brand name
+4. "description" - Offer description
+
+⚠️ CRITICAL: All 7 JSON keys MUST be present! Never skip redeemCode or expiryDate!
 
 CRITICAL RULES:
 1. ONLY extract data that EXISTS in the OCR text
@@ -693,9 +700,9 @@ CRITICAL RULES:
 3. COPY dates EXACTLY as written - do NOT change format or create timestamps
 4. If data is missing, use null (NOT -1, NOT 0, NOT empty object)
 5. NEVER use negative numbers or placeholder values like -1
-6. Output ONLY the JSON object, NO explanations
+6. Output ONLY the JSON object, NO explanations, NO extra text after JSON
 
-Schema (all 7 keys required):
+Schema (all 7 keys MUST be present):
 {"storeName":str|null,"description":str|null,"cashback":obj|null,"offerText":str|null,"redeemCode":str|null,"expiryDate":str|null,"minOrderAmount":str|null}
 
 EXTRACTION GUIDE:
@@ -705,42 +712,47 @@ storeName:
 - Must appear in OCR text
 
 redeemCode:
+🚨 CRITICAL - MUST ALWAYS INCLUDE THIS KEY!
 - Search for: "Code:", "Coupon:", or standalone alphanumeric codes
-- Strip prefixes: "Code: SAVE50" → "SAVE50"
-- If NO code in OCR, use null
+- Strip prefixes: "Code: KAPW1M3LAfAhSe" → "KAPW1M3LAfAhSe"
+- Examples: "SAVE50", "BTXS5T13LI9V5", "KAPW1M3LAfAhSe"
+- If NO code in OCR, use null (BUT key must be present!)
 - DO NOT invent codes
+- NEVER output "NULL" as a string - use null instead
 
 expiryDate:
-🚨 CRITICAL - MOST IMPORTANT FOR APP REMINDERS!
+🚨 CRITICAL - MOST IMPORTANT FOR APP REMINDERS! MUST ALWAYS INCLUDE THIS KEY!
 ⚠️ Extract EXACTLY what you see in OCR. DO NOT change the date!
 
 STEP 1: Find expiry text in OCR
 - Look for: "Expires on", "Valid till", "Expires:", "Expiry:", "EXPIRES IN"
 
 STEP 2: Extract ONLY day, month, year (remove time)
+- Input: "Expires on 31 May, 2025, 11:59 PM"
+- Output: "31 May 2025"
+  
 - Input: "Expires on 05 May, 2025, 11:59 PM"
 - Output: "05 May 2025"
-  
-- Input: "Expires on 31 May, 2025, 1:59 PM"
-- Output: "31 May 2025"
 
 - Input: "Valid till 15 Dec 2025"
 - Output: "15 Dec 2025"
 
 STEP 3: Remove ALL extra text
+- ❌ WRONG: "May,25|31" (mangled format!)
 - ❌ WRONG: "May/16th @ 11.59 PM IST / End of the OFFER."
 - ❌ WRONG: "May-31-2025T23:59Z"
-- ❌ WRONG: "2024-06-07T18:09:00Z"
-- ✅ CORRECT: "05 May 2025"
-- ✅ CORRECT: "31 May 2025"
+- ❌ WRONG: Put it in "offerText" field
+- ✅ CORRECT: "31 May 2025" in "expiryDate" field
+- ✅ CORRECT: "05 May 2025" in "expiryDate" field
 
 🚨 CRITICAL RULES:
-1. DO NOT change the date numbers (05 → 16 is WRONG!)
-2. DO NOT add "@", "PM", "IST", "End of the OFFER."
-3. DO NOT add timestamps, "T", "Z", colons
-4. ONLY output: day month year (e.g., "05 May 2025")
+1. MUST include "expiryDate" key (even if null)!
+2. DO NOT change the date numbers (31 May → May,25|31 is WRONG!)
+3. DO NOT add "@", "PM", "IST", "|", weird symbols
+4. DO NOT put expiry in "offerText" - it goes in "expiryDate"!
+5. ONLY output: day month year (e.g., "31 May 2025")
 
-If NO date in OCR → use null
+If NO date in OCR → use null (BUT key must be present!)
 
 cashback:
 ⚠️ IMPORTANT: If you cannot CLEARLY identify the discount amount, set cashback to null
