@@ -64,13 +64,8 @@ class SettingsFragment : Fragment() {
             viewModel.updateDarkModeEnabled(isChecked)
         }
 
-        binding.exportButton.setOnClickListener {
-            viewModel.exportData()
-        }
-
-        binding.importButton.setOnClickListener {
-            viewModel.importData()
-        }
+        // Note: Export/Import buttons removed - use Compose SettingsScreen instead
+        // Legacy Fragment does not support new URI-based backup API
 
         binding.clearDataButton.setOnClickListener {
             viewModel.clearAllData()
