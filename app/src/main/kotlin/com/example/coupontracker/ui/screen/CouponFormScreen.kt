@@ -2,16 +2,24 @@ package com.example.coupontracker.ui.screen
 
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -114,7 +122,10 @@ fun CouponFormScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Edit Coupon") },
+                title = { 
+                    // This screen is used for adding new coupons from images
+                    Text("Add Coupon") 
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -123,8 +134,35 @@ fun CouponFormScreen(
             )
         }
     ) { paddingValues ->
-        UnifiedCouponForm(
-            storeName = storeName,
+        // Show loading indicator while processing
+        if (uiState.isProcessing) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "Extracting coupon data...",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "This may take up to 1 minute",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            UnifiedCouponForm(
+                storeName = storeName,
             onStoreNameChange = { storeName = it },
             description = description,
             onDescriptionChange = { description = it },
@@ -166,6 +204,7 @@ fun CouponFormScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp)
-        )
+            )
+        }
     }
 }
