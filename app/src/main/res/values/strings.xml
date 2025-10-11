@@ -35,4 +35,8 @@
     <string name="multi_coupon_all_saved_snackbar">Successfully saved %1$d coupons.</string>
     <string name="multi_coupon_single_saved_snackbar">Coupon processed successfully.</string>
     <string name="multi_coupon_already_saved_snackbar">Coupon was already saved.</string>
+    
+    <!-- Widget strings -->
+    <string name="widget_description">Shows expiring coupons at a glance</string>
+    <string name="widget_total_coupons">total coupons</string>
 </resources>

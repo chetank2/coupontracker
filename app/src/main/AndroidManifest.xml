@@ -101,5 +101,18 @@
             </intent-filter>
         </receiver>
 
+        <!-- Home Screen Widget -->
+        <receiver
+            android:name=".widget.CouponWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.example.coupontracker.ACTION_WIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
+
     </application>
 </manifest>
