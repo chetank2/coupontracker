@@ -993,12 +993,20 @@ $sanitizedOcr<|im_end|>
                     }
                     
                     val parsedDate = parseResult.date
-                    if (parsedDate != null && parseResult.confidence > 0.5f) {
-                        Log.d(TAG, "Parsed expiry date: $dateStr -> $parsedDate (confidence: ${parseResult.confidence})")
-                        java.util.Date.from(parsedDate.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
+                    if (parsedDate != null) {
+                        if (parseResult.confidence >= 0.2f) {
+                            if (parseResult.confidence < 0.5f) {
+                                Log.w(TAG, "Accepting low-confidence expiry: $dateStr -> $parsedDate (confidence: ${parseResult.confidence})")
+                            } else {
+                                Log.d(TAG, "Parsed expiry date: $dateStr -> $parsedDate (confidence: ${parseResult.confidence})")
+                            }
+                            java.util.Date.from(parsedDate.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
+                        } else {
+                            Log.w(TAG, "Discarding very low confidence expiry: $dateStr (confidence: ${parseResult.confidence})")
+                            DateParser.parseDate(dateStr)
+                        }
                     } else {
-                        Log.w(TAG, "Low confidence date parse: $dateStr (confidence: ${parseResult.confidence})")
-                        // Fallback to original parser
+                        Log.w(TAG, "Failed to resolve expiry date after parsing attempts: $dateStr")
                         DateParser.parseDate(dateStr)
                     }
                 } catch (e: Exception) {
