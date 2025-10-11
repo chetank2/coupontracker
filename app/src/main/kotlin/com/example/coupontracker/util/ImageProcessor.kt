@@ -218,7 +218,8 @@ class ImageProcessor(
                     image = bitmap,
                     ocrText = ocrText,
                     ocrBlocks = emptyList(),
-                    imageUri = originalImageUri ?: "bitmap://${System.currentTimeMillis()}"
+                    imageUri = originalImageUri ?: "bitmap://${System.currentTimeMillis()}",
+                    captureTimestamp = captureTimestamp  // FIXED: Pass screenshot timestamp for relative date calculation
                 )
                 
                 Log.d(TAG, "✅ Progressive extraction SUCCESS:")

@@ -60,22 +60,23 @@ class ProgressiveExtractionService @Inject constructor(
         image: Bitmap,
         ocrText: String,
         ocrBlocks: List<TextBlock> = emptyList(),
-        imageUri: String
+        imageUri: String,
+        captureTimestamp: Date? = null  // FIXED: Accept timestamp as parameter
     ): ProgressiveExtractionResult = withContext(Dispatchers.Default) {
         
         Log.d(TAG, "🚀 Starting MiniCPM-FIRST extraction pipeline")
         Log.d(TAG, "OCR text length: ${ocrText.length} characters")
         
-        // Extract screenshot timestamp for relative date calculation
-        val captureTimestamp = try {
+        // FIXED: Use provided timestamp if available, otherwise try to extract from URI
+        val effectiveCaptureTimestamp = captureTimestamp ?: try {
             ImageMetadataExtractor.extractCaptureTimestamp(androidContext, Uri.parse(imageUri))
         } catch (e: Exception) {
             Log.w(TAG, "Failed to extract capture timestamp: ${e.message}")
             null
         }
         
-        if (captureTimestamp != null) {
-            Log.d(TAG, "📸 Screenshot timestamp: $captureTimestamp")
+        if (effectiveCaptureTimestamp != null) {
+            Log.d(TAG, "📸 Screenshot timestamp: $effectiveCaptureTimestamp (${if (captureTimestamp != null) "provided" else "extracted"})")
         } else {
             Log.w(TAG, "⚠️ No screenshot timestamp found, relative dates will use current time")
         }
@@ -92,7 +93,7 @@ class ProgressiveExtractionService @Inject constructor(
             ocrBlocks = ocrBlocks,
             metadata = emptyMap(),
             attempts = mutableListOf(),
-            captureTimestamp = captureTimestamp
+            captureTimestamp = effectiveCaptureTimestamp
         )
         
         val extractedFields = mutableMapOf<FieldType, FieldCandidate>()
@@ -105,7 +106,7 @@ class ProgressiveExtractionService @Inject constructor(
         if (llmService != null) {
             try {
                 Log.d(TAG, "✅ MiniCPM LLM available - using vision AI")
-                val llmInfo = llmService.processCouponImage(image, captureTimestamp)
+                val llmInfo = llmService.processCouponImage(image, effectiveCaptureTimestamp)
                 
                 if (llmInfo != null) {
                     // Convert ALL fields from MiniCPM (not just missing ones)
