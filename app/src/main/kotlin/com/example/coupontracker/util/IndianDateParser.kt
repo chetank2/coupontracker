@@ -229,6 +229,8 @@ object IndianDateParser {
             .trim()
             .replace(Regex("\\s+"), " ") // Normalize again after removals
 
+        cleaned = decodeUrlEscapes(cleaned)
+
         // Remove trailing AM/PM that sticks to the day number ("31PM" -> "31")
         cleaned = cleaned.replace(Regex("""(\\d{1,2})(?:\\s*)?(?:AM|PM)\\b""", RegexOption.IGNORE_CASE), "$1")
         
@@ -272,6 +274,24 @@ object IndianDateParser {
         }
         
         return cleaned.trim()
+    }
+
+    private fun decodeUrlEscapes(input: String): String {
+        var result = input
+        val replacements = mapOf(
+            "%20" to " ",
+            "%2C" to ",",
+            "%2F" to "/",
+            "%3A" to ":",
+            "%2D" to "-",
+            "%5B" to "[",
+            "%5D" to "]",
+            "%2B" to "+"
+        )
+        replacements.forEach { (code, replacement) ->
+            result = result.replace(code, replacement, ignoreCase = true)
+        }
+        return result
     }
 
     private fun normalizeMonthToken(monthToken: String): String {

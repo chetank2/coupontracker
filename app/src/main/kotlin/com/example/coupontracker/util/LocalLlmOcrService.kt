@@ -978,7 +978,7 @@ $sanitizedOcr<|im_end|>
                 "Unknown Store"
             } else storeName
             
-            val finalCode = if (GenericFieldHeuristics.areDuplicateFields(storeName, code)) {
+            val finalCode = if (GenericFieldHeuristics.areDuplicateFields(storeName, code) || GenericFieldHeuristics.isGenericOrMissingCode(code)) {
                 Log.w(TAG, "Detected duplicate store name and redeem code: '$code' - clearing redeem code")
                 null
             } else code

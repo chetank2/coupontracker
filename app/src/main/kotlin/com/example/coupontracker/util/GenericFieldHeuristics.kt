@@ -53,7 +53,22 @@ object GenericFieldHeuristics {
             Log.d(TAG, "Treating '$value' as too short/meaningless - length: ${cleanValue.length}")
             return true
         }
+        return false
+    }
+
+    fun isGenericOrMissingCode(value: String?): Boolean {
+        if (value.isNullOrBlank()) return true
+        val cleanValue = value.trim().uppercase()
+        if (cleanValue.length < 4) return true
+        if (!cleanValue.matches(Regex("^[A-Z0-9_-]{4,}$"))) return true
+        // Reject generic placeholders but allow hyphenated long codes
+        if (isGenericOrMissing(value)) return true
         
+        // Detect repeated single segment forms like NO_CODE_NEEDED or lorem words
+        if (cleanValue.contains("NO_CODE") || cleanValue.contains("NEEDED")) {
+            Log.d(TAG, "Treating '$value' as placeholder code")
+            return true
+        }
         return false
     }
     
