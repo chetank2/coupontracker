@@ -60,7 +60,7 @@ class CouponAdapter(
         fun bind(coupon: Coupon) {
             binding.apply {
                 couponCode.text = coupon.redeemCode ?: "NO CODE"
-                
+
                 // Limit description length if needed
                 val maxDescLength = 100
                 val desc = if (coupon.description.length > maxDescLength) {
@@ -69,9 +69,13 @@ class CouponAdapter(
                     coupon.description
                 }
                 couponDescription.text = desc
-                
-                // Always format cashback amount with rupee symbol
-                couponValue.text = String.format("₹%.0f", coupon.cashbackAmount)
+
+                if (coupon.cashbackAmount > 0) {
+                    couponValue.visibility = View.VISIBLE
+                    couponValue.text = String.format("₹%.0f", coupon.cashbackAmount)
+                } else {
+                    couponValue.visibility = View.GONE
+                }
                 
                 // Set expiry date text with color based on days remaining
                 setExpiryDateText(coupon.expiryDate)

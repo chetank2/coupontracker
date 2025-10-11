@@ -668,9 +668,9 @@ fun EnhancedCouponCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // Amount (use typed cashback display if available, fallback to legacy format)
-                    val displayText = cashbackDisplayText?.takeIf { it.isNotBlank() } 
+                    val displayText = cashbackDisplayText?.takeIf { it.isNotBlank() }
                         ?: if (amount != null && amount > 0) "₹${amount.toInt()}" else null
-                    
+
                     if (!displayText.isNullOrBlank()) {
                         Surface(
                             shape = BrandShapes.MediumCornerShape,
