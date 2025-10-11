@@ -80,9 +80,15 @@ class ProgressiveExtractionService @Inject constructor(
             Log.w(TAG, "⚠️ No screenshot timestamp found, relative dates will use current time")
         }
         
+        // CRITICAL: Clean OCR text to remove UI chrome (battery, time, status bar)
+        val cleanedOcr = com.example.coupontracker.util.OcrTextCleaner.cleanOcrText(ocrText)
+        val finalOcr = cleanedOcr.ifBlank { ocrText }  // Fallback if cleaning too aggressive
+        
+        Log.d(TAG, "OCR cleaning: ${ocrText.length} → ${finalOcr.length} chars")
+        
         val context = ExtractionContext(
             imageUri = imageUri,
-            ocrText = ocrText,
+            ocrText = finalOcr,  // Use cleaned OCR text
             ocrBlocks = ocrBlocks,
             metadata = emptyMap(),
             attempts = mutableListOf(),

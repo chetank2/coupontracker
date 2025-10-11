@@ -233,28 +233,39 @@ class StructuredFieldExtractor {
         }
         
         // Pattern 3: Percentage (filter spurious like "030%" and battery indicators)
+        // CRITICAL: Filter out battery/signal indicators (5G 36%, LTE 45%, Ở 38%)
         val percentPattern = Regex(
             """(?<![0-9])([1-9][0-9]?|100)(?:\.[0-9]{1,2})?\s*%\s*(off|discount|cashback)?""",
             RegexOption.IGNORE_CASE
         )
+        
+        // UI chrome patterns to exclude (battery, signal, time indicators)
+        val uiNoisePattern = Regex(
+            """(?:5G|4G|LTE|VoLTE|Ở|🔋|📶|battery|signal|wifi)\s+\d+%""",
+            RegexOption.IGNORE_CASE
+        )
+        
         percentPattern.findAll(context.ocrText).forEach { match ->
             val percentage = match.groupValues[1].toIntOrNull() ?: 0
-            // Valid percentages are 1-100
-            if (percentage in 1..100) {
-                // Get surrounding context to filter false positives
-                val startPos = maxOf(0, match.range.first - 10)
-                val endPos = minOf(context.ocrText.length, match.range.last + 10)
-                val surroundingText = context.ocrText.substring(startPos, endPos).lowercase()
+            val matchContext = context.ocrText.substring(
+                maxOf(0, match.range.first - 10),
+                minOf(context.ocrText.length, match.range.last + 10)
+            )
+            
+            // Valid percentages are 1-100 AND not part of UI chrome
+            if (percentage in 1..100 && !uiNoisePattern.containsMatchIn(matchContext)) {
+                // Extra validation: check if percentage appears in first 3 lines (likely UI chrome)
+                val lines = context.ocrText.lines()
+                val matchLine = context.ocrText.substring(0, match.range.first).count { it == '\n' }
                 
-                // Skip if this looks like a battery/signal indicator
-                val isBatteryIndicator = surroundingText.contains(Regex("""[0-9]g\s*${percentage}%""")) ||
-                                        surroundingText.contains(Regex("""${percentage}%\s*[0-9]g""")) ||
-                                        (percentage < 50 && surroundingText.contains(Regex("""[45]g""")))
+                // Reduce confidence if in first 3 lines and isolated (likely status bar)
+                val isLikelyUiChrome = matchLine < 3 && !match.value.lowercase().contains(Regex("off|discount|cashback|save"))
+                val confidence = if (isLikelyUiChrome) 0.3f else 0.75f
                 
-                if (!isBatteryIndicator) {
+                if (confidence >= 0.5f) {  // Only add if confidence threshold met
                     candidates.add(FieldCandidate(
                         value = "${match.groupValues[1]}%",
-                        confidence = 0.75f,
+                        confidence = confidence,
                         source = "percentage",
                         context = match.value
                     ))

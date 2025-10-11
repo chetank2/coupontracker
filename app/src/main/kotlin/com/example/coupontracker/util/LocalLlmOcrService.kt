@@ -6,6 +6,10 @@ import android.util.Log
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.LlmTelemetryService
 import com.example.coupontracker.ocr.OcrEngine
+import com.example.coupontracker.schema.CouponSchema
+import com.example.coupontracker.schema.PromptGenerator
+import com.example.coupontracker.schema.SchemaValidator
+import com.example.coupontracker.schema.ValidationResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
@@ -30,9 +34,9 @@ class LocalLlmOcrService(
     companion object {
         private const val TAG = "LocalLlmOcrService"
 
-        // Inference timeout (180 seconds - accommodates longer prompts + larger OCR text)
-        // First run: ~148s (model warmup + long prompt + generation), subsequent runs: ~10s
-        // Increased from 150s due to expanded anti-hallucination prompt (655 tokens vs 596)
+        // Inference timeout (180 seconds - accommodates warmup + generation)
+        // First run: ~68s (model warmup), subsequent runs: ~10-20s
+        // Increased from 120s after observing 138s timeouts on device
         private const val INFERENCE_TIMEOUT_MS = 180_000L
 
         // Model version tracking
@@ -40,6 +44,15 @@ class LocalLlmOcrService(
         private const val SUPPORTED_MODEL_VERSION = "qwen25_1.5b_instruct_q4"
 
         private const val OCR_SNIPPET_MAX_CHARS = 2000
+        
+        // Feature flags for schema-driven architecture
+        // Set to true to enable schema-driven prompts/validation, false to use manual/legacy
+        private const val USE_SCHEMA_PROMPTS = true
+        private const val USE_SCHEMA_VALIDATION = true
+        
+        // Prompt optimization: Use compact prompts to reduce token count (920 → ~350 tokens)
+        // Compact prompts rely on grammar enforcement for structure, reducing verbosity
+        private const val USE_COMPACT_PROMPTS = true
 
         private val RUPEE_VARIANT_PATTERN = Regex(
             pattern = """(^|\s+|[^\w₹])((?:₹|₨|૱|रु|रू|rs\.?))[\s:=-]*([+-]?\d[\d,]*(?:\.\d+)?)""",
@@ -640,16 +653,39 @@ class LocalLlmOcrService(
      * Create optimized structured prompt for coupon extraction with strict schema and typed cashback
      */
     private fun createCouponExtractionPrompt(ocrText: String): String {
-        val sanitizedOcr = sanitizeOcrSnippet(ocrText)
-        return buildQwenPrompt(sanitizedOcr)
+        // CRITICAL: Clean OCR text first to remove UI chrome (battery, signal, status bar)
+        val cleanedOcr = com.example.coupontracker.util.OcrTextCleaner.cleanOcrText(ocrText)
+        val finalOcr = cleanedOcr.ifBlank { ocrText }  // Fallback to raw if cleaning too aggressive
+        
+        val sanitizedOcr = sanitizeOcrSnippet(finalOcr)
+        return if (USE_SCHEMA_PROMPTS) {
+            // Schema-driven prompt generation
+            if (USE_COMPACT_PROMPTS) {
+                // Compact: ~350 tokens (relies on grammar for structure)
+                com.example.coupontracker.schema.CompactPromptGenerator.generateCompletePrompt(
+                    CouponSchema.SCHEMA, 
+                    sanitizedOcr
+                )
+            } else {
+                // Verbose: ~920 tokens (includes all examples and hints)
+                PromptGenerator.generateCompletePrompt(CouponSchema.SCHEMA, sanitizedOcr)
+            }
+        } else {
+            // Manual prompt (legacy)
+            buildQwenPromptManual(sanitizedOcr)
+        }
     }
 
     /**
-     * Qwen2.5-optimized prompt for structured JSON extraction
+     * Qwen2.5-optimized prompt for structured JSON extraction (MANUAL/LEGACY)
      * Qwen2.5 has better instruction-following than Qwen2
+     * 
+     * NOTE: This is the manual/legacy prompt. When USE_SCHEMA_PROMPTS=true,
+     * the prompt is generated from CouponSchema instead.
      */
-    private fun buildQwenPrompt(sanitizedOcr: String): String = """<|im_start|>system
-You are a precise JSON extractor. Your ONLY job is to copy data from OCR text into JSON format.
+    private fun buildQwenPromptManual(sanitizedOcr: String): String = """<|im_start|>system
+You are a JSON extractor. Extract coupon data and output ONLY valid JSON.
+
 
 CRITICAL RULES:
 1. ONLY extract data that EXISTS in the OCR text
@@ -787,26 +823,36 @@ $sanitizedOcr<|im_end|>
             val jsonCandidate = extractJsonSlice(cleanResponse)
                 ?: throw IllegalStateException("No JSON object found in LLM output")
             
-            // CRITICAL FIX: Repair incomplete JSON (e.g., missing closing braces due to token limit)
-            val repairedJson = repairIncompleteJson(jsonCandidate)
-            
-            // Use strict JSON validation
-            val json = CouponJsonValidator.parseStrict(repairedJson)
-            if (json == null) {
-                Log.w(TAG, "JSON failed strict validation, falling back to OCR")
-                throw IllegalArgumentException("Invalid JSON schema")
-            }
-            
-            // CRITICAL FIX: Sanitize -1 sentinel values BEFORE validation
-            // LLM sometimes uses -1 as a programming convention for "missing data"
-            // Convert -1 to null to prevent validation failure and fallback to pattern matching
-            sanitizeSentinelValues(json)
-            
-            // Validate field constraints
-            val validation = CouponJsonValidator.validateFieldConstraints(json)
-            if (validation is JsonValidationResult.Invalid) {
-                Log.w(TAG, "Field validation failed: ${validation.issues}")
-                // Continue with warnings but don't fail completely
+            // JSON validation: use schema-driven or legacy validator
+            val json = if (USE_SCHEMA_VALIDATION) {
+                // Schema-driven validation
+                val validationResult = SchemaValidator.validate(jsonCandidate, CouponSchema.SCHEMA)
+                when (validationResult) {
+                    is ValidationResult.Valid -> {
+                        Log.d(TAG, "Schema validation passed")
+                        JSONObject(jsonCandidate)
+                    }
+                    is ValidationResult.Invalid -> {
+                        Log.w(TAG, "Schema validation failed: ${validationResult.issues}")
+                        throw IllegalArgumentException("Invalid JSON schema: ${validationResult.issues.joinToString(", ")}")
+                    }
+                }
+            } else {
+                // Legacy validation
+                val parsedJson = CouponJsonValidator.parseStrict(jsonCandidate)
+                if (parsedJson == null) {
+                    Log.w(TAG, "JSON failed strict validation, falling back to OCR")
+                    throw IllegalArgumentException("Invalid JSON schema")
+                }
+                
+                // Validate field constraints
+                val validation = CouponJsonValidator.validateFieldConstraints(parsedJson)
+                if (validation is JsonValidationResult.Invalid) {
+                    Log.w(TAG, "Field validation failed: ${validation.issues}")
+                    // Continue with warnings but don't fail completely
+                }
+                
+                parsedJson
             }
             
             // Extract fields with fallbacks and generic filtering

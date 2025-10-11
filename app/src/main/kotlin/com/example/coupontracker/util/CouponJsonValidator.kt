@@ -1,15 +1,25 @@
 package com.example.coupontracker.util
 
 import android.util.Log
+import com.example.coupontracker.schema.CouponSchema
+import com.example.coupontracker.schema.SchemaValidator
+import com.example.coupontracker.schema.ValidationResult
 import org.json.JSONException
 import org.json.JSONObject
 
 /**
  * Strict JSON schema validator for coupon extraction responses
  * Implements the "parseStrict" pattern to reduce hallucinations
+ * 
+ * NOTE: This is the legacy validator. For schema-driven validation,
+ * use SchemaValidator directly with CouponSchema.SCHEMA.
  */
 object CouponJsonValidator {
     private const val TAG = "CouponJsonValidator"
+    
+    // Feature flag: Use schema-driven validation
+    // Set to true to enable schema-driven validation, false to use manual validation
+    private const val USE_SCHEMA_VALIDATION = true
     
     // Allowed keys in the JSON schema (updated for Qwen2.5 typed cashback format)
     private val ALLOWED_KEYS = setOf(
@@ -27,19 +37,40 @@ object CouponJsonValidator {
      * Returns null if JSON doesn't match expected schema
      */
     fun parseStrict(jsonString: String): JSONObject? {
-        return runCatching {
-            val json = JSONObject(jsonString.trim())
-            
-            // Validate schema compliance
-            if (json.onlyAllowedKeys() && json.noEmptyStrings()) {
-                json
-            } else {
-                Log.w(TAG, "JSON failed schema validation")
+        if (USE_SCHEMA_VALIDATION) {
+            // Schema-driven validation
+            return runCatching {
+                val validationResult = SchemaValidator.validate(jsonString, CouponSchema.SCHEMA)
+                when (validationResult) {
+                    is ValidationResult.Valid -> {
+                        Log.d(TAG, "Schema validation passed")
+                        JSONObject(jsonString.trim())
+                    }
+                    is ValidationResult.Invalid -> {
+                        Log.w(TAG, "Schema validation failed: ${validationResult.issues}")
+                        null
+                    }
+                }
+            }.getOrElse { exception ->
+                Log.w(TAG, "JSON parsing failed: ${exception.message}")
                 null
             }
-        }.getOrElse { exception ->
-            Log.w(TAG, "JSON parsing failed: ${exception.message}")
-            null
+        } else {
+            // Legacy validation
+            return runCatching {
+                val json = JSONObject(jsonString.trim())
+                
+                // Validate schema compliance
+                if (json.onlyAllowedKeys() && json.noEmptyStrings()) {
+                    json
+                } else {
+                    Log.w(TAG, "JSON failed schema validation")
+                    null
+                }
+            }.getOrElse { exception ->
+                Log.w(TAG, "JSON parsing failed: ${exception.message}")
+                null
+            }
         }
     }
     
