@@ -661,32 +661,13 @@ fun EnhancedCouponCard(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Amount and code
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Amount (use typed cashback display if available, fallback to legacy format)
-                    val displayText = cashbackDisplayText?.takeIf { it.isNotBlank() }
-                        ?: if (amount != null && amount > 0) "₹${amount.toInt()}" else null
-
-                    if (!displayText.isNullOrBlank()) {
-                        Surface(
-                            shape = BrandShapes.MediumCornerShape,
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                        ) {
-                            Text(
-                                text = displayText,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
-                        }
-                    }
-
-                    // Code with copy button
-                    if (!code.isNullOrBlank() && onCopyCode != null) {
+                // Coupon code badge with copy action
+                if (!code.isNullOrBlank() && onCopyCode != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Start,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             modifier = Modifier
@@ -728,14 +709,14 @@ fun EnhancedCouponCard(
  */
 @Composable
 fun EnhancedCouponCard(
-    storeName: String,
-    description: String,
-    expiryDate: Date?,
-    amount: Double? = null,
-    code: String? = null,
-    onClick: () -> Unit,
-    onCopyCode: ((String) -> Unit)? = null,
-    modifier: Modifier = Modifier
+        storeName: String,
+        description: String,
+        expiryDate: Date?,
+        amount: Double? = null,
+        code: String? = null,
+        onClick: () -> Unit,
+        onCopyCode: ((String) -> Unit)? = null,
+        modifier: Modifier = Modifier
 ) {
     // Call the new version with imageUri = null and cashbackDisplayText = null (legacy fallback)
     EnhancedCouponCard(
