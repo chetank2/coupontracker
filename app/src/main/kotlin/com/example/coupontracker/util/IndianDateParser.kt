@@ -217,7 +217,7 @@ object IndianDateParser {
      * Clean and normalize date string
      */
     private fun cleanDateString(rawDate: String): String {
-        var cleaned = rawDate.trim()
+        var cleaned = decodeUrlEscapes(rawDate.trim())
             .replace(Regex("\\s+"), " ") // Normalize whitespace
             .replace(",", "") // Remove commas initially for parsing
         

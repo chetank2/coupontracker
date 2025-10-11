@@ -947,7 +947,7 @@ $sanitizedOcr<|im_end|>
                         Log.d(TAG, "Validated universal code: $it")
                     }
                 }
-                ?.takeIf { !GenericFieldHeuristics.isGenericOrMissing(it) }
+                ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
             
             val expiryDate = json.optString("expiryDate").let {
                 if (it.isBlank() || it == "Unknown") null else it
