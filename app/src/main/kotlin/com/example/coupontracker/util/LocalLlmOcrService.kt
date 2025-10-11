@@ -917,10 +917,10 @@ $sanitizedOcr<|im_end|>
             val rawDescription = json.optString("description", "")
             val cleanedDescription = cleanDescription(rawDescription)
             val description = when {
-                cleanedDescription.isBlank() -> "Coupon offer"
-                cleanedDescription.equals("Unknown", ignoreCase = true) -> "Coupon offer"
-                GenericFieldHeuristics.isGenericOrMissing(cleanedDescription) -> "Coupon offer"
-                else -> cleanedDescription.take(100)
+                cleanedDescription.isBlank() -> selectDescriptionFallback(rawOcrText)
+                cleanedDescription.equals("Unknown", ignoreCase = true) -> selectDescriptionFallback(rawOcrText)
+                GenericFieldHeuristics.isGenericOrMissing(cleanedDescription) -> selectDescriptionFallback(rawOcrText)
+                else -> cleanedDescription.trim().replace(Regex("\\s+"), " ")
             }
             
         // Use universal code validation instead of brand-specific patterns
@@ -1107,7 +1107,7 @@ $sanitizedOcr<|im_end|>
         if (code.isBlank()) return false
         
         // Basic format validation
-        val basePattern = Regex("^[A-Z0-9][A-Z0-9_-]{3,15}$")
+        val basePattern = Regex("^[A-Z0-9][A-Z0-9_-]{3,23}$")
         if (!basePattern.matches(code)) {
             return false
         }
@@ -1129,6 +1129,10 @@ $sanitizedOcr<|im_end|>
         
         // Reasonable length check
         if (code.length < 4 || code.length > 16) {
+            return false
+        }
+        
+        if ((code.count { it == '-' } + code.count { it == '_' }) > 2) {
             return false
         }
         
@@ -1505,6 +1509,35 @@ $sanitizedOcr<|im_end|>
             
             else -> QualityReason.LOW_QUALITY_EXTRACTION
         }
+    }
+
+    private fun selectDescriptionFallback(rawOcrText: String?): String {
+        if (rawOcrText.isNullOrBlank()) {
+            Log.w(TAG, "No OCR text available for description fallback")
+            return "Coupon offer"
+        }
+
+        val lines = rawOcrText.lineSequence()
+            .map { it.trim() }
+            .filter { it.length in 12..220 }
+            .filter { !GenericFieldHeuristics.isGenericOrMissing(it) }
+            .toList()
+
+        val scoredLines = lines.map { line ->
+            var score = 0
+            if (Regex("\\d").containsMatchIn(line)) score += 3
+            if (Regex("%|₹|Rs|OFF|Flat|Buy|Cashback|Free|Code", RegexOption.IGNORE_CASE).containsMatchIn(line)) score += 3
+            if (line.length > 60) score += 1
+            if (line.contains("http", ignoreCase = true)) score -= 2
+            score to line.replace(Regex("\\s+"), " ")
+        }.sortedByDescending { it.first }
+
+        val primary = scoredLines.firstOrNull { it.first > 0 }?.second
+            ?: lines.firstOrNull()?.replace(Regex("\\s+"), " ")
+
+        val description = primary ?: "Coupon offer"
+        Log.d(TAG, "Using fallback description: '$description'")
+        return description
     }
 }
 
