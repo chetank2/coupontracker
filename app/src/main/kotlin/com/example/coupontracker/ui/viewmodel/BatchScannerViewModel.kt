@@ -346,7 +346,7 @@ class BatchScannerViewModel @Inject constructor(
             cashbackType = com.example.coupontracker.data.model.CashbackType.TEXT.name.lowercase(),
             cashbackValueNum = 0.0,
             cashbackCurrency = null,
-            offerText = "Unable to extract coupon details"
+            offerText = null
         )
     }
     
@@ -556,7 +556,7 @@ class BatchScannerViewModel @Inject constructor(
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
             cashbackCurrency = cashbackCurrency,
-            offerText = llmInfo.description.takeIf { it.isNotBlank() } ?: ocrCoupon.description
+            offerText = null
         )
     }
     
@@ -810,7 +810,7 @@ class BatchScannerViewModel @Inject constructor(
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
             cashbackCurrency = cashbackCurrency,
-            offerText = fields["description"]
+            offerText = null
         )
     }
     
@@ -845,7 +845,7 @@ class BatchScannerViewModel @Inject constructor(
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
             cashbackCurrency = cashbackCurrency,
-            offerText = couponInfo.description
+            offerText = null
         )
     }
 

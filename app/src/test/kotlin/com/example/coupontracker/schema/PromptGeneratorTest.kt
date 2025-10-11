@@ -188,16 +188,10 @@ class PromptGeneratorTest {
             "expiryDate",
             "cashback",
             "minOrderAmount",
-            "offerText",
             "description"
-        )
+        ).sorted()
         
-        manualPromptFeatures.forEach { feature ->
-            assertTrue(
-                "Generated prompt should contain feature: $feature",
-                generatedPrompt.contains(feature, ignoreCase = true)
-            )
-        }
+        assertEquals(expectedFields, schema.keys.sorted())
     }
     
     @Test
