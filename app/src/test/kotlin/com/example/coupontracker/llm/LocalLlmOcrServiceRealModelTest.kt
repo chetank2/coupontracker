@@ -150,13 +150,12 @@ class LocalLlmOcrServiceRealModelTest {
         {
             "storeName": "Prime Store",
             "description": "Flat 20% off on select products",
-            "redeemCode": "PRIME20",
+            "redeemCode": "SAVE20",
             "cashback": {
                 "type": "percent",
                 "valueNum": 20,
                 "currency": "INR"
             },
-            "offerText": "Flat 20% off",
             "expiryDate": "31 May 2025",
             "minOrderAmount": "₹1000"
         }

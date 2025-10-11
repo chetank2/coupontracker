@@ -149,32 +149,7 @@ object CouponSchema {
                 )
             ),
             
-            // Field 4: Offer Text
-            SchemaField(
-                name = "offerText",
-                type = FieldType.StringType,
-                required = false,
-                metadata = FieldMetadata(
-                    description = "Full offer text with conditions (optional, more detailed than description)",
-                    examples = listOf(
-                        "Flat 75% Off on Fashion & Lifestyle",
-                        "Get ₹200 off on minimum purchase of ₹999",
-                        "Extra 10% off with ICICI Credit Card"
-                    ),
-                    hints = listOf(
-                        "Include conditions if present",
-                        "Can be longer than description",
-                        "May include payment method restrictions"
-                    ),
-                    extractionHints = "Usually near the main offer, may include fine print details.",
-                    validationRules = listOf(
-                        "Optional field",
-                        "Should provide more context than description"
-                    )
-                )
-            ),
-            
-            // Field 5: Redeem Code
+            // Field 4: Redeem Code
             SchemaField(
                 name = "redeemCode",
                 type = FieldType.StringType,
@@ -204,7 +179,7 @@ object CouponSchema {
                 )
             ),
             
-            // Field 6: Expiry Date
+            // Field 5: Expiry Date
             SchemaField(
                 name = "expiryDate",
                 type = FieldType.StringType, // Keep as string to preserve original format
@@ -233,7 +208,7 @@ object CouponSchema {
                 )
             ),
             
-            // Field 7: Minimum Order Amount
+            // Field 6: Minimum Order Amount
             SchemaField(
                 name = "minOrderAmount",
                 type = FieldType.StringType, // String to preserve formatting like "₹999"

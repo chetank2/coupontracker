@@ -754,7 +754,7 @@ class ScannerViewModel @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = ocrCoupon.offerText ?: llmInfo.description
+            offerText = llmInfo.description.takeIf { it.isNotBlank() } ?: ocrCoupon.description
         )
     }
 
@@ -1303,7 +1303,7 @@ class ScannerViewModel @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = extractedInfo["amount"] ?: extractedInfo["benefit"],
+            offerText = extractedInfo["description"],
             category = determineCategory(extractedInfo),
             rating = null,
             status = when (couponInstance.status) {
@@ -1552,7 +1552,7 @@ class ScannerViewModel @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = extractedInfo["amount"] ?: extractedInfo["description"],
+            offerText = extractedInfo["description"],
             category = determineCategory(extractedInfo),
             rating = null,
             status = "ACTIVE",

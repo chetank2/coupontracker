@@ -702,8 +702,8 @@ CRITICAL RULES:
 5. NEVER use negative numbers or placeholder values like -1
 6. Output ONLY the JSON object, NO explanations, NO extra text after JSON
 
-Schema (all 7 keys MUST be present):
-{"storeName":str|null,"description":str|null,"cashback":obj|null,"offerText":str|null,"redeemCode":str|null,"expiryDate":str|null,"minOrderAmount":str|null}
+Schema (all 6 keys MUST be present):
+{"storeName":str|null,"description":str|null,"cashback":obj|null,"redeemCode":str|null,"expiryDate":str|null,"minOrderAmount":str|null}
 
 EXTRACTION GUIDE:
 
@@ -741,7 +741,7 @@ STEP 3: Remove ALL extra text
 - ❌ WRONG: "May,25|31" (mangled format!)
 - ❌ WRONG: "May/16th @ 11.59 PM IST / End of the OFFER."
 - ❌ WRONG: "May-31-2025T23:59Z"
-- ❌ WRONG: Put it in "offerText" field
+- ❌ WRONG: Put it in the WRONG field
 - ✅ CORRECT: "31 May 2025" in "expiryDate" field
 - ✅ CORRECT: "05 May 2025" in "expiryDate" field
 
@@ -749,7 +749,7 @@ STEP 3: Remove ALL extra text
 1. MUST include "expiryDate" key (even if null)!
 2. DO NOT change the date numbers (31 May → May,25|31 is WRONG!)
 3. DO NOT add "@", "PM", "IST", "|", weird symbols
-4. DO NOT put expiry in "offerText" - it goes in "expiryDate"!
+4. DO NOT put expiry in other fields - it goes in "expiryDate"!
 5. ONLY output: day month year (e.g., "31 May 2025")
 
 If NO date in OCR → use null (BUT key must be present!)
@@ -775,14 +775,10 @@ cashback:
 - Small numbers (< 5) near "Details", "Redeem Now" = APP RATINGS
 - Numbers with stars (⭐) or near store names = RATINGS
 
-offerText:
-- Full offer description with conditions
-- Example: "Get Upto 50% Off + Extra 33% Off"
-- If missing, use null
-
 description:
 ⭐ MOST IMPORTANT FIELD - Focus on getting this right!
-- ❗ If you output offerText, you MUST also put the same main sentence in description.
+- ❗ NEVER leave this empty if any offer text exists in OCR.
+- ❗ Include the main discount sentence even if extra details exist.
 - DO NOT return an empty string. If no offer text exists, use null (NOT "").
 - Extract the FULL offer text from the coupon
 - Combine multi-line text to form complete sentences

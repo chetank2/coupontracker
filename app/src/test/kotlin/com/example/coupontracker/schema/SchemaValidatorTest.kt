@@ -17,9 +17,8 @@ class SchemaValidatorTest {
                 "storeName": "Amazon",
                 "description": "Get 50% off on electronics",
                 "cashback": {"type": "percent", "valueNum": 50, "currency": null},
-                "offerText": "Flat 50% off on select electronics",
                 "redeemCode": "SAVE50",
-                "expiryDate": "31 May, 2025",
+                "expiryDate": "2024-12-31",
                 "minOrderAmount": "₹999"
             }
         """.trimIndent()
@@ -35,10 +34,9 @@ class SchemaValidatorTest {
                 "storeName": "Flipkart",
                 "description": "Coupon offer",
                 "cashback": null,
-                "offerText": null,
-                "redeemCode": null,
-                "expiryDate": null,
-                "minOrderAmount": null
+                "redeemCode": "SAVE50",
+                "expiryDate": "31 May 2024",
+                "minOrderAmount": "₹999"
             }
         """.trimIndent()
         
@@ -52,7 +50,6 @@ class SchemaValidatorTest {
             {
                 "description": "Get 50% off",
                 "cashback": null,
-                "offerText": null,
                 "redeemCode": null,
                 "expiryDate": null,
                 "minOrderAmount": null
@@ -74,7 +71,6 @@ class SchemaValidatorTest {
                 "storeName": null,
                 "description": "Test",
                 "cashback": null,
-                "offerText": null,
                 "redeemCode": null,
                 "expiryDate": null,
                 "minOrderAmount": null
@@ -92,7 +88,6 @@ class SchemaValidatorTest {
                 "storeName": "Amazon",
                 "description": "Test",
                 "cashback": null,
-                "offerText": null,
                 "redeemCode": null,
                 "expiryDate": null,
                 "minOrderAmount": null,
@@ -115,7 +110,6 @@ class SchemaValidatorTest {
                 "storeName": 12345,
                 "description": "Test",
                 "cashback": null,
-                "offerText": null,
                 "redeemCode": null,
                 "expiryDate": null,
                 "minOrderAmount": null
@@ -141,10 +135,9 @@ class SchemaValidatorTest {
                     "valueNum": 50,
                     "currency": null
                 },
-                "offerText": null,
-                "redeemCode": null,
-                "expiryDate": null,
-                "minOrderAmount": null
+                "redeemCode": "SAVE50",
+                "expiryDate": "31 May 2024",
+                "minOrderAmount": "₹999"
             }
         """.trimIndent()
         
@@ -163,10 +156,9 @@ class SchemaValidatorTest {
                     "valueNum": 50,
                     "currency": null
                 },
-                "offerText": null,
-                "redeemCode": null,
-                "expiryDate": null,
-                "minOrderAmount": null
+                "redeemCode": "SAVE50",
+                "expiryDate": "31 May 2024",
+                "minOrderAmount": "₹999"
             }
         """.trimIndent()
         
@@ -184,10 +176,9 @@ class SchemaValidatorTest {
                     "valueNum": 50,
                     "currency": null
                 },
-                "offerText": null,
-                "redeemCode": null,
-                "expiryDate": null,
-                "minOrderAmount": null
+                "redeemCode": "SAVE50",
+                "expiryDate": "31 May 2024",
+                "minOrderAmount": "₹999"
             }
         """.trimIndent()
         
@@ -210,10 +201,9 @@ class SchemaValidatorTest {
                     "valueNum": "fifty",
                     "currency": null
                 },
-                "offerText": null,
-                "redeemCode": null,
-                "expiryDate": null,
-                "minOrderAmount": null
+                "redeemCode": "SAVE50",
+                "expiryDate": "31 May 2024",
+                "minOrderAmount": "₹999"
             }
         """.trimIndent()
         
@@ -273,10 +263,9 @@ class SchemaValidatorTest {
                         "valueNum": 50,
                         "currency": null
                     },
-                    "offerText": null,
-                    "redeemCode": null,
-                    "expiryDate": null,
-                    "minOrderAmount": null
+                    "redeemCode": "SAVE50",
+                    "expiryDate": "31 May 2024",
+                    "minOrderAmount": "₹999"
                 }
             """.trimIndent()
             

@@ -260,17 +260,6 @@ class ProgressiveExtractionService @Inject constructor(
             )
         }
         
-        if (FieldType.AMOUNT in missingFields && couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) {
-            results.getOrPut(FieldType.AMOUNT) { mutableListOf() }.add(
-                FieldCandidate(
-                    value = "${couponInfo.cashbackAmount}",
-                    confidence = 0.75f,
-                    source = "minicpm_llm",
-                    context = "Extracted by MiniCPM LLM"
-                )
-            )
-        }
-        
         if (FieldType.COUPON_CODE in missingFields && couponInfo.redeemCode != null) {
             results.getOrPut(FieldType.COUPON_CODE) { mutableListOf() }.add(
                 FieldCandidate(
@@ -378,9 +367,8 @@ class ProgressiveExtractionService @Inject constructor(
         val expiryDate = extractedFields[FieldType.EXPIRY_DATE]?.value?.let { parseDate(it) }
         
         // Amount and Cashback Info
-        val (cashbackAmount, cashbackInfo) = extractedFields[FieldType.AMOUNT]?.value?.let {
-            parseCashbackAmount(it)
-        } ?: Pair(0.0, CashbackInfo(CashbackType.AMOUNT, 0.0))
+        val cashbackAmount = 0.0
+        val cashbackInfo = CashbackInfo(CashbackType.AMOUNT, 0.0)
         
         return Coupon(
             id = 0,
@@ -393,7 +381,7 @@ class ProgressiveExtractionService @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = extractedFields[FieldType.AMOUNT]?.value,
+            offerText = null,
             category = null,
             rating = null,
             status = "ACTIVE",
@@ -433,41 +421,6 @@ class ProgressiveExtractionService @Inject constructor(
         
         Log.w(TAG, "Could not parse date: $dateString")
         return null
-    }
-    
-    /**
-     * Parse cashback amount string to amount and type
-     */
-    private fun parseCashbackAmount(amountText: String): Pair<Double, CashbackInfo> {
-        try {
-            // Check for percentage
-            if (amountText.contains("%")) {
-                val percentPattern = Regex("""([0-9]+(?:\.[0-9]{1,2})?)""")
-                val match = percentPattern.find(amountText)
-                val value = match?.value?.toDoubleOrNull() ?: 0.0
-                return Pair(value, CashbackInfo(CashbackType.PERCENT, value))
-            }
-            
-            // Check for rupee amount
-            val numericValue = IndianCurrencyParser.parseAmount(amountText) ?: 0.0
-            
-            // Determine type based on keywords
-            val cashbackInfo = when {
-                amountText.contains("cashback", ignoreCase = true) -> 
-                    CashbackInfo(CashbackType.AMOUNT, numericValue, "INR")
-                amountText.contains("off", ignoreCase = true) || 
-                amountText.contains("discount", ignoreCase = true) -> 
-                    CashbackInfo(CashbackType.AMOUNT, numericValue, "INR")
-                else -> 
-                    CashbackInfo(CashbackType.AMOUNT, numericValue, "INR")
-            }
-            
-            return Pair(numericValue, cashbackInfo)
-            
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse cashback amount: $amountText", e)
-            return Pair(0.0, CashbackInfo(CashbackType.AMOUNT, 0.0))
-        }
     }
     
     /**

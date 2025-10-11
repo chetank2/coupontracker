@@ -19,7 +19,7 @@ data class Coupon(
     val cashbackType: String? = null, // "percent", "amount", "text"
     val cashbackValueNum: Double? = null, // Numeric value only
     val cashbackCurrency: String? = "INR", // Currency for amounts
-    val offerText: String? = null, // Original display text (e.g., "Flat 75% Off")
+    val offerText: String? = null, // Deprecated: kept for migrations; UI should use description instead
     val imageUri: String?,
     val imagePhash: String? = null,
     val imageSignature: String? = null,
@@ -64,7 +64,7 @@ data class Coupon(
      * Gets the display text for cashback, preferring offerText if available.
      */
     fun getCashbackDisplayText(): String {
-        return offerText ?: getCashbackInfo().getDisplayText()
+        return description.takeIf { it.isNotBlank() } ?: getCashbackInfo().getDisplayText()
     }
 
     /**

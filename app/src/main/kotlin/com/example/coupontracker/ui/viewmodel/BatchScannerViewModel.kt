@@ -556,7 +556,7 @@ class BatchScannerViewModel @Inject constructor(
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
             cashbackCurrency = cashbackCurrency,
-            offerText = ocrCoupon.offerText ?: llmInfo.description
+            offerText = llmInfo.description.takeIf { it.isNotBlank() } ?: ocrCoupon.description
         )
     }
     
@@ -810,7 +810,7 @@ class BatchScannerViewModel @Inject constructor(
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
             cashbackCurrency = cashbackCurrency,
-            offerText = fields["description"] ?: "Extracted via batch LEGACY processing"
+            offerText = fields["description"]
         )
     }
     
@@ -845,7 +845,7 @@ class BatchScannerViewModel @Inject constructor(
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
             cashbackCurrency = cashbackCurrency,
-            offerText = couponInfo.description.takeIf { it.isNotBlank() } ?: "Extracted via batch LLM"
+            offerText = couponInfo.description
         )
     }
 

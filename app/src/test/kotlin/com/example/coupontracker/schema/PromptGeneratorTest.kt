@@ -17,7 +17,6 @@ class PromptGeneratorTest {
         assertTrue("Should contain storeName", schemaJson.contains("\"storeName\""))
         assertTrue("Should contain description", schemaJson.contains("\"description\""))
         assertTrue("Should contain cashback", schemaJson.contains("\"cashback\""))
-        assertTrue("Should contain offerText", schemaJson.contains("\"offerText\""))
         assertTrue("Should contain redeemCode", schemaJson.contains("\"redeemCode\""))
         assertTrue("Should contain expiryDate", schemaJson.contains("\"expiryDate\""))
         assertTrue("Should contain minOrderAmount", schemaJson.contains("\"minOrderAmount\""))

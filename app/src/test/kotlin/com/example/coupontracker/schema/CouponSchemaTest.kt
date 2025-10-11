@@ -20,7 +20,6 @@ class CouponSchemaTest {
         assertTrue("Should have storeName field", fieldNames.contains("storeName"))
         assertTrue("Should have description field", fieldNames.contains("description"))
         assertTrue("Should have cashback field", fieldNames.contains("cashback"))
-        assertTrue("Should have offerText field", fieldNames.contains("offerText"))
         assertTrue("Should have redeemCode field", fieldNames.contains("redeemCode"))
         assertTrue("Should have expiryDate field", fieldNames.contains("expiryDate"))
         assertTrue("Should have minOrderAmount field", fieldNames.contains("minOrderAmount"))

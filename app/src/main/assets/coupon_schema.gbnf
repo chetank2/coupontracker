@@ -5,7 +5,7 @@ root ::= object
 ws ::= [ \t\n\r]*
 
 # Main coupon object with all 7 required keys
-object ::= "{" ws "\"storeName\"" ws ":" ws value ws "," ws "\"description\"" ws ":" ws value ws "," ws "\"cashback\"" ws ":" ws cashback-value ws "," ws "\"offerText\"" ws ":" ws value ws "," ws "\"redeemCode\"" ws ":" ws value ws "," ws "\"expiryDate\"" ws ":" ws value ws "," ws "\"minOrderAmount\"" ws ":" ws value ws "}" ws
+object ::= "{" ws "\"storeName\"" ws ":" ws value ws "," ws "\"description\"" ws ":" ws value ws "," ws "\"cashback\"" ws ":" ws cashback-value ws "," ws "\"redeemCode\"" ws ":" ws value ws "," ws "\"expiryDate\"" ws ":" ws value ws "," ws "\"minOrderAmount\"" ws ":" ws value ws "}" ws
 
 # Cashback: null or typed object
 cashback-value ::= "null" | cashback-object

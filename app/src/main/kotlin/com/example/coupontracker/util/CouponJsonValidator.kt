@@ -26,7 +26,6 @@ object CouponJsonValidator {
         "storeName",
         "description", 
         "cashback",  // Changed from cashbackAmount to support typed object
-        "offerText", // Added to match prompt schema
         "redeemCode",
         "expiryDate",
         "minOrderAmount"
