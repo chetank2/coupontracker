@@ -711,20 +711,29 @@ redeemCode:
 - DO NOT invent codes
 
 expiryDate:
+⚠️ CRITICAL: Output simple human-readable dates ONLY. NO ISO timestamps!
 - Search for: "Expires on", "Valid till", "Expires:", "Expiry:", "EXPIRES IN"
-- Extract the date but CLEAN IT:
-  * Remove timestamps: "3 May, 2024 23:59 PM" → "3 May 2024" or "05 May 2025"
-  * Keep only: day, month, year
-  * Format: "3 May 2024" or "05 May, 2025" or "2025-05-03"
-- If year looks wrong (old/past), use the screenshot date context to infer correct year
-- Handle truncated text: If date ends with "...", infer year from context
-- DO NOT create ISO timestamps like "2024-06-07T18:09:00Z"
-- If NO date in OCR, use null
-
+- Extract ONLY the date part (day, month, year):
+  * Remove ALL timestamps: "3 May, 2024 23:59 PM" → "3 May 2024"
+  * Remove "T", "Z", time zones, colons
+  * Format: "31 May 2025" or "05/31/2025" or "2025-05-31"
+  
+❌ NEVER OUTPUT THESE:
+  * "May-31-2025T23:59Z" (ISO timestamp)
+  * "2024-06-07T18:09:00Z" (ISO timestamp)
+  * Any format with "T" or "Z" or colons
+  
+✅ CORRECT FORMATS:
+  * "31 May 2025" (preferred)
+  * "05/31/2025" (acceptable)
+  * "2025-05-31" (acceptable)
+  
 Examples:
-  * OCR: "Expires on 15 Dec, 2025, 11:59 PM" → "15 Dec 2025"
-  * OCR: "Valid till 2025-12-31" → "2025-12-31"  
+  * OCR: "Expires on 31 May, 2025, 1:59 PM" → "31 May 2025"
+  * OCR: "Valid till 2025-12-31" → "2025-12-31"
   * OCR: "Expires on 05 May, 2025, 11:59 PM" → "05 May 2025"
+  
+- If NO date in OCR, use null
 
 cashback:
 ⚠️ IMPORTANT: If you cannot CLEARLY identify the discount amount, set cashback to null

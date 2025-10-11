@@ -251,7 +251,9 @@ fun CouponDetailScreen(
 
                     Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
-                    // Cashback amount (use typed display)
+                    // Cashback amount - HIDDEN per user request
+                    // User: "Don't show the amount" - description field has full offer text
+                    /*
                     val cashbackDisplayText = coupon.getCashbackDisplayText()
                     if (cashbackDisplayText.isNotBlank() && coupon.getCashbackNumericValue() > 0) {
                         Row(
@@ -274,6 +276,7 @@ fun CouponDetailScreen(
 
                         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
                     }
+                    */
 
                     // Category
                     if (!coupon.category.isNullOrEmpty()) {

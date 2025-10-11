@@ -131,7 +131,9 @@ fun UnifiedCouponForm(
             }
         )
         
-        // Amount field
+        // Amount field - HIDDEN per user request (unreliable extraction)
+        // User feedback: "Don't show the amount - description has the full offer text"
+        /*
         OutlinedTextField(
             value = amount,
             onValueChange = onAmountChange,
@@ -142,6 +144,7 @@ fun UnifiedCouponForm(
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
         )
+        */
         
         // Code field
         OutlinedTextField(
