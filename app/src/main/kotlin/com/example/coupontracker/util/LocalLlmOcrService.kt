@@ -846,6 +846,14 @@ $sanitizedOcr<|im_end|>
         return if (start >= 0 && end > start) text.substring(start, end + 1) else null
     }
 
+    private fun removeDeprecatedKeys(jsonString: String): String {
+        var sanitized = jsonString.replace(Regex("\"offerText\"\\s*:\\s*\".*?\"\\s*,?"), "")
+        sanitized = sanitized.replace(Regex(",\\s*,"), ",")
+        sanitized = sanitized.replace(Regex("\\{\\s*,"), "{")
+        sanitized = sanitized.replace(Regex(",\\s*}"), "}")
+        return sanitized
+    }
+
     /**
      * Parse LLM JSON response to CouponInfo object with strict validation
      */
@@ -870,15 +878,16 @@ $sanitizedOcr<|im_end|>
             
             val jsonCandidate = extractJsonSlice(cleanResponse)
                 ?: throw IllegalStateException("No JSON object found in LLM output")
+            val sanitizedJsonCandidate = removeDeprecatedKeys(jsonCandidate)
             
             // JSON validation: use schema-driven or legacy validator
             val json = if (USE_SCHEMA_VALIDATION) {
                 // Schema-driven validation
-                val validationResult = SchemaValidator.validate(jsonCandidate, CouponSchema.SCHEMA)
+                val validationResult = SchemaValidator.validate(sanitizedJsonCandidate, CouponSchema.SCHEMA)
                 when (validationResult) {
                     is ValidationResult.Valid -> {
                         Log.d(TAG, "Schema validation passed")
-                        JSONObject(jsonCandidate)
+                        JSONObject(sanitizedJsonCandidate)
                     }
                     is ValidationResult.Invalid -> {
                         Log.w(TAG, "Schema validation failed: ${validationResult.issues}")
@@ -887,7 +896,7 @@ $sanitizedOcr<|im_end|>
                 }
             } else {
                 // Legacy validation
-                val parsedJson = CouponJsonValidator.parseStrict(jsonCandidate)
+                val parsedJson = CouponJsonValidator.parseStrict(sanitizedJsonCandidate)
                 if (parsedJson == null) {
                     Log.w(TAG, "JSON failed strict validation, falling back to OCR")
                     throw IllegalArgumentException("Invalid JSON schema")
