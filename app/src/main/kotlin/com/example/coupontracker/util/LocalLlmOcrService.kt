@@ -847,11 +847,17 @@ $sanitizedOcr<|im_end|>
     }
 
     private fun removeDeprecatedKeys(jsonString: String): String {
-        var sanitized = jsonString.replace(Regex("\"offerText\"\\s*:\\s*\".*?\"\\s*,?"), "")
-        sanitized = sanitized.replace(Regex(",\\s*,"), ",")
-        sanitized = sanitized.replace(Regex("\\{\\s*,"), "{")
-        sanitized = sanitized.replace(Regex(",\\s*}"), "}")
-        return sanitized
+        return try {
+            val jsonObject = JSONObject(jsonString)
+            jsonObject.remove("offerText")
+            jsonObject.toString()
+        } catch (parseError: JSONException) {
+            var sanitized = jsonString.replace(Regex("\"offerText\"\\s*:\\s*\".*?\"\\s*,?"), "")
+            sanitized = sanitized.replace(Regex(",\\s*,"), ",")
+            sanitized = sanitized.replace(Regex("\\{\\s*,"), "{")
+            sanitized = sanitized.replace(Regex(",\\s*\\}"), "}")
+            sanitized
+        }
     }
 
     /**
