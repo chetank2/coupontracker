@@ -941,13 +941,10 @@ $sanitizedOcr<|im_end|>
                 ?: json.optString("code").takeIf { it.isNotBlank() && it != "Unknown" })
                 ?.let { rawCode ->
                     // Basic sanitization and universal validation
-                    val sanitized = RedeemCodeSanitizer.sanitize(rawCode)
-                    if (sanitized != null && isValidUniversalCode(sanitized)) {
-                        Log.d(TAG, "Validated universal code: $sanitized")
-                        sanitized
-                    } else {
-                        Log.w(TAG, "Invalid code pattern: $sanitized")
-                        null
+                    val sanitized = RedeemCodeSanitizer.sanitizePreserve(rawCode)
+                    val repaired = sanitized ?: RedeemCodeRepair.repair(rawCode)
+                    repaired?.takeIf { isValidUniversalCode(it) }?.also {
+                        Log.d(TAG, "Validated universal code: $it")
                     }
                 }
                 ?.takeIf { !GenericFieldHeuristics.isGenericOrMissing(it) }

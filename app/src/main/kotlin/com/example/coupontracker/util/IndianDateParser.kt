@@ -247,7 +247,7 @@ object IndianDateParser {
         }
 
         // Reorder month-day-year artifacts (e.g., "May-31-2025" or "May/31/2025" -> "31 May 2025")
-        val monthDayYearPattern = Regex("""\\b([A-Za-z]{3,9})[-/ ]*(\\d{1,2})[-/ ]*(20\\d{2})\\b""")
+        val monthDayYearPattern = Regex("""\b([A-Za-z]{3,9})[-/ ]*(\d{1,2})[-/ ]*(20\d{2})\b""")
         cleaned = monthDayYearPattern.replace(cleaned) { match ->
             val month = normalizeMonthToken(match.groupValues[1])
             val day = match.groupValues[2]
