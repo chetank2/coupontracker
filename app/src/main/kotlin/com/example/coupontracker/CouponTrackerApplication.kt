@@ -24,9 +24,13 @@ class CouponTrackerApplication : Application(), Configuration.Provider {
             super.onCreate()
 
             // V2: Initialize extraction strategy config (loads persisted strategy)
-            com.example.coupontracker.util.ExtractionConfig.init(this)
+            // Defer to background thread for performance
+            androidx.core.os.HandlerCompat.createAsync(android.os.Looper.getMainLooper()).post {
+                com.example.coupontracker.util.ExtractionConfig.init(this)
+            }
 
             // Initialize WorkManager and schedule daily reminder checks
+            // This is lightweight and won't block startup
             initializeWorkers()
 
             Log.d("CouponTracker", "Application onCreate completed successfully")
