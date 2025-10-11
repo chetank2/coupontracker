@@ -46,6 +46,9 @@ import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Storage
 import com.example.coupontracker.ocr.OcrEngine
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.EntryPoint
@@ -247,6 +250,17 @@ fun SettingsScreen(
             
             // Model Management (simplified)
             ModelManagementCard(ocrEngine = ocrEngine)
+
+            // DATA SECTION
+            Text(
+                text = "DATA",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp, top = 8.dp)
+            )
+            
+            BackupRestoreCard(viewModel = viewModel)
 
             // ABOUT SECTION
             Text(
@@ -541,6 +555,167 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                         Text("Delete")
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BackupRestoreCard(viewModel: SettingsViewModel) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val backupState by viewModel.backupState.collectAsState()
+    
+    // File pickers
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        uri?.let { viewModel.exportBackup(it) }
+    }
+    
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { viewModel.importBackup(it) }
+    }
+    
+    // Show result dialog
+    when (val state = backupState) {
+        is SettingsViewModel.BackupState.Success -> {
+            LaunchedEffect(state) {
+                Toast.makeText(
+                    context,
+                    "${state.message} (${state.count} coupons)",
+                    Toast.LENGTH_LONG
+                ).show()
+                viewModel.resetBackupState()
+            }
+        }
+        is SettingsViewModel.BackupState.Error -> {
+            LaunchedEffect(state) {
+                Toast.makeText(
+                    context,
+                    state.message,
+                    Toast.LENGTH_LONG
+                ).show()
+                viewModel.resetBackupState()
+            }
+        }
+        else -> {}
+    }
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            // Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Storage,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Backup & Restore",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Text(
+                text = "Export your coupons to an encrypted backup file or restore from a previous backup.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Export/Import Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Export Button
+                OutlinedButton(
+                    onClick = {
+                        val timestamp = System.currentTimeMillis()
+                        exportLauncher.launch("coupons_backup_$timestamp.encrypted")
+                    },
+                    enabled = backupState !is SettingsViewModel.BackupState.Exporting &&
+                             backupState !is SettingsViewModel.BackupState.Importing,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (backupState is SettingsViewModel.BackupState.Exporting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.FileUpload,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Export")
+                }
+                
+                // Import Button
+                Button(
+                    onClick = {
+                        importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                    },
+                    enabled = backupState !is SettingsViewModel.BackupState.Exporting &&
+                             backupState !is SettingsViewModel.BackupState.Importing,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (backupState is SettingsViewModel.BackupState.Importing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.FileDownload,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Import")
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Security note
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = "Backups are encrypted using AES-256",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
             }
         }
     }
