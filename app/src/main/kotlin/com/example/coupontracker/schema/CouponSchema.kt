@@ -52,7 +52,7 @@ object CouponSchema {
             SchemaField(
                 name = "description",
                 type = FieldType.StringType,
-                required = true,
+                required = false,  // FIXED: Allow null when LLM can't extract description
                 metadata = FieldMetadata(
                     description = "Brief summary of the coupon offer",
                     examples = listOf(
