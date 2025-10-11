@@ -39,7 +39,6 @@ object OcrTextCleaner {
         Regex("""\d{1,2}:\d{2}\s*(?:AM|PM)\s+\d+\s+items?""", RegexOption.IGNORE_CASE),  // "11:11 PM 1 items"
         Regex("""\bAssigning on priority\b""", RegexOption.IGNORE_CASE),  // Delivery status
         Regex("""\bSearching for a delive""", RegexOption.IGNORE_CASE),  // Delivery search
-        Regex("""\bHAL Old Airport""", RegexOption.IGNORE_CASE),  // Location info
         Regex("""\bAdd Delivery Instructions\b""", RegexOption.IGNORE_CASE),  // Delivery UI
         
         // Common delivery app UI elements
