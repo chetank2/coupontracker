@@ -782,6 +782,8 @@ offerText:
 
 description:
 ⭐ MOST IMPORTANT FIELD - Focus on getting this right!
+- ❗ If you output offerText, you MUST also put the same main sentence in description.
+- DO NOT return an empty string. If no offer text exists, use null (NOT "").
 - Extract the FULL offer text from the coupon
 - Combine multi-line text to form complete sentences
 - Examples:
