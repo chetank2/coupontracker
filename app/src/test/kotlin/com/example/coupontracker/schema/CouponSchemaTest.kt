@@ -1,35 +1,6 @@
 package com.example.coupontracker.schema
 
 import org.junit.Assert.assertEquals
-import org.junit.Test
-
-class CouponSchemaTest {
-
-    @Test
-    fun `schema exposes expected field names`() {
-        val fieldNames = CouponSchema.getAllFieldNames()
-        assertEquals(
-            listOf(
-                "storeName",
-                "description",
-                "cashback",
-                "redeemCode",
-                "expiryDate",
-                "minOrderAmount"
-            ),
-            fieldNames
-        )
-    }
-
-    @Test
-    fun `only store name is required`() {
-        val requiredFields = CouponSchema.getRequiredFieldNames()
-        assertEquals(listOf("storeName"), requiredFields)
-    }
-}
-package com.example.coupontracker.schema
-
-import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,4 +38,3 @@ class CouponSchemaTest {
         assertTrue(allowed.containsAll(listOf("percent", "amount", "text")))
     }
 }
-

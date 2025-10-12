@@ -1,40 +1,12 @@
 package com.example.coupontracker.schema
 
-import org.junit.Assert.assertTrue
-import org.junit.Test
-
-class SchemaValidatorTest {
-
-    @Test
-    fun `validate accepts minimal store name`() {
-        val json = """
-            {
-              "storeName": "Amazon"
-            }
-        """.trimIndent()
-
-        val result = SchemaValidator.validate(json, CouponSchema.SCHEMA)
-        assertTrue(result is ValidationResult.Valid)
-    }
-
-    @Test
-    fun `validate rejects missing store name`() {
-        val json = """
-            {
-              "redeemCode": "SAVE10"
-            }
-        """.trimIndent()
-
-        val result = SchemaValidator.validate(json, CouponSchema.SCHEMA)
-        assertTrue(result is ValidationResult.Invalid)
-    }
-}
-package com.example.coupontracker.schema
-
 import com.example.coupontracker.schema.ValidationResult.Invalid
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class SchemaValidatorTest {
 
     private val schema = CouponSchema.SCHEMA
@@ -43,9 +15,7 @@ class SchemaValidatorTest {
     fun `validate accepts minimal valid coupon`() {
         val json = """
             {
-              "storeName": "Amazon",
-              "redeemCode": "SAVE20",
-              "expiryDate": "2025-12-31"
+              "storeName": "Amazon"
             }
         """.trimIndent()
 
@@ -68,4 +38,3 @@ class SchemaValidatorTest {
         assertTrue(issues.any { it.contains("storeName") })
     }
 }
-
