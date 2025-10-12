@@ -3,6 +3,7 @@ package com.example.coupontracker.ui.viewmodel
 import android.app.Application
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -86,9 +87,33 @@ class BatchScannerViewModel @Inject constructor(
      * @param uris List of image URIs to add
      */
     fun addImages(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+
         val currentImages = _uiState.value.selectedImages.toMutableList()
-        currentImages.addAll(uris)
-        _uiState.value = _uiState.value.copy(selectedImages = currentImages)
+        val existingUris = currentImages.map { it.uri.toString() }.toMutableSet()
+        val newImages = mutableListOf<SelectedImage>()
+
+        for (uri in uris) {
+            val uriKey = uri.toString()
+            if (existingUris.contains(uriKey) || newImages.any { it.uri.toString() == uriKey }) {
+                Log.d(TAG, "Skipping duplicate image uri=$uriKey")
+                continue
+            }
+
+            val selectionOrder = currentImages.size + newImages.size + 1
+            val selectedImage = createSelectedImage(
+                uri = uri,
+                selectionOrder = selectionOrder,
+                explicitMimeType = null
+            )
+
+            newImages.add(selectedImage)
+        }
+
+        if (newImages.isNotEmpty()) {
+            currentImages.addAll(newImages)
+            _uiState.value = _uiState.value.copy(selectedImages = currentImages)
+        }
     }
 
     /**
@@ -97,7 +122,20 @@ class BatchScannerViewModel @Inject constructor(
      */
     fun addPdf(uri: Uri) {
         val currentImages = _uiState.value.selectedImages.toMutableList()
-        currentImages.add(uri)
+        val uriKey = uri.toString()
+        if (currentImages.any { it.uri.toString() == uriKey }) {
+            Log.d(TAG, "Skipping duplicate PDF uri=$uriKey")
+            return
+        }
+
+        val selectionOrder = currentImages.size + 1
+        val selectedImage = createSelectedImage(
+            uri = uri,
+            selectionOrder = selectionOrder,
+            explicitMimeType = "application/pdf"
+        )
+
+        currentImages.add(selectedImage)
         _uiState.value = _uiState.value.copy(selectedImages = currentImages)
     }
 
@@ -108,8 +146,14 @@ class BatchScannerViewModel @Inject constructor(
     fun removeImage(index: Int) {
         val currentImages = _uiState.value.selectedImages.toMutableList()
         if (index in currentImages.indices) {
-            currentImages.removeAt(index)
-            _uiState.value = _uiState.value.copy(selectedImages = currentImages)
+            val removed = currentImages.removeAt(index)
+            val updatedStatuses = _uiState.value.imageProcessingStatuses.filterNot {
+                it.image.uri.toString() == removed.uri.toString()
+            }
+            _uiState.value = _uiState.value.copy(
+                selectedImages = currentImages,
+                imageProcessingStatuses = updatedStatuses
+            )
         }
     }
 
@@ -117,7 +161,14 @@ class BatchScannerViewModel @Inject constructor(
      * Clear all selected images
      */
     fun clearImages() {
-        _uiState.value = _uiState.value.copy(selectedImages = emptyList())
+        _uiState.value = _uiState.value.copy(
+            selectedImages = emptyList(),
+            processedCoupons = emptyList(),
+            imageProcessingStatuses = emptyList(),
+            processedCount = 0,
+            currentlyProcessingImage = null,
+            error = null
+        )
     }
     
     /**
@@ -151,23 +202,54 @@ class BatchScannerViewModel @Inject constructor(
                     return@launch
                 }
 
-                updateState { it.copy(isProcessing = true, processedCount = 0, error = null) }
+                updateState {
+                    it.copy(
+                        isProcessing = true,
+                        processedCount = 0,
+                        error = null,
+                        imageProcessingStatuses = emptyList(),
+                        currentlyProcessingImage = null
+                    )
+                }
 
                 val images = _uiState.value.selectedImages
                 val processedCoupons = mutableListOf<Coupon>()
                 var failedCount = 0
+                val imageStatuses = mutableListOf<ImageProcessingStatus>()
 
-                for ((index, uri) in images.withIndex()) {
+                for ((index, selectedImage) in images.withIndex()) {
+                    val uri = selectedImage.uri
+                    updateState { it.copy(currentlyProcessingImage = selectedImage) }
                     var bitmap: android.graphics.Bitmap? = null
                     try {
+                        if (!selectedImage.isImage()) {
+                            Log.w(TAG, "Batch: Unsupported file type ${selectedImage.mimeType} for uri=$uri")
+                            failedCount++
+                            imageStatuses.add(
+                                ImageProcessingStatus(
+                                    image = selectedImage,
+                                    success = false,
+                                    message = "Unsupported file type"
+                                )
+                            )
+                            continue
+                        }
+
                         // Load and track bitmap
                         bitmap = android.graphics.BitmapFactory.decodeStream(
                             context.contentResolver.openInputStream(uri)
                         )
-                        
+
                         if (bitmap == null) {
                             Log.e(TAG, "Batch: Failed to decode bitmap ${index + 1}")
                             failedCount++
+                            imageStatuses.add(
+                                ImageProcessingStatus(
+                                    image = selectedImage,
+                                    success = false,
+                                    message = "Unable to open image"
+                                )
+                            )
                             continue
                         }
                         
@@ -179,36 +261,70 @@ class BatchScannerViewModel @Inject constructor(
                         if (imageCoupons.isNotEmpty()) {
                             processedCoupons.addAll(imageCoupons)
                             Log.d(TAG, "Batch: Extracted ${imageCoupons.size} coupon(s) from image ${index + 1}/${images.size}")
+                            imageStatuses.add(
+                                ImageProcessingStatus(
+                                    image = selectedImage,
+                                    success = true,
+                                    message = null,
+                                    couponsFound = imageCoupons.size
+                                )
+                            )
                         } else {
                             Log.w(TAG, "Batch: No coupons extracted from image ${index + 1}/${images.size}")
                             failedCount++
+                            imageStatuses.add(
+                                ImageProcessingStatus(
+                                    image = selectedImage,
+                                    success = false,
+                                    message = "No coupons detected"
+                                )
+                            )
                         }
-                        
+
                     } catch (e: Exception) {
                         Log.e(TAG, "Batch: Error processing ${index + 1}/${images.size}", e)
                         failedCount++
+                        imageStatuses.add(
+                            ImageProcessingStatus(
+                                image = selectedImage,
+                                success = false,
+                                message = e.message ?: "Unexpected error"
+                            )
+                        )
                     } finally {
-                        bitmap?.let { 
+                        bitmap?.let {
                             bitmapManager.releaseBitmap(it)
                         }
                     }
 
                     // Update progress
-                    updateState { it.copy(processedCount = index + 1) }
+                    updateState {
+                        it.copy(
+                            processedCount = index + 1,
+                            currentlyProcessingImage = null,
+                            imageProcessingStatuses = imageStatuses.toList()
+                        )
+                    }
                 }
 
                 // Show success or partial success message
+                val failedImages = imageStatuses.filterNot { it.success }
                 val statusMessage = when {
                     failedCount == 0 -> null
-                    failedCount < images.size -> "Processed ${images.size - failedCount} of ${images.size} images. Some images could not be processed."
-                    else -> "Failed to process any images."
+                    failedCount < images.size -> {
+                        val failedNames = failedImages.joinToString { it.image.displayName }
+                        "Processed ${images.size - failedCount} of ${images.size} files. Issues with: $failedNames"
+                    }
+                    else -> "Failed to process any files."
                 }
 
                 updateState {
                     it.copy(
                         isProcessing = false,
                         processedCoupons = processedCoupons,
-                        error = statusMessage
+                        error = statusMessage,
+                        imageProcessingStatuses = imageStatuses.toList(),
+                        currentlyProcessingImage = null
                     )
                 }
             } catch (e: Exception) {
@@ -216,7 +332,8 @@ class BatchScannerViewModel @Inject constructor(
                 updateState {
                     it.copy(
                         isProcessing = false,
-                        error = "Error processing images: ${e.message}"
+                        error = "Error processing images: ${e.message}",
+                        currentlyProcessingImage = null
                     )
                 }
             }
@@ -281,6 +398,9 @@ class BatchScannerViewModel @Inject constructor(
     fun resetProcessedCoupons() {
         _uiState.value = _uiState.value.copy(
             processedCoupons = emptyList(),
+            imageProcessingStatuses = emptyList(),
+            processedCount = 0,
+            currentlyProcessingImage = null,
             error = null
         )
     }
@@ -1042,16 +1162,70 @@ class BatchScannerViewModel @Inject constructor(
             updatedAt = java.util.Date()
         )
     }
+
+    private fun createSelectedImage(
+        uri: Uri,
+        selectionOrder: Int,
+        explicitMimeType: String?
+    ): SelectedImage {
+        val displayName = resolveDisplayName(uri) ?: "Image $selectionOrder"
+        val resolvedMimeType = explicitMimeType ?: context.contentResolver.getType(uri)
+        val guessedMimeType = resolvedMimeType ?: guessMimeType(displayName)
+        return SelectedImage(
+            uri = uri,
+            displayName = displayName,
+            mimeType = guessedMimeType,
+            selectionOrder = selectionOrder
+        )
+    }
+
+    private fun resolveDisplayName(uri: Uri): String? {
+        return runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { cursor ->
+                    if (!cursor.moveToFirst()) return@use null
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0) cursor.getString(index) else null
+                }
+        }.getOrNull()
+    }
+
+    private fun guessMimeType(displayName: String): String {
+        return when {
+            displayName.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
+            displayName.endsWith(".png", ignoreCase = true) -> "image/png"
+            displayName.endsWith(".jpg", ignoreCase = true) || displayName.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
+            else -> "image/*"
+        }
+    }
 }
 
 /**
  * UI state for the batch scanner
  */
 data class BatchScannerUiState(
-    val selectedImages: List<Uri> = emptyList(),
+    val selectedImages: List<SelectedImage> = emptyList(),
     val processedCoupons: List<Coupon> = emptyList(),
     val isProcessing: Boolean = false,
     val isSaving: Boolean = false,
     val processedCount: Int = 0,
-    val error: String? = null
+    val error: String? = null,
+    val imageProcessingStatuses: List<ImageProcessingStatus> = emptyList(),
+    val currentlyProcessingImage: SelectedImage? = null
+)
+
+data class SelectedImage(
+    val uri: Uri,
+    val displayName: String,
+    val mimeType: String,
+    val selectionOrder: Int
+) {
+    fun isImage(): Boolean = mimeType.startsWith("image/") || mimeType == "image/*"
+}
+
+data class ImageProcessingStatus(
+    val image: SelectedImage,
+    val success: Boolean,
+    val message: String?,
+    val couponsFound: Int = 0
 )

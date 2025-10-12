@@ -1,5 +1,6 @@
 package com.example.coupontracker.ui.screen
 
+import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -65,9 +66,19 @@ fun UnifiedUploadScreen(
     
     // Multiple image picker launcher
     val multipleImagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
+        contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         if (uris.isNotEmpty()) {
+            uris.forEach { uri ->
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (e: SecurityException) {
+                    // Ignore if permission cannot be persisted (e.g., legacy providers)
+                }
+            }
             viewModel.addMultipleImages(uris)
         }
     }
@@ -162,7 +173,7 @@ fun UnifiedUploadScreen(
             
             // Multiple images upload button
             Button(
-                onClick = { multipleImagePickerLauncher.launch("image/*") },
+                onClick = { multipleImagePickerLauncher.launch(arrayOf("image/*")) },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Icon(Icons.Default.PhotoLibrary, contentDescription = null)

@@ -107,14 +107,14 @@
             <div class="col-md-12">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Upload Test Image</h5>
+                        <h5>Upload Test Images</h5>
                     </div>
                     <div class="card-body">
                         <div id="dropArea">
                             <i class="fas fa-cloud-upload-alt fa-3x mb-3"></i>
-                            <h5>Drag & Drop a Coupon Image Here</h5>
+                            <h5>Drag & Drop Coupon Images Here</h5>
                             <p>or</p>
-                            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                            <input type="file" id="fileInput" accept="image/*" multiple style="display: none;">
                             <button class="btn btn-primary" id="browseBtn">Browse Files</button>
                         </div>
 
@@ -218,7 +218,7 @@
                 const dt = e.dataTransfer;
                 const files = dt.files;
                 if (files.length > 0) {
-                    handleFile(files[0]);
+                    handleFiles(files);
                 }
             }
 
@@ -230,21 +230,24 @@
             // File input change
             $('#fileInput').change(function() {
                 if (this.files.length > 0) {
-                    handleFile(this.files[0]);
+                    handleFiles(this.files);
                 }
             });
         });
 
-        // Handle uploaded file
-        function handleFile(file) {
-            if (!file) return;
+        // Handle uploaded files
+        function handleFiles(fileList) {
+            const files = Array.from(fileList || []).filter(Boolean);
+            if (files.length === 0) return;
 
             // Show progress container
             $('.progress-container').show();
+            $('.progress-bar').css('width', '0%');
+            $('#uploadStatus').text('Uploading...');
 
             // Create FormData
             const formData = new FormData();
-            formData.append('file', file);
+            files.forEach(file => formData.append('files[]', file));
 
             // Upload file
             $.ajax({
@@ -283,283 +286,375 @@
 
         // Display recognition results
         function displayResults(response) {
-            if (!response.file || !response.results) {
-                $('#resultContainer').html('<p class="text-center text-danger">Error: Invalid response</p>');
+            const items = normalizeResponseItems(response);
+
+            if (items.length === 0) {
+                $('#resultContainer').html('<p class="text-center text-danger">Error: No results returned</p>');
+                $('#extractedTextContainer').html('<p class="text-center">No text extracted</p>');
+                $('#detectedElementsContainer').html('<p class="text-center">No elements detected</p>');
+                $('#couponSummaryContainer').html('<p class="text-center">No coupon summary available</p>');
                 return;
             }
 
-            // Display image with highlighted regions
+            renderImageResults(items);
+            renderExtractedText(items);
+            renderDetectedElements(items);
+            renderCouponSummaries(items, response.aggregated_coupon);
+        }
+
+        function normalizeResponseItems(response) {
+            if (!response) {
+                return [];
+            }
+
+            if (Array.isArray(response.items) && response.items.length > 0) {
+                return response.items;
+            }
+
+            if (response.file && response.results) {
+                return [{
+                    file: response.file,
+                    results: response.results,
+                    coupon_summary: response.coupon_summary || null
+                }];
+            }
+
+            return [];
+        }
+
+        function renderImageResults(items) {
             const resultContainer = $('#resultContainer');
             resultContainer.empty();
 
-            const imageContainer = $('<div class="result-image-container"></div>');
-            const image = $('<img class="result-image" src="' + response.file.url + '" alt="' + response.file.original_name + '">');
+            items.forEach(function(item, index) {
+                const section = $('<div class="mb-4"></div>');
+                const title = $('<h6 class="fw-bold"></h6>');
+                const filename = item.file && item.file.original_name ? ' — ' + item.file.original_name : '';
+                title.text('Screenshot ' + (index + 1) + filename);
+                section.append(title);
 
-            imageContainer.append(image);
+                const imageContainer = $('<div class="result-image-container position-relative"></div>');
+                const image = $('<img class="result-image" alt="Coupon screenshot">');
+                if (item.file && item.file.url) {
+                    image.attr('src', item.file.url);
+                }
+                imageContainer.append(image);
+                section.append(imageContainer);
+                resultContainer.append(section);
 
-            // Wait for image to load before adding highlight boxes
-            image.on('load', function() {
-                const imgWidth = this.width;
-                const imgHeight = this.height;
+                image.on('load', function() {
+                    imageContainer.find('.highlight-box, .highlight-label').remove();
 
-                // Add highlight boxes for detected elements
-                if (response.results.elements && response.results.elements.length > 0) {
-                    response.results.elements.forEach(function(element) {
-                        const region = element.region;
-                        const type = element.type;
-                        const confidence = element.confidence;
+                    if (!item.results || !Array.isArray(item.results.elements)) {
+                        return;
+                    }
 
-                        // Determine confidence class
-                        let confidenceClass = '';
-                        if (confidence >= 0.8) {
-                            confidenceClass = 'confidence-high';
-                        } else if (confidence >= 0.5) {
-                            confidenceClass = 'confidence-medium';
-                        } else {
-                            confidenceClass = 'confidence-low';
-                        }
+                    item.results.elements.forEach(function(element) {
+                        const region = element.region || {};
+                        const type = element.type || 'unknown';
+                        const confidence = element.confidence || 0;
 
-                        const box = $('<div class="highlight-box ' + confidenceClass + '"></div>');
+                        const box = $('<div class="highlight-box"></div>');
+                        box.addClass(getConfidenceClass(confidence));
                         box.css({
-                            left: region.left + 'px',
-                            top: region.top + 'px',
-                            width: (region.right - region.left) + 'px',
-                            height: (region.bottom - region.top) + 'px',
+                            left: (region.left || 0) + 'px',
+                            top: (region.top || 0) + 'px',
+                            width: Math.max((region.right || 0) - (region.left || 0), 0) + 'px',
+                            height: Math.max((region.bottom || 0) - (region.top || 0), 0) + 'px',
                             borderColor: getColorForType(type)
                         });
 
-                        // Add tooltip data attributes
                         box.attr('data-bs-toggle', 'tooltip');
                         box.attr('data-bs-placement', 'top');
-                        box.attr('title', type + ': ' + Math.round(confidence * 100) + '% confidence');
+                        box.attr('title', capitalizeFirstLetter(type) + ': ' + Math.round(confidence * 100) + '%');
 
                         const label = $('<div class="highlight-label"></div>');
                         label.text(capitalizeFirstLetter(type) + ' (' + Math.round(confidence * 100) + '%)');
                         label.css({
-                            left: region.left + 'px',
-                            top: (region.top - 25) + 'px',
+                            left: (region.left || 0) + 'px',
+                            top: Math.max((region.top || 0) - 25, 0) + 'px',
                             backgroundColor: getColorForType(type)
                         });
 
                         imageContainer.append(box);
                         imageContainer.append(label);
                     });
-                }
+
+                    const tooltipTriggerList = [].slice.call(imageContainer.find('[data-bs-toggle="tooltip"]'));
+                    tooltipTriggerList.forEach(function(tooltipTriggerEl) {
+                        new bootstrap.Tooltip(tooltipTriggerEl);
+                    });
+                });
             });
+        }
 
-            resultContainer.append(imageContainer);
+        function renderExtractedText(items) {
+            const container = $('#extractedTextContainer');
+            container.empty();
 
-            // Display extracted text
-            const extractedTextContainer = $('#extractedTextContainer');
-            extractedTextContainer.empty();
+            const anyText = items.some(item => item.results && item.results.text && Object.keys(item.results.text).length > 0);
 
-            if (response.results.text && Object.keys(response.results.text).length > 0) {
-                const textList = $('<div class="accordion" id="extractedTextAccordion"></div>');
+            if (!anyText) {
+                container.html('<p class="text-center">No text extracted</p>');
+                return;
+            }
 
-                // Define the order we want to display the fields
+            const accordionId = 'extractedTextAccordion';
+            const accordion = $('<div class="accordion" id="' + accordionId + '"></div>');
+
+            items.forEach(function(item, itemIndex) {
+                const text = item.results && item.results.text ? item.results.text : null;
+                if (!text || Object.keys(text).length === 0) {
+                    return;
+                }
+
+                const itemId = accordionId + 'Item' + itemIndex;
+                const accordionItem = $('<div class="accordion-item"></div>');
+                const header = $('<h2 class="accordion-header" id="' + itemId + 'Header"></h2>');
+                const button = $('<button class="accordion-button' + (itemIndex === 0 ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + itemId + 'Body" aria-expanded="' + (itemIndex === 0) + '" aria-controls="' + itemId + 'Body"></button>');
+                const filename = item.file && item.file.original_name ? item.file.original_name : 'Screenshot ' + (itemIndex + 1);
+                button.html('<i class="fas fa-file-image me-2"></i>' + filename);
+                header.append(button);
+                accordionItem.append(header);
+
+                const collapseDiv = $('<div id="' + itemId + 'Body" class="accordion-collapse collapse' + (itemIndex === 0 ? ' show' : '') + '" aria-labelledby="' + itemId + 'Header" data-bs-parent="#' + accordionId + '"></div>');
+                const body = $('<div class="accordion-body"></div>');
+
                 const fieldOrder = ['store', 'amount', 'code', 'description', 'expiry'];
-
-                // Process fields in the defined order
-                fieldOrder.forEach((type, index) => {
-                    if (response.results.text[type]) {
-                        const text = response.results.text[type];
-                        const headerId = 'heading' + type;
-                        const collapseId = 'collapse' + type;
-                        const isFirst = index === 0;
-
-                        const accordionItem = $('<div class="accordion-item"></div>');
-                        const header = $('<h2 class="accordion-header" id="' + headerId + '"></h2>');
-                        const button = $('<button class="accordion-button ' + (isFirst ? '' : 'collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + collapseId + '" aria-expanded="' + (isFirst ? 'true' : 'false') + '" aria-controls="' + collapseId + '"></button>');
-
-                        button.html('<span class="badge bg-' + getBadgeColorForType(type) + ' me-2">' + capitalizeFirstLetter(type) + '</span>');
-
-                        header.append(button);
-                        accordionItem.append(header);
-
-                        const collapseDiv = $('<div id="' + collapseId + '" class="accordion-collapse collapse ' + (isFirst ? 'show' : '') + '" aria-labelledby="' + headerId + '" data-bs-parent="#extractedTextAccordion"></div>');
-                        const body = $('<div class="accordion-body"></div>');
-
-                        body.html('<p class="mb-0">' + text + '</p>');
-
-                        collapseDiv.append(body);
-                        accordionItem.append(collapseDiv);
-
-                        textList.append(accordionItem);
+                fieldOrder.forEach(function(type) {
+                    if (!text[type]) {
+                        return;
                     }
+
+                    const value = text[type];
+                    const fieldRow = $('<div class="mb-2"></div>');
+                    fieldRow.append('<span class="badge bg-' + getBadgeColorForType(type) + ' me-2">' + capitalizeFirstLetter(type) + '</span>');
+                    fieldRow.append('<span>' + value + '</span>');
+                    body.append(fieldRow);
                 });
 
-                extractedTextContainer.append(textList);
-
-                // Add a copy all button
-                const copyAllBtn = $('<button class="btn btn-sm btn-outline-primary mt-3 w-100">Copy All Text</button>');
-                copyAllBtn.click(function() {
-                    const allText = Object.entries(response.results.text)
-                        .map(([type, text]) => capitalizeFirstLetter(type) + ': ' + text)
+                const copyBtn = $('<button class="btn btn-sm btn-outline-primary mt-3">Copy Text</button>');
+                copyBtn.click(function() {
+                    const textBlob = Object.entries(text)
+                        .map(([type, value]) => capitalizeFirstLetter(type) + ': ' + value)
                         .join('\n');
 
-                    navigator.clipboard.writeText(allText).then(function() {
-                        $(this).text('Copied!');
+                    navigator.clipboard.writeText(textBlob).then(function() {
+                        copyBtn.text('Copied!');
                         setTimeout(function() {
-                            copyAllBtn.text('Copy All Text');
+                            copyBtn.text('Copy Text');
                         }, 2000);
-                    }.bind(this));
-                });
-
-                extractedTextContainer.append(copyAllBtn);
-            } else {
-                extractedTextContainer.html('<p class="text-center">No text extracted</p>');
-            }
-
-            // Display detected elements
-            const detectedElementsContainer = $('#detectedElementsContainer');
-            detectedElementsContainer.empty();
-
-            if (response.results.elements && response.results.elements.length > 0) {
-                // Group elements by type
-                const elementsByType = {};
-                response.results.elements.forEach(function(element) {
-                    if (!elementsByType[element.type]) {
-                        elementsByType[element.type] = [];
-                    }
-                    elementsByType[element.type].push(element);
-                });
-
-                // Create a table for better visualization
-                const table = $('<table class="table table-sm table-hover"></table>');
-                const thead = $('<thead class="table-light"></thead>');
-                const headerRow = $('<tr></tr>');
-                headerRow.append('<th>Type</th><th>Confidence</th><th>Position</th>');
-                thead.append(headerRow);
-                table.append(thead);
-
-                const tbody = $('<tbody></tbody>');
-
-                // Process each type in order
-                const fieldOrder = ['store', 'amount', 'code', 'description', 'expiry'];
-                fieldOrder.forEach(type => {
-                    if (elementsByType[type]) {
-                        elementsByType[type].forEach(function(element, index) {
-                            const confidence = element.confidence;
-                            const region = element.region;
-
-                            // Determine confidence class
-                            let confidenceClass = '';
-                            if (confidence >= 0.8) {
-                                confidenceClass = 'table-success';
-                            } else if (confidence >= 0.5) {
-                                confidenceClass = 'table-warning';
-                            } else {
-                                confidenceClass = 'table-danger';
-                            }
-
-                            const row = $('<tr class="' + confidenceClass + '"></tr>');
-
-                            // Only show type name for the first element of each type
-                            if (index === 0) {
-                                row.append('<td><span class="badge bg-' + getBadgeColorForType(type) + '">' +
-                                           capitalizeFirstLetter(type) + '</span></td>');
-                            } else {
-                                row.append('<td></td>');
-                            }
-
-                            // Add confidence with progress bar
-                            const confidencePercent = Math.round(confidence * 100);
-                            const confidenceCell = $('<td></td>');
-                            const progressBar = $('<div class="progress" style="height: 15px;"></div>');
-                            const progressBarInner = $('<div class="progress-bar" role="progressbar"></div>');
-                            progressBarInner.css('width', confidencePercent + '%');
-                            progressBarInner.attr('aria-valuenow', confidencePercent);
-                            progressBarInner.attr('aria-valuemin', '0');
-                            progressBarInner.attr('aria-valuemax', '100');
-                            progressBarInner.text(confidencePercent + '%');
-
-                            // Set color based on confidence
-                            if (confidence >= 0.8) {
-                                progressBarInner.addClass('bg-success');
-                            } else if (confidence >= 0.5) {
-                                progressBarInner.addClass('bg-warning');
-                            } else {
-                                progressBarInner.addClass('bg-danger');
-                            }
-
-                            progressBar.append(progressBarInner);
-                            confidenceCell.append(progressBar);
-                            row.append(confidenceCell);
-
-                            // Add position info
-                            row.append('<td>(' + region.left + ', ' + region.top + ') to (' +
-                                       region.right + ', ' + region.bottom + ')</td>');
-
-                            tbody.append(row);
-                        });
-                    }
-                });
-
-                table.append(tbody);
-                detectedElementsContainer.append(table);
-
-                // Add a note about confidence levels
-                const confidenceNote = $('<div class="mt-2 small text-muted"></div>');
-                confidenceNote.html('<strong>Confidence levels:</strong><br>' +
-                                   '<span class="badge bg-success">High</span> 80-100% | ' +
-                                   '<span class="badge bg-warning">Medium</span> 50-79% | ' +
-                                   '<span class="badge bg-danger">Low</span> 0-49%');
-                detectedElementsContainer.append(confidenceNote);
-            } else {
-                detectedElementsContainer.html('<p class="text-center">No elements detected</p>');
-            }
-
-            // Display coupon summary
-            const couponSummaryContainer = $('#couponSummaryContainer');
-            couponSummaryContainer.empty();
-
-            if (response.results.summary) {
-                // Create a styled summary card
-                const summaryCard = $('<div class="card border-success"></div>');
-                const summaryBody = $('<div class="card-body"></div>');
-
-                // Split the summary into lines and create styled elements
-                const summaryLines = response.results.summary.split('\n');
-
-                summaryLines.forEach(function(line) {
-                    if (line.trim()) {
-                        const parts = line.split(':');
-                        if (parts.length >= 2) {
-                            const label = parts[0].trim();
-                            const value = parts.slice(1).join(':').trim();
-
-                            const row = $('<div class="row mb-2"></div>');
-                            row.append('<div class="col-4 fw-bold">' + label + ':</div>');
-                            row.append('<div class="col-8">' + value + '</div>');
-
-                            summaryBody.append(row);
-                        } else {
-                            summaryBody.append('<p>' + line + '</p>');
-                        }
-                    }
-                });
-
-                // Add a "Copy to Clipboard" button
-                const copyBtn = $('<button class="btn btn-sm btn-outline-success mt-3">Copy to Clipboard</button>');
-                copyBtn.click(function() {
-                    navigator.clipboard.writeText(response.results.summary).then(function() {
-                        $(this).text('Copied!');
-                        setTimeout(function() {
-                            copyBtn.text('Copy to Clipboard');
-                        }, 2000);
-                    }.bind(this)).catch(function(err) {
-                        console.error('Could not copy text: ', err);
                     });
                 });
 
-                summaryBody.append(copyBtn);
-                summaryCard.append(summaryBody);
-                couponSummaryContainer.append(summaryCard);
-            } else if (response.results.error) {
-                couponSummaryContainer.html('<div class="alert alert-danger">' + response.results.error + '</div>');
-            } else {
-                couponSummaryContainer.html('<p class="text-center">No coupon summary available</p>');
+                body.append(copyBtn);
+                collapseDiv.append(body);
+                accordionItem.append(collapseDiv);
+                accordion.append(accordionItem);
+            });
+
+            container.append(accordion);
+        }
+
+        function renderDetectedElements(items) {
+            const container = $('#detectedElementsContainer');
+            container.empty();
+
+            const entries = items.map((item, index) => ({
+                index,
+                file: item.file,
+                elements: item.results && Array.isArray(item.results.elements) ? item.results.elements : []
+            })).filter(entry => entry.elements.length > 0);
+
+            if (entries.length === 0) {
+                container.html('<p class="text-center">No elements detected</p>');
+                return;
             }
+
+            const accordionId = 'detectedElementsAccordion';
+            const accordion = $('<div class="accordion" id="' + accordionId + '"></div>');
+
+            entries.forEach(function(entry, entryIndex) {
+                const itemId = accordionId + 'Item' + entryIndex;
+                const accordionItem = $('<div class="accordion-item"></div>');
+                const header = $('<h2 class="accordion-header" id="' + itemId + 'Header"></h2>');
+                const button = $('<button class="accordion-button' + (entryIndex === 0 ? '' : ' collapsed') + '" type="button" data-bs-toggle="collapse" data-bs-target="#' + itemId + 'Body" aria-expanded="' + (entryIndex === 0) + '" aria-controls="' + itemId + 'Body"></button>');
+                const filename = entry.file && entry.file.original_name ? entry.file.original_name : 'Screenshot ' + (entry.index + 1);
+                button.html('<i class="fas fa-bullseye me-2"></i>' + filename + ' — ' + entry.elements.length + ' elements');
+                header.append(button);
+                accordionItem.append(header);
+
+                const collapseDiv = $('<div id="' + itemId + 'Body" class="accordion-collapse collapse' + (entryIndex === 0 ? ' show' : '') + '" aria-labelledby="' + itemId + 'Header" data-bs-parent="#' + accordionId + '"></div>');
+                const body = $('<div class="accordion-body"></div>');
+
+                const table = $('<table class="table table-sm table-hover"></table>');
+                const thead = $('<thead class="table-light"><tr><th>Type</th><th>Confidence</th><th>Position</th></tr></thead>');
+                table.append(thead);
+                const tbody = $('<tbody></tbody>');
+
+                const fieldOrder = ['store', 'amount', 'code', 'description', 'expiry'];
+                fieldOrder.forEach(function(type) {
+                    entry.elements.filter(element => element.type === type).forEach(function(element, elementIndex) {
+                        const confidence = element.confidence || 0;
+                        const region = element.region || {};
+                        const row = $('<tr></tr>');
+                        row.addClass(getRowConfidenceClass(confidence));
+
+                        if (elementIndex === 0) {
+                            row.append('<td><span class="badge bg-' + getBadgeColorForType(type) + '">' + capitalizeFirstLetter(type) + '</span></td>');
+                        } else {
+                            row.append('<td></td>');
+                        }
+
+                        const confidencePercent = Math.round(confidence * 100);
+                        const confidenceCell = $('<td></td>');
+                        const progressBar = $('<div class="progress" style="height: 15px;"></div>');
+                        const progressBarInner = $('<div class="progress-bar" role="progressbar"></div>');
+                        progressBarInner.css('width', confidencePercent + '%');
+                        progressBarInner.attr({
+                            'aria-valuenow': confidencePercent,
+                            'aria-valuemin': 0,
+                            'aria-valuemax': 100
+                        });
+                        progressBarInner.text(confidencePercent + '%');
+                        progressBarInner.addClass(getProgressBarClass(confidence));
+
+                        progressBar.append(progressBarInner);
+                        confidenceCell.append(progressBar);
+                        row.append(confidenceCell);
+
+                        row.append('<td>(' + (region.left || 0) + ', ' + (region.top || 0) + ') → (' + (region.right || 0) + ', ' + (region.bottom || 0) + ')</td>');
+
+                        tbody.append(row);
+                    });
+                });
+
+                table.append(tbody);
+                body.append(table);
+
+                const confidenceNote = $('<div class="mt-2 small text-muted"></div>');
+                confidenceNote.html('<strong>Confidence levels:</strong><br>' +
+                    '<span class="badge bg-success">High</span> 80-100% | ' +
+                    '<span class="badge bg-warning">Medium</span> 50-79% | ' +
+                    '<span class="badge bg-danger">Low</span> 0-49%');
+                body.append(confidenceNote);
+
+                collapseDiv.append(body);
+                accordionItem.append(collapseDiv);
+                accordion.append(accordionItem);
+            });
+
+            container.append(accordion);
+        }
+
+        function renderCouponSummaries(items, aggregatedCoupon) {
+            const container = $('#couponSummaryContainer');
+            container.empty();
+
+            const summaries = items.map(item => item.coupon_summary).filter(Boolean);
+            const hasSummary = summaries.length > 0 || aggregatedCoupon;
+
+            if (!hasSummary) {
+                container.html('<p class="text-center">No coupon summary available</p>');
+                return;
+            }
+
+            if (aggregatedCoupon) {
+                const aggregatedCard = createSummaryCard('Combined Coupon (Best Fields)', aggregatedCoupon);
+                container.append(aggregatedCard);
+            }
+
+            summaries.forEach(function(summary, index) {
+                const title = 'Screenshot ' + (index + 1);
+                const card = createSummaryCard(title, summary);
+                container.append(card);
+            });
+        }
+
+        function createSummaryCard(title, summary) {
+            const card = $('<div class="card border-success mb-3"></div>');
+            const header = $('<div class="card-header bg-success text-white"></div>').text(title);
+            const body = $('<div class="card-body"></div>');
+
+            const fields = ['store', 'amount', 'code', 'description', 'expiry'];
+            let hasContent = false;
+
+            fields.forEach(function(field) {
+                const data = summary[field];
+                if (!data || !data.text) {
+                    return;
+                }
+                hasContent = true;
+
+                const row = $('<div class="row mb-2"></div>');
+                row.append('<div class="col-4 fw-bold">' + capitalizeFirstLetter(field) + ':</div>');
+
+                let valueHtml = data.text;
+                if (typeof data.confidence === 'number') {
+                    valueHtml += ' <span class="badge bg-secondary ms-2">' + Math.round(data.confidence * 100) + '%</span>';
+                }
+
+                row.append('<div class="col-8">' + valueHtml + '</div>');
+                body.append(row);
+            });
+
+            if (!hasContent) {
+                body.append('<p class="mb-0">No structured data available.</p>');
+            } else {
+                const copyBtn = $('<button class="btn btn-sm btn-outline-success mt-3">Copy Summary</button>');
+                copyBtn.click(function() {
+                    const textBlob = fields
+                        .map(field => ({
+                            key: field,
+                            entry: summary[field]
+                        }))
+                        .filter(item => item.entry && item.entry.text)
+                        .map(item => capitalizeFirstLetter(item.key) + ': ' + item.entry.text)
+                        .join('\n');
+
+                    navigator.clipboard.writeText(textBlob).then(function() {
+                        copyBtn.text('Copied!');
+                        setTimeout(function() {
+                            copyBtn.text('Copy Summary');
+                        }, 2000);
+                    });
+                });
+                body.append(copyBtn);
+            }
+
+            card.append(header);
+            card.append(body);
+            return card;
+        }
+
+        function getConfidenceClass(confidence) {
+            if (confidence >= 0.8) {
+                return 'confidence-high';
+            }
+            if (confidence >= 0.5) {
+                return 'confidence-medium';
+            }
+            return 'confidence-low';
+        }
+
+        function getRowConfidenceClass(confidence) {
+            if (confidence >= 0.8) {
+                return 'table-success';
+            }
+            if (confidence >= 0.5) {
+                return 'table-warning';
+            }
+            return 'table-danger';
+        }
+
+        function getProgressBarClass(confidence) {
+            if (confidence >= 0.8) {
+                return 'bg-success';
+            }
+            if (confidence >= 0.5) {
+                return 'bg-warning';
+            }
+            return 'bg-danger';
         }
 
         // Helper functions
