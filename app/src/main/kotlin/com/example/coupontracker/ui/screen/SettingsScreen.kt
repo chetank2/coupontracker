@@ -262,6 +262,64 @@ fun SettingsScreen(
             
             BackupRestoreCard(viewModel = viewModel)
 
+            // DEVELOPER SECTION
+            Text(
+                text = "DEVELOPER",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp, top = 8.dp)
+            )
+            
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    // Analytics Dashboard Link
+                    TextButton(
+                        onClick = { navController.navigate(Screen.Analytics.route) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Analytics,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Analytics Dashboard",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    
+                    Divider(modifier = Modifier.padding(vertical = 4.dp))
+                    
+                    // Extraction Dashboard Link
+                    TextButton(
+                        onClick = { navController.navigate(Screen.ExtractionDashboard.route) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.School,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Extraction Learning",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
             // ABOUT SECTION
             Text(
                 text = "ABOUT",

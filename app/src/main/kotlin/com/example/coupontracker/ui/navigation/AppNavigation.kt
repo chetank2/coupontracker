@@ -25,7 +25,7 @@ import com.example.coupontracker.ui.screen.QRScannerScreen
 import com.example.coupontracker.ui.screen.ScannerScreen
 import com.example.coupontracker.ui.screen.SettingsScreen
 import com.example.coupontracker.ui.screen.SmartCaptureScreen
-
+import com.example.coupontracker.ui.screen.SmartCameraScreen
 import com.example.coupontracker.ui.screen.UnifiedCameraScreen
 import com.example.coupontracker.ui.screen.UnifiedUploadScreen
 import com.example.coupontracker.util.CouponInfo
@@ -46,6 +46,7 @@ sealed class Screen(val route: String) {
     }
     object Scanner : Screen("scanner")
     object SmartCapture : Screen("smart_capture")
+    object SmartCamera : Screen("smart_camera")
     object BatchScanner : Screen("batch_scanner")
     object QRScanner : Screen("qr_scanner")
     object ManualEntry : Screen("manual_entry")
@@ -146,6 +147,23 @@ fun AppNavigation(
 
         composable(Screen.SmartCapture.route) {
             SmartCaptureScreen(navController = navController)
+        }
+
+        composable(Screen.SmartCamera.route) {
+            SmartCameraScreen(
+                onPhotoTaken = { uri ->
+                    // Navigate to CouponForm with the captured image
+                    navController.navigate(
+                        Screen.CouponForm.createRoute(
+                            imageUri = uri.toString(),
+                            isBatchMode = false
+                        )
+                    )
+                },
+                onBackPressed = {
+                    navController.navigateUp()
+                }
+            )
         }
 
         composable(Screen.ApiTest.route) {

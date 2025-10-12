@@ -1138,11 +1138,11 @@ $sanitizedOcr<|im_end|>
         }
         
         // Reasonable length check
-        if (code.length < 4 || code.length > 16) {
+        if (code.length < 4 || code.length > 24) {
             return false
         }
         
-        if ((code.count { it == '-' } + code.count { it == '_' }) > 2) {
+        if ((code.count { it == '-' } + code.count { it == '_' }) > 6) {
             return false
         }
         

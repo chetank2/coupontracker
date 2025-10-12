@@ -202,7 +202,7 @@ fun HomeScreen(
                 SimplifiedCaptureBottomSheet(
                     onDismiss = { showCaptureBottomSheet = false },
                     onCameraCapture = {
-                        navController.navigate(Screen.UnifiedCamera.route)
+                        navController.navigate(Screen.SmartCamera.route)
                     },
                     onUpload = {
                         // Launch image picker directly instead of navigating to another screen
@@ -245,7 +245,7 @@ fun HomeScreen(
                         ) {
                             PrimaryButton(
                                 text = "Scan Coupon",
-                                onClick = { navController.navigate(Screen.UnifiedCamera.route) },
+                                onClick = { navController.navigate(Screen.SmartCamera.route) },
                                 leadingIcon = Icons.Default.CameraAlt,
                                 modifier = Modifier
                                     .fillMaxWidth()
