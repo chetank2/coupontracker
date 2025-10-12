@@ -4,7 +4,9 @@ import android.Manifest
 import android.util.Log
 import android.widget.Toast
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -159,32 +161,37 @@ fun QRScannerScreen(
                             val imageAnalysis = ImageAnalysis.Builder()
                                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                                 .build()
-                                .also {
-                                    it.setAnalyzer(cameraExecutor) { imageProxy ->
-                                        val mediaImage = imageProxy.image
-                                        if (mediaImage != null && !uiState.isProcessing) {
-                                            val image = InputImage.fromMediaImage(
-                                                mediaImage,
-                                                imageProxy.imageInfo.rotationDegrees
-                                            )
+                                .also { analysis ->
+                                    val analyzer = object : ImageAnalysis.Analyzer {
+                                        @ExperimentalGetImage
+                                        override fun analyze(imageProxy: ImageProxy) {
+                                            val mediaImage = imageProxy.image
+                                            if (mediaImage != null && !uiState.isProcessing) {
+                                                val image = InputImage.fromMediaImage(
+                                                    mediaImage,
+                                                    imageProxy.imageInfo.rotationDegrees
+                                                )
 
-                                            // Process the image
-                                            scanner.process(image)
-                                                .addOnSuccessListener { barcodes ->
-                                                    if (barcodes.isNotEmpty()) {
-                                                        viewModel.onBarcodeDetected(barcodes[0])
+                                                // Process the image
+                                                scanner.process(image)
+                                                    .addOnSuccessListener { barcodes ->
+                                                        if (barcodes.isNotEmpty()) {
+                                                            viewModel.onBarcodeDetected(barcodes[0])
+                                                        }
                                                     }
-                                                }
-                                                .addOnFailureListener { e ->
-                                                    Log.e("QRScannerScreen", "Barcode scanning failed", e)
-                                                }
-                                                .addOnCompleteListener {
-                                                    imageProxy.close()
-                                                }
-                                        } else {
-                                            imageProxy.close()
+                                                    .addOnFailureListener { e ->
+                                                        Log.e("QRScannerScreen", "Barcode scanning failed", e)
+                                                    }
+                                                    .addOnCompleteListener {
+                                                        imageProxy.close()
+                                                    }
+                                            } else {
+                                                imageProxy.close()
+                                            }
                                         }
                                     }
+
+                                    analysis.setAnalyzer(cameraExecutor, analyzer)
                                 }
 
                             try {

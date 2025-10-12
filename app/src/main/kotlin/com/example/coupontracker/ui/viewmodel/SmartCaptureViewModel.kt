@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.net.Uri
 import android.util.Log
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
@@ -98,6 +99,7 @@ class SmartCaptureViewModel @Inject constructor(
     /**
      * Process an image for smart detection
      */
+    @ExperimentalGetImage
     fun processImage(imageProxy: ImageProxy, executor: Executor) {
         val mediaImage = imageProxy.image ?: return
 
