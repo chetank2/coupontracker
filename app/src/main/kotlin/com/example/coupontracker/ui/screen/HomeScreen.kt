@@ -11,7 +11,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,7 +19,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,8 +35,6 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -51,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -152,7 +149,7 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
                     if (!isSearchActive) {
                         Text(
@@ -168,6 +165,7 @@ fun HomeScreen(
                             },
                             placeholder = { Text("Search coupons") },
                             singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
                             colors = TextFieldDefaults.colors(
                                 focusedIndicatorColor = MaterialTheme.colorScheme.primary,
                                 unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
@@ -202,7 +200,7 @@ fun HomeScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
@@ -283,11 +281,6 @@ fun HomeScreen(
             .padding(paddingValues)
     ) {
         SearchAndFilterBar(
-            searchQuery = searchQuery,
-            onSearchChange = {
-                searchQuery = it
-                viewModel.updateSearchQuery(it)
-            },
             onFiltersClick = { showFilterSortBottomSheet = true },
             sortOrderLabel = filters.sortOrder.displayName,
             hasActiveFilters = filters.filterState.hasActiveFilters(includeSearchQuery = true, searchQuery = searchQuery)
@@ -422,8 +415,6 @@ fun HomeScreen(
 
 @Composable
 private fun SearchAndFilterBar(
-    searchQuery: String,
-    onSearchChange: (String) -> Unit,
     onFiltersClick: () -> Unit,
     sortOrderLabel: String,
     hasActiveFilters: Boolean
@@ -433,23 +424,6 @@ private fun SearchAndFilterBar(
             .fillMaxWidth()
             .padding(horizontal = BrandSpacing.Medium, vertical = BrandSpacing.Small)
     ) {
-        TextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
-            placeholder = { Text("Search coupons") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
-            )
-        )
-
-        Spacer(modifier = Modifier.height(BrandSpacing.Small))
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
