@@ -3,8 +3,30 @@ package com.example.coupontracker.util
 /**
  * Utility for cleaning OCR text by removing UI chrome/noise.
  * Filters out battery indicators, signal bars, time displays, etc.
+ * Enhanced for multi-coupon extraction with currency normalization and metadata extraction.
  */
+
+/**
+ * Result of OCR text cleaning with extracted metadata
+ */
+data class CleanedOcrResult(
+    val cleanedText: String,
+    val originalText: String,
+    val metadata: Map<String, Any> = emptyMap(),
+    val removedPatterns: List<String> = emptyList()
+)
+
 object OcrTextCleaner {
+    
+    // Banner labels commonly found in coupon screenshots
+    private val BANNER_PATTERNS = listOf(
+        "expires today", "expires in", "expiring soon", "collect now", "details",
+        "view terms", "apply", "activate", "claim", "get offer", "redeem now",
+        "save now", "shop now", "buy now", "add to cart", "view offer",
+        "terms & conditions", "terms and conditions", "see details", "read more",
+        "limited time", "for you", "recommended", "trending", "popular",
+        "I'll use it later", "remind me", "not interested"
+    ).map { it.lowercase() }
     
     // UI chrome patterns (status bar, navigation, etc.)
     private val UI_NOISE_PATTERNS = listOf(
@@ -64,12 +86,64 @@ object OcrTextCleaner {
             return true
         }
         
+        // Check against banner patterns
+        if (BANNER_PATTERNS.any { trimmed.lowercase().contains(it) }) {
+            return true
+        }
+        
         // Lines with only special characters
         if (trimmed.all { !it.isLetterOrDigit() }) {
             return true
         }
         
         return false
+    }
+    
+    /**
+     * Normalize currency symbols for LLM processing
+     */
+    private fun normalizeCurrency(text: String): String {
+        return text
+            .replace("₹", "Rs. ")
+            .replace("₨", "Rs. ")
+            .replace("$", "USD ")
+            .replace("€", "EUR ")
+            .replace("£", "GBP ")
+    }
+    
+    /**
+     * Normalize percentage for LLM processing
+     */
+    private fun normalizePercentage(text: String): String {
+        return text.replace(Regex("""(\d+)\s*%"""), "$1 percent")
+    }
+    
+    /**
+     * Extract date format hints from text
+     */
+    private fun extractDateHints(text: String): Map<String, String> {
+        val hints = mutableMapOf<String, String>()
+        
+        // Detect date formats present
+        val datePatterns = listOf(
+            Regex("""\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\b""") to "DD MMM YYYY",
+            Regex("""\b\d{1,2}/\d{1,2}/\d{4}\b""") to "DD/MM/YYYY or MM/DD/YYYY",
+            Regex("""\b\d{4}-\d{2}-\d{2}\b""") to "YYYY-MM-DD"
+        )
+        
+        for ((pattern, format) in datePatterns) {
+            if (pattern.containsMatchIn(text)) {
+                hints["dateFormat"] = format
+                break
+            }
+        }
+        
+        // Detect relative dates
+        if (Regex("""\b(?:expires? in|valid for|days?\s+left)\s+\d+""", RegexOption.IGNORE_CASE).containsMatchIn(text)) {
+            hints["hasRelativeDate"] = "true"
+        }
+        
+        return hints
     }
     
     /**
@@ -156,6 +230,48 @@ object OcrTextCleaner {
             .filterNot { isUiChrome(it) }
             .joinToString("\n")
             .trim()
+    }
+    
+    /**
+     * Clean OCR text for LLM extraction with metadata and normalization
+     * This is the main method for multi-coupon extraction pipeline
+     */
+    fun cleanForLlmExtraction(text: String, includeCurrencyNormalization: Boolean = true): CleanedOcrResult {
+        val removedPatterns = mutableListOf<String>()
+        
+        // Step 1: Remove UI chrome and banner labels
+        val lines = text.lines()
+        val cleanedLines = lines.filter { line ->
+            val trimmed = line.trim()
+            if (isUiChrome(trimmed)) {
+                removedPatterns.add("UI_CHROME: $trimmed")
+                false
+            } else {
+                true
+            }
+        }
+        
+        var cleanedText = cleanedLines.joinToString("\n").trim()
+        
+        // Step 2: Normalize currency and percentage (optional, for better LLM understanding)
+        if (includeCurrencyNormalization) {
+            cleanedText = normalizeCurrency(cleanedText)
+            cleanedText = normalizePercentage(cleanedText)
+        }
+        
+        // Step 3: Extract metadata hints
+        val metadata = mutableMapOf<String, Any>()
+        metadata.putAll(extractDateHints(text))
+        metadata["originalLength"] = text.length
+        metadata["cleanedLength"] = cleanedText.length
+        metadata["removedLineCount"] = lines.size - cleanedLines.size
+        
+        return CleanedOcrResult(
+            cleanedText = cleanedText,
+            originalText = text,
+            metadata = metadata,
+            removedPatterns = removedPatterns
+        )
     }
 }
 

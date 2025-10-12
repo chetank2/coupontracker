@@ -43,6 +43,10 @@ class ProgressiveExtractionService @Inject constructor(
     private val llmService: com.example.coupontracker.util.LocalLlmOcrService? = null,
     private val extractionLearningIntegration: com.example.coupontracker.learning.ExtractionLearningIntegration? = null
 ) {
+    // V2: Validation components for multi-coupon extraction
+    private val confidenceScorer = ConfidenceScorer()
+    private val extractionValidator = ExtractionValidator(confidenceScorer)
+    
     companion object {
         private const val TAG = "ProgressiveExtractionService"
         
@@ -462,7 +466,8 @@ class ProgressiveExtractionService @Inject constructor(
     }
     
     /**
-     * Finish extraction: build result + ALWAYS trigger learning
+     * Finish extraction: build result + validate + ALWAYS trigger learning
+     * V2: Enhanced with confidence scoring and validation
      * This ensures learning runs regardless of which pass succeeded
      */
     private suspend fun finishExtraction(
@@ -494,6 +499,38 @@ class ProgressiveExtractionService @Inject constructor(
         """.trimIndent())
         
         val result = buildFinalResult(context, extractedFields, image, imageUri)
+        
+        // V2: Validate extracted coupon with confidence scoring
+        try {
+            val validationResult = extractionValidator.validate(result.coupon)
+            
+            Log.d(TAG, """
+                ┌─────────────────────────────────────────────────────────
+                │ VALIDATION RESULT
+                ├─────────────────────────────────────────────────────────
+                │ Quality: ${validationResult.extractionQuality}
+                │ Confidence: ${validationResult.validationResult.overallConfidence}
+                │ Action: ${validationResult.validationResult.suggestedAction}
+                │ 
+                │ Recommendations:
+                ${validationResult.actionableRecommendations.joinToString("\n") { "│   - $it" }}
+                └─────────────────────────────────────────────────────────
+            """.trimIndent())
+            
+            // Log warnings if validation suggests issues
+            if (validationResult.validationResult.warnings.isNotEmpty()) {
+                Log.w(TAG, "Validation warnings: ${validationResult.validationResult.warnings.joinToString("; ")}")
+            }
+            
+            // If extraction quality is too poor, log recommendation but still return result
+            // (Let caller decide whether to use it or retry)
+            if (validationResult.extractionQuality == ExtractionValidator.ExtractionQuality.FAILED) {
+                Log.e(TAG, "Extraction quality FAILED - consider retrying with different strategy")
+            }
+            
+        } catch (e: Exception) {
+            Log.w(TAG, "Error during validation (non-critical): ${e.message}", e)
+        }
         
         // CRITICAL: ALWAYS trigger learning (no matter which pass succeeded)
         extractionLearningIntegration?.let { learning ->
