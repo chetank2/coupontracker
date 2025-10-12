@@ -33,6 +33,14 @@ class CouponRepositoryImpl @Inject constructor(
 
     override suspend fun deleteAllCoupons() = couponDao.deleteAllCoupons()
 
+    override suspend fun replaceAllCoupons(coupons: List<Coupon>): Int {
+        val sanitizedCoupons = coupons.map { coupon ->
+            // Force Room to generate fresh IDs so we do not rely on the source database
+            coupon.copy(id = 0)
+        }
+        return couponDao.replaceAllCoupons(sanitizedCoupons).size
+    }
+
     // New methods
     override fun getPriorityCoupons(): Flow<List<Coupon>> = couponDao.getPriorityCoupons()
 

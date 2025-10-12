@@ -29,6 +29,9 @@ interface CouponDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCoupon(coupon: Coupon): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCoupons(coupons: List<Coupon>): List<Long>
+
     @Update
     suspend fun updateCoupon(coupon: Coupon)
 
@@ -37,6 +40,15 @@ interface CouponDao {
 
     @Query("DELETE FROM coupons")
     suspend fun deleteAllCoupons()
+
+    @Transaction
+    suspend fun replaceAllCoupons(coupons: List<Coupon>): List<Long> {
+        deleteAllCoupons()
+        if (coupons.isEmpty()) {
+            return emptyList()
+        }
+        return insertCoupons(coupons)
+    }
 
     // New queries
     @Query("SELECT * FROM coupons WHERE isPriority = 1 ORDER BY (expiryDate IS NULL), expiryDate ASC")
