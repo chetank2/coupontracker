@@ -247,6 +247,11 @@ fun HomeScreen(
                     },
                     onManualEntry = {
                         navController.navigate(Screen.ManualEntry.route)
+                    },
+                    onScreenshotUpload = {
+                        // Phase 3: Multi-coupon screenshot upload
+                        // Navigate to batch scanner for multi-coupon extraction
+                        navController.navigate(Screen.BatchScanner.route)
                     }
                 )
             }

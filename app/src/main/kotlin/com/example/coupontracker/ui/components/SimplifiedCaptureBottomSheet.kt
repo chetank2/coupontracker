@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Camera
+import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Card
@@ -43,7 +44,8 @@ fun SimplifiedCaptureBottomSheet(
     onDismiss: () -> Unit,
     onCameraCapture: () -> Unit,
     onUpload: () -> Unit,
-    onManualEntry: () -> Unit
+    onManualEntry: () -> Unit,
+    onScreenshotUpload: (() -> Unit)? = null // Optional screenshot upload for multi-coupon
 ) {
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
@@ -104,6 +106,24 @@ fun SimplifiedCaptureBottomSheet(
             )
 
             Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+            
+            // Optional: Multi-coupon screenshot upload (Phase 3 feature)
+            if (onScreenshotUpload != null) {
+                CaptureOptionCard(
+                    title = "Multi-coupon screenshot",
+                    subtitle = "Extract 3+ coupons from app screenshots",
+                    icon = Icons.Default.Collections,
+                    accentColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.8f),
+                    onClick = {
+                        onScreenshotUpload()
+                        scope.launch { sheetState.hide() }.invokeOnCompletion {
+                            if (!sheetState.isVisible) onDismiss()
+                        }
+                    }
+                )
+                
+                Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+            }
 
             CaptureOptionCard(
                 title = "Type manually",
