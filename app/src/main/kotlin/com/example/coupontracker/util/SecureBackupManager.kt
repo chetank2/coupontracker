@@ -16,6 +16,7 @@ import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.security.KeyStore
 import java.util.Date
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -183,19 +184,19 @@ class SecureBackupManager @Inject constructor(
                 val encryptedDataWithIv = context.contentResolver.openInputStream(uri)?.use { inputStream ->
                     inputStream.readBytes()
                 } ?: throw Exception("Failed to read backup file")
-                
+
                 if (encryptedDataWithIv.size < IV_SIZE) {
                     throw Exception("Invalid backup file format (too small)")
                 }
-                
+
                 // Extract IV and encrypted data
                 val iv = encryptedDataWithIv.copyOfRange(0, IV_SIZE)
                 val encryptedData = encryptedDataWithIv.copyOfRange(IV_SIZE, encryptedDataWithIv.size)
-                
+
                 // Decrypt the data
                 val plaintext = decrypt(encryptedData, iv)
                 val json = String(plaintext, Charsets.UTF_8)
-                
+
                 // Deserialize backup data
                 val backupData: BackupData = try {
                     gson.fromJson(json, BackupData::class.java)
@@ -210,12 +211,17 @@ class SecureBackupManager @Inject constructor(
                         coupons = coupons
                     )
                 }
-                
+
                 backupData.coupons
-                
+            } catch (e: AEADBadTagException) {
+                Log.e(TAG, "Failed to decrypt backup - incorrect key", e)
+                throw IllegalStateException(
+                    "Unable to decrypt backup. Please ensure you created it on this device.",
+                    e
+                )
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to read coupons from backup", e)
-                emptyList()
+                throw e
             }
         }
     }
