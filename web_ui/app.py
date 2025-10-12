@@ -296,42 +296,155 @@ def upload_training_images():
 @app.route('/api/upload/testing', methods=['POST'])
 def upload_testing_images():
     """Handle testing image uploads"""
-    if 'file' not in request.files:
-        return jsonify({'error': 'No file provided'}), 400
+    files = []
 
-    file = request.files['file']
-    if file and allowed_file(file.filename):
-        # Generate a unique filename
+    if 'files[]' in request.files:
+        files = request.files.getlist('files[]')
+    elif 'file' in request.files:
+        files = [request.files['file']]
+
+    if not files:
+        return jsonify({'error': 'No files provided'}), 400
+
+    processed_items = []
+
+    for file in files:
+        if not file or not allowed_file(file.filename):
+            print(f"Invalid file skipped: {getattr(file, 'filename', 'unknown')}")
+            continue
+
         filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
         filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
         file.save(filepath)
 
+        processed_path = filepath
         try:
-            # Process the image
             processed_path = image_processor.preprocess_image(filepath)
-
-            # Check if the processed image exists
             if not os.path.exists(processed_path):
-                print(f"Processed image not found: {processed_path}, using original")
+                print(f"Processed image not found: {processed_path}, falling back to original")
                 processed_path = filepath
+        except Exception as e:
+            print(f"Error preprocessing image {file.filename}: {e}")
 
-            # Run pattern recognition
+        try:
             results = model_manager.test_image(processed_path)
         except Exception as e:
-            print(f"Error processing image: {e}")
-            # If processing fails, try using the original image
-            results = model_manager.test_image(filepath)
+            print(f"Error running model on image {file.filename}: {e}")
+            results = {'error': str(e)}
 
-        return jsonify({
+        coupon_summary = build_coupon_summary(results)
+
+        processed_items.append({
             'file': {
                 'original_name': file.filename,
                 'saved_name': filename,
                 'url': url_for('static', filename=f'uploads/{filename}')
             },
-            'results': results
+            'results': results,
+            'coupon_summary': coupon_summary
         })
 
-    return jsonify({'error': 'Invalid file'}), 400
+    if not processed_items:
+        return jsonify({'error': 'No valid files were processed'}), 400
+
+    aggregated_coupon = aggregate_coupon_summaries([item['coupon_summary'] for item in processed_items])
+
+    response_payload = {
+        'items': processed_items,
+        'count': len(processed_items),
+        'aggregated_coupon': aggregated_coupon
+    }
+
+    # Preserve legacy response shape for single uploads
+    if len(processed_items) == 1:
+        response_payload.update({
+            'file': processed_items[0]['file'],
+            'results': processed_items[0]['results'],
+            'coupon_summary': processed_items[0]['coupon_summary']
+        })
+
+    return jsonify(response_payload)
+
+
+def build_coupon_summary(results):
+    """Normalize coupon data into a consistent summary."""
+    if not isinstance(results, dict):
+        return {}
+
+    summary = {}
+    field_sources = {
+        'store': [('text', 'store'), ('coupon', 'store'), ('store_name', None), ('merchant', None)],
+        'code': [('text', 'code'), ('coupon', 'code'), ('coupon_code', None)],
+        'amount': [('text', 'amount'), ('coupon', 'amount'), ('discount', None), ('value', None)],
+        'description': [('text', 'description'), ('coupon', 'description'), ('details', None)],
+        'expiry': [('text', 'expiry'), ('coupon', 'expiry'), ('expiry_date', None), ('expires_on', None)]
+    }
+
+    for field, sources in field_sources.items():
+        summary[field] = extract_field(results, sources)
+
+    return summary
+
+
+def extract_field(results, sources):
+    for container_key, field_key in sources:
+        container = results.get(container_key) if container_key else results
+        if not isinstance(container, dict):
+            continue
+
+        value = container.get(field_key) if field_key else container
+
+        text, confidence = normalize_value(value)
+        if text:
+            return {
+                'text': text,
+                'confidence': confidence
+            }
+
+    return None
+
+
+def normalize_value(value):
+    if isinstance(value, dict):
+        text = value.get('text') or value.get('value') or value.get('raw') or value.get('label')
+        confidence = value.get('confidence') or value.get('score')
+        if text:
+            return str(text), confidence
+    elif isinstance(value, (str, int, float)):
+        return str(value), None
+
+    return None, None
+
+
+def aggregate_coupon_summaries(summaries):
+    """Merge individual coupon summaries into a single best-effort coupon."""
+    fields = ['store', 'code', 'amount', 'description', 'expiry']
+    aggregated = {}
+
+    for field in fields:
+        best_value = None
+        best_confidence = -1.0
+
+        for summary in summaries:
+            if not summary:
+                continue
+            candidate = summary.get(field)
+            if not candidate or not candidate.get('text'):
+                continue
+
+            confidence = candidate.get('confidence')
+            numeric_confidence = confidence if isinstance(confidence, (int, float)) else None
+
+            if numeric_confidence is not None:
+                if numeric_confidence > best_confidence:
+                    best_value = candidate
+                    best_confidence = numeric_confidence
+            elif best_value is None:
+                best_value = candidate
+
+        aggregated[field] = best_value
+
+    return aggregated
 
 @app.route('/api/annotate', methods=['POST'])
 def save_annotation():
