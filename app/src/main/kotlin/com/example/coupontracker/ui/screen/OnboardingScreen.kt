@@ -1,265 +1,402 @@
 package com.example.coupontracker.ui.screen
 
 import android.content.Context
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.R
 import com.example.coupontracker.ui.components.DataSafetyDialog
 import com.example.coupontracker.ui.components.PrimaryButton
+import com.example.coupontracker.ui.components.SecondaryButton
 import com.example.coupontracker.ui.components.TextBrandButton
 import com.example.coupontracker.ui.navigation.Screen
-import androidx.compose.ui.res.stringResource
 import com.example.coupontracker.ui.theme.BrandColors
 import com.example.coupontracker.ui.theme.BrandSpacing
+import com.example.coupontracker.ui.viewmodel.ModelImportUiState
+import com.example.coupontracker.ui.viewmodel.ModelImportViewModel
 
 @Composable
-fun OnboardingScreen(
-    navController: NavController
+private fun CouponOnboardingLayout(
+    totalPages: Int,
+    currentPage: Int,
+    onPageChange: (Int) -> Unit,
+    showSkip: Boolean,
+    onSkip: () -> Unit,
+    content: @Composable (Int) -> Unit
 ) {
-    val context = LocalContext.current
-    var currentPage by remember { mutableStateOf(0) }
-    val pages = remember { OnboardingPages.getPages() }
-    var showDataSafety by remember { mutableStateOf(false) }
-    var pendingDestination by remember { mutableStateOf(Screen.Home.route) }
-
-    if (showDataSafety) {
-        DataSafetyDialog(onDismiss = { showDataSafety = false })
-    }
-
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = BrandSpacing.Large)
+            .padding(top = 48.dp, bottom = 32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Content
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxWidth()
+                .padding(bottom = BrandSpacing.Small)
         ) {
-            // Skip button
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp)
-            ) {
-                if (currentPage < pages.size - 1) {
-                    TextBrandButton(
-                        text = stringResource(id = R.string.onboarding_skip),
-                        onClick = { completeOnboarding(context, navController) },
-                        modifier = Modifier.align(Alignment.CenterEnd)
-                    )
-                }
-            }
-
-            // Page content with animation
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-            ) {
-                // Show only the current page
-                OnboardingPage(page = pages[currentPage])
-
-                when (currentPage) {
-                    1 -> {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextButton(onClick = { showDataSafety = true }) {
-                            Text(stringResource(id = R.string.onboarding_privacy_cta))
-                        }
-                    }
-                    2 -> {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = stringResource(id = R.string.onboarding_model_summary),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            Button(
-                                onClick = {
-                                    pendingDestination = Screen.Settings.route
-                                    completeOnboarding(context, navController, Screen.Settings.route)
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(stringResource(id = R.string.onboarding_download_model))
-                            }
-
-                            TextButton(
-                                onClick = {
-                                    if (currentPage < pages.lastIndex) currentPage++
-                                },
-                                modifier = Modifier.align(Alignment.CenterHorizontally)
-                            ) {
-                                Text(stringResource(id = R.string.onboarding_maybe_later))
-                            }
-                        }
-                    }
-                    3 -> {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Button(
-                                onClick = {
-                                    completeOnboarding(context, navController, Screen.SmartCamera.route)
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(stringResource(id = R.string.onboarding_scan_camera))
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    completeOnboarding(context, navController, Screen.UnifiedUpload.route)
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(stringResource(id = R.string.onboarding_upload_screenshot))
-                            }
-
-                            OutlinedButton(
-                                onClick = {
-                                    val destination = pendingDestination
-                                    completeOnboarding(context, navController, destination)
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = if (pendingDestination == Screen.Settings.route) {
-                                        stringResource(id = R.string.onboarding_open_settings)
-                                    } else {
-                                        stringResource(id = R.string.onboarding_enter_app)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Indicators
-            Row(
-                modifier = Modifier
-                    .padding(bottom = 32.dp),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                pages.indices.forEach { index ->
-                    Box(
-                        modifier = Modifier
-                            .padding(horizontal = 4.dp)
-                            .size(if (currentPage == index) 12.dp else 8.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (currentPage == index)
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                            )
-                    )
-                }
-            }
-
-            // Navigation buttons
-            if (currentPage < pages.size - 1) {
-                PrimaryButton(
-                    text = stringResource(id = R.string.onboarding_next),
-                    onClick = {
-                        if (currentPage < pages.size - 1) {
-                            currentPage++
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
+            if (showSkip) {
+                TextBrandButton(
+                    text = stringResource(id = R.string.onboarding_skip),
+                    onClick = onSkip,
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                    contentColor = BrandColors.Accent
                 )
             }
+        }
+
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
+            Crossfade(targetState = currentPage, label = "onboarding_page") { pageIndex ->
+                content(pageIndex)
+            }
+        }
+
+        PaginationIndicators(
+            totalPages = totalPages + 1,
+            currentPage = currentPage,
+            modifier = Modifier
+                .padding(top = BrandSpacing.Medium, bottom = BrandSpacing.Medium)
+        )
+
+        if (currentPage < totalPages) {
+            PrimaryButton(
+                text = stringResource(id = R.string.onboarding_next),
+                onClick = { onPageChange(currentPage + 1) },
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
 
 @Composable
-fun OnboardingPage(page: OnboardingPage) {
+private fun PaginationIndicators(
+    totalPages: Int,
+    currentPage: Int,
+    modifier: Modifier = Modifier,
+    indicatorShape: Shape = MaterialTheme.shapes.small
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        repeat(totalPages) { index ->
+            val isActive = currentPage == index
+            Box(
+                modifier = Modifier
+                    .padding(horizontal = 4.dp)
+                    .height(8.dp)
+                    .clip(indicatorShape)
+                    .background(
+                        if (isActive) BrandColors.Accent else MaterialTheme.colorScheme.surfaceVariant,
+                    )
+                    .let { base ->
+                        if (isActive) base.width(18.dp) else base.width(8.dp)
+                    }
+            )
+        }
+    }
+}
+
+@Composable
+private fun IllustrationWithGlow(
+    imageRes: Int,
+    contentDescription: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(200.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        val gradient = Brush.radialGradient(
+            colors = listOf(
+                BrandColors.Accent.copy(alpha = 0.3f),
+                Color.Transparent
+            ),
+            radius = 220f
+        )
+
+        Surface(
+            modifier = Modifier
+                .size(220.dp)
+                .clip(MaterialTheme.shapes.extraLarge),
+            color = Color.Transparent
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(gradient)
+            )
+        }
+
+        Image(
+            painter = painterResource(id = imageRes),
+                    contentDescription = contentDescription,
+                    modifier = Modifier
+                        .size(180.dp)
+                        .semantics { this.contentDescription = contentDescription }
+        )
+    }
+}
+
+@Composable
+private fun ModelDownloadPage(
+    page: OnboardingPage,
+    modelState: ModelImportUiState,
+    onDownload: () -> Unit,
+    onSkip: () -> Unit
+) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
+            .fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        // Image
-        Image(
-            painter = painterResource(id = page.imageResId),
-            contentDescription = null,
-            modifier = Modifier
-                .size(280.dp)
-                .padding(bottom = 32.dp)
+        OnboardingContentPage(
+            page = page,
+            illustrationDescription = stringResource(id = R.string.onboarding_model_illustration_desc)
         )
 
-        // Title
-        Text(
-            text = page.title,
-            style = MaterialTheme.typography.headlineSmall,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Description
-        Text(
-            text = page.description,
-            style = MaterialTheme.typography.bodyLarge,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        if (page.bullets.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Column(
-                modifier = Modifier.fillMaxWidth(0.95f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                page.bullets.forEach { bullet ->
-                    Row(
-                        verticalAlignment = Alignment.Top,
-                        modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
+        ) {
+            if (modelState.isImporting) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.large),
+                    color = BrandColors.SurfaceElevated
+                ) {
+                    Column(
+                        modifier = Modifier.padding(BrandSpacing.Medium),
+                        verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
                     ) {
                         Text(
-                            text = "•",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(end = 8.dp)
+                            text = stringResource(id = R.string.onboarding_model_downloading),
+                            style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = bullet,
+                            text = modelState.importMessage,
                             style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        LinearProgressIndicator(
+                            progress = modelState.importProgress / 100f,
+                            modifier = Modifier.fillMaxWidth(),
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = stringResource(
+                                id = R.string.onboarding_model_progress_percent,
+                                modelState.importProgress
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
+
+            PrimaryButton(
+                text = if (modelState.isImporting) {
+                    stringResource(id = R.string.onboarding_model_downloading_button)
+                } else {
+                    stringResource(id = R.string.onboarding_download_model)
+                },
+                onClick = onDownload,
+                enabled = !modelState.isImporting,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            TextBrandButton(
+                text = stringResource(id = R.string.onboarding_maybe_later),
+                onClick = onSkip,
+                modifier = Modifier.fillMaxWidth(),
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun GetStartedPage(
+    page: OnboardingPage,
+    onScan: () -> Unit,
+    onUpload: () -> Unit,
+    onEnterApp: () -> Unit,
+    onOpenSettings: () -> Unit,
+    isModelInstalled: Boolean,
+    pendingDestination: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        OnboardingContentPage(
+            page = page,
+            illustrationDescription = stringResource(id = R.string.onboarding_first_coupon_desc)
+        )
+
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
+        ) {
+            PrimaryButton(
+                text = stringResource(id = R.string.onboarding_scan_camera),
+                onClick = onScan,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            SecondaryButton(
+                text = stringResource(id = R.string.onboarding_upload_screenshot),
+                onClick = onUpload,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            TextBrandButton(
+                text = if (pendingDestination == Screen.Settings.route && !isModelInstalled) {
+                    stringResource(id = R.string.onboarding_open_settings)
+                } else {
+                    stringResource(id = R.string.onboarding_enter_app)
+                },
+                onClick = if (pendingDestination == Screen.Settings.route && !isModelInstalled) onOpenSettings else onEnterApp,
+                modifier = Modifier.fillMaxWidth(),
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun OnboardingContentPage(
+    page: OnboardingPage,
+    illustrationDescription: String,
+    footerContent: (@Composable () -> Unit)? = null
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = BrandSpacing.Large)
+            .padding(bottom = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween
+    ) {
+        Spacer(modifier = Modifier.height(BrandSpacing.Large))
+
+        IllustrationWithGlow(
+            imageRes = page.imageResId,
+            contentDescription = illustrationDescription
+        )
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Large))
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
+        ) {
+            Text(
+                text = page.title,
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Text(
+                text = page.description,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            if (page.bullets.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(BrandSpacing.Small))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(BrandSpacing.ExtraSmall)
+                ) {
+                    page.bullets.forEach { bullet ->
+                        Row(
+                            verticalAlignment = Alignment.Top,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "•",
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                            Text(
+                                text = bullet,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        footerContent?.let {
+            Spacer(modifier = Modifier.height(BrandSpacing.Large))
+            it()
         }
     }
 }
@@ -330,5 +467,91 @@ object OnboardingPages {
                 )
             )
         )
+    }
+}
+
+@Composable
+fun OnboardingScreen(
+    navController: NavController,
+    modelImportViewModel: ModelImportViewModel = hiltViewModel()
+) {
+    val context = LocalContext.current
+    val pages = remember { OnboardingPages.getPages() }
+    var currentPage by rememberSaveable { mutableStateOf(0) }
+    var showDataSafety by remember { mutableStateOf(false) }
+    var pendingDestination by rememberSaveable { mutableStateOf(Screen.Home.route) }
+    val modelState by modelImportViewModel.uiState.collectAsState()
+    val totalPages = pages.lastIndex
+
+    if (showDataSafety) {
+        DataSafetyDialog(onDismiss = { showDataSafety = false })
+    }
+
+    CouponOnboardingLayout(
+        totalPages = totalPages,
+        currentPage = currentPage,
+        onPageChange = { currentPage = it },
+        showSkip = currentPage < totalPages,
+        onSkip = { completeOnboarding(context, navController) }
+    ) { pageIndex ->
+        val page = pages[pageIndex]
+        when (pageIndex) {
+            0 -> OnboardingContentPage(
+                page = page,
+                illustrationDescription = stringResource(id = R.string.onboarding_vault_illustration_desc)
+            )
+            1 -> {
+                val privacyCtaLabel = stringResource(id = R.string.onboarding_privacy_cta)
+                OnboardingContentPage(
+                    page = page,
+                    illustrationDescription = stringResource(id = R.string.onboarding_privacy_illustration_desc),
+                    footerContent = {
+                        TextButton(
+                            onClick = { showDataSafety = true },
+                            modifier = Modifier.semantics { contentDescription = privacyCtaLabel }
+                        ) {
+                            Text(
+                                text = privacyCtaLabel,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+                    }
+                )
+            }
+            2 -> {
+                ModelDownloadPage(
+                    page = page,
+                    modelState = modelState,
+                    onDownload = {
+                        pendingDestination = Screen.Settings.route
+                        modelImportViewModel.downloadModel()
+                    },
+                    onSkip = {
+                        if (currentPage < totalPages) currentPage++
+                    }
+                )
+            }
+            3 -> {
+                GetStartedPage(
+                    page = page,
+                    onScan = {
+                        completeOnboarding(context, navController, Screen.SmartCamera.route)
+                    },
+                    onUpload = {
+                        completeOnboarding(context, navController, Screen.UnifiedUpload.route)
+                    },
+                    onEnterApp = {
+                        val destination = pendingDestination
+                        completeOnboarding(context, navController, destination)
+                    },
+                    onOpenSettings = {
+                        pendingDestination = Screen.Settings.route
+                        completeOnboarding(context, navController, Screen.Settings.route)
+                    },
+                    isModelInstalled = modelState.isModelInstalled,
+                    pendingDestination = pendingDestination
+                )
+            }
+        }
     }
 }

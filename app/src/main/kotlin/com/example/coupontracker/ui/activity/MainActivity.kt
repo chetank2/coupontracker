@@ -132,7 +132,7 @@ class MainActivity : ComponentActivity() {
                 val uriJson = gson.toJson(uriStrings)
 
                 val sharedPrefs = getSharedPreferences("coupon_tracker_prefs", MODE_PRIVATE)
-                sharedPrefs.edit().putString("shared_image_uris", uriJson).apply()
+            sharedPrefs.edit().putString("shared_image_uris", uriJson).apply()
 
                 // Navigate to the batch scanner screen
                 navControllerRef?.navigate(Screen.BatchScanner.route)

@@ -69,8 +69,8 @@ fun PrimaryButton(
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
-            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-            disabledContentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
+            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
+            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.4f)
         )
     ) {
         if (loading) {
@@ -113,8 +113,8 @@ fun SecondaryButton(
         colors = ButtonDefaults.buttonColors(
             containerColor = MaterialTheme.colorScheme.secondary,
             contentColor = MaterialTheme.colorScheme.onSecondary,
-            disabledContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
-            disabledContentColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.38f)
+            disabledContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
+            disabledContentColor = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.4f)
         )
     ) {
         if (loading) {
@@ -193,7 +193,8 @@ fun TextBrandButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     loading: Boolean = false,
-    leadingIcon: ImageVector? = null
+    leadingIcon: ImageVector? = null,
+    contentColor: Color = MaterialTheme.colorScheme.primary
 ) {
     TextButton(
         onClick = onClick,
@@ -201,14 +202,14 @@ fun TextBrandButton(
         enabled = enabled && !loading,
         shape = BrandShapes.ButtonShape,
         colors = ButtonDefaults.textButtonColors(
-            contentColor = MaterialTheme.colorScheme.primary,
-            disabledContentColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.38f)
+            contentColor = contentColor,
+            disabledContentColor = contentColor.copy(alpha = 0.38f)
         )
     ) {
         if (loading) {
             CircularProgressIndicator(
                 modifier = Modifier.size(24.dp),
-                color = MaterialTheme.colorScheme.primary,
+                color = contentColor,
                 strokeWidth = 2.dp
             )
         } else {

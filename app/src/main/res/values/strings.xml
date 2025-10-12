@@ -51,6 +51,13 @@
     <string name="onboarding_enter_app">Enter app</string>
     <string name="onboarding_open_settings">Open settings to download later</string>
     <string name="onboarding_model_summary">Download once (~940 MB). Works offline, keeps screenshots on this device.</string>
+    <string name="onboarding_model_downloading_button">Downloading…</string>
+    <string name="onboarding_model_downloading">Downloading model files</string>
+    <string name="onboarding_model_progress_percent">%1$d%% complete</string>
+    <string name="onboarding_vault_illustration_desc">Illustration of a secure coupon vault</string>
+    <string name="onboarding_privacy_illustration_desc">Illustration of a lock highlighting data privacy</string>
+    <string name="onboarding_model_illustration_desc">Illustration depicting an AI model download</string>
+    <string name="onboarding_first_coupon_desc">Illustration inviting you to add your first coupon</string>
 
     <!-- Data safety dialog -->
     <string name="data_safety_title">Your data stays on this device</string>

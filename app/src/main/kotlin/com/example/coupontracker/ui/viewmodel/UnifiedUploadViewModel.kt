@@ -58,17 +58,18 @@ class UnifiedUploadViewModel @Inject constructor(
                     error = null
                 )
 
-                // Store the URIs for batch processing
                 val sharedPrefs = context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
                 val gson = Gson()
                 val uriStrings = uris.map { it.toString() }
-                val uriJson = gson.toJson(uriStrings)
-                sharedPrefs.edit().putString("shared_image_uris", uriJson).apply()
+                sharedPrefs.edit()
+                    .putString("shared_image_uris", gson.toJson(uriStrings))
+                    .apply()
 
-                // Navigate to batch scanner (will be handled in the UI)
+                val pendingCount = uris.size
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
-                    navigateToBatchScanner = true
+                    navigateToBatchScanner = true,
+                    pendingBatchCount = pendingCount
                 )
             } catch (e: Exception) {
                 handleError(e, "Error processing multiple images")
@@ -149,5 +150,6 @@ data class UnifiedUploadUiState(
     val isProcessing: Boolean = false,
     val processedCoupon: Coupon? = null,
     val navigateToBatchScanner: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val pendingBatchCount: Int = 0
 )

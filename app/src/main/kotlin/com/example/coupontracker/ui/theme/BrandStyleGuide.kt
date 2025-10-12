@@ -20,43 +20,42 @@ import androidx.compose.ui.unit.sp
  */
 object BrandColors {
     // Primary palette
-    val Primary = Color(0xFF000000)         // Black - main brand color
-    val PrimaryVariant = Color(0xFF333333)  // Dark gray for emphasis
-    val OnPrimary = Color(0xFFFFFFFF)       // White text on primary
+    val Primary = Color(0xFF0F1115)
+    val PrimaryVariant = Color(0xFF1A1C21)
+    val OnPrimary = Color(0xFFE0E0E0)
 
-    // Secondary palette
-    val Secondary = Color(0xFF666666)       // Medium gray - complementary to primary
-    val SecondaryVariant = Color(0xFF444444) // Darker gray
-    val OnSecondary = Color(0xFFFFFFFF)     // White text on secondary
+    // Accent palette
+    val Accent = Color(0xFF2979FF)
+    val AccentVariant = Color(0xFF1E5ED0)
+    val OnAccent = Color(0xFFFFFFFF)
 
-    // Accent colors
-    val Accent = Color(0xFF999999)          // Light gray - for highlights and CTAs
-    val AccentVariant = Color(0xFF777777)   // Medium gray
-    val OnAccent = Color(0xFFFFFFFF)        // White text on accent
-
-    // Neutral palette
-    val Background = Color(0xFFF5F5F5)      // Light gray - background
-    val Surface = Color(0xFFFFFFFF)         // White - surface
-    val SurfaceVariant = Color(0xFFEEEEEE)  // Light gray - alternative surface
-    val OnBackground = Color(0xFF1A1A1A)    // Near black - text on background
-    val OnSurface = Color(0xFF1A1A1A)       // Near black - text on surface
-    val OnSurfaceVariant = Color(0xFF5F5F5F) // Medium gray - secondary text
+    // Backgrounds & surfaces
+    val Background = Color(0xFF0A0B0E)
+    val Surface = Color(0xFF121418)
+    val SurfaceVariant = Color(0xFF1C1F24)
+    val SurfaceElevated = Color(0xFF22262D)
+    val OnBackground = Color(0xFFE0E0E0)
+    val OnSurface = Color(0xFFDBE1F5)
+    val OnSurfaceVariant = Color(0xFFBDBDBD)
+    val Muted = Color(0xFF9AA0AD)
 
     // Status colors
-    val Success = Color(0xFF666666)         // Gray - success states
-    val Error = Color(0xFFE53935)           // Red - error states (keeping red for errors)
-    val Warning = Color(0xFF999999)         // Light gray - warning states
-    val Info = Color(0xFF444444)            // Dark gray - information states
+    val Success = Color(0xFF4CAF50)
+    val Warning = Color(0xFFFF9800)
+    val Error = Color(0xFFF44336)
+    val Info = Color(0xFF00BCD4)
 
-    // Expiration colors
-    val Valid = Color(0xFF666666)           // Gray - valid coupons
-    val ExpiringSoon = Color(0xFF999999)    // Light gray - expiring soon
-    val Expired = Color(0xFFE53935)         // Red - expired coupons (keeping red for expired)
+    // CTA variations
+    val PrimaryButton = Accent
+    val SecondaryButton = Color(0xFF2F323A)
+    val OnSecondaryButton = OnSurface
+    val TertiaryButton = Color.Transparent
+    val OnTertiaryButton = Accent
 
-    // Card colors
-    val CardBackground = Color(0xFFFFFFFF)  // White - card background
-    val CardStroke = Color(0xFFE0E0E0)      // Light gray - card stroke
-    val CardHighlight = Color(0xFFF5F5F5)   // Very light gray - highlighted card
+    // Overlays & borders
+    val Divider = Color(0xFF2C3038)
+    val Stroke = Color(0xFF2A2E36)
+    val Highlight = Color(0xFF1C263D)
 }
 
 /**
@@ -116,17 +115,17 @@ object BrandTypography {
     )
 
     val TitleMedium = TextStyle(
-        fontWeight = FontWeight.Medium,
-        fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.15.sp
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 18.sp,
+        lineHeight = 28.sp,
+        letterSpacing = 0.1.sp
     )
 
     val TitleSmall = TextStyle(
         fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.05.sp
     )
 
     // Body styles
@@ -134,43 +133,43 @@ object BrandTypography {
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.5.sp
+        letterSpacing = 0.15.sp
     )
 
     val BodyMedium = TextStyle(
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
-        letterSpacing = 0.25.sp
+        letterSpacing = 0.1.sp
     )
 
     val BodySmall = TextStyle(
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.4.sp
+        letterSpacing = 0.1.sp
     )
 
     // Label styles
     val LabelLarge = TextStyle(
-        fontWeight = FontWeight.Medium,
-        fontSize = 14.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 16.sp,
+        lineHeight = 22.sp,
+        letterSpacing = 0.05.sp
     )
 
     val LabelMedium = TextStyle(
         fontWeight = FontWeight.Medium,
-        fontSize = 12.sp,
-        lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
+        fontSize = 13.sp,
+        lineHeight = 18.sp,
+        letterSpacing = 0.1.sp
     )
 
     val LabelSmall = TextStyle(
         fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
+        fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
+        letterSpacing = 0.1.sp
     )
 }
 

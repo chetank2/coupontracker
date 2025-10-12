@@ -8,18 +8,25 @@ import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.ui.model.CouponStatusFilter
 import com.example.coupontracker.ui.model.ExpiryRange
 import com.example.coupontracker.ui.model.FilterState
+import com.example.coupontracker.ui.theme.BrandSpacing
+import com.example.coupontracker.ui.viewmodel.ModelImportUiState
+import com.example.coupontracker.ui.viewmodel.ModelImportViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+import kotlinx.coroutines.runBlocking
 
 /**
  * Data class for coupon filters
@@ -30,10 +37,32 @@ data class CouponFilters(
     val searchQuery: String = ""
 )
 
+enum class ModelAvailabilityStatus {
+    NOT_INSTALLED,
+    DOWNLOADING,
+    INSTALLED,
+    ERROR
+}
+
+data class HomeUiState(
+    val coupons: List<Coupon> = emptyList(),
+    val filters: CouponFilters = CouponFilters(),
+    val modelStatus: ModelAvailabilityStatus = ModelAvailabilityStatus.NOT_INSTALLED,
+    val modelProgress: Int = 0,
+    val modelMessage: String = "",
+    val showModelCard: Boolean = true,
+    val modelError: String? = null
+)
+
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    private val couponRepository: CouponRepository
+    private val couponRepository: CouponRepository,
+    private val modelImportManager: com.example.coupontracker.model.ModelImportManager,
+    private val securePreferencesManager: com.example.coupontracker.util.SecurePreferencesManager
 ) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(HomeUiState())
+    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
     private val allCouponsFlow: StateFlow<List<Coupon>> = couponRepository.getAllCoupons()
         .stateIn(
@@ -42,24 +71,66 @@ class HomeViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
+    private val modelStatusFlow = MutableStateFlow(ModelAvailabilityStatus.NOT_INSTALLED)
+    private val modelProgressFlow = MutableStateFlow(0)
+    private val modelMessageFlow = MutableStateFlow("")
+
     // Filter state
     private val _filters = MutableStateFlow(CouponFilters())
     val filters: StateFlow<CouponFilters> = _filters.asStateFlow()
 
-    // Get all coupons as a StateFlow with filters applied
-    val coupons: StateFlow<List<Coupon>> = combine(
-        allCouponsFlow,
-        _filters
-    ) { coupons, filters ->
-        applyCouponFilters(coupons, filters)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
+    init {
+        observeModelStatus()
+        observeCoupons()
+    }
 
-    // Surface original data for chips and other UI
-    val allCoupons: StateFlow<List<Coupon>> = allCouponsFlow
+    private fun observeModelStatus() {
+        viewModelScope.launch {
+            modelStatusFlow.value = determineModelStatus()
+            _uiState.value = _uiState.value.copy(
+                modelStatus = modelStatusFlow.value,
+                modelProgress = modelProgressFlow.value,
+                modelMessage = modelMessageFlow.value,
+                modelError = if (modelStatusFlow.value == ModelAvailabilityStatus.ERROR) modelMessageFlow.value else null,
+                showModelCard = shouldShowModelCard(modelStatusFlow.value)
+            )
+        }
+    }
+
+    private fun observeCoupons() {
+        combine(
+            allCouponsFlow,
+            modelStatusFlow,
+            _filters
+        ) { coupons, modelStatus, filters ->
+            val filteredCoupons = applyCouponFilters(coupons, filters)
+            _uiState.value.copy(
+                coupons = filteredCoupons,
+                filters = filters,
+                modelStatus = modelStatus,
+                modelProgress = modelProgressFlow.value,
+                modelMessage = modelMessageFlow.value,
+                modelError = if (modelStatus == ModelAvailabilityStatus.ERROR) modelMessageFlow.value else null,
+                showModelCard = shouldShowModelCard(modelStatus)
+            )
+        }.onEach { updated ->
+            _uiState.value = updated
+        }.launchIn(viewModelScope)
+    }
+
+    fun refreshModelStatus() {
+        viewModelScope.launch {
+            val status = determineModelStatus()
+            modelStatusFlow.value = status
+            _uiState.value = _uiState.value.copy(
+                modelStatus = status,
+                modelProgress = modelProgressFlow.value,
+                modelMessage = modelMessageFlow.value,
+                modelError = if (status == ModelAvailabilityStatus.ERROR) modelMessageFlow.value else null,
+                showModelCard = shouldShowModelCard(status)
+            )
+        }
+    }
 
     val availableStores: StateFlow<List<String>> = allCouponsFlow
         .map { coupons ->
@@ -257,5 +328,17 @@ class HomeViewModel @Inject constructor(
             val expiry = coupon.expiryDate ?: return@filter false
             expiry.after(now) && expiry.before(windowEnd)
         }
+    }
+
+    private fun determineModelStatus(): ModelAvailabilityStatus {
+        return if (securePreferencesManager.getLlmModelDownloaded()) {
+            ModelAvailabilityStatus.INSTALLED
+        } else {
+            ModelAvailabilityStatus.NOT_INSTALLED
+        }
+    }
+
+    private fun shouldShowModelCard(status: ModelAvailabilityStatus): Boolean {
+        return status != ModelAvailabilityStatus.INSTALLED
     }
 }

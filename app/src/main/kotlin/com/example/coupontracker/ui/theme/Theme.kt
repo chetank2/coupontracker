@@ -17,56 +17,50 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.example.coupontracker.util.ThemeMode
 
-private val LightColors = lightColorScheme(
-    primary = BrandColors.Primary,
-    onPrimary = BrandColors.OnPrimary,
-    primaryContainer = BrandColors.Primary.copy(alpha = 0.12f),
-    onPrimaryContainer = BrandColors.Primary,
-    secondary = BrandColors.Secondary,
-    onSecondary = BrandColors.OnSecondary,
-    secondaryContainer = BrandColors.Secondary.copy(alpha = 0.12f),
-    onSecondaryContainer = BrandColors.Secondary,
-    tertiary = BrandColors.Accent,
-    onTertiary = BrandColors.OnAccent,
-    tertiaryContainer = BrandColors.Accent.copy(alpha = 0.12f),
-    onTertiaryContainer = BrandColors.Accent,
+private val BrandLightColors = lightColorScheme(
+    primary = BrandColors.Accent,
+    onPrimary = BrandColors.OnAccent,
+    primaryContainer = BrandColors.Accent.copy(alpha = 0.16f),
+    onPrimaryContainer = BrandColors.OnAccent,
+    secondary = BrandColors.SecondaryButton,
+    onSecondary = BrandColors.OnSecondaryButton,
+    secondaryContainer = BrandColors.SecondaryButton.copy(alpha = 0.2f),
+    onSecondaryContainer = BrandColors.OnSecondaryButton,
+    tertiary = BrandColors.Primary,
+    onTertiary = BrandColors.OnPrimary,
     error = BrandColors.Error,
     onError = Color.White,
-    errorContainer = BrandColors.Error.copy(alpha = 0.12f),
-    onErrorContainer = BrandColors.Error,
     background = BrandColors.Background,
     onBackground = BrandColors.OnBackground,
     surface = BrandColors.Surface,
     onSurface = BrandColors.OnSurface,
     surfaceVariant = BrandColors.SurfaceVariant,
     onSurfaceVariant = BrandColors.OnSurfaceVariant,
-    outline = BrandColors.CardStroke
+    outline = BrandColors.Stroke,
+    outlineVariant = BrandColors.Divider
 )
 
-private val DarkColors = darkColorScheme(
-    primary = Color(0xFF333333),  // Dark gray for dark theme
-    onPrimary = Color(0xFFFFFFFF),
-    primaryContainer = Color(0xFF444444),
-    onPrimaryContainer = Color(0xFFEEEEEE),
-    secondary = Color(0xFF777777),  // Medium gray for dark theme
-    onSecondary = Color(0xFFFFFFFF),
-    secondaryContainer = Color(0xFF555555),
-    onSecondaryContainer = Color(0xFFEEEEEE),
-    tertiary = Color(0xFF999999),  // Light gray for dark theme
-    onTertiary = Color(0xFF000000),
-    tertiaryContainer = Color(0xFF777777),
-    onTertiaryContainer = Color(0xFFEEEEEE),
-    error = Color(0xFFEF5350),  // Keeping red for error states
-    onError = Color(0xFF000000),
-    errorContainer = Color(0xFFB00020),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color(0xFF121212),
-    onBackground = Color(0xFFE1E1E1),
-    surface = Color(0xFF1E1E1E),
-    onSurface = Color(0xFFE1E1E1),
-    surfaceVariant = Color(0xFF2C2C2C),
-    onSurfaceVariant = Color(0xFFBDBDBD),
-    outline = Color(0xFF3E3E3E)
+private val BrandDarkColors = darkColorScheme(
+    primary = BrandColors.Accent,
+    onPrimary = BrandColors.OnAccent,
+    primaryContainer = BrandColors.Accent.copy(alpha = 0.18f),
+    onPrimaryContainer = BrandColors.OnAccent,
+    secondary = BrandColors.SecondaryButton,
+    onSecondary = BrandColors.OnSecondaryButton,
+    secondaryContainer = BrandColors.SecondaryButton.copy(alpha = 0.3f),
+    onSecondaryContainer = BrandColors.OnSecondaryButton,
+    tertiary = BrandColors.SurfaceElevated,
+    onTertiary = BrandColors.OnSurface,
+    error = BrandColors.Error,
+    onError = Color.White,
+    background = BrandColors.Background,
+    onBackground = BrandColors.OnBackground,
+    surface = BrandColors.Surface,
+    onSurface = BrandColors.OnSurface,
+    surfaceVariant = BrandColors.SurfaceVariant,
+    onSurfaceVariant = BrandColors.OnSurfaceVariant,
+    outline = BrandColors.Stroke,
+    outlineVariant = BrandColors.Divider
 )
 
 @Composable
@@ -89,8 +83,8 @@ fun CouponTrackerTheme(
             val context = LocalContext.current
             if (useDarkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        useDarkTheme -> DarkColors
-        else -> LightColors
+        useDarkTheme -> BrandDarkColors
+        else -> BrandLightColors
     }
 
     val view = LocalView.current

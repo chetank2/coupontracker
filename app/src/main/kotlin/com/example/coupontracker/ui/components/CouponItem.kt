@@ -51,7 +51,7 @@ fun CouponItem(
     val statusColor = when (status) {
         StatusType.ERROR -> BrandColors.Error
         StatusType.WARNING -> BrandColors.Warning
-        StatusType.SUCCESS -> BrandColors.Valid
+        StatusType.SUCCESS -> BrandColors.Success
         StatusType.INFO, StatusType.NEUTRAL -> MaterialTheme.colorScheme.outline
     }
     val statusText = DateFormatter.getExpiryText(coupon.expiryDate)

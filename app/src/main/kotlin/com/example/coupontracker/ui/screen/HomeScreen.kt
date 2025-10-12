@@ -100,7 +100,8 @@ fun HomeScreen(
     navController: NavController,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
-    val coupons by viewModel.coupons.collectAsState(initial = emptyList())
+    val homeUiState by viewModel.uiState.collectAsState()
+    val coupons = homeUiState.coupons
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
 
@@ -125,9 +126,7 @@ fun HomeScreen(
         }
     }
 
-    val filters by viewModel.filters.collectAsState()
-    val availableStores by viewModel.availableStores.collectAsState()
-    val availableCategories by viewModel.availableCategories.collectAsState()
+    val filters = homeUiState.filters
 
     // Search state mirrors ViewModel so filters survive recomposition
     var searchQuery by remember { mutableStateOf(filters.searchQuery) }
@@ -258,8 +257,8 @@ fun HomeScreen(
                     onDismiss = { showFilterSortBottomSheet = false },
                     currentSortOrder = filters.sortOrder,
                     currentFilterState = filters.filterState,
-                    availableStores = availableStores,
-                    availableCategories = availableCategories,
+                    availableStores = viewModel.availableStores.collectAsState().value,
+                    availableCategories = viewModel.availableCategories.collectAsState().value,
                     onApply = { sortOrder, filterState ->
                         viewModel.updateSortOrder(sortOrder)
                         viewModel.setFilterState(filterState)
@@ -273,45 +272,23 @@ fun HomeScreen(
             }
         }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            TextField(
-                value = searchQuery,
-                onValueChange = {
-                    searchQuery = it
-                    viewModel.updateSearchQuery(it)
-                },
-                placeholder = { Text("Search coupons") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = BrandSpacing.Medium, vertical = BrandSpacing.Small)
-            )
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(paddingValues)
+    ) {
+        SearchAndFilterBar(
+            searchQuery = searchQuery,
+            onSearchChange = {
+                searchQuery = it
+                viewModel.updateSearchQuery(it)
+            },
+            onFiltersClick = { showFilterSortBottomSheet = true },
+            sortOrderLabel = filters.sortOrder.displayName,
+            hasActiveFilters = filters.filterState.hasActiveFilters(includeSearchQuery = true, searchQuery = searchQuery)
+        )
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = BrandSpacing.Medium),
-                horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
-            ) {
-                AssistChip(
-                    onClick = { showFilterSortBottomSheet = true },
-                    label = { Text("Filters") },
-                    leadingIcon = { Icon(Icons.Default.FilterList, contentDescription = null) }
-                )
-
-                AssistChip(
-                    onClick = { showFilterSortBottomSheet = true },
-                    label = { Text(filters.sortOrder.name.lowercase().replaceFirstChar { it.titlecase() }) },
-                    leadingIcon = { Icon(Icons.Default.Sort, contentDescription = null) }
-                )
-            }
-
-            AppliedFiltersBar(
+        FilterHighlightsBanner(
                 filterState = filters.filterState,
                 searchQuery = searchQuery,
                 onClearStore = { store ->
@@ -340,16 +317,14 @@ fun HomeScreen(
                 }
             )
 
-            val hasActiveFilters = filters.filterState.hasActiveFilters(includeSearchQuery = true, searchQuery = searchQuery)
-
-            if (coupons.isEmpty()) {
+        if (coupons.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (hasActiveFilters) {
+                if (filters.filterState.hasActiveFilters(includeSearchQuery = true, searchQuery = searchQuery)) {
                         FilteredEmptyState(
                             onClearFilters = {
                                 viewModel.resetFilters()
@@ -438,6 +413,142 @@ fun HomeScreen(
             }
         }
     }
+}
+
+@Composable
+private fun SearchAndFilterBar(
+    searchQuery: String,
+    onSearchChange: (String) -> Unit,
+    onFiltersClick: () -> Unit,
+    sortOrderLabel: String,
+    hasActiveFilters: Boolean
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = BrandSpacing.Medium, vertical = BrandSpacing.Small)
+    ) {
+        TextField(
+            value = searchQuery,
+            onValueChange = onSearchChange,
+            placeholder = { Text("Search coupons") },
+            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
+            )
+        )
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Small))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
+        ) {
+            AssistChip(
+                onClick = onFiltersClick,
+                label = { Text(if (hasActiveFilters) "Filters active" else "Filters") },
+                leadingIcon = { Icon(Icons.Default.FilterList, contentDescription = null) },
+                colors = AssistChipDefaults.assistChipColors(
+                    containerColor = if (hasActiveFilters) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant
+                )
+            )
+
+            AssistChip(
+                onClick = onFiltersClick,
+                label = { Text(sortOrderLabel) },
+                leadingIcon = { Icon(Icons.Default.Sort, contentDescription = null) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FilterHighlightsBanner(
+    filterState: FilterState,
+    searchQuery: String,
+    onClearStore: (String) -> Unit,
+    onClearCategory: (String) -> Unit,
+    onClearStatus: () -> Unit,
+    onClearValueRange: () -> Unit,
+    onClearExpiry: () -> Unit,
+    onClearSearch: () -> Unit,
+    onClearAll: () -> Unit
+) {
+    if (!filterState.hasActiveFilters(includeSearchQuery = true, searchQuery = searchQuery)) return
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = BrandSpacing.Medium)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Active filters",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            TextButton(onClick = onClearAll) {
+                Text("Clear all")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Small))
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (searchQuery.isNotBlank()) {
+                FilterChip(label = "Search: $searchQuery", onClear = onClearSearch)
+            }
+
+            filterState.selectedStores.forEach { store ->
+                FilterChip(label = store, onClear = { onClearStore(store) })
+            }
+
+            filterState.selectedCategories.forEach { category ->
+                FilterChip(label = category, onClear = { onClearCategory(category) })
+            }
+
+            if (filterState.status != CouponStatusFilter.ALL) {
+                FilterChip(label = "Status: ${filterState.status.displayName}", onClear = onClearStatus)
+            }
+
+            if (filterState.minValue != null || filterState.maxValue != null) {
+                val label = "Value: ${filterState.minValue?.toString() ?: "0"} – ${filterState.maxValue?.toString() ?: "∞"}"
+                FilterChip(label = label, onClear = onClearValueRange)
+            }
+
+            if (filterState.expiryRange != ExpiryRange.ALL) {
+                FilterChip(label = "Expiry: ${filterState.expiryRange.displayName}", onClear = onClearExpiry)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Small))
+    }
+}
+
+@Composable
+private fun FilterChip(
+    label: String,
+    onClear: () -> Unit
+) {
+    AssistChip(
+        onClick = {},
+        label = { Text(label) },
+        trailingIcon = {
+            IconButton(onClick = onClear) {
+                Icon(Icons.Default.Close, contentDescription = "Remove filter")
+            }
+        },
+        colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    )
 }
 
 @Composable

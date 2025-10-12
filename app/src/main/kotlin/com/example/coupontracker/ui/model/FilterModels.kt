@@ -23,7 +23,7 @@ fun FilterState.hasActiveFilters(includeSearchQuery: Boolean = false, searchQuer
 }
 
 enum class CouponStatusFilter(val displayName: String) {
-    ALL("All"),
+    ALL("All statuses"),
     ACTIVE("Active"),
     EXPIRING_SOON("Expiring soon"),
     EXPIRED("Expired")
