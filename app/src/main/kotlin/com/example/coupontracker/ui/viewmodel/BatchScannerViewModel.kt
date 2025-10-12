@@ -41,6 +41,9 @@ class BatchScannerViewModel @Inject constructor(
     private val detectorInitializationResult = initializeTwoStageDetector()
     private val twoStageDetector = detectorInitializationResult.detector
     private val detectorInitErrorMessage = detectorInitializationResult.errorMessage
+    
+    // V2.1: Hybrid detector for multi-coupon per image detection
+    private val hybridDetector = com.example.coupontracker.ml.HybridCouponDetector(context, ocrEngine)
 
     companion object {
         private const val TAG = "BatchScannerViewModel"
@@ -170,20 +173,16 @@ class BatchScannerViewModel @Inject constructor(
                         
                         bitmapManager.trackBitmap(bitmap)
                         
-                        // V2: Route through selected strategy (NOT CouponInputManager!)
-                        val coupon = when (strategy) {
-                            com.example.coupontracker.util.ExtractionStrategy.LEGACY -> 
-                                processWithLegacyPath(uri, bitmap)
-                            com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST -> 
-                                processWithLlmFirstPath(uri, bitmap)
-                            com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST -> 
-                                processWithOcrFirstPath(uri, bitmap)
-                            com.example.coupontracker.util.ExtractionStrategy.HYBRID -> 
-                                processWithHybridPath(uri, bitmap)
-                        }
+                        // V2.1: Detect multiple coupons per image using hybrid detector
+                        val imageCoupons = detectAndExtractMultipleCoupons(uri, bitmap, strategy)
                         
-                        processedCoupons.add(coupon)
-                        Log.d(TAG, "Batch: Successfully processed ${index + 1}/${images.size} via ${strategy.name}")
+                        if (imageCoupons.isNotEmpty()) {
+                            processedCoupons.addAll(imageCoupons)
+                            Log.d(TAG, "Batch: Extracted ${imageCoupons.size} coupon(s) from image ${index + 1}/${images.size}")
+                        } else {
+                            Log.w(TAG, "Batch: No coupons extracted from image ${index + 1}/${images.size}")
+                            failedCount++
+                        }
                         
                     } catch (e: Exception) {
                         Log.e(TAG, "Batch: Error processing ${index + 1}/${images.size}", e)
@@ -858,6 +857,190 @@ class BatchScannerViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up TwoStageDetector", e)
         }
+    }
+    
+    /**
+     * V2.1: Detect and extract multiple coupons from a single image
+     * Uses HybridCouponDetector to find coupon regions, then extracts each
+     */
+    private suspend fun detectAndExtractMultipleCoupons(
+        uri: Uri,
+        bitmap: android.graphics.Bitmap,
+        strategy: com.example.coupontracker.util.ExtractionStrategy
+    ): List<Coupon> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        
+        Log.d(TAG, "Detecting multiple coupons in image...")
+        
+        try {
+            // Step 1: Run OCR on full image
+            val ocrResult = multiEngineOCR.processImage(bitmap)
+            
+            if (ocrResult !is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success) {
+                Log.w(TAG, "OCR failed, falling back to single coupon extraction")
+                return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+            }
+            
+            // Step 2: Detect coupon regions using hybrid detector
+            val couponRegions = hybridDetector.detectCoupons(bitmap, ocrResult)
+            
+            Log.d(TAG, "Hybrid detector found ${couponRegions.size} coupon region(s)")
+            
+            // Step 3: If only one region or full-image fallback, use standard extraction
+            if (couponRegions.size == 1 && couponRegions[0].source == com.example.coupontracker.ml.HybridCouponDetector.DetectionSource.FALLBACK) {
+                Log.d(TAG, "Single coupon detected, using standard extraction")
+                return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+            }
+            
+            // Step 4: Extract each detected coupon region
+            val extractedCoupons = mutableListOf<Coupon>()
+            
+            for ((regionIndex, region) in couponRegions.withIndex()) {
+                try {
+                    Log.d(TAG, "Extracting coupon region ${regionIndex + 1}/${couponRegions.size}")
+                    
+                    // Crop bitmap to region
+                    val regionBitmap = cropBitmapToRegion(bitmap, region.boundingBox)
+                    
+                    if (regionBitmap == null) {
+                        Log.w(TAG, "Failed to crop region ${regionIndex + 1}, skipping")
+                        continue
+                    }
+                    
+                    bitmapManager.trackBitmap(regionBitmap)
+                    
+                    try {
+                        // Extract coupon from cropped region
+                        val coupon = extractCouponFromRegion(
+                            regionBitmap = regionBitmap,
+                            region = region,
+                            strategy = strategy,
+                            uri = uri
+                        )
+                        
+                        extractedCoupons.add(coupon)
+                        Log.d(TAG, "Successfully extracted coupon ${regionIndex + 1}: store='${coupon.storeName}', code='${coupon.redeemCode}'")
+                        
+                    } finally {
+                        bitmapManager.releaseBitmap(regionBitmap)
+                    }
+                    
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error extracting region ${regionIndex + 1}", e)
+                    // Continue with next region
+                }
+            }
+            
+            // If no coupons extracted from regions, fallback to single coupon
+            if (extractedCoupons.isEmpty()) {
+                Log.w(TAG, "No coupons extracted from regions, falling back to single coupon extraction")
+                return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+            }
+            
+            return@withContext extractedCoupons
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in multi-coupon detection", e)
+            // Fallback to single coupon extraction
+            return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+        }
+    }
+    
+    /**
+     * Extract single coupon using standard strategy
+     */
+    private suspend fun extractSingleCoupon(
+        uri: Uri,
+        bitmap: android.graphics.Bitmap,
+        strategy: com.example.coupontracker.util.ExtractionStrategy
+    ): Coupon {
+        return when (strategy) {
+            com.example.coupontracker.util.ExtractionStrategy.LEGACY -> 
+                processWithLegacyPath(uri, bitmap)
+            com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST -> 
+                processWithLlmFirstPath(uri, bitmap)
+            com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST -> 
+                processWithOcrFirstPath(uri, bitmap)
+            com.example.coupontracker.util.ExtractionStrategy.HYBRID -> 
+                processWithHybridPath(uri, bitmap)
+        }
+    }
+    
+    /**
+     * Extract coupon from a detected region
+     */
+    private suspend fun extractCouponFromRegion(
+        regionBitmap: android.graphics.Bitmap,
+        region: com.example.coupontracker.ml.HybridCouponDetector.CouponRegion,
+        strategy: com.example.coupontracker.util.ExtractionStrategy,
+        uri: Uri
+    ): Coupon {
+        // If region already has OCR text, use it directly with LLM
+        if (region.ocrText.isNotBlank() && strategy in listOf(
+            com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST,
+            com.example.coupontracker.util.ExtractionStrategy.HYBRID
+        )) {
+            try {
+                Log.d(TAG, "Using pre-extracted OCR text (${region.ocrText.length} chars) for LLM extraction")
+                
+                // Use LLM with pre-extracted OCR text
+                val llmResult = localLlmOcrService.processCouponImageTyped(regionBitmap)
+                
+                if (llmResult is com.example.coupontracker.util.ExtractResult.Good) {
+                    return convertExtractResultToCoupon(llmResult, uri)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "LLM extraction with pre-extracted OCR failed: ${e.message}")
+            }
+        }
+        
+        // Fallback: extract using standard strategy path
+        return extractSingleCoupon(uri, regionBitmap, strategy)
+    }
+    
+    /**
+     * Crop bitmap to region bounds
+     */
+    private fun cropBitmapToRegion(bitmap: android.graphics.Bitmap, region: android.graphics.Rect): android.graphics.Bitmap? {
+        return try {
+            // Validate bounds
+            val left = region.left.coerceIn(0, bitmap.width)
+            val top = region.top.coerceIn(0, bitmap.height)
+            val right = region.right.coerceIn(left, bitmap.width)
+            val bottom = region.bottom.coerceIn(top, bitmap.height)
+            
+            val width = right - left
+            val height = bottom - top
+            
+            if (width <= 0 || height <= 0) {
+                Log.w(TAG, "Invalid crop region: width=$width, height=$height")
+                return null
+            }
+            
+            android.graphics.Bitmap.createBitmap(bitmap, left, top, width, height)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cropping bitmap", e)
+            null
+        }
+    }
+    
+    /**
+     * Convert ExtractResult to Coupon
+     */
+    private fun convertExtractResultToCoupon(result: com.example.coupontracker.util.ExtractResult.Good, uri: Uri): Coupon {
+        val couponInfo = result.info
+        return Coupon(
+            id = 0,
+            storeName = couponInfo.storeName,
+            description = couponInfo.description,
+            cashbackAmount = couponInfo.cashbackAmount,
+            cashbackType = couponInfo.cashbackType,
+            expiryDate = couponInfo.expiryDate,
+            redeemCode = couponInfo.couponCode,
+            imageUri = uri.toString(),
+            status = "Active",
+            createdAt = java.util.Date(),
+            updatedAt = java.util.Date()
+        )
     }
 }
 
