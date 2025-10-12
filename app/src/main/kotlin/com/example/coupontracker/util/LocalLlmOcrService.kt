@@ -325,6 +325,7 @@ class LocalLlmOcrService(
     private val telemetryService = injectedTelemetryService ?: LlmTelemetryService.getInstance(context)
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor() // Fallback
+    private var modelPinned = false
     
     init {
         Log.d(TAG, "🔍 LocalLlmOcrService initialization started")
@@ -408,7 +409,7 @@ class LocalLlmOcrService(
             // Step 4: Run LLM inference with timeout and memory tracking
             memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
             val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
-                llmRuntime.runTextInference(rawOcrText, prompt)
+                llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned)
             }
 
             // Step 5: Parse and validate response
@@ -527,7 +528,7 @@ class LocalLlmOcrService(
             memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
             val inferenceStartTime = System.currentTimeMillis()
             val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
-                llmRuntime.runTextInference(ocrText, prompt)
+                llmRuntime.runTextInference(ocrText, prompt, keepLoaded = modelPinned)
             }
             val inferenceElapsed = System.currentTimeMillis() - inferenceStartTime
             Log.d(TAG, "⏱️  Inference completed in ${inferenceElapsed / 1000}s")
@@ -1432,7 +1433,12 @@ $sanitizedOcr<|im_end|>
     suspend fun warmUpModel(): Boolean {
         return try {
             Log.d(TAG, "Warming up LLM model...")
-            llmRuntime.loadModel()
+            val loaded = llmRuntime.loadModel()
+            if (loaded) {
+                modelPinned = true
+                Log.d(TAG, "LLM model pinned in memory for reuse")
+            }
+            loaded
         } catch (e: Exception) {
             Log.e(TAG, "Failed to warm up model", e)
             false
@@ -1444,7 +1450,11 @@ $sanitizedOcr<|im_end|>
      */
     suspend fun releaseResources() {
         Log.d(TAG, "Releasing LLM resources")
-        llmRuntime.releaseModel()
+        if (modelPinned) {
+            llmRuntime.releaseModel()
+            modelPinned = false
+            Log.d(TAG, "LLM model reference released")
+        }
     }
     
     /**

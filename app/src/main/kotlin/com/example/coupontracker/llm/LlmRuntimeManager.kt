@@ -351,10 +351,17 @@ class LlmRuntimeManager private constructor(private val context: Context) {
      * This is MUCH faster than vision inference (5-10s vs 15-30 min)
      * and still uses MiniCPM's intelligence to understand the text
      */
-    suspend fun runTextInference(ocrText: String, prompt: String): String? = withContext(Dispatchers.IO) {
+    suspend fun runTextInference(
+        ocrText: String,
+        prompt: String,
+        keepLoaded: Boolean = false
+    ): String? = withContext(Dispatchers.IO) {
         try {
-            // Acquire model (loads if needed)
-            acquireModel()
+            var releaseAfter = false
+            if (!keepLoaded || modelHandle == null) {
+                acquireModel()
+                releaseAfter = !keepLoaded
+            }
             
             try {
                 val currentHandle = modelHandle ?: throw IllegalStateException("Model handle is null after acquire")
@@ -388,8 +395,10 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 return@withContext response
                 
             } finally {
-                // Always release model after use
-                releaseModel()
+                if (releaseAfter) {
+                    // Release only if we acquired exclusively for this call
+                    releaseModel()
+                }
             }
             
         } catch (e: Exception) {
