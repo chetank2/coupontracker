@@ -143,3 +143,13 @@ This system is designed for enterprise deployment with:
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🤝 Contributing
+
+We welcome improvements, bug fixes, and documentation updates from the community. To contribute:
+
+1. Fork the repository and create a feature branch.
+2. Make your changes and ensure all relevant tests pass.
+3. Submit a pull request with a clear description of the updates and any testing performed.
+
+For significant updates, consider opening an issue first so we can discuss the proposed changes before you begin development.
