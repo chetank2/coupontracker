@@ -48,6 +48,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import com.example.coupontracker.ui.viewmodel.ModelImportViewModel
 
 @AndroidEntryPoint
 class AddFragment : Fragment() {
@@ -62,7 +63,7 @@ class AddFragment : Fragment() {
     lateinit var imageProcessor: com.example.coupontracker.util.ImageProcessor
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var securePreferencesManager: SecurePreferencesManager
-    private lateinit var modelDownloadManager: ModelDownloadManager
+    @Inject lateinit var modelDownloadManager: ModelDownloadManager
     private var modelStatusJob: Job? = null
 
     companion object {
@@ -106,8 +107,7 @@ class AddFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         sharedPreferences = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         securePreferencesManager = SecurePreferencesManager(requireContext())
-        modelDownloadManager = ModelDownloadManager(requireContext())
-        // ImageProcessor now injected via Hilt
+        // modelDownloadManager = ModelDownloadManager(requireContext()) // This line is removed as it's now injected
         setupCamera()
         setupClickListeners()
         setupMistralApiSwitch()

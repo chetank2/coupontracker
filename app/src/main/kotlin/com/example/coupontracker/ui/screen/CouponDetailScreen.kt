@@ -70,8 +70,13 @@ fun CouponDetailScreen(
                     }
                 },
                 actions = {
+                    val shareEnabled = coupon != null
                     IconButton(onClick = {
-                        // Delete coupon
+                        coupon?.let { shareCoupon(context, it) }
+                    }, enabled = shareEnabled) {
+                        Icon(Icons.Default.Share, contentDescription = "Share coupon")
+                    }
+                    IconButton(onClick = {
                         viewModel.deleteCoupon()
                         navController.popBackStack()
                     }) {
@@ -87,253 +92,15 @@ fun CouponDetailScreen(
                 .padding(paddingValues)
         ) {
             coupon?.let { coupon ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(BrandSpacing.Medium)
-                ) {
-                    // Coupon image (if available)
-                    coupon.imageUri?.let { imageUri ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp)
-                                .padding(bottom = BrandSpacing.Medium)
-                                .clickable { showImagePreview = true },
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(imageUri)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = "Coupon Image",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
-
-                        // Image preview dialog
-                        if (showImagePreview) {
-                            ImagePreviewDialog(
-                                imageUri = imageUri,
-                                onDismiss = { showImagePreview = false },
-                                onShare = {
-                                    // Share the image
-                                    val shareIntent = Intent().apply {
-                                        action = Intent.ACTION_SEND
-                                        putExtra(Intent.EXTRA_STREAM, Uri.parse(imageUri))
-                                        type = "image/*"
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                    context.startActivity(Intent.createChooser(shareIntent, "Share Coupon Image"))
-                                }
-                            )
-                        }
-                    }
-
-                    // Store name and icon
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // Store icon placeholder
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = coupon.storeName.take(1).uppercase(),
-                                style = MaterialTheme.typography.titleLarge,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(BrandSpacing.Medium))
-
-                        Text(
-                            text = coupon.storeName,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(BrandSpacing.Medium))
-
-                    // Description
-                    Text(
-                        text = coupon.description,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-
-                    Spacer(modifier = Modifier.height(BrandSpacing.Large))
-
-                    // Coupon code
-                    if (!coupon.redeemCode.isNullOrEmpty()) {
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceVariant
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(BrandSpacing.Medium),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = coupon.redeemCode,
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.weight(1f)
-                                )
-
-                                IconButton(onClick = {
-                                    clipboardManager.setText(AnnotatedString(coupon.redeemCode))
-                                    Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
-                                }) {
-                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy code")
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(BrandSpacing.Large))
-                    }
-
-                    // Expiry date
-                    val expiryStatus = DateFormatter.getExpiryStatus(coupon.expiryDate)
-                    val expiryText = DateFormatter.getExpiryText(coupon.expiryDate)
-                    val expiryColor = when (expiryStatus) {
-                        StatusType.ERROR -> Color(0xFFE53935)
-                        StatusType.WARNING -> Color(0xFFFFA000)
-                        StatusType.SUCCESS -> Color(0xFF43A047)
-                        StatusType.INFO, StatusType.NEUTRAL -> Color(0xFF2196F3)
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Event,
-                            contentDescription = null,
-                            tint = expiryColor
-                        )
-
-                        Spacer(modifier = Modifier.width(BrandSpacing.Small))
-
-                        Text(
-                            text = coupon.expiryDate?.let { DateFormatter.formatShort(it) }
-                                ?: stringResource(id = R.string.no_expiry_provided),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-
-                        Spacer(modifier = Modifier.width(BrandSpacing.Medium))
-
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = expiryColor.copy(alpha = 0.1f)
-                        ) {
-                            Text(
-                                text = expiryText,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = expiryColor,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(BrandSpacing.Medium))
-
-                    // Cashback amount - HIDDEN per user request
-                    // User: "Don't show the amount" - description field has full offer text
-                    /*
-                    val cashbackDisplayText = coupon.getCashbackDisplayText()
-                    if (cashbackDisplayText.isNotBlank() && coupon.getCashbackNumericValue() > 0) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (coupon.getCashbackInfo().type == CashbackType.PERCENT) 
-                                    Icons.Default.Percent else Icons.Default.CurrencyRupee,
-                                contentDescription = null
-                            )
-
-                            Spacer(modifier = Modifier.width(BrandSpacing.Small))
-
-                            Text(
-                                text = cashbackDisplayText, // Shows "75%" or "₹500" correctly
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
-                    }
-                    */
-
-                    // Category
-                    if (!coupon.category.isNullOrEmpty()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Category,
-                                contentDescription = null
-                            )
-
-                            Spacer(modifier = Modifier.width(BrandSpacing.Small))
-
-                            Text(
-                                text = coupon.category,
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
-                    }
-
-                    // Action buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Button(
-                            onClick = {
-                                // Track usage
-                                viewModel.trackUsage(coupon.cashbackAmount)
-                                Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null)
-                            Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                            Text("Track Usage")
-                        }
-
-                        Spacer(modifier = Modifier.width(BrandSpacing.Medium))
-
-                        Button(
-                            onClick = {
-                                // Set reminder
-                                Toast.makeText(context, "Reminder functionality would be implemented here", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Notifications, contentDescription = null)
-                            Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                            Text("Set Reminder")
-                        }
-                    }
-                }
+                CouponDetailContent(
+                    coupon = coupon,
+                    showImagePreview = showImagePreview,
+                    onToggleImagePreview = { showImagePreview = it },
+                    onTrackUsage = { viewModel.trackUsage(coupon.cashbackAmount) },
+                    context = context,
+                    clipboardManager = clipboardManager
+                )
             } ?: run {
-                // Loading or error state
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -343,4 +110,282 @@ fun CouponDetailScreen(
             }
         }
     }
+}
+
+@Composable
+private fun CouponDetailContent(
+    coupon: com.example.coupontracker.data.model.Coupon,
+    showImagePreview: Boolean,
+    onToggleImagePreview: (Boolean) -> Unit,
+    onTrackUsage: () -> Unit,
+    context: Context,
+    clipboardManager: androidx.compose.ui.platform.ClipboardManager
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(BrandSpacing.Medium)
+    ) {
+        // Coupon image (if available)
+        coupon.imageUri?.let { imageUri ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .padding(bottom = BrandSpacing.Medium)
+                    .clickable { onToggleImagePreview(true) },
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(imageUri)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "Coupon Image",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            // Image preview dialog
+            if (showImagePreview) {
+                ImagePreviewDialog(
+                    imageUri = imageUri,
+                    onDismiss = { onToggleImagePreview(false) },
+                    onShare = {
+                        // Share the image
+                        val shareIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_STREAM, Uri.parse(imageUri))
+                            type = "image/*"
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share Coupon Image"))
+                    }
+                )
+            }
+        }
+
+        // Store name and icon
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Store icon placeholder
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = coupon.storeName.take(1).uppercase(),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Spacer(modifier = Modifier.width(BrandSpacing.Medium))
+
+            Text(
+                text = coupon.storeName,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+        // Description
+        Text(
+            text = coupon.description,
+            style = MaterialTheme.typography.bodyLarge
+        )
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Large))
+
+        // Coupon code
+        if (!coupon.redeemCode.isNullOrEmpty()) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(BrandSpacing.Medium),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = coupon.redeemCode,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    IconButton(onClick = {
+                        clipboardManager.setText(AnnotatedString(coupon.redeemCode))
+                        Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy code")
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(BrandSpacing.Large))
+        }
+
+        // Expiry date
+        val expiryStatus = DateFormatter.getExpiryStatus(coupon.expiryDate)
+        val expiryText = DateFormatter.getExpiryText(coupon.expiryDate)
+        val expiryColor = when (expiryStatus) {
+            StatusType.ERROR -> Color(0xFFE53935)
+            StatusType.WARNING -> Color(0xFFFFA000)
+            StatusType.SUCCESS -> Color(0xFF43A047)
+            StatusType.INFO, StatusType.NEUTRAL -> Color(0xFF2196F3)
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Event,
+                contentDescription = null,
+                tint = expiryColor
+            )
+
+            Spacer(modifier = Modifier.width(BrandSpacing.Small))
+
+            Text(
+                text = coupon.expiryDate?.let { DateFormatter.formatShort(it) }
+                    ?: stringResource(id = R.string.no_expiry_provided),
+                style = MaterialTheme.typography.bodyLarge
+            )
+
+            Spacer(modifier = Modifier.width(BrandSpacing.Medium))
+
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = expiryColor.copy(alpha = 0.1f)
+            ) {
+                Text(
+                    text = expiryText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = expiryColor,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+        // Cashback amount - HIDDEN per user request
+        // User: "Don't show the amount" - description field has full offer text
+        /*
+        val cashbackDisplayText = coupon.getCashbackDisplayText()
+        if (cashbackDisplayText.isNotBlank() && coupon.getCashbackNumericValue() > 0) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (coupon.getCashbackInfo().type == CashbackType.PERCENT) 
+                        Icons.Default.Percent else Icons.Default.CurrencyRupee,
+                    contentDescription = null
+                )
+
+                Spacer(modifier = Modifier.width(BrandSpacing.Small))
+
+                Text(
+                    text = cashbackDisplayText, // Shows "75%" or "₹500" correctly
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+        }
+        */
+
+        // Category
+        if (!coupon.category.isNullOrEmpty()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Category,
+                    contentDescription = null
+                )
+
+                Spacer(modifier = Modifier.width(BrandSpacing.Small))
+
+                Text(
+                    text = coupon.category,
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+
+            Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+        }
+
+        // Action buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Button(
+                onClick = {
+                    onTrackUsage()
+                    Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null)
+                Spacer(modifier = Modifier.width(BrandSpacing.Small))
+                Text("Track Usage")
+            }
+
+            Spacer(modifier = Modifier.width(BrandSpacing.Medium))
+
+            Button(
+                onClick = {
+                    // Set reminder
+                    Toast.makeText(context, "Reminder functionality would be implemented here", Toast.LENGTH_SHORT).show()
+                },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.Notifications, contentDescription = null)
+                Spacer(modifier = Modifier.width(BrandSpacing.Small))
+                Text("Set Reminder")
+            }
+        }
+    }
+}
+
+private fun shareCoupon(context: Context, coupon: com.example.coupontracker.data.model.Coupon) {
+    val shareBody = buildString {
+        append("Store: ${coupon.storeName}\n")
+        if (coupon.description.isNotBlank()) append("Offer: ${coupon.description}\n")
+        coupon.redeemCode?.takeIf { it.isNotBlank() }?.let { append("Code: $it\n") }
+        coupon.expiryDate?.let { append("Expires: ${com.example.coupontracker.ui.components.DateFormatter.formatShort(it)}\n") }
+    }
+
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        putExtra(Intent.EXTRA_TEXT, shareBody)
+        type = "text/plain"
+    }
+
+    coupon.imageUri?.let { uriString ->
+        val uri = Uri.parse(uriString)
+        shareIntent.putExtra(Intent.EXTRA_STREAM, uri)
+        shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        shareIntent.type = "image/*"
+    }
+
+    context.startActivity(Intent.createChooser(shareIntent, "Share coupon"))
 }

@@ -32,7 +32,8 @@ class ModelImportViewModel @Inject constructor(
     private val modelImportManager: ModelImportManager,
     private val modelSelfTest: ModelSelfTest,
     private val modelDownloadManager: com.example.coupontracker.llm.ModelDownloadManager,
-    private val secureDownloader: com.example.coupontracker.network.SecureModelDownloader
+    private val secureDownloader: com.example.coupontracker.network.SecureModelDownloader,
+    private val securePreferencesManager: com.example.coupontracker.util.SecurePreferencesManager
 ) : AndroidViewModel(application) {
     
     private val _uiState = MutableStateFlow(ModelImportUiState())
@@ -84,6 +85,11 @@ class ModelImportViewModel @Inject constructor(
                         importProgress = 100,
                         importMessage = "Import complete"
                     )
+
+                    result.manifest?.let { manifest ->
+                        securePreferencesManager.setLlmModelVersion(manifest.version)
+                        securePreferencesManager.setLlmModelSizeMB(result.sizeMB.toFloat())
+                    }
                     
                     // Auto-run self-test after successful import
                     runSelfTest()
@@ -125,6 +131,9 @@ class ModelImportViewModel @Inject constructor(
     fun deleteModel() {
         viewModelScope.launch {
             modelImportManager.deleteModel()
+            securePreferencesManager.setLlmModelVersion("")
+            securePreferencesManager.setLlmModelSizeMB(0f)
+            securePreferencesManager.setLlmModelDownloaded(false)
             _uiState.value = _uiState.value.copy(
                 isModelInstalled = false,
                 modelInfo = null,
@@ -173,6 +182,8 @@ class ModelImportViewModel @Inject constructor(
                 when (result) {
                     is com.example.coupontracker.llm.DownloadResult.Success -> {
                         withContext(Dispatchers.Main) {
+                            securePreferencesManager.setLlmModelVersion(result.version)
+                            securePreferencesManager.setLlmModelSizeMB(result.modelSizeMB.toFloat())
                             _uiState.value = _uiState.value.copy(
                                 isImporting = false,
                                 isModelInstalled = true,

@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -27,14 +28,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Collections
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,9 +44,13 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,34 +61,38 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.data.model.Coupon
-
 import com.example.coupontracker.ui.components.BrandCard
 import com.example.coupontracker.ui.components.EmptyState
 import com.example.coupontracker.ui.components.EnhancedCouponCard
-import com.example.coupontracker.ui.components.FilterOption
 import com.example.coupontracker.ui.components.FilterSortBottomSheet
 import com.example.coupontracker.ui.components.OutlinedBrandButton
 import com.example.coupontracker.ui.components.PrimaryButton
 import com.example.coupontracker.ui.components.SecondaryButton
 import com.example.coupontracker.ui.components.SectionHeader
 import com.example.coupontracker.ui.components.SimplifiedCaptureBottomSheet
+import com.example.coupontracker.ui.model.CouponStatusFilter
+import com.example.coupontracker.ui.model.ExpiryRange
+import com.example.coupontracker.ui.model.FilterState
+import com.example.coupontracker.ui.model.hasActiveFilters
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.HomeViewModel
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.material3.Button
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,6 +103,8 @@ fun HomeScreen(
     val coupons by viewModel.coupons.collectAsState(initial = emptyList())
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+
+    val hasFiltersApplied: Boolean
 
     val sharedPreferences = remember {
         context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
@@ -113,9 +125,19 @@ fun HomeScreen(
         }
     }
 
-    // Search state
-    var searchQuery by remember { mutableStateOf("") }
-    var isSearchActive by remember { mutableStateOf(false) }
+    val filters by viewModel.filters.collectAsState()
+    val availableStores by viewModel.availableStores.collectAsState()
+    val availableCategories by viewModel.availableCategories.collectAsState()
+
+    // Search state mirrors ViewModel so filters survive recomposition
+    var searchQuery by remember { mutableStateOf(filters.searchQuery) }
+    var isSearchActive by remember { mutableStateOf(filters.searchQuery.isNotBlank()) }
+
+    LaunchedEffect(filters.searchQuery) {
+        if (filters.searchQuery != searchQuery) {
+            searchQuery = filters.searchQuery
+        }
+    }
 
     // Bottom sheet states
     var showCaptureBottomSheet by remember { mutableStateOf(false) }
@@ -139,20 +161,36 @@ fun HomeScreen(
                             style = MaterialTheme.typography.titleLarge
                         )
                     } else {
-                        // Search field would go here in a real implementation
-                        Text(
-                            text = "Search Coupons",
-                            style = MaterialTheme.typography.titleMedium
+                        TextField(
+                            value = searchQuery,
+                            onValueChange = {
+                                searchQuery = it
+                                viewModel.updateSearchQuery(it)
+                            },
+                            placeholder = { Text("Search coupons") },
+                            singleLine = true,
+                            colors = TextFieldDefaults.colors(
+                                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
+                                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
+                                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                            )
                         )
                     }
                 },
                 actions = {
                     IconButton(
-                        onClick = { isSearchActive = !isSearchActive }
+                        onClick = {
+                            isSearchActive = !isSearchActive
+                            if (!isSearchActive) {
+                                searchQuery = ""
+                                viewModel.updateSearchQuery("")
+                            }
+                        }
                     ) {
                         Icon(
                             imageVector = if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
-                            contentDescription = if (isSearchActive) "Close Search" else "Search"
+                            contentDescription = if (isSearchActive) "Close search" else "Search"
                         )
                     }
 
@@ -218,105 +256,141 @@ fun HomeScreen(
             if (showFilterSortBottomSheet) {
                 FilterSortBottomSheet(
                     onDismiss = { showFilterSortBottomSheet = false },
-                    currentSortOrder = viewModel.filters.value.sortOrder,
-                    currentFilter = viewModel.filters.value.filterOption,
-                    onSortOrderSelected = { viewModel.updateSortOrder(it) },
-                    onFilterSelected = { viewModel.updateFilterOption(it) }
+                    currentSortOrder = filters.sortOrder,
+                    currentFilterState = filters.filterState,
+                    availableStores = availableStores,
+                    availableCategories = availableCategories,
+                    onApply = { sortOrder, filterState ->
+                        viewModel.updateSortOrder(sortOrder)
+                        viewModel.setFilterState(filterState)
+                        showFilterSortBottomSheet = false
+                    },
+                    onReset = {
+                        viewModel.resetFilters()
+                        showFilterSortBottomSheet = false
+                    }
                 )
             }
         }
     ) { paddingValues ->
-        if (coupons.isEmpty()) {
-            Box(
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            TextField(
+                value = searchQuery,
+                onValueChange = {
+                    searchQuery = it
+                    viewModel.updateSearchQuery(it)
+                },
+                placeholder = { Text("Search coupons") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                singleLine = true,
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentAlignment = Alignment.Center
+                    .fillMaxWidth()
+                    .padding(horizontal = BrandSpacing.Medium, vertical = BrandSpacing.Small)
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = BrandSpacing.Medium),
+                horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
             ) {
-                EmptyState(
-                    title = "No Coupons Yet",
-                    message = "Add your first coupon to start saving money. You can scan, import, or manually enter coupon details.",
-                    icon = Icons.Outlined.Info,
-                    modifier = Modifier.fillMaxWidth(0.9f),
-                    action = {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.fillMaxWidth(0.7f)
-                        ) {
-                            PrimaryButton(
-                                text = "Scan Coupon",
-                                onClick = { navController.navigate(Screen.SmartCamera.route) },
-                                leadingIcon = Icons.Default.CameraAlt,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = BrandSpacing.Medium)
-                            )
+                AssistChip(
+                    onClick = { showFilterSortBottomSheet = true },
+                    label = { Text("Filters") },
+                    leadingIcon = { Icon(Icons.Default.FilterList, contentDescription = null) }
+                )
 
-                            Spacer(modifier = Modifier.height(BrandSpacing.Small))
-
-                            SecondaryButton(
-                                text = "Upload Image",
-                                onClick = { imagePickerLauncher.launch("image/*") },
-                                leadingIcon = Icons.Default.Upload,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-                    }
+                AssistChip(
+                    onClick = { showFilterSortBottomSheet = true },
+                    label = { Text(filters.sortOrder.name.lowercase().replaceFirstChar { it.titlecase() }) },
+                    leadingIcon = { Icon(Icons.Default.Sort, contentDescription = null) }
                 )
             }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                // Search and filter row
-                Row(
+
+            AppliedFiltersBar(
+                filterState = filters.filterState,
+                searchQuery = searchQuery,
+                onClearStore = { store ->
+                    viewModel.updateFilterState { it.copy(selectedStores = it.selectedStores - store) }
+                },
+                onClearCategory = { category ->
+                    viewModel.updateFilterState { it.copy(selectedCategories = it.selectedCategories - category) }
+                },
+                onClearStatus = {
+                    viewModel.updateFilterState { it.copy(status = CouponStatusFilter.ALL) }
+                },
+                onClearValueRange = {
+                    viewModel.updateFilterState { it.copy(minValue = null, maxValue = null) }
+                },
+                onClearExpiry = {
+                    viewModel.updateFilterState { it.copy(expiryRange = ExpiryRange.ALL) }
+                },
+                onClearSearch = {
+                    searchQuery = ""
+                    viewModel.updateSearchQuery("")
+                },
+                onClearAll = {
+                    viewModel.resetFilters()
+                    searchQuery = ""
+                    viewModel.updateSearchQuery("")
+                }
+            )
+
+            val hasActiveFilters = filters.filterState.hasActiveFilters(includeSearchQuery = true, searchQuery = searchQuery)
+
+            if (coupons.isEmpty()) {
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = BrandSpacing.Medium, vertical = BrandSpacing.Small),
-                    verticalAlignment = Alignment.CenterVertically
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Search bar (simplified for this example)
-                    Text(
-                        text = "Search coupons...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .weight(1f)
-                            .background(
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                shape = MaterialTheme.shapes.medium
-                            )
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                            .semantics {
-                                // Add semantic properties for accessibility
-                                contentDescription = "Search for coupons"
-                                onClick { true } // Make it appear clickable to screen readers
+                    if (hasActiveFilters) {
+                        FilteredEmptyState(
+                            onClearFilters = {
+                                viewModel.resetFilters()
+                                searchQuery = ""
+                                viewModel.updateSearchQuery("")
                             }
-                    )
+                        )
+                    } else {
+                        EmptyState(
+                            title = "No Coupons Yet",
+                            message = "Add your first coupon to start saving money. You can scan, import, or manually enter coupon details.",
+                            icon = Icons.Outlined.Info,
+                            modifier = Modifier.fillMaxWidth(0.9f),
+                            action = {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.fillMaxWidth(0.7f)
+                                ) {
+                                    PrimaryButton(
+                                        text = "Scan Coupon",
+                                        onClick = { navController.navigate(Screen.SmartCamera.route) },
+                                        leadingIcon = Icons.Default.CameraAlt,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(top = BrandSpacing.Medium)
+                                    )
 
-                    Spacer(modifier = Modifier.width(BrandSpacing.Small))
+                                    Spacer(modifier = Modifier.height(BrandSpacing.Small))
 
-                    // Filter button
-                    IconButton(
-                        onClick = { showFilterSortBottomSheet = true },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .background(
-                                color = MaterialTheme.colorScheme.primary, // Changed to primary for better contrast
-                                shape = CircleShape
-                            )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FilterList,
-                            contentDescription = "Filter and Sort Coupons",
-                            tint = MaterialTheme.colorScheme.onPrimary // Changed to onPrimary for better contrast
+                                    SecondaryButton(
+                                        text = "Upload Image",
+                                        onClick = { imagePickerLauncher.launch("image/*") },
+                                        leadingIcon = Icons.Default.Upload,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
+                            }
                         )
                     }
                 }
-
-                // Section header
+            } else {
                 SectionHeader(
                     title = "Your Coupons",
                     modifier = Modifier.padding(
@@ -334,8 +408,8 @@ fun HomeScreen(
                     }
                 )
 
-                // Coupon list
                 LazyColumn(
+                    modifier = Modifier.weight(1f),
                     contentPadding = PaddingValues(
                         start = BrandSpacing.Medium,
                         end = BrandSpacing.Medium,
@@ -356,12 +430,168 @@ fun HomeScreen(
                             },
                             onCopyCode = { code ->
                                 clipboardManager.setText(AnnotatedString(code))
-                                // In a real app, you would show a toast or snackbar here
                             },
                             cashbackDisplayText = coupon.getCashbackDisplayText()
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppliedFiltersBar(
+    filterState: FilterState,
+    searchQuery: String,
+    onClearStore: (String) -> Unit,
+    onClearCategory: (String) -> Unit,
+    onClearStatus: () -> Unit,
+    onClearValueRange: () -> Unit,
+    onClearExpiry: () -> Unit,
+    onClearSearch: () -> Unit,
+    onClearAll: () -> Unit
+) {
+    if (!filterState.hasActiveFilters(includeSearchQuery = true, searchQuery = searchQuery)) return
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = BrandSpacing.Medium)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Active filters",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+            TextButton(onClick = onClearAll) {
+                Text("Clear all")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Small))
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (searchQuery.isNotBlank()) {
+                AssistChip(
+                    onClick = {},
+                    label = { Text("Search: $searchQuery") },
+                    leadingIcon = {
+                        IconButton(onClick = onClearSearch) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear search")
+                        }
+                    }
+                )
+            }
+
+            filterState.selectedStores.forEach { store ->
+                AssistChip(
+                    onClick = {},
+                    label = { Text(store) },
+                    leadingIcon = {
+                        IconButton(onClick = { onClearStore(store) }) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove store filter")
+                        }
+                    }
+                )
+            }
+
+            filterState.selectedCategories.forEach { category ->
+                AssistChip(
+                    onClick = {},
+                    label = { Text(category) },
+                    leadingIcon = {
+                        IconButton(onClick = { onClearCategory(category) }) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove category filter")
+                        }
+                    }
+                )
+            }
+
+            if (filterState.status != CouponStatusFilter.ALL) {
+                AssistChip(
+                    onClick = {},
+                    label = { Text("Status: ${filterState.status.displayName}") },
+                    leadingIcon = {
+                        IconButton(onClick = onClearStatus) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove status filter")
+                        }
+                    }
+                )
+            }
+
+            if (filterState.minValue != null || filterState.maxValue != null) {
+                val text = buildString {
+                    append("Value: ")
+                    append(filterState.minValue?.toString() ?: "0")
+                    append(" – ")
+                    append(filterState.maxValue?.toString() ?: "∞")
+                }
+                AssistChip(
+                    onClick = {},
+                    label = { Text(text) },
+                    leadingIcon = {
+                        IconButton(onClick = onClearValueRange) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove value filter")
+                        }
+                    }
+                )
+            }
+
+            if (filterState.expiryRange != ExpiryRange.ALL) {
+                AssistChip(
+                    onClick = {},
+                    label = { Text("Expiry: ${filterState.expiryRange.displayName}") },
+                    leadingIcon = {
+                        IconButton(onClick = onClearExpiry) {
+                            Icon(Icons.Default.Close, contentDescription = "Remove expiry filter")
+                        }
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilteredEmptyState(
+    onClearFilters: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = BrandSpacing.Medium),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
+        ) {
+            Icon(
+                imageVector = Icons.Default.FilterList,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                text = "No coupons match",
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = "No coupons match the current search or filters. Try adjusting them or clear everything to view all coupons.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Button(onClick = onClearFilters) {
+                Text("Clear filters")
             }
         }
     }

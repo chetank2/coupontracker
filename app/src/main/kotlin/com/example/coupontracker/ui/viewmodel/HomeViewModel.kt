@@ -5,18 +5,29 @@ import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.SortOrder
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
-import com.example.coupontracker.ui.components.FilterOption
+import com.example.coupontracker.ui.model.CouponStatusFilter
+import com.example.coupontracker.ui.model.ExpiryRange
+import com.example.coupontracker.ui.model.FilterState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.*
-import java.util.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 /**
  * Data class for coupon filters
  */
 data class CouponFilters(
-    val filterOption: FilterOption = FilterOption.ALL,
-    val sortOrder: SortOrder = SortOrder.EXPIRY_DATE
+    val filterState: FilterState = FilterState(),
+    val sortOrder: SortOrder = SortOrder.EXPIRY_DATE,
+    val searchQuery: String = ""
 )
 
 @HiltViewModel
@@ -24,13 +35,20 @@ class HomeViewModel @Inject constructor(
     private val couponRepository: CouponRepository
 ) : ViewModel() {
 
+    private val allCouponsFlow: StateFlow<List<Coupon>> = couponRepository.getAllCoupons()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     // Filter state
     private val _filters = MutableStateFlow(CouponFilters())
     val filters: StateFlow<CouponFilters> = _filters.asStateFlow()
 
     // Get all coupons as a StateFlow with filters applied
     val coupons: StateFlow<List<Coupon>> = combine(
-        couponRepository.getAllCoupons(),
+        allCouponsFlow,
         _filters
     ) { coupons, filters ->
         applyCouponFilters(coupons, filters)
@@ -39,6 +57,37 @@ class HomeViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+
+    // Surface original data for chips and other UI
+    val allCoupons: StateFlow<List<Coupon>> = allCouponsFlow
+
+    val availableStores: StateFlow<List<String>> = allCouponsFlow
+        .map { coupons ->
+            coupons
+                .map { it.storeName.trim() }
+                .filter { it.isNotBlank() }
+                .distinctBy { it.lowercase(Locale.getDefault()) }
+                .sortedBy { it.lowercase(Locale.getDefault()) }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    val availableCategories: StateFlow<List<String>> = allCouponsFlow
+        .map { coupons ->
+            coupons
+                .mapNotNull { it.category?.trim() }
+                .filter { it.isNotBlank() }
+                .distinctBy { it.lowercase(Locale.getDefault()) }
+                .sortedBy { it.lowercase(Locale.getDefault()) }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     // Get priority coupons
     val priorityCoupons: StateFlow<List<Coupon>> = couponRepository.getPriorityCoupons()
@@ -68,47 +117,84 @@ class HomeViewModel @Inject constructor(
      * Apply filters to the coupon list
      */
     private fun applyCouponFilters(coupons: List<Coupon>, filters: CouponFilters): List<Coupon> {
+        val state = filters.filterState
         val now = Date()
-        val calendar = Calendar.getInstance()
 
-        // Apply filter option
-        var filteredCoupons = when (filters.filterOption) {
-            FilterOption.ALL -> coupons
-            FilterOption.ACTIVE -> coupons.filter { coupon ->
+        // Search filter first
+        var filteredCoupons = coupons.filter { coupon ->
+            val query = filters.searchQuery.trim()
+            if (query.isBlank()) {
+                true
+            } else {
+                val lowerQuery = query.lowercase(Locale.getDefault())
+                coupon.storeName.lowercase(Locale.getDefault()).contains(lowerQuery) ||
+                    coupon.description.lowercase(Locale.getDefault()).contains(lowerQuery) ||
+                    (coupon.redeemCode?.lowercase(Locale.getDefault())?.contains(lowerQuery) == true)
+            }
+        }
+
+        // Store filter
+        if (state.selectedStores.isNotEmpty()) {
+            filteredCoupons = filteredCoupons.filter { coupon ->
+                state.selectedStores.any { store ->
+                    coupon.storeName.equals(store, ignoreCase = true)
+                }
+            }
+        }
+
+        // Category filter
+        if (state.selectedCategories.isNotEmpty()) {
+            filteredCoupons = filteredCoupons.filter { coupon ->
+                val category = coupon.category ?: return@filter false
+                state.selectedCategories.any { selected ->
+                    category.contains(selected, ignoreCase = true)
+                }
+            }
+        }
+
+        // Status filter
+        filteredCoupons = when (state.status) {
+            CouponStatusFilter.ALL -> filteredCoupons
+            CouponStatusFilter.ACTIVE -> filteredCoupons.filter { coupon ->
                 val expiry = coupon.expiryDate
                 expiry == null || expiry.after(now)
             }
-            FilterOption.EXPIRING_SOON -> {
-                calendar.time = now
-                calendar.add(Calendar.DAY_OF_YEAR, 7)
-                val sevenDaysFromNow = calendar.time
-                coupons.filter { coupon ->
-                    val expiry = coupon.expiryDate ?: return@filter false
-                    expiry.after(now) && expiry.before(sevenDaysFromNow)
-                }
+            CouponStatusFilter.EXPIRING_SOON -> {
+                filterByExpiryWindow(filteredCoupons, now, 7)
             }
-            FilterOption.EXPIRED -> coupons.filter { coupon ->
+            CouponStatusFilter.EXPIRED -> filteredCoupons.filter { coupon ->
                 val expiry = coupon.expiryDate ?: return@filter false
                 expiry.before(now)
             }
-            FilterOption.HIGH_VALUE -> coupons.filter { it.cashbackAmount >= 100 } // Assuming 100 is high value
-            FilterOption.FOOD -> coupons.filter { it.category?.contains("Food", ignoreCase = true) == true ||
-                                                 it.category?.contains("Dining", ignoreCase = true) == true ||
-                                                 it.storeName.contains("Food", ignoreCase = true) ||
-                                                 it.storeName.contains("Restaurant", ignoreCase = true) }
-            FilterOption.SHOPPING -> coupons.filter { it.category?.contains("Shopping", ignoreCase = true) == true ||
-                                                     it.storeName.contains("Shop", ignoreCase = true) ||
-                                                     it.storeName.contains("Store", ignoreCase = true) ||
-                                                     it.storeName.contains("Mart", ignoreCase = true) }
-            FilterOption.TRAVEL -> coupons.filter { it.category?.contains("Travel", ignoreCase = true) == true ||
-                                                   it.storeName.contains("Travel", ignoreCase = true) ||
-                                                   it.storeName.contains("Flight", ignoreCase = true) ||
-                                                   it.storeName.contains("Hotel", ignoreCase = true) }
-            FilterOption.ENTERTAINMENT -> coupons.filter { it.category?.contains("Entertainment", ignoreCase = true) == true ||
-                                                          it.storeName.contains("Movie", ignoreCase = true) ||
-                                                          it.storeName.contains("Game", ignoreCase = true) ||
-                                                          it.storeName.contains("Play", ignoreCase = true) }
-            FilterOption.OTHER -> coupons.filter { it.category == null || it.category.equals("Other", ignoreCase = true) }
+        }
+
+        // Value filter (numeric cashback)
+        filteredCoupons = filteredCoupons.filter { coupon ->
+            val value = coupon.getCashbackNumericValue()
+            val minOk = state.minValue?.let { value >= it } ?: true
+            val maxOk = state.maxValue?.let { value <= it } ?: true
+            minOk && maxOk
+        }
+
+        // Expiry range filter
+        filteredCoupons = when (state.expiryRange) {
+            ExpiryRange.ALL -> filteredCoupons
+            ExpiryRange.THIRTY_DAYS -> filterByExpiryWindow(filteredCoupons, now, 30)
+            ExpiryRange.SEVEN_DAYS -> filterByExpiryWindow(filteredCoupons, now, 7)
+            ExpiryRange.THREE_DAYS -> filterByExpiryWindow(filteredCoupons, now, 3)
+            ExpiryRange.TODAY -> filteredCoupons.filter { coupon ->
+                val expiry = coupon.expiryDate ?: return@filter false
+                val calendar = Calendar.getInstance()
+                calendar.time = now
+                calendar.set(Calendar.HOUR_OF_DAY, 0)
+                calendar.set(Calendar.MINUTE, 0)
+                calendar.set(Calendar.SECOND, 0)
+                calendar.set(Calendar.MILLISECOND, 0)
+                val startOfDay = calendar.time
+                calendar.add(Calendar.DAY_OF_YEAR, 1)
+                val endOfDay = calendar.time
+                !expiry.before(startOfDay) && expiry.before(endOfDay)
+            }
         }
 
         // Apply sorting
@@ -132,10 +218,25 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Update the filter option
+     * Update the filter state
      */
-    fun updateFilterOption(filterOption: FilterOption) {
-        _filters.value = _filters.value.copy(filterOption = filterOption)
+    fun updateFilterState(transform: (FilterState) -> FilterState) {
+        _filters.value = _filters.value.copy(filterState = transform(_filters.value.filterState))
+    }
+
+    fun setFilterState(filterState: FilterState) {
+        _filters.value = _filters.value.copy(filterState = filterState)
+    }
+
+    /**
+     * Update search query
+     */
+    fun updateSearchQuery(query: String) {
+        _filters.value = _filters.value.copy(searchQuery = query)
+    }
+
+    fun resetFilters() {
+        _filters.value = CouponFilters()
     }
 
     /**
@@ -145,5 +246,16 @@ class HomeViewModel @Inject constructor(
         val calendar = Calendar.getInstance()
         calendar.add(Calendar.DAY_OF_YEAR, 7)
         return calendar.time
+    }
+
+    private fun filterByExpiryWindow(coupons: List<Coupon>, now: Date, days: Int): List<Coupon> {
+        val calendar = Calendar.getInstance()
+        calendar.time = now
+        calendar.add(Calendar.DAY_OF_YEAR, days)
+        val windowEnd = calendar.time
+        return coupons.filter { coupon ->
+            val expiry = coupon.expiryDate ?: return@filter false
+            expiry.after(now) && expiry.before(windowEnd)
+        }
     }
 }

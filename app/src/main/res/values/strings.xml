@@ -39,4 +39,35 @@
     <!-- Widget strings -->
     <string name="widget_description">Shows expiring coupons at a glance</string>
     <string name="widget_total_coupons">total coupons</string>
+
+    <!-- Onboarding strings -->
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_privacy_cta">How we keep data private</string>
+    <string name="onboarding_download_model">Download model (~940 MB)</string>
+    <string name="onboarding_maybe_later">Maybe later</string>
+    <string name="onboarding_scan_camera">Scan with camera</string>
+    <string name="onboarding_upload_screenshot">Upload screenshot</string>
+    <string name="onboarding_enter_app">Enter app</string>
+    <string name="onboarding_open_settings">Open settings to download later</string>
+    <string name="onboarding_model_summary">Download once (~940 MB). Works offline, keeps screenshots on this device.</string>
+
+    <!-- Data safety dialog -->
+    <string name="data_safety_title">Your data stays on this device</string>
+    <string name="data_safety_intro">Coupon Tracker processes coupons entirely offline. Screenshots never leave your phone unless you export a backup.</string>
+    <string name="data_safety_bullet_ai_title">On-device AI</string>
+    <string name="data_safety_bullet_ai_desc">The Qwen2.5 model runs locally. It reads text from coupons without contacting cloud APIs.</string>
+    <string name="data_safety_bullet_backup_title">Encrypted backups</string>
+    <string name="data_safety_bullet_backup_desc">Exports use Android Keystore and AES-256-GCM. Only you can decrypt them.</string>
+    <string name="data_safety_bullet_tracking_title">No tracking</string>
+    <string name="data_safety_bullet_tracking_desc">We don’t collect analytics from coupons. Optional usage events stay on device until you export them.</string>
+    <string name="data_safety_backup_hint">Need to share your data? Use the encrypted backup from Settings → Data. You’re always in control.</string>
+    <string name="data_safety_footer">Questions? Tap privacy policy to review our detailed data practices.</string>
+    <string name="data_safety_privacy_policy">Privacy policy</string>
+    <string name="common_close">Close</string>
+
+    <!-- Settings data safety card -->
+    <string name="settings_data_safety_title">Private by design</string>
+    <string name="settings_data_safety_summary">Screenshots never leave your device. Download the on-device reader for faster, offline extraction.</string>
+    <string name="settings_data_safety_button">View data safety details</string>
 </resources>

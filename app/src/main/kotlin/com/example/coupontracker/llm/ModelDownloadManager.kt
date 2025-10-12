@@ -30,6 +30,7 @@ import javax.net.ssl.SSLException
  */
 class ModelDownloadManager(
     private val context: Context,
+    private val securePrefs: SecurePreferencesManager,
     private val verificationDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     
@@ -110,7 +111,6 @@ class ModelDownloadManager(
         }
     }
     
-    private val securePrefs = SecurePreferencesManager(context)
     private val modelDir = com.example.coupontracker.model.ModelPaths.modelDir(context)
 
     private data class VerificationCache(val version: String?, val result: Boolean)
@@ -249,7 +249,7 @@ class ModelDownloadManager(
             Log.d(TAG, "Model download completed successfully")
             progressCallback(DownloadProgress(100, "Download complete"))
             
-            DownloadResult.Success(modelSizeMB)
+            DownloadResult.Success(modelSizeMB, MODEL_VERSION)
             
         } catch (e: Exception) {
             Log.e(TAG, "Model download failed", e)
@@ -359,7 +359,8 @@ class ModelDownloadManager(
             Log.d(TAG, "✅ GGUF model download completed: ${"%.1f".format(totalSizeMB)} MB (with vision support)")
             progressCallback(DownloadProgress(100, "Download complete - Vision enabled!"))
             
-            DownloadResult.Success(totalSizeMB)
+            // No manifest file available for this download path; return static version
+            DownloadResult.Success(totalSizeMB, "$MODEL_VERSION-vision")
             
         } catch (e: Exception) {
             Log.e(TAG, "GGUF model download failed", e)
@@ -441,7 +442,8 @@ class ModelDownloadManager(
             Log.d(TAG, "✅ Qwen2.5 model download completed: ${"%.1f".format(sizeMB)} MB")
             progressCallback(DownloadProgress(100, "Download complete!"))
             
-            DownloadResult.Success(sizeMB)
+            // No manifest file shipped; version is from constant
+            DownloadResult.Success(sizeMB, QWEN25_VERSION)
             
         } catch (e: Exception) {
             Log.e(TAG, "Qwen2.5 model download failed", e)
@@ -911,7 +913,7 @@ data class DownloadProgress(
  * Download result sealed class
  */
 sealed class DownloadResult {
-    data class Success(val modelSizeMB: Float) : DownloadResult()
+    data class Success(val modelSizeMB: Float, val version: String) : DownloadResult()
     data class Error(val message: String) : DownloadResult()
 }
 

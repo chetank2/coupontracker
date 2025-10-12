@@ -35,8 +35,10 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.School
 import androidx.compose.ui.text.style.TextAlign
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.res.stringResource
 import com.example.coupontracker.ui.components.PasswordDialog
 import com.example.coupontracker.ui.components.ThemeSelector
+import com.example.coupontracker.ui.components.DataSafetyDialog
 import com.example.coupontracker.ui.viewmodel.SettingsViewModel
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.ModelDownloadManager
@@ -54,6 +56,7 @@ import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import com.example.coupontracker.R
 
 // Using keys from SecurePreferencesManager
 
@@ -80,6 +83,12 @@ fun SettingsScreen(
         hiltEntryPoint.getOcrEngine()
     }
     
+    var showDataSafety by remember { mutableStateOf(false) }
+
+    if (showDataSafety) {
+        DataSafetyDialog(onDismiss = { showDataSafety = false })
+    }
+
     // Use a lazy initialization to avoid ANR
     val securePreferencesManager = remember { 
         SecurePreferencesManager(context)
@@ -261,6 +270,49 @@ fun SettingsScreen(
             )
             
             BackupRestoreCard(viewModel = viewModel)
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(id = R.string.settings_data_safety_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Text(
+                        text = stringResource(id = R.string.settings_data_safety_summary),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    TextButton(
+                        onClick = { showDataSafety = true },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Text(stringResource(id = R.string.settings_data_safety_button))
+                    }
+                }
+            }
 
             // DEVELOPER SECTION
             Text(

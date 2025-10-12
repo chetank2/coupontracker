@@ -33,9 +33,10 @@ object LlmModule {
     @Provides
     @Singleton
     fun provideModelDownloadManager(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
+        securePreferencesManager: SecurePreferencesManager
     ): ModelDownloadManager {
-        return ModelDownloadManager(context)
+        return ModelDownloadManager(context, securePreferencesManager)
     }
 
     @Provides

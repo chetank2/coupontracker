@@ -1,6 +1,10 @@
 package com.example.coupontracker.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -11,8 +15,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.coupontracker.ui.theme.BrandSpacing
 import kotlinx.coroutines.launch
@@ -54,97 +59,122 @@ fun SimplifiedCaptureBottomSheet(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Add Coupon",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                text = "Add coupon",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
             )
 
-            Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+            Spacer(modifier = Modifier.height(BrandSpacing.Small))
 
-            // Camera option
-            Button(
+            Text(
+                text = "Pick how you want to capture this offer.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(BrandSpacing.Large))
+
+            CaptureOptionCard(
+                title = "Scan with camera",
+                subtitle = "Live detection highlights codes and expiry",
+                icon = Icons.Default.Camera,
+                accentColor = MaterialTheme.colorScheme.primary,
                 onClick = {
                     onCameraCapture()
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
                         if (!sheetState.isVisible) onDismiss()
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Black,
-                    contentColor = Color.White
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Camera,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Camera",
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
+                }
+            )
 
-            Spacer(modifier = Modifier.height(BrandSpacing.Small))
+            Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
-            // Upload option
-            Button(
+            CaptureOptionCard(
+                title = "Upload screenshot",
+                subtitle = "Instantly extract from your gallery",
+                icon = Icons.Default.Upload,
+                accentColor = MaterialTheme.colorScheme.secondary,
                 onClick = {
                     onUpload()
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
                         if (!sheetState.isVisible) onDismiss()
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Black,
-                    contentColor = Color.White
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Upload,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Upload",
-                    style = MaterialTheme.typography.titleMedium
-                )
-            }
+                }
+            )
 
-            Spacer(modifier = Modifier.height(BrandSpacing.Small))
+            Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
-            // Manual entry option
-            Button(
+            CaptureOptionCard(
+                title = "Type manually",
+                subtitle = "Enter code yourself when screenshots are messy",
+                icon = Icons.Default.Edit,
+                accentColor = MaterialTheme.colorScheme.tertiary,
                 onClick = {
                     onManualEntry()
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
                         if (!sheetState.isVisible) onDismiss()
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Black,
-                    contentColor = Color.White
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+                }
+            )
+
+            Spacer(modifier = Modifier.height(BrandSpacing.Large))
+        }
+    }
+}
+
+@Composable
+private fun CaptureOptionCard(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    accentColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = accentColor.copy(alpha = 0.08f)
+        ),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Manual Entry",
-                    style = MaterialTheme.typography.titleMedium
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            
-            // Add extra space at the bottom for better UX
-            Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(
+                        color = accentColor,
+                        shape = MaterialTheme.shapes.small
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
         }
     }
 }
