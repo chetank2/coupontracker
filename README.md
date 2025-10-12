@@ -9,7 +9,8 @@ A comprehensive coupon recognition system featuring both mobile Android app and 
 This repository contains a complete production-ready coupon recognition system with:
 
 ### 📱 **Android Mobile App** ⭐ **NEW: LLM Integration**
-- **🧠 MiniCPM-Llama3-V2.5 Vision Model**: On-device LLM for intelligent coupon extraction
+- **🧠 Qwen2-1.5B-Instruct (Default)**: Lightweight on-device LLM with fast inference
+- **🧠 MiniCPM-Llama3-V2.5 (Legacy Optional)**: Vision-enabled LLM for multimodal extraction
 - **🎯 Two-Stage Multi-Coupon Detection**: YOLO-based detection with interactive boundary adjustment
 - **🔄 Smart Fallback Chain**: LLM → Model-Based → Pattern → MLKit OCR with quality validation
 - **📝 Deferred Persistence**: Preview-before-save workflow with duplicate detection
@@ -121,7 +122,7 @@ For CI or local scripting workflows, use the helper wrapper which simply forward
 
 - **Android**: Kotlin, Jetpack Compose, Room DB, ML Kit
 - **Backend**: Python, Flask, MLflow, PyTorch
-- **ML Models**: YOLOv8, Custom OCR models, TensorFlow Lite
+- **ML Models**: Qwen2-1.5B-Instruct (default), MiniCPM-Llama3-V2.5 (optional vision), YOLOv8, Custom OCR models, TensorFlow Lite
 - **Frontend**: Progressive Web App, IndexedDB, Service Workers
 - **Infrastructure**: Docker, Gradle, Git LFS
 
@@ -143,3 +144,13 @@ This system is designed for enterprise deployment with:
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🤝 Contributing
+
+We welcome improvements, bug fixes, and documentation updates from the community. To contribute:
+
+1. Fork the repository and create a feature branch.
+2. Make your changes and ensure all relevant tests pass.
+3. Submit a pull request with a clear description of the updates and any testing performed.
+
+For significant updates, consider opening an issue first so we can discuss the proposed changes before you begin development.
