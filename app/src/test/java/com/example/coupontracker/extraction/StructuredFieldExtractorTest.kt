@@ -23,8 +23,51 @@ class StructuredFieldExtractorTest {
 
         val expiryCandidates = results[FieldType.EXPIRY_DATE].orEmpty()
         assertTrue(
-            "Expected expiry candidates to include the normalized date",
-            expiryCandidates.any { it.value.contains("31 May") }
+            "Expected expiry candidates to include the ISO normalized date",
+            expiryCandidates.any { it.value == "2025-05-31" }
+        )
+    }
+
+    @Test
+    fun `store detection prioritizes real brand over watermark`() = runTest {
+        val context = ExtractionContext(
+            imageUri = "test://coupon",
+            ocrText = "Pastm rewards\nAha Annual Plan Offer",
+            ocrBlocks = emptyList(),
+            metadata = emptyMap(),
+            captureTimestamp = null
+        )
+
+        val results = extractor.detectFieldsStructured(context)
+        val storeCandidates = results[FieldType.STORE_NAME].orEmpty()
+
+        assertTrue(
+            "Expected store candidates to contain Aha",
+            storeCandidates.any { it.value.equals("Aha", ignoreCase = true) }
+        )
+
+        assertTrue(
+            "Watermark term Pastm should be filtered out",
+            storeCandidates.none { it.value.equals("Pastm", ignoreCase = true) }
+        )
+    }
+
+    @Test
+    fun `store detection accepts brands with y vowel like XYXX`() = runTest {
+        val context = ExtractionContext(
+            imageUri = "test://coupon",
+            ocrText = "Exclusive XYXX voucher",
+            ocrBlocks = emptyList(),
+            metadata = emptyMap(),
+            captureTimestamp = null
+        )
+
+        val results = extractor.detectFieldsStructured(context)
+        val storeCandidates = results[FieldType.STORE_NAME].orEmpty()
+
+        assertTrue(
+            "Expected store candidates to include XYXX",
+            storeCandidates.any { it.value == "XYXX" }
         )
     }
 }

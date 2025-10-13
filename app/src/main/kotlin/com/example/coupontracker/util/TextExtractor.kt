@@ -351,33 +351,58 @@ class TextExtractor {
             sanitizeDescription(desc)?.let { return it }
         }
 
+        val candidates = mutableListOf<String>()
+
+        fun addCandidate(raw: String?) {
+            sanitizeDescription(raw)?.takeIf { it.length >= 4 }?.let { candidates.add(it) }
+        }
+
+        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        for (i in lines.indices) {
+            val line = lines[i]
+            if (Pattern.compile("(?i)buy\\s+\\d+\\s+get\\s+\\d+").matcher(line).find()) {
+                val builder = StringBuilder(line)
+                if (i + 1 < lines.size) {
+                    val nextLine = lines[i + 1]
+                    if (nextLine.startsWith("+") || Pattern.compile("(?i)(up\\s+to|flat|plus|&)").matcher(nextLine).find()) {
+                        builder.append(' ').append(nextLine.trimStart('+', ' '))
+                    }
+                }
+                val combined = builder.toString().replace("\\s+".toRegex(), " ").trim()
+                Log.d(TAG, "Found multi-line offer description: $combined")
+                addCandidate(combined)
+            }
+        }
+
         // Look for discount descriptions
         val discountPatterns = listOf(
-            Pattern.compile("(?i)(\\d+%\\s+off.{3,30})"),
-            Pattern.compile("(?i)(₹\\d+\\s+off.{3,30})"),
-            Pattern.compile("(?i)(Rs\\.?\\s*\\d+\\s+off.{3,30})"),
-            Pattern.compile("(?i)(save\\s+\\d+%.{3,30})"),
-            Pattern.compile("(?i)(up\\s+to\\s+₹\\d+\\s+off?.{0,30})")
+            Pattern.compile("(?i)(buy\\s+\\d+\\s+get\\s+\\d+\\s+free.{0,80})"),
+            Pattern.compile("(?i)(buy\\s+\\d+\\s+get\\s+\\d+.{0,80})"),
+            Pattern.compile("(?i)(\\d+%\\s+off.{3,80})"),
+            Pattern.compile("(?i)(₹\\d+\\s+off.{3,80})"),
+            Pattern.compile("(?i)(Rs\\.?\\s*\\d+\\s+off.{3,80})"),
+            Pattern.compile("(?i)(save\\s+\\d+%.{3,80})"),
+            Pattern.compile("(?i)(up\\s+to\\s+₹\\d+\\s+off?.{0,80})")
         )
 
         for (pattern in discountPatterns) {
             val matcher = pattern.matcher(text)
-            if (matcher.find()) {
+            while (matcher.find()) {
                 val desc = matcher.group(1)
                 Log.d(TAG, "Found description from discount pattern: $desc")
-                sanitizeDescription(desc)?.let { return it }
+                addCandidate(desc)
             }
         }
 
-        // If no specific discount pattern is found, return the first sentence
+        // If no specific discount pattern is found, consider the first sentence
         val sentences = text.split(Pattern.compile("[.!?]"))
         if (sentences.isNotEmpty() && sentences[0].length > 10) {
             val desc = sentences[0].trim()
             Log.d(TAG, "Using first sentence as description: $desc")
-            return sanitizeDescription(desc)
+            addCandidate(desc)
         }
 
-        return null
+        return candidates.maxByOrNull { it.length }
     }
 
     private fun sanitizeDescription(value: String?): String? {
