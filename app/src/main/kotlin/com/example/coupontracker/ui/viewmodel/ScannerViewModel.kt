@@ -47,6 +47,7 @@ class ScannerViewModel @Inject constructor(
     private val telemetryService: ExtractionTelemetryService,
     private val universalExtractionService: UniversalExtractionService,
     private val performanceMonitor: ExtractionPerformanceMonitor,
+    private val analyticsTracker: AnalyticsTracker,
     private val bitmapManager: com.example.coupontracker.util.BitmapManager  // V2: Injected bitmap memory management
 ) : AndroidViewModel(application) {
 
@@ -207,6 +208,14 @@ class ScannerViewModel @Inject constructor(
                 val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
                 Log.d(TAG, "Starting scan with strategy: ${strategy.name} for: $imageUri")
 
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_STARTED,
+                    mapOf(
+                        "strategy" to strategy.name.lowercase(Locale.getDefault()),
+                        "persist_mode" to if (persistImmediately) "immediate" else "review"
+                    )
+                )
+
                 // Load bitmap from URI
                 bitmap = loadBitmapFromUri(imageUri) ?: run {
                     _uiState.value = ScannerUiState.Error("Could not load image")
@@ -236,6 +245,11 @@ class ScannerViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Error in enhanced scanning", e)
                 _uiState.value = ScannerUiState.Error("Error processing image: ${e.message}")
+
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                    mapOf("reason" to (e.message ?: "unknown_error"))
+                )
             } finally {
                 // V2: Release bitmap after processing completes
                 bitmap?.let { bm ->
@@ -260,10 +274,14 @@ class ScannerViewModel @Inject constructor(
             return
         }
 
+        val detectionStart = System.currentTimeMillis()
         // Run two-stage detection
         val couponInstances = withContext(Dispatchers.IO) {
             detector.detectMultiCoupons(bitmap)
         }
+
+        val detectionTime = System.currentTimeMillis() - detectionStart
+        analyticsTracker.trackProcessingTime(detectionTime, "two_stage_detection")
 
         Log.d(TAG, "Two-stage detection completed: ${couponInstances.size} coupons detected")
 
@@ -281,6 +299,13 @@ class ScannerViewModel @Inject constructor(
                 )
             }
             else -> {
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_MULTIPLE_COUPONS_DETECTED,
+                    mapOf(
+                        "count" to couponInstances.size,
+                        "source" to "two_stage"
+                    )
+                )
                 _uiState.value = ScannerUiState.MultiCouponDetected(couponInstances, bitmap, imageUri.toString())
             }
         }
@@ -836,6 +861,16 @@ class ScannerViewModel @Inject constructor(
             // Create coupon from extracted information
             val coupon = createCouponFromInstance(couponInstance, extractionResult.fields, imageUri)
 
+            analyticsTracker.trackEvent(
+                AnalyticsTracker.EVENT_COUPON_DETECTED,
+                mapOf(
+                    "source" to "two_stage",
+                    "confidence" to String.format(Locale.US, "%.2f", couponInstance.confidence),
+                    "mini_cpm" to extractionResult.miniCpmStatus.name,
+                    "fields" to extractionResult.fields.size
+                )
+            )
+
             val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
             pendingPreview = null
 
@@ -853,6 +888,15 @@ class ScannerViewModel @Inject constructor(
                 )
                 _uiState.value = ScannerUiState.Success(coupon, extractionResult.miniCpmStatus)
                 Log.d(TAG, "Preview ready for review without immediate persistence")
+
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+                    mapOf(
+                        "persisted" to false,
+                        "result" to "pending_review",
+                        "mini_cpm" to extractionResult.miniCpmStatus.name
+                    )
+                )
             }
 
         } catch (e: Exception) {
@@ -878,6 +922,9 @@ class ScannerViewModel @Inject constructor(
 
         val savedCoupon = couponRepository.getCouponById(savedCouponId)
 
+        var analyticsResult = "created"
+        var persistedFlag = true
+
         if (savedCoupon != null) {
             val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt ?: savedCoupon.createdAt)
 
@@ -887,15 +934,27 @@ class ScannerViewModel @Inject constructor(
                     TAG,
                     "Duplicate coupon detected, existing ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}"
                 )
+                analyticsResult = "duplicate"
+                persistedFlag = false
             } else {
                 _uiState.value = ScannerUiState.Saved(savedCoupon)
                 Log.d(TAG, "New coupon saved with ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}")
+                analyticsResult = "created"
             }
         } else {
             val fallbackCoupon = coupon.copy(id = savedCouponId)
             _uiState.value = ScannerUiState.Saved(fallbackCoupon)
             Log.d(TAG, "Coupon saved (fallback) with ID: $savedCouponId")
         }
+
+        analyticsTracker.trackEvent(
+            AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+            mapOf(
+                "persisted" to persistedFlag,
+                "result" to analyticsResult,
+                "mini_cpm" to miniCpmStatus.name
+            )
+        )
     }
 
     fun confirmPreviewSave(updatedCoupon: Coupon? = null) {
@@ -1047,9 +1106,33 @@ class ScannerViewModel @Inject constructor(
                     "Saved coupon ${processedResults.size}/${couponInstances.size}: ${coupon.redeemCode}"
                 )
 
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_COUPON_DETECTED,
+                    mapOf(
+                        "source" to "multi_coupon_batch",
+                        "mini_cpm" to extractionResult.miniCpmStatus.name,
+                        "fields" to extractionResult.fields.size
+                    )
+                )
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+                    mapOf(
+                        "persisted" to true,
+                        "result" to "batch",
+                        "mini_cpm" to extractionResult.miniCpmStatus.name
+                    )
+                )
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon $index", e)
                 // Continue with other coupons
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                    mapOf(
+                        "reason" to (e.message ?: "batch_error"),
+                        "stage" to "multi_coupon"
+                    )
+                )
             } finally {
                 twoStageDetector?.releaseInstances(listOf(instance))
             }
@@ -1059,6 +1142,13 @@ class ScannerViewModel @Inject constructor(
             _uiState.value = ScannerUiState.AllCouponsSaved(processedResults)
         } else {
             _uiState.value = ScannerUiState.Error("Failed to save any coupons")
+            analyticsTracker.trackEvent(
+                AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                mapOf(
+                    "reason" to "batch_no_results",
+                    "stage" to "multi_coupon"
+                )
+            )
         }
     }
 
@@ -1362,9 +1452,10 @@ class ScannerViewModel @Inject constructor(
                 ocrText = ocrText,
                 context = context
             )
-            
+
             val processingTime = System.currentTimeMillis() - startTime
-            
+            analyticsTracker.trackProcessingTime(processingTime, "universal_extraction")
+
             if (extractionResult.success && extractionResult.confidence > 0.3f) {
                 Log.d(TAG, "Universal extraction successful with confidence: ${extractionResult.confidence}")
                 
@@ -1398,9 +1489,27 @@ class ScannerViewModel @Inject constructor(
                     normalizedDescription = normalizedDescription,
                     miniCpmStatus = MiniCpmProgress.SUCCESS
                 )
-                
+
                 _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.SUCCESS)
-                
+
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_COUPON_DETECTED,
+                    mapOf(
+                        "source" to "universal",
+                        "confidence" to String.format(Locale.US, "%.2f", extractionResult.confidence),
+                        "mini_cpm" to MiniCpmProgress.SUCCESS.name,
+                        "fields" to extractionResult.extractedFields.size
+                    )
+                )
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+                    mapOf(
+                        "persisted" to false,
+                        "result" to "pending_review",
+                        "mini_cpm" to MiniCpmProgress.SUCCESS.name
+                    )
+                )
+
             } else {
                 Log.d(TAG, "Universal extraction failed or low confidence: ${extractionResult.confidence}")
                 
@@ -1451,18 +1560,56 @@ class ScannerViewModel @Inject constructor(
 
                     if (extractedInfo.isEmpty()) {
                         _uiState.value = ScannerUiState.Error("Could not extract any coupon information from the image")
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                            mapOf(
+                                "reason" to "ocr_no_fields",
+                                "stage" to "traditional_uri"
+                            )
+                        )
                     } else {
                         val coupon = createCouponFromExtractedInfo(extractedInfo, finalUri.toString())
                         _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.FALLBACK)
+
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_COUPON_DETECTED,
+                            mapOf(
+                                "source" to "traditional_ocr",
+                                "fields" to extractedInfo.size,
+                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                            )
+                        )
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+                            mapOf(
+                                "persisted" to false,
+                                "result" to "pending_review",
+                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                            )
+                        )
                     }
                 }
                 is MultiEngineOCR.OCRResult.Error -> {
                     _uiState.value = ScannerUiState.Error(result.message)
+                    analyticsTracker.trackEvent(
+                        AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                        mapOf(
+                            "reason" to "ocr_error",
+                            "stage" to "traditional_uri"
+                        )
+                    )
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in traditional OCR fallback", e)
             _uiState.value = ScannerUiState.Error("Error processing image: ${e.message}")
+            analyticsTracker.trackEvent(
+                AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                mapOf(
+                    "reason" to (e.message ?: "ocr_exception"),
+                    "stage" to "traditional_uri"
+                )
+            )
         }
     }
 
@@ -1480,18 +1627,56 @@ class ScannerViewModel @Inject constructor(
 
                     if (extractedInfo.isEmpty()) {
                         _uiState.value = ScannerUiState.Error("Could not extract any coupon information from the image")
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                            mapOf(
+                                "reason" to "ocr_no_fields",
+                                "stage" to "traditional_bitmap"
+                            )
+                        )
                     } else {
                         val coupon = createCouponFromExtractedInfo(extractedInfo, imageUri?.toString())
                         _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.FALLBACK)
+
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_COUPON_DETECTED,
+                            mapOf(
+                                "source" to "traditional_ocr",
+                                "fields" to extractedInfo.size,
+                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                            )
+                        )
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+                            mapOf(
+                                "persisted" to false,
+                                "result" to "pending_review",
+                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                            )
+                        )
                     }
                 }
                 is MultiEngineOCR.OCRResult.Error -> {
                     _uiState.value = ScannerUiState.Error(result.message)
+                    analyticsTracker.trackEvent(
+                        AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                        mapOf(
+                            "reason" to "ocr_error",
+                            "stage" to "traditional_bitmap"
+                        )
+                    )
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in traditional OCR fallback for bitmap", e)
             _uiState.value = ScannerUiState.Error("Error processing image: ${e.message}")
+            analyticsTracker.trackEvent(
+                AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                mapOf(
+                    "reason" to (e.message ?: "ocr_exception"),
+                    "stage" to "traditional_bitmap"
+                )
+            )
         }
     }
 
