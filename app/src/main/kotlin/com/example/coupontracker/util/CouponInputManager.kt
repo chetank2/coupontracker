@@ -16,6 +16,11 @@ import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.extraction.MultiCouponExtractionService
+import com.example.coupontracker.extraction.MultiCouponExtractionService.CouponWithConfidence
+import com.example.coupontracker.extraction.MultiCouponExtractionService.MultiCouponResult
+import com.example.coupontracker.ml.ScreenshotClassifier
+import com.example.coupontracker.ocr.MlKitOcrEngine
 import com.google.mlkit.vision.barcode.BarcodeScanner
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
@@ -70,7 +75,8 @@ private fun areWithinTolerance(first: Date, second: Date): Boolean {
  */
 class CouponInputManager(
     private val context: Context,
-    private val imageProcessor: ImageProcessor
+    private val imageProcessor: ImageProcessor,
+    private val multiCouponExtractionService: MultiCouponExtractionService?
 ) {
 
     companion object {
@@ -79,9 +85,50 @@ class CouponInputManager(
         private const val TEMP_FILE_SUFFIX_IMAGE = ".jpg"
         private const val TEMP_FILE_SUFFIX_PDF = ".pdf"
         private const val SCREENSHOTS_FOLDER = "Screenshots"
+        private const val MULTI_COUPON_THRESHOLD = 2 // Minimum coupons to trigger multi-extraction
+        private const val MULTI_COUPON_PREVIEW_PACKAGE = "com.example.coupontracker.ui.activity.MultiCouponSelectionActivity"
     }
     private val contentResolver: ContentResolver = context.contentResolver
     private val uriPersistenceManager = UriPersistenceManager(context)
+    
+    // Screenshot classifier for multi-coupon detection
+    private val screenshotClassifier by lazy {
+        ScreenshotClassifier()
+    }
+
+    
+    // Quick OCR engine for screenshot classification
+    private val quickOcrEngine by lazy {
+        MlKitOcrEngine(context)
+    }
+
+    private fun handleMultiCouponResult(
+        multiResult: MultiCouponResult,
+        captureTimestamp: Date?
+    ): Coupon? {
+        if (multiResult.coupons.isEmpty()) {
+            Log.w(TAG, "Multi-coupon result contained no coupons")
+            return null
+        }
+
+        val bestCoupon = multiResult.coupons.maxByOrNull { it.confidence }
+        if (bestCoupon == null) {
+            Log.w(TAG, "Multi-coupon result had coupons but no confidence scores; returning null")
+            return null
+        }
+
+        Log.d(
+            TAG,
+            "Selected best coupon from multi-coupon result with confidence=${bestCoupon.confidence} and store='${bestCoupon.coupon.storeName}'"
+        )
+
+        val coupon = bestCoupon.coupon
+        return coupon.copy(
+            createdAt = captureTimestamp ?: coupon.createdAt,
+            updatedAt = Date()
+        )
+    }
+    
     private var screenshotObserver: ContentObserver? = null
 
     // Barcode scanner options
@@ -169,6 +216,43 @@ class CouponInputManager(
         return withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Processing coupon from bitmap")
+                
+                // Quick OCR scan for multi-coupon detection
+                val quickOcrText = try {
+                    quickOcrEngine.recognize(bitmap)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Quick OCR failed for multi-coupon detection: ${e.message}")
+                    ""
+                }
+
+                val classification = screenshotClassifier.classify(bitmap, quickOcrText)
+                Log.d(TAG, "Screenshot classification: type=${classification.type}, confidence=${classification.confidence}")
+
+                if (classification.type == ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP) {
+                    val couponCount = (classification.indicators["coupon_count"] as? Int) ?: 0
+                    Log.d(TAG, "🚨 Multi-coupon screenshot detected ($couponCount coupons)")
+
+                    val multiResult = multiCouponExtractionService?.let { service ->
+                        runCatching {
+                            service.extractMultipleCoupons(
+                                bitmap = bitmap,
+                                imageUri = null
+                            )
+                        }.getOrElse { error ->
+                            Log.e(TAG, "Multi-coupon extraction failed, falling back to single extraction", error)
+                            null
+                        }
+                    }
+
+                    if (multiResult != null && multiResult.coupons.isNotEmpty()) {
+                        Log.d(TAG, "✅ Multi-coupon extraction succeeded: extracted ${multiResult.coupons.size} coupon(s)")
+                        handleMultiCouponResult(multiResult, captureTimestamp)?.let { combinedResult ->
+                            return@withContext combinedResult
+                        }
+                    } else {
+                        Log.w(TAG, "⚠️ Multi-coupon extraction returned no coupons, falling back to single extraction")
+                    }
+                }
 
                 // Try to scan for barcodes first
                 val barcodeResult = scanForBarcodes(bitmap)

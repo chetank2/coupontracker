@@ -30,7 +30,7 @@ import com.example.coupontracker.R
 import com.example.coupontracker.databinding.FragmentAddBinding
 import com.example.coupontracker.ui.viewmodel.AddCouponViewModel
 import com.example.coupontracker.util.CouponInfo
-import com.example.coupontracker.util.ImageProcessor
+import com.example.coupontracker.util.CouponInputManager
 import com.example.coupontracker.util.SecurePreferencesManager
 import com.example.coupontracker.util.ApiType
 import com.example.coupontracker.llm.ModelDownloadManager
@@ -59,8 +59,8 @@ class AddFragment : Fragment() {
     private lateinit var cameraExecutor: ExecutorService
     private var imageUri: Uri? = null
     private var imageCapture: ImageCapture? = null
-    @Inject
-    lateinit var imageProcessor: com.example.coupontracker.util.ImageProcessor
+    @Inject lateinit var imageProcessor: com.example.coupontracker.util.ImageProcessor
+    @Inject lateinit var couponInputManager: CouponInputManager
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var securePreferencesManager: SecurePreferencesManager
     @Inject lateinit var modelDownloadManager: ModelDownloadManager
@@ -715,7 +715,26 @@ class AddFragment : Fragment() {
                 }
                 // ImageProcessor is now injected via Hilt, no manual instantiation needed
 
-                val couponInfo = imageProcessor.processImage(uri) // URI-based processing includes metadata extraction
+                val coupon = couponInputManager.processCouponFromImageUriWithPersistence(uri)
+                val couponInfo = CouponInfo(
+                    storeName = coupon.storeName,
+                    description = coupon.description,
+                    cashbackAmount = coupon.getCashbackNumericValue().takeIf { it > 0.0 },
+                    redeemCode = coupon.redeemCode,
+                    expiryDate = coupon.expiryDate,
+                    category = coupon.category,
+                    status = coupon.status,
+                    discountType = when (coupon.cashbackType) {
+                        "percent" -> "PERCENTAGE"
+                        "amount" -> "AMOUNT"
+                        else -> null
+                    },
+                    minimumPurchase = coupon.minimumPurchase,
+                    maximumDiscount = coupon.maximumDiscount,
+                    paymentMethod = coupon.paymentMethod,
+                    platformType = coupon.platformType,
+                    usageLimit = coupon.usageLimit
+                )
                 Log.d(TAG, "Extracted coupon info: $couponInfo")
 
                 if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&

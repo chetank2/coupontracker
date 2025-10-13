@@ -1,7 +1,6 @@
 package com.example.coupontracker.ui.viewmodel
 
 import android.app.Application
-import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -14,7 +13,6 @@ import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.util.CouponInputManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,16 +27,13 @@ import javax.inject.Inject
 @HiltViewModel
 class CouponFormViewModel @Inject constructor(
     application: Application,
-    @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository,
-    private val imageProcessor: com.example.coupontracker.util.ImageProcessor,
+    private val couponInputManager: CouponInputManager,
     savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(CouponFormUiState())
     val uiState: StateFlow<CouponFormUiState> = _uiState.asStateFlow()
-
-    private val couponInputManager = CouponInputManager(context, imageProcessor)
 
     companion object {
         private const val TAG = "CouponFormViewModel"
@@ -63,12 +58,9 @@ class CouponFormViewModel @Inject constructor(
             try {
                 updateState { it.copy(isProcessing = true, error = null, saveResult = null) }
 
-                // Process the image with URI persistence
                 val coupon = couponInputManager.processCouponFromImageUriWithPersistence(uri)
 
-                // Convert to coupon info
                 val couponInfo = mapCouponToCouponInfo(coupon)
-
                 updateState {
                     it.copy(
                         isProcessing = false,

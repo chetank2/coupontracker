@@ -81,5 +81,37 @@ object ExtractionModule {
             extractionLearningIntegration
         )
     }
+
+    @Provides
+    @Singleton
+    fun provideConfidenceScorer(): ConfidenceScorer {
+        return ConfidenceScorer()
+    }
+
+    @Provides
+    @Singleton
+    fun provideExtractionValidator(
+        confidenceScorer: ConfidenceScorer
+    ): ExtractionValidator {
+        return ExtractionValidator(confidenceScorer)
+    }
+
+    @Provides
+    @Singleton
+    fun provideMultiCouponExtractionService(
+        @ApplicationContext context: Context,
+        ocrEngine: com.example.coupontracker.ocr.OcrEngine,
+        progressiveExtractionService: ProgressiveExtractionService,
+        confidenceScorer: ConfidenceScorer,
+        extractionValidator: ExtractionValidator
+    ): MultiCouponExtractionService {
+        return MultiCouponExtractionService(
+            context = context,
+            ocrEngine = ocrEngine,
+            progressiveExtractionService = progressiveExtractionService,
+            confidenceScorer = confidenceScorer,
+            extractionValidator = extractionValidator
+        )
+    }
 }
 

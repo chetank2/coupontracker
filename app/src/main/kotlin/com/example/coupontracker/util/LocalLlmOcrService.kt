@@ -873,10 +873,29 @@ $sanitizedOcr<|im_end|>
                 .removeSuffix("```")
                 .trim()
             
-            // Prepend the assistant primer if response doesn't start with {
-            // (we prime with `{"storeName":` in the prompt)
-            if (!cleanResponse.startsWith("{")) {
-                cleanResponse = """{"storeName":$cleanResponse"""
+            // Fix common JSON malformations from LLM
+            // Step 1: Normalize mixed quotes to double quotes
+            cleanResponse = cleanResponse
+                .replace("'storeName'", "\"storeName\"")
+                .replace("'description'", "\"description\"")
+                .replace("'cashback'", "\"cashback\"")
+                .replace("'redeemCode'", "\"redeemCode\"")
+                .replace("'expiryDate'", "\"expiryDate\"")
+                .replace("'minOrderAmount'", "\"minOrderAmount\"")
+            
+            // Step 2: Fix duplicate key like `{"storeName":"storeName": null`
+            if (cleanResponse.contains("\"storeName\":\"storeName\":")) {
+                cleanResponse = cleanResponse.replace("\"storeName\":\"storeName\":", "\"storeName\":")
+            }
+            
+            // Step 3: Ensure opening brace exists
+            if (!cleanResponse.trim().startsWith("{")) {
+                cleanResponse = "{" + cleanResponse.trim()
+            }
+            
+            // Step 4: Ensure closing brace exists
+            if (!cleanResponse.trim().endsWith("}")) {
+                cleanResponse = cleanResponse.trim() + "}"
             }
             
             if (cleanResponse.length < 20) {

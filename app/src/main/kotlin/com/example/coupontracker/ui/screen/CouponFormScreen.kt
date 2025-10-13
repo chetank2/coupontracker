@@ -63,6 +63,7 @@ fun CouponFormScreen(
 
     // Form fields
     var storeName by remember { mutableStateOf(uiState.couponInfo?.storeName ?: "") }
+
     var description by remember { mutableStateOf(uiState.couponInfo?.description ?: "") }
     var amount by remember { mutableStateOf(uiState.couponInfo?.cashbackAmount?.toString() ?: "") }
     var code by remember { mutableStateOf(uiState.couponInfo?.redeemCode ?: "") }

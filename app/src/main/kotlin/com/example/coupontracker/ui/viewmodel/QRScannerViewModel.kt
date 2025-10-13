@@ -1,7 +1,6 @@
 package com.example.coupontracker.ui.viewmodel
 
 import android.app.Application
-import android.content.Context
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,7 +9,6 @@ import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.util.CouponInputManager
 import com.google.mlkit.vision.barcode.common.Barcode
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,15 +21,12 @@ import javax.inject.Inject
 @HiltViewModel
 class QRScannerViewModel @Inject constructor(
     application: Application,
-    @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository,
-    private val imageProcessor: com.example.coupontracker.util.ImageProcessor
+    private val couponInputManager: CouponInputManager
 ) : AndroidViewModel(application) {
     
     private val _uiState = MutableStateFlow(QRScannerUiState())
     val uiState: StateFlow<QRScannerUiState> = _uiState.asStateFlow()
-    
-    private val couponInputManager = CouponInputManager(context, imageProcessor)
     
     companion object {
         private const val TAG = "QRScannerViewModel"
