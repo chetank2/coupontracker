@@ -112,6 +112,15 @@ class LocalLlmOcrService(
                 normalized
             }
 
+            val prioritizedLine = selectBestOfferLine(cleanedLines)
+            prioritizedLine?.let { candidate ->
+                val extracted = extractCoreOfferText(candidate)
+                val finalized = finalizeDescription(extracted)
+                if (finalized.isNotBlank()) {
+                    return finalized
+                }
+            }
+
             val tokens = mutableListOf<String>()
             var previousTokenKey: String? = null
 
@@ -136,9 +145,91 @@ class LocalLlmOcrService(
                 .replace(Regex("\\s+"), " ")
                 .trim()
 
-            val withoutStorePrefix = stripLikelyStorePrefix(joined)
+            return finalizeDescription(joined)
+        }
+
+        private fun finalizeDescription(text: String): String {
+            if (text.isBlank()) {
+                return ""
+            }
+
+            val compact = text.replace(Regex("\\s+"), " ").trim()
+            if (compact.isEmpty()) {
+                return ""
+            }
+
+            val withoutStorePrefix = stripLikelyStorePrefix(compact)
             val normalizedRupees = normalizeRupeeVariants(withoutStorePrefix)
             return ensureLeadingCapital(normalizedRupees)
+        }
+
+        private fun selectBestOfferLine(lines: List<String>): String? {
+            var bestScore = Int.MIN_VALUE
+            var bestLine: String? = null
+
+            for (line in lines) {
+                val score = scoreOfferLine(line)
+                if (score > bestScore) {
+                    bestScore = score
+                    bestLine = line
+                }
+            }
+
+            return if (bestScore > 0) bestLine else null
+        }
+
+        private fun scoreOfferLine(line: String): Int {
+            val lower = line.lowercase(Locale.getDefault())
+
+            if (NOISE_PREFIXES.any { prefix -> lower.startsWith(prefix) }) {
+                return Int.MIN_VALUE
+            }
+
+            if (NOISE_CONTAINS.any { marker -> lower.contains(marker) }) {
+                return Int.MIN_VALUE
+            }
+
+            var score = 0
+
+            if (lower.contains("you won")) score += 6
+            if (lower.contains("voucher")) score += 3
+            if (lower.contains("cashback")) score += 3
+            if (lower.contains("worth")) score += 2
+            if (lower.contains("off")) score += 3
+            if (lower.contains("save")) score += 1
+            if (lower.contains("deal") || lower.contains("offer")) score += 1
+
+            if (RUPEE_AMOUNT_PATTERN.containsMatchIn(line)) score += 4
+            if (PERCENT_PATTERN.containsMatchIn(line)) score += 3
+
+            if (lower.contains("active")) score -= 2
+            if (lower.contains("lifetime")) score -= 2
+
+            return score
+        }
+
+        private fun extractCoreOfferText(line: String): String {
+            val lower = line.lowercase(Locale.getDefault())
+            val startIndex = START_KEYWORDS
+                .mapNotNull { keyword ->
+                    val idx = lower.indexOf(keyword)
+                    if (idx >= 0) idx else null
+                }
+                .minOrNull() ?: 0
+
+            val trimmedStart = line.substring(startIndex).trim()
+            val lowerTrimmed = trimmedStart.lowercase(Locale.getDefault())
+
+            var endIndex = trimmedStart.length
+            for (keyword in STOP_PHRASES) {
+                val idx = lowerTrimmed.indexOf(keyword)
+                if (idx >= 0) {
+                    endIndex = kotlin.math.min(endIndex, idx)
+                }
+            }
+
+            val candidate = trimmedStart.substring(0, endIndex).trim().trimEnd('-', ':', '|')
+            return candidate.replace(Regex("\\s+"), " ")
         }
 
         private fun shouldKeepToken(token: String): Boolean {
@@ -239,6 +330,48 @@ class LocalLlmOcrService(
         )
 
         private val VOWELS = setOf('a', 'e', 'i', 'o', 'u')
+
+        private val START_KEYWORDS = listOf(
+            "you won",
+            "flat",
+            "get",
+            "grab",
+            "enjoy",
+            "save",
+            "exclusive",
+            "offer",
+            "deal",
+            "voucher",
+            "worth",
+            "win"
+        )
+
+        private val STOP_PHRASES = listOf(
+            "vouchers active",
+            "lifetime",
+            "details",
+            "home",
+            "cards",
+            "double tap",
+            "double-tap",
+            "track usage",
+            "set reminder"
+        )
+
+        private val NOISE_PREFIXES = listOf(
+            "vouchers",
+            "details",
+            "home",
+            "lifetime"
+        )
+
+        private val NOISE_CONTAINS = listOf(
+            "double tap",
+            "double-tap"
+        )
+
+        private val PERCENT_PATTERN = Regex("\\d+\\s*%")
+        private val RUPEE_AMOUNT_PATTERN = Regex("₹\\s*\\d[\\d,]*")
 
         private fun normalizeRupeeVariants(text: String): String {
             if (text.isEmpty()) {
