@@ -112,9 +112,10 @@ class LocalLlmOcrService(
                 normalized
             }
 
-            val prioritizedLine = selectBestOfferLine(cleanedLines)
-            prioritizedLine?.let { candidate ->
-                val extracted = extractCoreOfferText(candidate)
+            val prioritizedSelection = selectBestOfferLine(cleanedLines)
+            prioritizedSelection?.let { selection ->
+                val expandedLine = expandOfferLineWithContinuation(cleanedLines, selection)
+                val extracted = extractCoreOfferText(expandedLine)
                 val finalized = finalizeDescription(extracted)
                 if (finalized.isNotBlank()) {
                     return finalized
@@ -163,19 +164,23 @@ class LocalLlmOcrService(
             return ensureLeadingCapital(normalizedRupees)
         }
 
-        private fun selectBestOfferLine(lines: List<String>): String? {
+        private fun selectBestOfferLine(lines: List<String>): OfferLineSelection? {
             var bestScore = Int.MIN_VALUE
-            var bestLine: String? = null
+            var bestIndex = -1
 
-            for (line in lines) {
+            for ((index, line) in lines.withIndex()) {
                 val score = scoreOfferLine(line)
                 if (score > bestScore) {
                     bestScore = score
-                    bestLine = line
+                    bestIndex = index
                 }
             }
 
-            return if (bestScore > 0) bestLine else null
+            return if (bestScore > 0 && bestIndex in lines.indices) {
+                OfferLineSelection(lines[bestIndex], bestIndex)
+            } else {
+                null
+            }
         }
 
         private fun scoreOfferLine(line: String): Int {
@@ -206,6 +211,70 @@ class LocalLlmOcrService(
             if (lower.contains("lifetime")) score -= 2
 
             return score
+        }
+
+        private fun expandOfferLineWithContinuation(
+            lines: List<String>,
+            selection: OfferLineSelection
+        ): String {
+            if (selection.index !in lines.indices) {
+                return selection.line
+            }
+
+            val builder = StringBuilder(selection.line)
+            var currentIndex = selection.index + 1
+
+            while (currentIndex < lines.size) {
+                val candidate = lines[currentIndex]
+                if (!shouldAppendContinuation(builder.toString(), candidate)) {
+                    break
+                }
+
+                builder.append(' ')
+                builder.append(candidate)
+                currentIndex++
+            }
+
+            return builder.toString()
+        }
+
+        private fun shouldAppendContinuation(current: String, candidate: String): Boolean {
+            if (candidate.isBlank()) {
+                return false
+            }
+
+            val lowerCandidate = candidate.lowercase(Locale.getDefault())
+            if (CONTINUATION_AVOID_KEYWORDS.any { keyword -> lowerCandidate.contains(keyword) }) {
+                return false
+            }
+
+            val candidateHasValue = candidate.any { it.isDigit() } || candidate.contains('₹') || candidate.contains('%')
+            val currentHasValue = current.any { it.isDigit() } || current.contains('₹') || current.contains('%')
+
+            val startsWithConnector = CONTINUATION_PREFIXES.any { prefix -> lowerCandidate.startsWith(prefix) }
+            val lowercaseContinuation = candidate.firstOrNull()?.isLowerCase() == true
+
+            if (startsWithConnector) {
+                return true
+            }
+
+            if (!currentHasValue && candidateHasValue) {
+                return true
+            }
+
+            if (!currentHasValue && lowercaseContinuation) {
+                return true
+            }
+
+            if ((current.endsWith('-') || current.endsWith(':') || current.endsWith('–') || current.endsWith('—')) && candidate.isNotBlank()) {
+                return true
+            }
+
+            if (candidateHasValue && candidate.length <= 24) {
+                return true
+            }
+
+            return false
         }
 
         private fun extractCoreOfferText(line: String): String {
@@ -346,6 +415,49 @@ class LocalLlmOcrService(
             "win"
         )
 
+        private val CONTINUATION_PREFIXES = listOf(
+            "worth",
+            "for",
+            "at",
+            "above",
+            "over",
+            "with",
+            "using",
+            "use code",
+            "code",
+            "and",
+            "plus",
+            "+",
+            "extra",
+            "only",
+            "on",
+            "across",
+            "sitewide",
+            "storewide",
+            "orders",
+            "order",
+            "upto",
+            "up to",
+            "when",
+            "while",
+            "valid on"
+        )
+
+        private val CONTINUATION_AVOID_KEYWORDS = listOf(
+            "terms",
+            "condition",
+            "tnc",
+            "apply",
+            "download",
+            "scan",
+            "double tap",
+            "double-tap",
+            "valid till",
+            "valid until",
+            "valid upto",
+            "valid up to"
+        )
+
         private val STOP_PHRASES = listOf(
             "vouchers active",
             "lifetime",
@@ -451,6 +563,8 @@ class LocalLlmOcrService(
                 text
             }
         }
+
+        private data class OfferLineSelection(val line: String, val index: Int)
     }
     
     // Dependencies
