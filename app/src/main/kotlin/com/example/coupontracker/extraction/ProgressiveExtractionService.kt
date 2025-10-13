@@ -11,9 +11,11 @@ import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.universal.PatternLearningEngine
 import com.example.coupontracker.util.ImageMetadataExtractor
 import com.example.coupontracker.util.IndianCurrencyParser
+import com.example.coupontracker.util.IndianDateParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
+import java.time.ZoneId
 import java.util.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -397,32 +399,48 @@ class ProgressiveExtractionService @Inject constructor(
     /**
      * Parse date string to Date object
      */
-    private fun parseDate(dateString: String): Date? {
+    internal fun parseDate(dateString: String): Date? {
+        val sanitized = dateString.trim()
+            .replace(Regex("(?i)(\\d{1,2})(st|nd|rd|th)"), "\\1")
+            .replace(",", "")
+            .replace(Regex("\\s+"), " ")
+
         // Try ISO format first (from relative date conversion)
         val isoFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         try {
-            return isoFormat.parse(dateString)
-        } catch (e: Exception) {
+            return isoFormat.parse(sanitized)
+        } catch (ignored: Exception) {
             // Not ISO format
         }
-        
-        // Try common Indian date formats
+
+        // Try common Indian date formats with both single and double digit days
         val formats = listOf(
             "dd/MM/yyyy",
+            "d/M/yyyy",
             "dd-MM-yyyy",
+            "d-M-yyyy",
             "dd MMM yyyy",
-            "dd MMMM yyyy"
+            "d MMM yyyy",
+            "dd MMMM yyyy",
+            "d MMMM yyyy"
         )
-        
+
         for (formatStr in formats) {
             try {
                 val format = SimpleDateFormat(formatStr, Locale.US)
-                return format.parse(dateString)
-            } catch (e: Exception) {
+                return format.parse(sanitized)
+            } catch (ignored: Exception) {
                 // Try next format
             }
         }
-        
+
+        // Fallback to the shared Indian date parser for harder cases
+        val fallback = IndianDateParser.parseExpiryIST(dateString).date
+        if (fallback != null) {
+            val zone = ZoneId.systemDefault()
+            return Date.from(fallback.atStartOfDay(zone).toInstant())
+        }
+
         Log.w(TAG, "Could not parse date: $dateString")
         return null
     }
