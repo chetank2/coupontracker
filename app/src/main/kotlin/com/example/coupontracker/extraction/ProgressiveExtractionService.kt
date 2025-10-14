@@ -9,6 +9,8 @@ import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.universal.PatternLearningEngine
+import com.example.coupontracker.util.CouponFixContext
+import com.example.coupontracker.util.CouponPostProcessor
 import com.example.coupontracker.util.ImageMetadataExtractor
 import com.example.coupontracker.util.IndianCurrencyParser
 import com.example.coupontracker.util.IndianDateParser
@@ -339,8 +341,16 @@ class ProgressiveExtractionService @Inject constructor(
         
         Log.d(TAG, "Built coupon: store='${coupon.storeName}', desc='${coupon.description.take(50)}...', amount=${coupon.cashbackAmount}")
         
-        return ProgressiveExtractionResult(
+        val refined = CouponPostProcessor.refine(
             coupon = coupon,
+            context = CouponFixContext(
+                ocrText = context.ocrText,
+                captureTimestamp = context.captureTimestamp
+            )
+        )
+
+        return ProgressiveExtractionResult(
+            coupon = refined,
             confidence = overallConfidence,
             extractedFields = extractedFields,
             success = true,

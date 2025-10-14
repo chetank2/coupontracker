@@ -7,6 +7,8 @@ import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.ml.HybridCouponDetector
 import com.example.coupontracker.ml.ScreenshotClassifier
 import com.example.coupontracker.ocr.OcrEngine
+import com.example.coupontracker.util.CouponFixContext
+import com.example.coupontracker.util.CouponPostProcessor
 import com.example.coupontracker.util.MultiEngineOCR
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -197,7 +199,7 @@ class MultiCouponExtractionService @Inject constructor(
         
         try {
             // Use progressive extraction service (already has validation integrated)
-            val extractionResult = progressiveExtractionService.extractCoupon(
+        val extractionResult = progressiveExtractionService.extractCoupon(
                 androidContext = context,
                 image = regionBitmap,
                 ocrText = region.ocrText,
@@ -209,12 +211,20 @@ class MultiCouponExtractionService @Inject constructor(
             // Validate extraction
             val validationResult = extractionValidator.validate(extractionResult.coupon)
             
-            return CouponWithConfidence(
-                coupon = extractionResult.coupon,
-                confidence = validationResult.validationResult.overallConfidence,
-                extractionQuality = validationResult.extractionQuality,
-                warnings = validationResult.actionableRecommendations
+        val refinedCoupon = CouponPostProcessor.refine(
+            coupon = extractionResult.coupon,
+            context = CouponFixContext(
+                ocrText = region.ocrText,
+                captureTimestamp = Date()
             )
+        )
+
+        return CouponWithConfidence(
+            coupon = refinedCoupon,
+            confidence = validationResult.validationResult.overallConfidence,
+            extractionQuality = validationResult.extractionQuality,
+            warnings = validationResult.actionableRecommendations
+        )
             
         } finally {
             // Clean up cropped bitmap

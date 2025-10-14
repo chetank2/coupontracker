@@ -312,13 +312,7 @@ class CouponInputManager(
                 // Process with OCR using capture timestamp
                 val couponInfo = imageProcessor.processImage(bitmap, captureTimestamp)
                 ExtractionLogBuffer.appendInfo(TAG, "ImageProcessor returned coupon info: store='${couponInfo.storeName}', description='${couponInfo.description}'")
-                val normalizedExpiry = normalizeExpiryDate(couponInfo.expiryDate, captureTimestamp)
-                if (couponInfo.expiryDate != null && normalizedExpiry == null) {
-                    Log.d(TAG, "Discarding fallback expiry date; treating as unknown")
-                    ExtractionLogBuffer.appendInfo(TAG, "Discarding fallback expiry date; treating as unknown")
-                }
 
-                // Convert CouponInfo to Coupon
                 val normalizedDiscountType = when (couponInfo.discountType?.uppercase(Locale.ROOT)) {
                     "PERCENTAGE" -> "percent"
                     "AMOUNT" -> "amount"
@@ -332,14 +326,14 @@ class CouponInputManager(
                 val platformType = couponInfo.platformType?.takeIf { it.isNotBlank() }
                 val rating = couponInfo.rating?.takeIf { it.isNotBlank() }
 
-                return@withContext Coupon(
+                val baseCoupon = Coupon(
                     id = 0,
                     storeName = couponInfo.storeName.ifBlank { "Unknown Store" },
                     description = couponInfo.description.ifBlank { "No description" },
-                    expiryDate = normalizedExpiry,
+                    expiryDate = couponInfo.expiryDate,
                     cashbackAmount = cashbackValueNum ?: 0.0,
                     redeemCode = couponInfo.redeemCode,
-                    imageUri = null, // We'll set this later in the ViewModel
+                    imageUri = null,
                     category = category,
                     status = status ?: "Active",
                     cashbackType = normalizedDiscountType,
@@ -353,6 +347,27 @@ class CouponInputManager(
                     createdAt = Date(),
                     updatedAt = Date()
                 )
+
+                val contextText = listOfNotNull(
+                    quickOcrText.takeIf { it.isNotBlank() },
+                    couponInfo.description.takeIf { it.isNotBlank() }
+                ).joinToString("\n").ifBlank { null }
+
+                val refinedCoupon = CouponPostProcessor.refine(
+                    coupon = baseCoupon,
+                    context = CouponFixContext(
+                        ocrText = contextText,
+                        captureTimestamp = captureTimestamp
+                    )
+                )
+
+                val normalizedExpiry = normalizeExpiryDate(refinedCoupon.expiryDate, captureTimestamp)
+                if (refinedCoupon.expiryDate != null && normalizedExpiry == null) {
+                    Log.d(TAG, "Discarding fallback expiry date; treating as unknown")
+                    ExtractionLogBuffer.appendInfo(TAG, "Discarding fallback expiry date; treating as unknown")
+                }
+
+                return@withContext refinedCoupon.copy(expiryDate = normalizedExpiry)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon from bitmap", e)
                 ExtractionLogBuffer.appendError(TAG, "Error processing coupon from bitmap", e)

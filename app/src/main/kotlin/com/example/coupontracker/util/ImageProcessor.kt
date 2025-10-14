@@ -132,8 +132,8 @@ class ImageProcessor(
                 if (progressiveExtractionService == null) {
                     Log.e(TAG, "❌ Progressive extraction is ENABLED but service is NULL! Check Hilt injection.")
                 } else {
-                    Log.d(TAG, "✨ Using PROGRESSIVE extraction pipeline")
-                    return@withContext processWithProgressivePipeline(bitmap, captureTimestamp, originalImageUri)
+                Log.d(TAG, "✨ Using PROGRESSIVE extraction pipeline")
+                return@withContext processWithProgressivePipeline(bitmap, captureTimestamp, originalImageUri)
                 }
             } else {
                 Log.d(TAG, "ℹ️  Progressive extraction is DISABLED via feature flag")
@@ -171,7 +171,6 @@ class ImageProcessor(
                 }
             }
 
-            // Return the result
             return@withContext result
         } catch (e: Exception) {
             Log.e(TAG, "Failed to process image", e)

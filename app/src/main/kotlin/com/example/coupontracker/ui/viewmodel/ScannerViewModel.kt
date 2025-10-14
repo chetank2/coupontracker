@@ -20,7 +20,15 @@ import com.example.coupontracker.util.FeedbackType
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
-import com.example.coupontracker.util.*
+import com.example.coupontracker.util.AnalyticsTracker
+import com.example.coupontracker.util.BitmapManager
+import com.example.coupontracker.util.CouponDedupUtils
+import com.example.coupontracker.util.CouponFixContext
+import com.example.coupontracker.util.CouponPostProcessor
+import com.example.coupontracker.util.ExtractionConfig
+import com.example.coupontracker.util.ExtractionLogBuffer
+import com.example.coupontracker.util.CouponFixContext
+import com.example.coupontracker.util.CouponPostProcessor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -334,7 +342,11 @@ class ScannerViewModel @Inject constructor(
                     
                     // Step 3: Persist URI
                     val persistedUri = uriPersistenceManager.persistUri(imageUri)
-                    val finalCoupon = llmCoupon.copy(imageUri = persistedUri?.toString())
+                    val finalCoupon = finalizeCoupon(
+                        base = llmCoupon.copy(imageUri = persistedUri?.toString()),
+                        ocrText = null,
+                        captureTimestamp = null
+                    )
                     
                     // Step 4: Learn patterns (store extraction result for learning)
                     lastExtractionResult = com.example.coupontracker.universal.UniversalExtractionResult(
@@ -491,7 +503,11 @@ class ScannerViewModel @Inject constructor(
                         
                         // Step 3: Persist URI and save coupon
                         val persistedUri = uriPersistenceManager.persistUri(imageUri)
-                        val finalCoupon = extractionResult.coupon.copy(imageUri = persistedUri?.toString())
+                        val finalCoupon = finalizeCoupon(
+                            base = extractionResult.coupon.copy(imageUri = persistedUri?.toString()),
+                            ocrText = ocrText,
+                            captureTimestamp = null
+                        )
                         
                         // Step 4: Store for potential learning
                         lastExtractionResult = extractionResult to ocrText
@@ -641,7 +657,11 @@ class ScannerViewModel @Inject constructor(
             if (fusedCoupon != null) {
                 // Persist URI
                 val persistedUri = uriPersistenceManager.persistUri(imageUri)
-                val finalCoupon = fusedCoupon.copy(imageUri = persistedUri?.toString())
+                val finalCoupon = finalizeCoupon(
+                    base = fusedCoupon.copy(imageUri = persistedUri?.toString()),
+                    ocrText = null,
+                    captureTimestamp = null
+                )
                 
                 // Store for potential learning
                 lastExtractionResult = com.example.coupontracker.universal.UniversalExtractionResult(
@@ -859,7 +879,15 @@ class ScannerViewModel @Inject constructor(
             val extractionResult = extractTextFromFields(couponInstance)
 
             // Create coupon from extracted information
-            val coupon = createCouponFromInstance(couponInstance, extractionResult.fields, imageUri)
+            val coupon = finalizeCoupon(
+                base = createCouponFromInstance(
+                    couponInstance = couponInstance,
+                    extractedInfo = extractionResult.fields,
+                    imageUri = imageUri
+                ),
+                ocrText = extractionResult.fields.values.joinToString("\n"),
+                captureTimestamp = null
+            )
 
             analyticsTracker.trackEvent(
                 AnalyticsTracker.EVENT_COUPON_DETECTED,
@@ -1913,6 +1941,22 @@ class ScannerViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up TwoStageDetector", e)
         }
+    }
+
+    private fun finalizeCoupon(
+        base: Coupon,
+        ocrText: String?,
+        captureTimestamp: Date?
+    ): Coupon {
+        val refined = CouponPostProcessor.refine(
+            coupon = base,
+            context = CouponFixContext(
+                ocrText = ocrText,
+                captureTimestamp = captureTimestamp
+            )
+        )
+        val normalizedExpiry = normalizeExpiryDate(refined.expiryDate, captureTimestamp)
+        return refined.copy(expiryDate = normalizedExpiry)
     }
 }
 
