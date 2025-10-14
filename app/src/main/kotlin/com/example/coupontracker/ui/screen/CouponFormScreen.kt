@@ -78,11 +78,14 @@ fun CouponFormScreen(
     var category by remember { mutableStateOf(uiState.couponInfo?.category ?: "") }
 
     // Initialize with image URI
-    LaunchedEffect(imageUri) {
-        imageUri?.let { uri ->
-            if (uri.isNotEmpty()) {
-                viewModel.processImageUri(Uri.parse(uri))
-            }
+    LaunchedEffect(imageUri, uiState.isProcessing, uiState.couponInfo) {
+        val uriString = imageUri?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
+
+        val hasExtractedInfo = uiState.couponInfo != null
+        val isCurrentlyProcessing = uiState.isProcessing
+
+        if (!hasExtractedInfo && !isCurrentlyProcessing) {
+            viewModel.processImageUri(Uri.parse(uriString))
         }
     }
 
