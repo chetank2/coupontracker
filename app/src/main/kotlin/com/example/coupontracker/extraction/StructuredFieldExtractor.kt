@@ -38,6 +38,14 @@ class StructuredFieldExtractor {
         private val WATERMARK_CANONICAL = setOf(
             "paytm", "gpay", "phonepe"
         )
+
+        private inline fun safeLogDebug(tag: String, message: () -> String) {
+            try {
+                Log.d(tag, message())
+            } catch (_: Throwable) {
+                // Ignore logging failures in unit tests where android.util.Log is a stub.
+            }
+        }
     }
     
     /**
@@ -74,7 +82,7 @@ class StructuredFieldExtractor {
             reason = "Structured pattern matching"
         ))
         
-        Log.d(TAG, "Structured extraction found ${results.values.sumOf { it.size }} candidates across ${results.size} field types")
+        safeLogDebug(TAG) { "Structured extraction found ${results.values.sumOf { it.size }} candidates across ${results.size} field types" }
         
         results
     }
@@ -356,7 +364,9 @@ class StructuredFieldExtractor {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
             val calculatedDate = dateFormat.format(calendar.time)
             
-            android.util.Log.d(TAG, "📅 Expiry: OCR='${match.value}' → Base=${dateFormat.format(baseDate.time)} + $count $unit = $calculatedDate (capture timestamp: ${context.captureTimestamp != null})")
+            safeLogDebug(TAG) {
+                "📅 Expiry: OCR='${match.value}' → Base=${dateFormat.format(baseDate.time)} + $count $unit = $calculatedDate (capture timestamp: ${context.captureTimestamp != null})"
+            }
             
             candidates.add(FieldCandidate(
                 value = calculatedDate,
@@ -515,7 +525,7 @@ class StructuredFieldExtractor {
 
         // Reject if it has too many consonants in a row (like "Pastm")
         val maxConsecutiveConsonants = cleanName.windowed(4, 1, partialWindows = false)
-            .count { window -> window.all { char -> char.isLetter() && char.lowercaseChar() !in "aeiou" } }
+            .count { window -> window.all { char -> char.isLetter() && char.lowercaseChar() !in "aeiouy" } }
         if (maxConsecutiveConsonants > 0) return false
 
         // Reject if contains too many special characters
@@ -527,9 +537,12 @@ class StructuredFieldExtractor {
         val letterCount = cleanName.count { it.isLetter() }
         if (digitCount > 0 && letterCount < 2) return false
 
-        // Reject OCR-like garbage: repeated character patterns like "aa", "mm", "tt"
-        val hasRepeatedChars = cleanName.lowercase().zipWithNext().any { (a, b) -> a == b && a.isLetter() }
-        if (hasRepeatedChars && cleanName.length < 6) return false  // Allow in longer names like "Mississippi"
+        // Reject OCR-like garbage: repeated character patterns, but allow valid brands like XYXX, TATA, NOON
+        // Only reject if the name is very short (< 4) or if it has excessive repetition
+        if (cleanName.length < 4) {
+            val hasRepeatedChars = cleanName.lowercase().zipWithNext().any { (a, b) -> a == b && a.isLetter() }
+            if (hasRepeatedChars) return false
+        }
 
         return true
     }
@@ -581,7 +594,7 @@ class StructuredFieldExtractor {
     }
 
     private fun normalizeAbsoluteDate(raw: String): String? {
-        val cleaned = raw.trim().replace("\n", " ").trimEnd('.', ',', ';')
+        val cleaned = raw.trim().replace("\n", " ").replace(",", " ").replace(Regex("\\s+"), " ").trimEnd('.', ',', ';')
         val patterns = listOf(
             "dd/MM/yyyy",
             "MM/dd/yyyy",
@@ -591,7 +604,7 @@ class StructuredFieldExtractor {
             "dd MMM yyyy",
             "d MMMM yyyy",
             "dd MMMM yyyy",
-            "MMM dd, yyyy",
+            "MMM dd yyyy",
             "MMM dd yyyy"
         )
 
@@ -601,7 +614,10 @@ class StructuredFieldExtractor {
 
         for (pattern in patterns) {
             try {
-                val parser = SimpleDateFormat(pattern, Locale.US).apply { isLenient = false }
+                val parser = SimpleDateFormat(pattern, Locale.US).apply {
+                    isLenient = false
+                    timeZone = TimeZone.getTimeZone("UTC")  // Use same timezone as formatter
+                }
                 val date = parser.parse(cleaned)
                 if (date != null) {
                     return isoFormat.format(date)

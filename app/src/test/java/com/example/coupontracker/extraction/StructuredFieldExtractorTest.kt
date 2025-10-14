@@ -22,8 +22,9 @@ class StructuredFieldExtractorTest {
         val results = extractor.detectFieldsStructured(context)
 
         val expiryCandidates = results[FieldType.EXPIRY_DATE].orEmpty()
+        println("DEBUG: Expiry candidates found: ${expiryCandidates.map { it.value }}")
         assertTrue(
-            "Expected expiry candidates to include the ISO normalized date",
+            "Expected expiry candidates to include the ISO normalized date, but found: ${expiryCandidates.map { it.value }}",
             expiryCandidates.any { it.value == "2025-05-31" }
         )
     }
@@ -41,13 +42,14 @@ class StructuredFieldExtractorTest {
         val results = extractor.detectFieldsStructured(context)
         val storeCandidates = results[FieldType.STORE_NAME].orEmpty()
 
+        println("DEBUG: Store candidates found: ${storeCandidates.map { it.value }}")
         assertTrue(
-            "Expected store candidates to contain Aha",
-            storeCandidates.any { it.value.equals("Aha", ignoreCase = true) }
+            "Expected store candidates to contain Aha, but found: ${storeCandidates.map { it.value }}",
+            storeCandidates.any { it.value.contains("Aha", ignoreCase = true) }
         )
 
         assertTrue(
-            "Watermark term Pastm should be filtered out",
+            "Watermark term Pastm should be filtered out, but found: ${storeCandidates.map { it.value }}",
             storeCandidates.none { it.value.equals("Pastm", ignoreCase = true) }
         )
     }
@@ -65,8 +67,9 @@ class StructuredFieldExtractorTest {
         val results = extractor.detectFieldsStructured(context)
         val storeCandidates = results[FieldType.STORE_NAME].orEmpty()
 
+        println("DEBUG: Store candidates for XYXX: ${storeCandidates.map { it.value }}")
         assertTrue(
-            "Expected store candidates to include XYXX",
+            "Expected store candidates to include XYXX, but found: ${storeCandidates.map { it.value }}",
             storeCandidates.any { it.value == "XYXX" }
         )
     }

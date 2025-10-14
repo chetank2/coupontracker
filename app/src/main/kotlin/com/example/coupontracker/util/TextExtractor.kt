@@ -63,6 +63,22 @@ data class CouponInfo(
 class TextExtractor {
     private val TAG = "TextExtractor"
 
+    private inline fun safeLogDebug(tag: String, message: () -> String) {
+        try {
+            Log.d(tag, message())
+        } catch (_: Throwable) {
+            // Ignore logging failures in unit tests
+        }
+    }
+
+    private inline fun safeLogError(tag: String, message: String, throwable: Throwable) {
+        try {
+            Log.e(tag, message, throwable)
+        } catch (_: Throwable) {
+            // Ignore logging failures in unit tests
+        }
+    }
+
     /**
      * Extract all coupon information from text
      * @param text The text to extract information from
@@ -80,7 +96,7 @@ class TextExtractor {
      * @return CouponInfo object containing extracted information
      */
     fun extractCouponInfoSync(text: String, baseDate: Date? = null): CouponInfo {
-        Log.d(TAG, "Extracting coupon info from text: ${text.take(100)}...")
+        safeLogDebug(TAG) { "Extracting coupon info from text: ${text.take(100)}..." }
 
         val storeName = extractStoreName(text)
         val description = extractDescription(text)
@@ -101,7 +117,7 @@ class TextExtractor {
 
         val result = CouponInfo(
             storeName = storeName ?: "",
-            description = sanitizeDescription(description) ?: "",
+            description = description ?: "",
             expiryDate = expiryDate,
             cashbackAmount = cashbackAmount,
             redeemCode = redeemCode,
@@ -116,7 +132,7 @@ class TextExtractor {
             usageLimit = usageLimit
         )
 
-        Log.d(TAG, "Extracted coupon info: $result")
+        safeLogDebug(TAG) { "Extracted coupon info: $result" }
         return result
     }
 
@@ -131,7 +147,7 @@ class TextExtractor {
         val brandMatcher = brandPattern.matcher(text)
         if (brandMatcher.find()) {
             val brand = brandMatcher.group(1)
-            Log.d(TAG, "Found brand from 'Brand:' pattern: $brand")
+            safeLogDebug(TAG) { "Found brand from 'Brand:' pattern: $brand" }
             return brand
         }
 
@@ -225,7 +241,7 @@ class TextExtractor {
             val bestKey = candidateScores.maxByOrNull { it.value }!!.key
             val bestCandidate = candidateOriginal[bestKey]
             if (bestCandidate != null) {
-                Log.d(TAG, "Selected store name candidate: $bestCandidate")
+                safeLogDebug(TAG) { "Selected store name candidate: $bestCandidate" }
                 return bestCandidate
             }
         }
@@ -242,7 +258,7 @@ class TextExtractor {
             val storeMatcher = pattern.matcher(text)
             if (storeMatcher.find()) {
                 val name = cleanCandidate(storeMatcher.group(1)) ?: continue
-                Log.d(TAG, "Found store name from pattern: $name")
+                safeLogDebug(TAG) { "Found store name from pattern: $name" }
                 return name
             }
         }
@@ -280,7 +296,29 @@ class TextExtractor {
      * @return The extracted description or null if not found
      */
     fun extractDescription(text: String): String? {
-        // First, try to form a clean description using store name and discount info
+        // FIRST: Check for multi-line "buy X get Y" patterns (high priority)
+        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        for (i in lines.indices) {
+            val line = lines[i]
+            if (Pattern.compile("(?i)buy\\s+\\d+\\s+get\\s+\\d+").matcher(line).find()) {
+                val builder = StringBuilder(line)
+                if (i + 1 < lines.size) {
+                    val nextLine = lines[i + 1]
+                    if (nextLine.startsWith("+")) {
+                        // Preserve the "+" as a connector
+                        builder.append(' ').append(nextLine.trim())
+                    } else if (Pattern.compile("(?i)(up\\s+to|flat|plus|&)").matcher(nextLine).find()) {
+                        builder.append(' ').append(nextLine)
+                    }
+                }
+                val combined = builder.toString().replace("\\s+".toRegex(), " ").trim()
+                safeLogDebug(TAG) { "Found multi-line offer description: $combined" }
+                // Don't sanitize for "buy X get Y" patterns - return raw combined text
+                return combined.takeIf { it.isNotBlank() }
+            }
+        }
+
+        // SECOND: try to form a clean description using store name and discount info
         val storeName = extractStoreName(text) ?: ""
         val discountType = extractDiscountType(text)
         val cashbackAmount = extractCashbackAmount(text)
@@ -300,7 +338,7 @@ class TextExtractor {
             }
 
             val cleanDescription = "$storeName Coupon - $discountPhrase"
-            Log.d(TAG, "Created clean description: $cleanDescription")
+            safeLogDebug(TAG) { "Created clean description: $cleanDescription" }
             sanitizeDescription(cleanDescription)?.let { return it }
         }
 
@@ -311,7 +349,7 @@ class TextExtractor {
         val offerMatcher = offerPattern.matcher(text)
         if (offerMatcher.find()) {
             val offer = offerMatcher.group(1)?.trim()
-            Log.d(TAG, "Found description from 'Offer:' pattern: $offer")
+            safeLogDebug(TAG) { "Found description from 'Offer:' pattern: $offer" }
             sanitizeDescription(offer)?.let { return it }
         }
 
@@ -320,7 +358,7 @@ class TextExtractor {
         val wonProductsMatcher = wonProductsPattern.matcher(text)
         if (wonProductsMatcher.find()) {
             val desc = wonProductsMatcher.group(1)?.trim()
-            Log.d(TAG, "Found description from 'You won products' pattern: $desc")
+            safeLogDebug(TAG) { "Found description from 'You won products' pattern: $desc" }
             sanitizeDescription(desc)?.let { return it }
         }
 
@@ -329,7 +367,7 @@ class TextExtractor {
         val getUptoMatcher = getUptoPattern.matcher(text)
         if (getUptoMatcher.find()) {
             val desc = getUptoMatcher.group(1)
-            Log.d(TAG, "Found description from 'Get upto' pattern: $desc")
+            safeLogDebug(TAG) { "Found description from 'Get upto' pattern: $desc" }
             sanitizeDescription(desc)?.let { return it }
         }
 
@@ -338,7 +376,7 @@ class TextExtractor {
         val upToMatcher = upToPattern.matcher(text)
         if (upToMatcher.find()) {
             val desc = upToMatcher.group(1)?.trim()
-            Log.d(TAG, "Found description from 'Up to X%' pattern: $desc")
+            safeLogDebug(TAG) { "Found description from 'Up to X%' pattern: $desc" }
             sanitizeDescription(desc)?.let { return it }
         }
 
@@ -347,7 +385,7 @@ class TextExtractor {
         val flatOffMatcher = flatOffPattern.matcher(text)
         if (flatOffMatcher.find()) {
             val desc = flatOffMatcher.group(1)?.trim()
-            Log.d(TAG, "Found description from 'Flat ₹X OFF' pattern: $desc")
+            safeLogDebug(TAG) { "Found description from 'Flat ₹X OFF' pattern: $desc" }
             sanitizeDescription(desc)?.let { return it }
         }
 
@@ -355,23 +393,6 @@ class TextExtractor {
 
         fun addCandidate(raw: String?) {
             sanitizeDescription(raw)?.takeIf { it.length >= 4 }?.let { candidates.add(it) }
-        }
-
-        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
-        for (i in lines.indices) {
-            val line = lines[i]
-            if (Pattern.compile("(?i)buy\\s+\\d+\\s+get\\s+\\d+").matcher(line).find()) {
-                val builder = StringBuilder(line)
-                if (i + 1 < lines.size) {
-                    val nextLine = lines[i + 1]
-                    if (nextLine.startsWith("+") || Pattern.compile("(?i)(up\\s+to|flat|plus|&)").matcher(nextLine).find()) {
-                        builder.append(' ').append(nextLine.trimStart('+', ' '))
-                    }
-                }
-                val combined = builder.toString().replace("\\s+".toRegex(), " ").trim()
-                Log.d(TAG, "Found multi-line offer description: $combined")
-                addCandidate(combined)
-            }
         }
 
         // Look for discount descriptions
@@ -389,7 +410,7 @@ class TextExtractor {
             val matcher = pattern.matcher(text)
             while (matcher.find()) {
                 val desc = matcher.group(1)
-                Log.d(TAG, "Found description from discount pattern: $desc")
+                safeLogDebug(TAG) { "Found description from discount pattern: $desc" }
                 addCandidate(desc)
             }
         }
@@ -398,7 +419,7 @@ class TextExtractor {
         val sentences = text.split(Pattern.compile("[.!?]"))
         if (sentences.isNotEmpty() && sentences[0].length > 10) {
             val desc = sentences[0].trim()
-            Log.d(TAG, "Using first sentence as description: $desc")
+            safeLogDebug(TAG) { "Using first sentence as description: $desc" }
             addCandidate(desc)
         }
 
@@ -437,7 +458,7 @@ class TextExtractor {
             val calendar = Calendar.getInstance()
             calendar.time = referenceDate
             calendar.add(Calendar.HOUR_OF_DAY, hoursToAdd)
-            Log.d(TAG, "Found expiry date from 'expires in X hours' format: ${hoursToAdd} hours from base date $referenceDate")
+            safeLogDebug(TAG) { "Found expiry date from 'expires in X hours' format: ${hoursToAdd} hours from base date $referenceDate" }
             return calendar.time
         }
 
@@ -462,7 +483,7 @@ class TextExtractor {
                     calendar.add(Calendar.DAY_OF_YEAR, timeValue)
                 }
 
-                Log.d(TAG, "Found expiry date from 'Expiry:' with 'expires in' format: $timeValue $timeUnit from base date $referenceDate")
+                safeLogDebug(TAG) { "Found expiry date from 'Expiry:' with 'expires in' format: $timeValue $timeUnit from base date $referenceDate" }
                 return calendar.time
             }
 
@@ -482,7 +503,7 @@ class TextExtractor {
                         val sdf = SimpleDateFormat(pattern, Locale.getDefault())
                         val date = sdf.parse(expiryText)
                         if (date != null) {
-                            Log.d(TAG, "Parsed expiry date from 'Expiry:' field: $expiryText")
+                            safeLogDebug(TAG) { "Parsed expiry date from 'Expiry:' field: $expiryText" }
                             return date
                         }
                     } catch (e: ParseException) {
@@ -490,7 +511,7 @@ class TextExtractor {
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error parsing expiry date from 'Expiry:' field", e)
+                safeLogError(TAG, "Error parsing expiry date from 'Expiry:' field", e)
             }
         }
 
@@ -502,7 +523,7 @@ class TextExtractor {
             try {
                 val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
                 val date = sdf.parse(dateStr)
-                Log.d(TAG, "Found expiry date from explicit format: $dateStr")
+                safeLogDebug(TAG) { "Found expiry date from explicit format: $dateStr" }
                 return date
             } catch (e: ParseException) {
                 // Continue with other patterns
@@ -517,7 +538,7 @@ class TextExtractor {
             val calendar = Calendar.getInstance()
             calendar.time = referenceDate
             calendar.add(Calendar.DAY_OF_YEAR, daysToAdd)
-            Log.d(TAG, "Found expiry date from 'expires in X days' format: ${daysToAdd} days from base date $referenceDate")
+            safeLogDebug(TAG) { "Found expiry date from 'expires in X days' format: ${daysToAdd} days from base date $referenceDate" }
             return calendar.time
         }
 
@@ -545,7 +566,7 @@ class TextExtractor {
                     try {
                         val sdf = SimpleDateFormat(pattern, Locale.getDefault())
                         val date = sdf.parse(dateStr)
-                        Log.d(TAG, "Found expiry date from standard format: $dateStr")
+                        safeLogDebug(TAG) { "Found expiry date from standard format: $dateStr" }
                         return date
                     } catch (e: ParseException) {
                         // Try next pattern
@@ -559,7 +580,7 @@ class TextExtractor {
             try {
                 val sdf = SimpleDateFormat(pattern, Locale.getDefault())
                 val date = sdf.parse(text)
-                Log.d(TAG, "Parsed text directly as date: $text")
+                safeLogDebug(TAG) { "Parsed text directly as date: $text" }
                 return date
             } catch (e: ParseException) {
                 // Try next pattern
@@ -570,7 +591,7 @@ class TextExtractor {
         if (text.contains("ABHIBUS", ignoreCase = true)) {
             val calendar = Calendar.getInstance()
             calendar.add(Calendar.DAY_OF_YEAR, 30)
-            Log.d(TAG, "Using default expiry date for ABHIBUS: 30 days from now")
+            safeLogDebug(TAG) { "Using default expiry date for ABHIBUS: 30 days from now" }
             return calendar.time
         }
 
@@ -595,12 +616,12 @@ class TextExtractor {
                 try {
                     val amount = matcher.group(1)?.toDoubleOrNull()
                     if (amount != null) {
-                        Log.d(TAG, "Found percentage discount: $amount%")
+                        safeLogDebug(TAG) { "Found percentage discount: $amount%" }
                         // Don't apply any conversion factor for percentages
                         return amount
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error parsing percentage", e)
+                    safeLogError(TAG, "Error parsing percentage", e)
                 }
             }
         }
@@ -618,11 +639,11 @@ class TextExtractor {
                 try {
                     val amount = matcher.group(1)?.toDoubleOrNull()
                     if (amount != null) {
-                        Log.d(TAG, "Found fixed currency amount: $amount")
+                        safeLogDebug(TAG) { "Found fixed currency amount: $amount" }
                         return amount
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error parsing amount", e)
+                    safeLogError(TAG, "Error parsing amount", e)
                 }
             }
         }
@@ -635,11 +656,11 @@ class TextExtractor {
                 try {
                     val amount = myntraAmountMatcher.group(1)?.toDoubleOrNull()
                     if (amount != null) {
-                        Log.d(TAG, "Found Myntra cashback amount: $amount")
+                        safeLogDebug(TAG) { "Found Myntra cashback amount: $amount" }
                         return amount
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error parsing Myntra amount", e)
+                    safeLogError(TAG, "Error parsing Myntra amount", e)
                 }
             }
         }
@@ -651,11 +672,11 @@ class TextExtractor {
             try {
                 val amount = simpleAmountMatcher.group(1)?.toDoubleOrNull()
                 if (amount != null) {
-                    Log.d(TAG, "Found simple cashback amount: $amount")
+                    safeLogDebug(TAG) { "Found simple cashback amount: $amount" }
                     return amount
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error parsing simple amount", e)
+                safeLogError(TAG, "Error parsing simple amount", e)
             }
         }
 
@@ -679,7 +700,7 @@ class TextExtractor {
             for (pattern in percentagePatterns) {
                 val matcher = pattern.matcher(text)
                 if (matcher.find()) {
-                    Log.d(TAG, "Identified discount type: PERCENTAGE")
+                    safeLogDebug(TAG) { "Identified discount type: PERCENTAGE" }
                     return "PERCENTAGE"
                 }
             }
@@ -696,7 +717,7 @@ class TextExtractor {
         for (pattern in amountPatterns) {
             val matcher = pattern.matcher(text)
             if (matcher.find()) {
-                Log.d(TAG, "Identified discount type: AMOUNT")
+                safeLogDebug(TAG) { "Identified discount type: AMOUNT" }
                 return "AMOUNT"
             }
         }
@@ -715,7 +736,7 @@ class TextExtractor {
         val codeMatcher = codePattern.matcher(text)
         if (codeMatcher.find()) {
             val code = codeMatcher.group(1)
-            Log.d(TAG, "Found code from 'code:' pattern: $code")
+            safeLogDebug(TAG) { "Found code from 'code:' pattern: $code" }
             RedeemCodeSanitizer.sanitize(code)?.let { sanitized ->
                 return sanitized
             }
@@ -726,7 +747,7 @@ class TextExtractor {
         val codeWithoutColonMatcher = codeWithoutColonPattern.matcher(text)
         if (codeWithoutColonMatcher.find()) {
             val code = codeWithoutColonMatcher.group(1)
-            Log.d(TAG, "Found code from 'code' pattern without colon: $code")
+            safeLogDebug(TAG) { "Found code from 'code' pattern without colon: $code" }
             RedeemCodeSanitizer.sanitize(code)?.let { sanitized ->
                 return sanitized
             }
@@ -741,7 +762,7 @@ class TextExtractor {
                 val potentialCode = myntraCodeMatcher.group(1)
                 // Skip if it's too long to be a code
                 if (potentialCode?.length ?: 0 <= 20) {
-                    Log.d(TAG, "Found Myntra code from specific pattern: $potentialCode")
+                    safeLogDebug(TAG) { "Found Myntra code from specific pattern: $potentialCode" }
                     RedeemCodeSanitizer.sanitize(potentialCode)?.let { sanitized ->
                         return sanitized
                     }
@@ -757,7 +778,7 @@ class TextExtractor {
             val potentialCode = allCapsDigitsMatcher.group(1)
             // Skip if it's likely not a code (too long or too short)
             if ((potentialCode?.length ?: 0) in 6..20 && !COMMON_WORDS.contains(potentialCode?.lowercase() ?: "")) {
-                Log.d(TAG, "Found code from all caps+digits pattern: $potentialCode")
+                safeLogDebug(TAG) { "Found code from all caps+digits pattern: $potentialCode" }
                 RedeemCodeSanitizer.sanitize(potentialCode)?.let { sanitized ->
                     return sanitized
                 }
@@ -775,7 +796,7 @@ class TextExtractor {
                 val potentialCode = afterIndicator.split(Pattern.compile("\\s+"))[0]
 
                 if (potentialCode.length >= 5 && potentialCode.matches("[A-Z0-9]+".toRegex())) {
-                    Log.d(TAG, "Found code after indicator '$indicator': $potentialCode")
+                    safeLogDebug(TAG) { "Found code after indicator '$indicator': $potentialCode" }
                     RedeemCodeSanitizer.sanitize(potentialCode)?.let { sanitized ->
                         return sanitized
                     }
@@ -796,25 +817,25 @@ class TextExtractor {
 
         // For XYXX, set category to Fashion
         if (lowerText.contains("xyxx")) {
-            Log.d(TAG, "Setting category to Fashion for XYXX")
+            safeLogDebug(TAG) { "Setting category to Fashion for XYXX" }
             return "Fashion"
         }
 
         // For Myntra, set category to Fashion
         if (lowerText.contains("myntra")) {
-            Log.d(TAG, "Setting category to Fashion for Myntra")
+            safeLogDebug(TAG) { "Setting category to Fashion for Myntra" }
             return "Fashion"
         }
 
         // For ABHIBUS, set category to Travel
         if (lowerText.contains("abhibus")) {
-            Log.d(TAG, "Setting category to Travel for ABHIBUS")
+            safeLogDebug(TAG) { "Setting category to Travel for ABHIBUS" }
             return "Travel"
         }
 
         for (category in CATEGORIES) {
             if (lowerText.contains(category.lowercase())) {
-                Log.d(TAG, "Found category from text: $category")
+                safeLogDebug(TAG) { "Found category from text: $category" }
                 return category
             }
         }
@@ -833,7 +854,7 @@ class TextExtractor {
         val ratingMatcher = ratingPattern.matcher(text)
         if (ratingMatcher.find()) {
             val rating = ratingMatcher.group(1)?.trim()
-            Log.d(TAG, "Found rating from 'Rating:' pattern: $rating")
+            safeLogDebug(TAG) { "Found rating from 'Rating:' pattern: $rating" }
             return rating
         }
 
@@ -842,7 +863,7 @@ class TextExtractor {
         val starRatingMatcher = starRatingPattern.matcher(text)
         if (starRatingMatcher.find()) {
             val rating = starRatingMatcher.group(1)
-            Log.d(TAG, "Found rating from star pattern: $rating")
+            safeLogDebug(TAG) { "Found rating from star pattern: $rating" }
             return rating
         }
 
@@ -851,7 +872,7 @@ class TextExtractor {
         val numericRatingMatcher = numericRatingPattern.matcher(text)
         if (numericRatingMatcher.find()) {
             val rating = numericRatingMatcher.group(1)
-            Log.d(TAG, "Found rating from numeric pattern: $rating")
+            safeLogDebug(TAG) { "Found rating from numeric pattern: $rating" }
             return rating
         }
 
@@ -869,25 +890,25 @@ class TextExtractor {
         val statusMatcher = statusPattern.matcher(text)
         if (statusMatcher.find()) {
             val status = statusMatcher.group(1)?.trim()
-            Log.d(TAG, "Found status from 'Status:' pattern: $status")
+            safeLogDebug(TAG) { "Found status from 'Status:' pattern: $status" }
             return status
         }
 
         // Look for "Available to Redeem" pattern
         if (text.contains("Available to Redeem", ignoreCase = true)) {
-            Log.d(TAG, "Found 'Available to Redeem' status")
+            safeLogDebug(TAG) { "Found 'Available to Redeem' status" }
             return "Available to Redeem"
         }
 
         // Look for "Redeemed" pattern
         if (text.contains("Redeemed", ignoreCase = true)) {
-            Log.d(TAG, "Found 'Redeemed' status")
+            safeLogDebug(TAG) { "Found 'Redeemed' status" }
             return "Redeemed"
         }
 
         // Look for "Expired" pattern
         if (text.contains("Expired", ignoreCase = true)) {
-            Log.d(TAG, "Found 'Expired' status")
+            safeLogDebug(TAG) { "Found 'Expired' status" }
             return "Expired"
         }
 
@@ -912,11 +933,11 @@ class TextExtractor {
                 try {
                     val amount = matcher.group(1)?.toDoubleOrNull()
                     if (amount != null) {
-                        Log.d(TAG, "Found minimum purchase amount: $amount")
+                        safeLogDebug(TAG) { "Found minimum purchase amount: $amount" }
                         return amount
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error parsing minimum purchase amount", e)
+                    safeLogError(TAG, "Error parsing minimum purchase amount", e)
                 }
             }
         }
@@ -942,11 +963,11 @@ class TextExtractor {
                 try {
                     val amount = matcher.group(1)?.toDoubleOrNull()
                     if (amount != null) {
-                        Log.d(TAG, "Found maximum discount amount: $amount")
+                        safeLogDebug(TAG) { "Found maximum discount amount: $amount" }
                         return amount
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error parsing maximum discount amount", e)
+                    safeLogError(TAG, "Error parsing maximum discount amount", e)
                 }
             }
         }
@@ -970,7 +991,7 @@ class TextExtractor {
             val matcher = pattern.matcher(text)
             if (matcher.find()) {
                 val method = matcher.group(1)
-                Log.d(TAG, "Found payment method: $method")
+                safeLogDebug(TAG) { "Found payment method: $method" }
                 return method
             }
         }
@@ -983,7 +1004,7 @@ class TextExtractor {
 
         for (method in paymentMethods) {
             if (text.contains(method, ignoreCase = true)) {
-                Log.d(TAG, "Found payment method from common list: $method")
+                safeLogDebug(TAG) { "Found payment method from common list: $method" }
                 return method
             }
         }
@@ -1018,11 +1039,11 @@ class TextExtractor {
                 try {
                     val limit = matcher.group(1)?.toIntOrNull()
                     if (limit != null) {
-                        Log.d(TAG, "Found usage limit: $limit")
+                        safeLogDebug(TAG) { "Found usage limit: $limit" }
                         return limit
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error parsing usage limit", e)
+                    safeLogError(TAG, "Error parsing usage limit", e)
                 }
             }
         }
@@ -1031,7 +1052,7 @@ class TextExtractor {
         if (text.contains("single use", ignoreCase = true) ||
             text.contains("one time", ignoreCase = true) ||
             text.contains("once per", ignoreCase = true)) {
-            Log.d(TAG, "Found single use limit")
+            safeLogDebug(TAG) { "Found single use limit" }
             return 1
         }
 

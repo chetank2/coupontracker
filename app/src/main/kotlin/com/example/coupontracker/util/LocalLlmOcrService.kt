@@ -54,6 +54,8 @@ class LocalLlmOcrService(
         // Compact prompts rely on grammar enforcement for structure, reducing verbosity
         private const val USE_COMPACT_PROMPTS = true
 
+        private val CONNECTOR_TOKENS = setOf("+", "&", "/")
+
         private val RUPEE_VARIANT_PATTERN = Regex(
             pattern = """(^|\s+|[^\w₹])((?:₹|₨|૱|रु|रू|rs\.?))[\s:=-]*([+-]?\d[\d,]*(?:\.\d+)?)""",
             options = setOf(RegexOption.IGNORE_CASE)
@@ -302,6 +304,9 @@ class LocalLlmOcrService(
         }
 
         private fun shouldKeepToken(token: String): Boolean {
+            if (CONNECTOR_TOKENS.contains(token)) {
+                return true
+            }
             val letters = token.count { it.isLetter() }
             val digits = token.count { it.isDigit() }
             val effectiveLength = token.count { !it.isWhitespace() }

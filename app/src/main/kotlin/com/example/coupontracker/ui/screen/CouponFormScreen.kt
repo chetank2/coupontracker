@@ -1,5 +1,8 @@
 package com.example.coupontracker.ui.screen
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
@@ -33,12 +36,15 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.ui.components.UnifiedCouponForm
+import com.example.coupontracker.util.ExtractionLogBuffer
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.viewmodel.CouponFormViewModel
 import com.example.coupontracker.ui.viewmodel.CouponSaveResult
 import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 import java.text.SimpleDateFormat
 import java.util.Locale
+
+private const val TAG = "CouponFormScreen"
 
 /**
  * Screen for editing coupon details with a consistent form
@@ -54,6 +60,7 @@ fun CouponFormScreen(
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val clipboard = remember { context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager }
 
     val persistedImageUri = uiState.persistedImageUri
     val previewImageUriString = persistedImageUri ?: imageUri
@@ -164,19 +171,19 @@ fun CouponFormScreen(
         } else {
             UnifiedCouponForm(
                 storeName = storeName,
-            onStoreNameChange = { storeName = it },
-            description = description,
-            onDescriptionChange = { description = it },
-            amount = amount,
-            onAmountChange = { amount = it },
-            code = code,
-            onCodeChange = { code = it },
-            expiryDateString = expiryDateString,
-            onExpiryDateStringChange = { expiryDateString = it },
-            category = category,
-            onCategoryChange = { category = it },
-            imageUri = previewImageUri,
-            onSave = {
+                onStoreNameChange = { storeName = it },
+                description = description,
+                onDescriptionChange = { description = it },
+                amount = amount,
+                onAmountChange = { amount = it },
+                code = code,
+                onCodeChange = { code = it },
+                expiryDateString = expiryDateString,
+                onExpiryDateStringChange = { expiryDateString = it },
+                category = category,
+                onCategoryChange = { category = it },
+                imageUri = previewImageUri,
+                onSave = {
                 val amountValue = amount.toDoubleOrNull() ?: 0.0
                 val expiryDate = try {
                     if (expiryDateString.isNotBlank()) {
@@ -189,22 +196,29 @@ fun CouponFormScreen(
                     null
                 }
 
-                viewModel.saveCoupon(
-                    storeName = storeName,
-                    description = description,
-                    amount = amountValue,
-                    code = code,
-                    expiryDate = expiryDate,
-                    category = category,
-                    imageUri = previewImageUriString?.takeIf { it.isNotBlank() }
-                )
-            },
-            isSaving = uiState.isSaving,
-            error = uiState.error,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp)
+                    viewModel.saveCoupon(
+                        storeName = storeName,
+                        description = description,
+                        amount = amountValue,
+                        code = code,
+                        expiryDate = expiryDate,
+                        category = category,
+                        imageUri = previewImageUriString?.takeIf { it.isNotBlank() }
+                    )
+                },
+                onCopyLogs = {
+                    val logText = ExtractionLogBuffer.getLogText().ifBlank { "No log data recorded yet." }
+                    val clip = ClipData.newPlainText("Coupon Extraction Log", logText)
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(context, "Logcat data copied", Toast.LENGTH_SHORT).show()
+                    ExtractionLogBuffer.appendInfo(TAG, "Log data copied to clipboard from compose UI (${logText.length} chars)")
+                },
+                isSaving = uiState.isSaving,
+                error = uiState.error,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(16.dp)
             )
         }
     }

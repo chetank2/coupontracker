@@ -152,6 +152,7 @@ class CouponInputManager(
         return withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Processing coupon from image URI: $imageUri")
+                ExtractionLogBuffer.appendInfo(TAG, "Processing coupon from image URI: $imageUri")
 
                 // Check if this is a PDF
                 if (isPdfFile(imageUri)) {
@@ -164,6 +165,7 @@ class CouponInputManager(
                     Log.d(TAG, "Extracted capture timestamp: $captureTimestamp")
                 } else {
                     Log.w(TAG, "No capture timestamp found, using fallback")
+                    ExtractionLogBuffer.appendWarning(TAG, "No capture timestamp found, using fallback")
                 }
                 
                 // Process as a regular image with capture timestamp
@@ -171,6 +173,7 @@ class CouponInputManager(
                 return@withContext processCouponFromBitmap(bitmap, captureTimestamp)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon from image URI", e)
+                ExtractionLogBuffer.appendError(TAG, "Error processing coupon from image URI", e)
                 throw e
             }
         }
@@ -185,11 +188,15 @@ class CouponInputManager(
         return withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Processing and persisting coupon from image URI: $imageUri")
+                ExtractionLogBuffer.appendInfo(TAG, "Persisting coupon from image URI: $imageUri")
 
                 // First persist the URI to app storage
                 val persistedUri = uriPersistenceManager.persistUri(imageUri)
                 if (persistedUri == null) {
                     Log.w(TAG, "Failed to persist URI, using original: $imageUri")
+                    ExtractionLogBuffer.appendWarning(TAG, "Failed to persist URI, using original: $imageUri")
+                } else {
+                    ExtractionLogBuffer.appendInfo(TAG, "Persisted image URI: $persistedUri")
                 }
 
                 // Process the coupon (use original URI for processing)
@@ -201,6 +208,7 @@ class CouponInputManager(
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon from image URI with persistence", e)
+                ExtractionLogBuffer.appendError(TAG, "Error processing coupon from image URI with persistence", e)
                 throw e
             }
         }
@@ -216,21 +224,25 @@ class CouponInputManager(
         return withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Processing coupon from bitmap")
+                ExtractionLogBuffer.appendInfo(TAG, "Processing coupon from bitmap")
                 
                 // Quick OCR scan for multi-coupon detection
                 val quickOcrText = try {
                     quickOcrEngine.recognize(bitmap)
                 } catch (e: Exception) {
                     Log.w(TAG, "Quick OCR failed for multi-coupon detection: ${e.message}")
+                    ExtractionLogBuffer.appendWarning(TAG, "Quick OCR failed for multi-coupon detection: ${e.message}")
                     ""
                 }
 
                 val classification = screenshotClassifier.classify(bitmap, quickOcrText)
                 Log.d(TAG, "Screenshot classification: type=${classification.type}, confidence=${classification.confidence}")
+                ExtractionLogBuffer.appendInfo(TAG, "Screenshot classification: type=${classification.type}, confidence=${classification.confidence}")
 
                 if (classification.type == ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP) {
                     val couponCount = (classification.indicators["coupon_count"] as? Int) ?: 0
                     Log.d(TAG, "🚨 Multi-coupon screenshot detected ($couponCount coupons)")
+                    ExtractionLogBuffer.appendInfo(TAG, "Multi-coupon screenshot detected ($couponCount coupons)")
 
                     val multiResult = multiCouponExtractionService?.let { service ->
                         runCatching {
@@ -240,17 +252,20 @@ class CouponInputManager(
                             )
                         }.getOrElse { error ->
                             Log.e(TAG, "Multi-coupon extraction failed, falling back to single extraction", error)
+                            ExtractionLogBuffer.appendError(TAG, "Multi-coupon extraction failed", error)
                             null
                         }
                     }
 
                     if (multiResult != null && multiResult.coupons.isNotEmpty()) {
                         Log.d(TAG, "✅ Multi-coupon extraction succeeded: extracted ${multiResult.coupons.size} coupon(s)")
+                        ExtractionLogBuffer.appendInfo(TAG, "Multi-coupon extraction succeeded: extracted ${multiResult.coupons.size} coupon(s)")
                         handleMultiCouponResult(multiResult, captureTimestamp)?.let { combinedResult ->
                             return@withContext combinedResult
                         }
                     } else {
                         Log.w(TAG, "⚠️ Multi-coupon extraction returned no coupons, falling back to single extraction")
+                        ExtractionLogBuffer.appendWarning(TAG, "Multi-coupon extraction returned no coupons")
                     }
                 }
 
@@ -258,6 +273,7 @@ class CouponInputManager(
                 val barcodeResult = scanForBarcodes(bitmap)
                 if (barcodeResult != null) {
                     Log.d(TAG, "Barcode detected: ${barcodeResult.rawValue}")
+                    ExtractionLogBuffer.appendInfo(TAG, "Barcode detected: ${barcodeResult.rawValue}")
 
                     // If it's a URL, try to process it
                     if (barcodeResult.valueType == Barcode.TYPE_URL) {
@@ -267,6 +283,7 @@ class CouponInputManager(
                                 return@withContext processCouponFromUrl(url)
                             } catch (e: Exception) {
                                 Log.e(TAG, "Failed to process URL from barcode, continuing with image processing", e)
+                                ExtractionLogBuffer.appendError(TAG, "Failed to process URL from barcode", e)
                             }
                         }
                     }
@@ -294,9 +311,11 @@ class CouponInputManager(
 
                 // Process with OCR using capture timestamp
                 val couponInfo = imageProcessor.processImage(bitmap, captureTimestamp)
+                ExtractionLogBuffer.appendInfo(TAG, "ImageProcessor returned coupon info: store='${couponInfo.storeName}', description='${couponInfo.description}'")
                 val normalizedExpiry = normalizeExpiryDate(couponInfo.expiryDate, captureTimestamp)
                 if (couponInfo.expiryDate != null && normalizedExpiry == null) {
                     Log.d(TAG, "Discarding fallback expiry date; treating as unknown")
+                    ExtractionLogBuffer.appendInfo(TAG, "Discarding fallback expiry date; treating as unknown")
                 }
 
                 // Convert CouponInfo to Coupon
@@ -336,6 +355,7 @@ class CouponInputManager(
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon from bitmap", e)
+                ExtractionLogBuffer.appendError(TAG, "Error processing coupon from bitmap", e)
                 throw e
             }
         }
@@ -400,6 +420,7 @@ class CouponInputManager(
         return withContext(Dispatchers.IO) {
             try {
                 Log.d(TAG, "Processing coupon from URL: $urlString")
+                ExtractionLogBuffer.appendInfo(TAG, "Processing coupon from URL: $urlString")
 
                 // Download the content from the URL
                 val url = URL(urlString)
