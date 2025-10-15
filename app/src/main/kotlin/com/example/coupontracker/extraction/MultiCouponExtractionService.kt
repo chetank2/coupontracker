@@ -3,6 +3,7 @@ package com.example.coupontracker.extraction
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import kotlin.system.measureTimeMillis
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.extraction.deterministic.DescriptionComposer
 import com.example.coupontracker.extraction.deterministic.DeterministicCouponExtractor
@@ -114,11 +115,15 @@ class MultiCouponExtractionService @Inject constructor(
         Log.d(TAG, "Starting multi-coupon extraction")
         Log.d(TAG, "Image: ${bitmap.width}x${bitmap.height}")
         Log.d(TAG, "========================================")
-        
+
         try {
             // Step 1: Run OCR on full image
             Log.d(TAG, "Step 1: Running OCR...")
-            val ocrResult = multiEngineOCR.processImage(bitmap)
+            lateinit var ocrResult: MultiEngineOCR.OCRResult
+            val ocrMillis = measureTimeMillis {
+                ocrResult = multiEngineOCR.processImage(bitmap)
+            }
+            Log.d(TAG, "OCR finished in ${ocrMillis}ms")
 
             if (ocrResult !is MultiEngineOCR.OCRResult.Success) {
                 Log.w(TAG, "OCR bootstrap failed: ${ocrResult}")
@@ -134,20 +139,30 @@ class MultiCouponExtractionService @Inject constructor(
             
             // Step 2: Classify screenshot type
             Log.d(TAG, "Step 2: Classifying screenshot type...")
-            val classification = screenshotClassifier.classify(bitmap, fullText)
+            lateinit var classification: ScreenshotClassifier.ClassificationResult
+            val classifyMillis = measureTimeMillis {
+                classification = screenshotClassifier.classify(bitmap, fullText)
+            }
+            Log.d(TAG, "Classification finished in ${classifyMillis}ms")
             Log.d(TAG, "Classification: ${classification.type} (confidence: ${classification.confidence})")
-            
+
             // Step 3: Detect coupon regions using hybrid detector
             Log.d(TAG, "Step 3: Detecting coupon regions...")
-            val couponRegions = hybridDetector.detectCoupons(bitmap, ocrResult)
+            lateinit var couponRegions: List<HybridCouponDetector.Region>
+            val detectMillis = measureTimeMillis {
+                couponRegions = hybridDetector.detectCoupons(bitmap, ocrResult)
+            }
+            Log.d(TAG, "Hybrid detector finished in ${detectMillis}ms")
             Log.d(TAG, "Detected ${couponRegions.size} coupon region(s)")
 
-            val regionCandidates = regionizer.regionize(
-                bitmap = bitmap,
-                screenshotType = classification.type,
-                ocrText = fullText,
-                fallbackRegions = couponRegions
-            )
+            val regionCandidates = logStageDuration("Regionizer") {
+                regionizer.regionize(
+                    bitmap = bitmap,
+                    screenshotType = classification.type,
+                    ocrText = fullText,
+                    fallbackRegions = couponRegions
+                )
+            }
 
             if (regionCandidates.isEmpty()) {
                 Log.w(TAG, "Regionizer produced no candidates; falling back to progressive extraction")
@@ -168,17 +183,18 @@ class MultiCouponExtractionService @Inject constructor(
             Log.d(TAG, "Step 4: Extracting ${regionsToProcess.size} coupon(s)...")
             val extractedCoupons = mutableListOf<CouponWithConfidence>()
             var filteredCount = 0
-            
+
             for ((index, region) in regionsToProcess.withIndex()) {
                 try {
                     Log.d(TAG, "  Extracting coupon ${index + 1}/${regionsToProcess.size} (mode=${region.mode})...")
-
-                    val couponWithConfidence = extractSingleRegion(
-                        bitmap = bitmap,
-                        candidate = region,
-                        regionIndex = index,
-                        imageUri = imageUri
-                    )
+                    val couponWithConfidence = logStageDuration("Region ${index + 1} extraction") {
+                        extractSingleRegion(
+                            bitmap = bitmap,
+                            candidate = region,
+                            regionIndex = index,
+                            imageUri = imageUri
+                        )
+                    }
                     
                     // Step 5: Filter by confidence threshold
                     if (couponWithConfidence.confidence >= MIN_CONFIDENCE_THRESHOLD) {
@@ -378,6 +394,14 @@ class MultiCouponExtractionService @Inject constructor(
         return deduped
     }
 
+    private inline fun <T> logStageDuration(stageName: String, block: () -> T): T {
+        var result: T? = null
+        val elapsed = measureTimeMillis { result = block() }
+        Log.d(TAG, "$stageName finished in ${elapsed}ms")
+        @Suppress("UNCHECKED_CAST")
+        return result as T
+    }
+
     private suspend fun fallbackToProgressiveExtraction(
         bitmap: Bitmap,
         imageUri: String?,
@@ -392,14 +416,16 @@ class MultiCouponExtractionService @Inject constructor(
         val captureTimestamp = Date()
         val fallbackUri = imageUri ?: "multi_coupon_fallback"
 
-        val progressive = progressiveExtractionService.extractCoupon(
-            androidContext = context,
-            image = bitmap,
-            ocrText = fallbackText,
-            ocrBlocks = emptyList(),
-            imageUri = fallbackUri,
-            captureTimestamp = captureTimestamp
-        )
+        val progressive = logStageDuration("Progressive fallback") {
+            progressiveExtractionService.extractCoupon(
+                androidContext = context,
+                image = bitmap,
+                ocrText = fallbackText,
+                ocrBlocks = emptyList(),
+                imageUri = fallbackUri,
+                captureTimestamp = captureTimestamp
+            )
+        }
 
         val refined = CouponPostProcessor.refine(
             coupon = progressive.coupon,
