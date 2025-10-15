@@ -313,36 +313,11 @@ class TextExtractor {
                 }
                 val combined = builder.toString().replace("\\s+".toRegex(), " ").trim()
                 safeLogDebug(TAG) { "Found multi-line offer description: $combined" }
-                // Don't sanitize for "buy X get Y" patterns - return raw combined text
-                return combined.takeIf { it.isNotBlank() }
+                if (combined.isMeaningfulDescription()) {
+                    return combined
+                }
             }
         }
-
-        // SECOND: try to form a clean description using store name and discount info
-        val storeName = extractStoreName(text) ?: ""
-        val discountType = extractDiscountType(text)
-        val cashbackAmount = extractCashbackAmount(text)
-
-        if (storeName.isNotBlank() && cashbackAmount != null) {
-            val amountStr = if (discountType == "PERCENTAGE") {
-                "$cashbackAmount%"
-            } else {
-                "₹$cashbackAmount"
-            }
-
-            val discountPhrase = when {
-                text.contains("cashback", ignoreCase = true) -> "$amountStr cashback"
-                text.contains("flat", ignoreCase = true) -> "Flat $amountStr off"
-                discountType == "PERCENTAGE" -> "Up to $amountStr off"
-                else -> "$amountStr off"
-            }
-
-            val cleanDescription = "$storeName Coupon - $discountPhrase"
-            safeLogDebug(TAG) { "Created clean description: $cleanDescription" }
-            sanitizeDescription(cleanDescription)?.let { return it }
-        }
-
-        // If we couldn't create a clean description, fall back to pattern matching
 
         // Look for "Offer:" pattern
         val offerPattern = Pattern.compile("(?i)Offer:\\s*(.+?)(?=\\n|$)")
@@ -392,7 +367,10 @@ class TextExtractor {
         val candidates = mutableListOf<String>()
 
         fun addCandidate(raw: String?) {
-            sanitizeDescription(raw)?.takeIf { it.length >= 4 }?.let { candidates.add(it) }
+            val sanitized = sanitizeDescription(raw)
+            if (sanitized != null && sanitized.isMeaningfulDescription()) {
+                candidates.add(sanitized)
+            }
         }
 
         // Look for discount descriptions
@@ -403,7 +381,10 @@ class TextExtractor {
             Pattern.compile("(?i)(₹\\d+\\s+off.{3,80})"),
             Pattern.compile("(?i)(Rs\\.?\\s*\\d+\\s+off.{3,80})"),
             Pattern.compile("(?i)(save\\s+\\d+%.{3,80})"),
-            Pattern.compile("(?i)(up\\s+to\\s+₹\\d+\\s+off?.{0,80})")
+            Pattern.compile("(?i)(up\\s+to\\s+₹\\d+\\s+off?.{0,80})"),
+            Pattern.compile("(?i)(flat\\s+(?:₹\\s*)?\\d+[\\d,]*(?:\\.\\d+)?\\s+(?:off|cashback).{0,80})"),
+            Pattern.compile("(?i)(\\d+[\\d,]*(?:\\.\\d+)?\\s+cashback.{0,80})"),
+            Pattern.compile("(?i)(extra\\s+\\d+%\\s+off.{0,80})")
         )
 
         for (pattern in discountPatterns) {
@@ -423,12 +404,43 @@ class TextExtractor {
             addCandidate(desc)
         }
 
-        return candidates.maxByOrNull { it.length }
+        return candidates
+            .filter { it.isMeaningfulDescription() }
+            .maxByOrNull { it.length }
     }
 
     private fun sanitizeDescription(value: String?): String? {
         val cleaned = LocalLlmOcrService.cleanDescription(value)
         return cleaned.ifBlank { null }
+    }
+
+    private fun String.isMeaningfulDescription(): Boolean {
+        if (isBlank()) {
+            return false
+        }
+
+        val normalized = trim()
+        if (normalized.length < 4) {
+            return false
+        }
+
+        val hasAlphaNumeric = normalized.any { it.isLetterOrDigit() }
+        if (!hasAlphaNumeric) {
+            return false
+        }
+
+        val genericPhrases = listOf(
+            "offer",
+            "coupon",
+            "deal"
+        )
+
+        val lower = normalized.lowercase(Locale.ROOT)
+        if (genericPhrases.any { lower == it }) {
+            return false
+        }
+
+        return true
     }
 
     /**
