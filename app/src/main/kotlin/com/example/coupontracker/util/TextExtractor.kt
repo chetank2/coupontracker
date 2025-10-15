@@ -287,7 +287,16 @@ class TextExtractor {
         }
 
         val cleaned = builder.joinToString(" ").trim()
-        return cleaned.takeIf { it.length >= 3 }
+        if (cleaned.length < 3) {
+            return null
+        }
+
+        if (!cleaned.any { it.isLetter() }) {
+            // Guard against numeric dashboard counters like "428"
+            return null
+        }
+
+        return cleaned
     }
 
     /**
@@ -429,6 +438,10 @@ class TextExtractor {
             return false
         }
 
+        if (looksLikeDashboardStats(normalized)) {
+            return false
+        }
+
         val genericPhrases = listOf(
             "offer",
             "coupon",
@@ -441,6 +454,28 @@ class TextExtractor {
         }
 
         return true
+    }
+
+    private fun looksLikeDashboardStats(text: String): Boolean {
+        val lower = text.lowercase(Locale.ROOT)
+
+        if (Regex("^\\d{1,2}:\\d{2}").containsMatchIn(text.trim())) {
+            return true
+        }
+
+        if (Regex("vouchers?\\s+active").containsMatchIn(lower)) {
+            return true
+        }
+
+        if (Regex("lifetime\\s*:\\s*\\d+").containsMatchIn(lower)) {
+            return true
+        }
+
+        if (Regex("active\\s*:\\s*\\d+").containsMatchIn(lower)) {
+            return true
+        }
+
+        return false
     }
 
     /**
