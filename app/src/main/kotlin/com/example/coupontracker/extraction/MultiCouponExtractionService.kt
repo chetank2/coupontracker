@@ -3,6 +3,7 @@ package com.example.coupontracker.extraction
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import kotlin.system.measureTimeMillis
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.extraction.deterministic.DescriptionComposer
 import com.example.coupontracker.extraction.deterministic.DeterministicCouponExtractor
@@ -61,17 +62,37 @@ class MultiCouponExtractionService @Inject constructor(
     )
     private val descriptionComposer = DescriptionComposer(storeCanon)
     private val sanitizer = SmartCouponSanitizer(storeCanon, descriptionComposer)
+
+    init {
+        // Multi-engine OCR should remain available for multi-coupon screenshots even when
+        // network state callbacks haven't arrived yet (the extractor runs off the main flow).
+        // Previous revisions forgot to opt the helper into offline mode which caused the
+        // pipeline to abort at the very first step.
+        multiEngineOCR.setNetworkAvailability(true)
+    }
     
     companion object {
         private const val TAG = "MultiCouponExtractionService"
-        
+
         // Minimum confidence threshold for accepting extracted coupons
         private const val MIN_CONFIDENCE_THRESHOLD = 0.50f
-        
+
         // Maximum coupons to extract from a single screenshot
         private const val MAX_COUPONS_PER_SCREENSHOT = 10
     }
-    
+
+    private sealed class BootstrapOutcome {
+        data class Ready(
+            val ocrResult: MultiEngineOCR.OCRResult.Success,
+            val fullText: String,
+            val classification: ScreenshotClassifier.ClassificationResult,
+            val couponRegions: List<HybridCouponDetector.Region>,
+            val regionCandidates: List<CouponRegionizer.RegionCandidate>
+        ) : BootstrapOutcome()
+
+        data class NeedsFallback(val reason: String) : BootstrapOutcome()
+    }
+
     /**
      * Coupon with confidence metadata
      */
@@ -101,47 +122,25 @@ class MultiCouponExtractionService @Inject constructor(
         bitmap: Bitmap,
         imageUri: String? = null
     ): MultiCouponResult = withContext(Dispatchers.Default) {
-        
+
         Log.d(TAG, "========================================")
         Log.d(TAG, "Starting multi-coupon extraction")
         Log.d(TAG, "Image: ${bitmap.width}x${bitmap.height}")
         Log.d(TAG, "========================================")
-        
+
         try {
-            // Step 1: Run OCR on full image
-            Log.d(TAG, "Step 1: Running OCR...")
-            val ocrResult = multiEngineOCR.processImage(bitmap)
-            
-            if (ocrResult !is MultiEngineOCR.OCRResult.Success) {
-                Log.e(TAG, "OCR failed, cannot proceed with multi-coupon extraction")
-                return@withContext MultiCouponResult(
-                    coupons = emptyList(),
-                    screenshotType = ScreenshotClassifier.ScreenshotType.CAMERA_CAPTURE,
-                    totalDetected = 0,
-                    totalExtracted = 0,
-                    totalFiltered = 0
+            val bootstrap = bootstrapExtraction(bitmap)
+
+            if (bootstrap is BootstrapOutcome.NeedsFallback) {
+                return@withContext fallbackToProgressiveExtraction(
+                    bitmap = bitmap,
+                    imageUri = imageUri,
+                    failureReason = bootstrap.reason
                 )
             }
-            
-            val fullText = ocrResult.extractedInfo.values.joinToString("\n")
-            Log.d(TAG, "OCR extracted ${fullText.length} characters")
-            
-            // Step 2: Classify screenshot type
-            Log.d(TAG, "Step 2: Classifying screenshot type...")
-            val classification = screenshotClassifier.classify(bitmap, fullText)
-            Log.d(TAG, "Classification: ${classification.type} (confidence: ${classification.confidence})")
-            
-            // Step 3: Detect coupon regions using hybrid detector
-            Log.d(TAG, "Step 3: Detecting coupon regions...")
-            val couponRegions = hybridDetector.detectCoupons(bitmap, ocrResult)
-            Log.d(TAG, "Detected ${couponRegions.size} coupon region(s)")
 
-            val regionCandidates = regionizer.regionize(
-                bitmap = bitmap,
-                screenshotType = classification.type,
-                ocrText = fullText,
-                fallbackRegions = couponRegions
-            )
+            bootstrap as BootstrapOutcome.Ready
+            val (ocrResult, fullText, classification, couponRegions, regionCandidates) = bootstrap
 
             // Limit to MAX_COUPONS_PER_SCREENSHOT
             val regionsToProcess = regionCandidates.take(MAX_COUPONS_PER_SCREENSHOT)
@@ -153,17 +152,18 @@ class MultiCouponExtractionService @Inject constructor(
             Log.d(TAG, "Step 4: Extracting ${regionsToProcess.size} coupon(s)...")
             val extractedCoupons = mutableListOf<CouponWithConfidence>()
             var filteredCount = 0
-            
+
             for ((index, region) in regionsToProcess.withIndex()) {
                 try {
                     Log.d(TAG, "  Extracting coupon ${index + 1}/${regionsToProcess.size} (mode=${region.mode})...")
-
-                    val couponWithConfidence = extractSingleRegion(
-                        bitmap = bitmap,
-                        candidate = region,
-                        regionIndex = index,
-                        imageUri = imageUri
-                    )
+                    val couponWithConfidence = logStageDuration("Region ${index + 1} extraction") {
+                        extractSingleRegion(
+                            bitmap = bitmap,
+                            candidate = region,
+                            regionIndex = index,
+                            imageUri = imageUri
+                        )
+                    }
                     
                     // Step 5: Filter by confidence threshold
                     if (couponWithConfidence.confidence >= MIN_CONFIDENCE_THRESHOLD) {
@@ -180,16 +180,34 @@ class MultiCouponExtractionService @Inject constructor(
                 }
             }
             
+            val dedupedCoupons = logStageDuration("Deduping coupons") {
+                dedupeCoupons(extractedCoupons)
+            }
+
+            val dedupeDrop = extractedCoupons.size - dedupedCoupons.size
+            if (dedupeDrop > 0) {
+                Log.d(TAG, "Removed $dedupeDrop duplicate coupon candidate(s)")
+            }
+
+            if (dedupedCoupons.isEmpty()) {
+                Log.w(TAG, "All regions filtered out; invoking progressive fallback")
+                return@withContext fallbackToProgressiveExtraction(
+                    bitmap = bitmap,
+                    imageUri = imageUri,
+                    failureReason = "all regions filtered"
+                )
+            }
+
             Log.d(TAG, "========================================")
             Log.d(TAG, "Multi-coupon extraction complete")
-            Log.d(TAG, "Detected: ${couponRegions.size}, Extracted: ${extractedCoupons.size}, Filtered: $filteredCount")
+            Log.d(TAG, "Detected: ${couponRegions.size}, Extracted: ${dedupedCoupons.size}, Filtered: $filteredCount")
             Log.d(TAG, "========================================")
-            
+
             return@withContext MultiCouponResult(
-                coupons = extractedCoupons,
+                coupons = dedupedCoupons,
                 screenshotType = classification.type,
                 totalDetected = regionCandidates.size,
-                totalExtracted = extractedCoupons.size,
+                totalExtracted = dedupedCoupons.size,
                 totalFiltered = filteredCount
             )
             
@@ -311,26 +329,165 @@ class MultiCouponExtractionService @Inject constructor(
             if (ocrResult !is MultiEngineOCR.OCRResult.Success) {
                 return@withContext false
             }
-            
+
             val fullText = ocrResult.extractedInfo.values.joinToString("\n")
-            
+
             // Quick classification
             val classification = screenshotClassifier.classify(bitmap, fullText)
-            
+
             // Use multi-coupon extraction if:
             // 1. Classified as MULTI_COUPON_APP with high confidence
             // 2. Or has multiple coupon indicators (fallback check)
             val shouldUse = classification.type == ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP &&
                            classification.confidence >= 0.7f
-            
+
             val hasMultipleIndicators = screenshotClassifier.hasMultipleCouponIndicators(fullText)
-            
+
             return@withContext shouldUse || hasMultipleIndicators
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "Error checking if should use multi-coupon extraction", e)
             return@withContext false
         }
+    }
+
+    private fun dedupeCoupons(coupons: List<CouponWithConfidence>): List<CouponWithConfidence> {
+        val seen = mutableSetOf<String>()
+        val deduped = mutableListOf<CouponWithConfidence>()
+        for (coupon in coupons) {
+            val codeKey = coupon.coupon.redeemCode?.uppercase()?.takeIf { it.isNotBlank() }
+            val key = buildString {
+                append(coupon.coupon.storeName.lowercase())
+                append('|')
+                append(codeKey ?: coupon.coupon.description.lowercase())
+            }
+            if (seen.add(key)) {
+                deduped.add(coupon)
+            } else {
+                Log.d(TAG, "Skipping duplicate coupon candidate for key=$key")
+            }
+        }
+        return deduped
+    }
+
+    private fun bootstrapExtraction(bitmap: Bitmap): BootstrapOutcome {
+        Log.d(TAG, "Step 1: Running OCR...")
+        lateinit var ocrResult: MultiEngineOCR.OCRResult
+        val ocrMillis = measureTimeMillis {
+            ocrResult = multiEngineOCR.processImage(bitmap)
+        }
+        Log.d(TAG, "OCR finished in ${ocrMillis}ms")
+
+        if (ocrResult !is MultiEngineOCR.OCRResult.Success) {
+            Log.w(TAG, "OCR bootstrap failed: ${ocrResult}")
+            return BootstrapOutcome.NeedsFallback("multi-engine OCR bootstrap")
+        }
+
+        val fullText = ocrResult.extractedInfo.values.joinToString("\n")
+        Log.d(TAG, "OCR extracted ${fullText.length} characters")
+
+        Log.d(TAG, "Step 2: Classifying screenshot type...")
+        lateinit var classification: ScreenshotClassifier.ClassificationResult
+        val classifyMillis = measureTimeMillis {
+            classification = screenshotClassifier.classify(bitmap, fullText)
+        }
+        Log.d(TAG, "Classification finished in ${classifyMillis}ms")
+        Log.d(TAG, "Classification: ${classification.type} (confidence: ${classification.confidence})")
+
+        Log.d(TAG, "Step 3: Detecting coupon regions...")
+        lateinit var couponRegions: List<HybridCouponDetector.Region>
+        val detectMillis = measureTimeMillis {
+            couponRegions = hybridDetector.detectCoupons(bitmap, ocrResult)
+        }
+        Log.d(TAG, "Hybrid detector finished in ${detectMillis}ms")
+        Log.d(TAG, "Detected ${couponRegions.size} coupon region(s)")
+
+        val regionCandidates = logStageDuration("Regionizer") {
+            regionizer.regionize(
+                bitmap = bitmap,
+                screenshotType = classification.type,
+                ocrText = fullText,
+                fallbackRegions = couponRegions
+            )
+        }
+
+        if (regionCandidates.isEmpty()) {
+            Log.w(TAG, "Regionizer produced no candidates; falling back to progressive extraction")
+            return BootstrapOutcome.NeedsFallback("no region candidates")
+        }
+
+        return BootstrapOutcome.Ready(
+            ocrResult = ocrResult,
+            fullText = fullText,
+            classification = classification,
+            couponRegions = couponRegions,
+            regionCandidates = regionCandidates
+        )
+    }
+
+    private inline fun <T> logStageDuration(stageName: String, block: () -> T): T {
+        var result: T? = null
+        val elapsed = measureTimeMillis { result = block() }
+        Log.d(TAG, "$stageName finished in ${elapsed}ms")
+        @Suppress("UNCHECKED_CAST")
+        return result as T
+    }
+
+    private suspend fun fallbackToProgressiveExtraction(
+        bitmap: Bitmap,
+        imageUri: String?,
+        failureReason: String
+    ): MultiCouponResult {
+        Log.w(TAG, "Falling back to progressive extraction due to $failureReason")
+
+        val fallbackText = runCatching { ocrEngine.recognize(bitmap) }
+            .onFailure { Log.e(TAG, "Fallback OCR recognize failed", it) }
+            .getOrElse { "" }
+
+        val captureTimestamp = Date()
+        val fallbackUri = imageUri ?: "multi_coupon_fallback"
+
+        val progressive = logStageDuration("Progressive fallback") {
+            progressiveExtractionService.extractCoupon(
+                androidContext = context,
+                image = bitmap,
+                ocrText = fallbackText,
+                ocrBlocks = emptyList(),
+                imageUri = fallbackUri,
+                captureTimestamp = captureTimestamp
+            )
+        }
+
+        val refined = CouponPostProcessor.refine(
+            coupon = progressive.coupon,
+            context = CouponFixContext(
+                ocrText = fallbackText,
+                captureTimestamp = captureTimestamp
+            )
+        )
+
+        val validation = extractionValidator.validate(refined)
+        val couponWithConfidence = CouponWithConfidence(
+            coupon = refined,
+            confidence = maxOf(progressive.confidence, validation.validationResult.overallConfidence),
+            extractionQuality = validation.extractionQuality,
+            warnings = validation.actionableRecommendations
+        )
+
+        val acceptedCoupons = if (couponWithConfidence.confidence >= MIN_CONFIDENCE_THRESHOLD) {
+            listOf(couponWithConfidence)
+        } else {
+            Log.w(TAG, "Progressive fallback coupon below threshold (${couponWithConfidence.confidence})")
+            emptyList()
+        }
+
+        return MultiCouponResult(
+            coupons = acceptedCoupons,
+            screenshotType = ScreenshotClassifier.ScreenshotType.CAMERA_CAPTURE,
+            totalDetected = if (acceptedCoupons.isEmpty()) 0 else 1,
+            totalExtracted = acceptedCoupons.size,
+            totalFiltered = if (acceptedCoupons.isEmpty()) 1 else 0
+        )
     }
 }
 
