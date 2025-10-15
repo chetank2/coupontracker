@@ -130,12 +130,6 @@ class CouponInputManager(
 
         val bestCoupon = multiResult.coupons.maxByOrNull { it.confidence } ?: return null
 
-        storeMultiCouponSession(
-            multiResult = multiResult,
-            captureTimestamp = captureTimestamp,
-            sourceImageUri = sourceImageUri
-        )
-
         val coupon = bestCoupon.coupon
         return coupon.copy(
             createdAt = captureTimestamp ?: coupon.createdAt,
@@ -274,7 +268,11 @@ class CouponInputManager(
                     if (multiResult != null && multiResult.coupons.isNotEmpty()) {
                         Log.d(TAG, "✅ Multi-coupon extraction succeeded: extracted ${multiResult.coupons.size} coupon(s)")
                         ExtractionLogBuffer.appendInfo(TAG, "Multi-coupon extraction succeeded: extracted ${multiResult.coupons.size} coupon(s)")
-                        handleMultiCouponResult(multiResult, captureTimestamp)?.let { combinedResult ->
+                        handleMultiCouponResult(
+                            multiResult = multiResult,
+                            captureTimestamp = captureTimestamp,
+                            sourceImageUri = null
+                        )?.let { combinedResult ->
                             return@withContext combinedResult
                         }
                     } else {

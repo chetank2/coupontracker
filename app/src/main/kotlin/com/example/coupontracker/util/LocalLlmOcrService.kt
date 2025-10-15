@@ -1022,7 +1022,7 @@ $sanitizedOcr
             var sanitized = jsonString
             val removalPatterns = listOf(
                 "\"offerText\"\\s*:\\s*\".*?\"\\s*,?",
-                "\"cashback\"\\s*:\\s*\{.*?}\\s*,?",
+                "\"cashback\"\\s*:\\s*\\{.*?\\}\\s*,?",
                 "\"cashbackAmount\"\\s*:\\s*[^,{}]+,?",
                 "\"minOrderAmount\"\\s*:\\s*[^,{}]+,?",
                 "\"minimumPurchase\"\\s*:\\s*[^,{}]+,?",
