@@ -325,9 +325,11 @@ class TextExtractor {
 
         if (storeName.isNotBlank() && cashbackAmount != null) {
             val amountStr = if (discountType == "PERCENTAGE") {
-                "$cashbackAmount%"
+                val normalized = text.findPercentagePhrase()?.takeIf { it.contains('%') }
+                normalized ?: "$cashbackAmount%"
             } else {
-                "₹$cashbackAmount"
+                val currencyPhrase = text.findRupeeAmountPhrase()
+                currencyPhrase ?: "₹$cashbackAmount"
             }
 
             val discountPhrase = when {
@@ -339,7 +341,11 @@ class TextExtractor {
 
             val cleanDescription = "$storeName Coupon - $discountPhrase"
             safeLogDebug(TAG) { "Created clean description: $cleanDescription" }
-            sanitizeDescription(cleanDescription)?.let { return it }
+            sanitizeDescription(cleanDescription)?.let { described ->
+                if (described.isMeaningfulDescription()) {
+                    return described
+                }
+            }
         }
 
         // If we couldn't create a clean description, fall back to pattern matching
@@ -392,7 +398,10 @@ class TextExtractor {
         val candidates = mutableListOf<String>()
 
         fun addCandidate(raw: String?) {
-            sanitizeDescription(raw)?.takeIf { it.length >= 4 }?.let { candidates.add(it) }
+            val sanitized = sanitizeDescription(raw)
+            if (sanitized != null && sanitized.length >= 4 && sanitized.isMeaningfulDescription()) {
+                candidates.add(sanitized)
+            }
         }
 
         // Look for discount descriptions
@@ -403,7 +412,9 @@ class TextExtractor {
             Pattern.compile("(?i)(₹\\d+\\s+off.{3,80})"),
             Pattern.compile("(?i)(Rs\\.?\\s*\\d+\\s+off.{3,80})"),
             Pattern.compile("(?i)(save\\s+\\d+%.{3,80})"),
-            Pattern.compile("(?i)(up\\s+to\\s+₹\\d+\\s+off?.{0,80})")
+            Pattern.compile("(?i)(up\\s+to\\s+₹\\d+\\s+off?.{0,80})"),
+            Pattern.compile("(?i)(flat\\s+(?:₹\\s*)?\\d+[\\d,]*(?:\\.\\d+)?\\s+(?:off|cashback).{0,80})"),
+            Pattern.compile("(?i)(\\d+[\\d,]*(?:\\.\\d+)?\\s+cashback.{0,80})")
         )
 
         for (pattern in discountPatterns) {
@@ -423,12 +434,59 @@ class TextExtractor {
             addCandidate(desc)
         }
 
-        return candidates.maxByOrNull { it.length }
+        return candidates
+            .filter { it.isMeaningfulDescription() }
+            .maxByOrNull { it.length }
     }
 
     private fun sanitizeDescription(value: String?): String? {
         val cleaned = LocalLlmOcrService.cleanDescription(value)
         return cleaned.ifBlank { null }
+    }
+
+    private fun String.isMeaningfulDescription(): Boolean {
+        if (isBlank()) {
+            return false
+        }
+
+        // Avoid extremely short fragments or single-word values
+        val trimmed = trim()
+        if (trimmed.length < 8 || trimmed.count { it.isLetterOrDigit() } < 5) {
+            return false
+        }
+
+        // Reject strings that look like they only contain indicators with no actual value
+        val indicatorOnly = trimmed.lowercase(Locale.ROOT)
+        if (indicatorOnly in setOf("offer", "coupon", "deal", "discount", "cashback")) {
+            return false
+        }
+
+        // Ensure at least one meaningful token (contains alphabetic character)
+        val hasWord = trimmed.split(" ").any { token ->
+            token.count { it.isLetter() } >= 2
+        }
+
+        return hasWord
+    }
+
+    private fun String.findPercentagePhrase(): String? {
+        val match = Pattern.compile("(?i)(up to\\s+)?(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:off|cashback|discount)?")
+            .matcher(this)
+        return if (match.find()) {
+            match.group().trim()
+        } else {
+            null
+        }
+    }
+
+    private fun String.findRupeeAmountPhrase(): String? {
+        val match = Pattern.compile("(?i)(?:₹|rs\\.?|inr)\\s*(\\d[\\d,]*(?:\\.\\d+)?)")
+            .matcher(this)
+        return if (match.find()) {
+            match.group().trim()
+        } else {
+            null
+        }
     }
 
     /**
