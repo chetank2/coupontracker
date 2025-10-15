@@ -461,6 +461,7 @@ class TextExtractor {
      */
     fun parseExpiryDate(text: String, baseDate: Date? = null): Date? {
         val referenceDate = baseDate ?: Date()
+        val cleanedText = cleanDateCandidate(text)
         
         // Check for "Expires in X hours" format
         val expiresInHoursPattern = Pattern.compile("(?i)expires?\\s+in\\s+(\\d+)\\s+hours?")
@@ -479,6 +480,7 @@ class TextExtractor {
         val expiryMatcher = expiryPattern.matcher(text)
         if (expiryMatcher.find()) {
             val expiryText = expiryMatcher.group(1)?.trim() ?: return null
+            val cleanedExpiryText = cleanDateCandidate(expiryText)
 
             // Check if it contains "Expires in X hours/days"
             val expiresInPattern = Pattern.compile("(?i)Expires\\s+in\\s+(\\d+)\\s+(hours?|days?)")
@@ -501,19 +503,12 @@ class TextExtractor {
 
             // Try to parse the expiry text as a date
             try {
-                val datePatterns = listOf(
-                    "dd/MM/yyyy",
-                    "MM/dd/yyyy",
-                    "yyyy-MM-dd",
-                    "dd-MM-yyyy",
-                    "dd MMM yyyy",
-                    "MMM dd, yyyy"
-                )
+                val datePatterns = COMMON_DATE_PATTERNS
 
                 for (pattern in datePatterns) {
                     try {
                         val sdf = SimpleDateFormat(pattern, Locale.getDefault())
-                        val date = sdf.parse(expiryText)
+                        val date = sdf.parse(cleanedExpiryText)
                         if (date != null) {
                             safeLogDebug(TAG) { "Parsed expiry date from 'Expiry:' field: $expiryText" }
                             return date
@@ -532,9 +527,9 @@ class TextExtractor {
         val explicitDateMatcher = explicitDatePattern.matcher(text)
         if (explicitDateMatcher.find()) {
             val dateStr = explicitDateMatcher.group(1) ?: return null
+            val cleanedDate = cleanDateCandidate(dateStr)
             try {
-                val sdf = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-                val date = sdf.parse(dateStr)
+                val date = parseWithCommonPatterns(cleanedDate)
                 safeLogDebug(TAG) { "Found expiry date from explicit format: $dateStr" }
                 return date
             } catch (e: ParseException) {
@@ -555,29 +550,24 @@ class TextExtractor {
         }
 
         // Check for standard date formats
-        val datePatterns = listOf(
-            "dd/MM/yyyy",
-            "MM/dd/yyyy",
-            "yyyy-MM-dd",
-            "dd-MM-yyyy",
-            "dd MMM yyyy",
-            "MMM dd, yyyy"
-        )
+        val datePatterns = COMMON_DATE_PATTERNS
 
         val dateRegexes = listOf(
             Pattern.compile("(?i)(?:valid|expires?|expiry|valid until|valid till)\\s+(?:on|by|until|till)?\\s+(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})"),
             Pattern.compile("(?i)(?:valid|expires?|expiry|valid until|valid till)\\s+(?:on|by|until|till)?\\s+(\\d{1,2}\\s+[A-Za-z]{3}\\s+\\d{2,4})"),
-            Pattern.compile("(?i)(?:valid|expires?|expiry|valid until|valid till)\\s+(?:on|by|until|till)?\\s+([A-Za-z]{3}\\s+\\d{1,2},\\s+\\d{2,4})")
+            Pattern.compile("(?i)(?:valid|expires?|expiry|valid until|valid till)\\s+(?:on|by|until|till)?\\s+([A-Za-z]{3}\\s+\\d{1,2},\\s+\\d{2,4})"),
+            Pattern.compile("(?i)(?:valid|expires?|expiry|valid until|valid till)\\s+(?:on|by|until|till)?\\s+(\\d{1,2}\\s+[A-Za-z]{3},\\s+\\d{2,4})")
         )
 
         for (regex in dateRegexes) {
             val matcher = regex.matcher(text)
             if (matcher.find()) {
                 val dateStr = matcher.group(1) ?: continue
+                val cleanedDateStr = cleanDateCandidate(dateStr)
                 for (pattern in datePatterns) {
                     try {
                         val sdf = SimpleDateFormat(pattern, Locale.getDefault())
-                        val date = sdf.parse(dateStr)
+                        val date = sdf.parse(cleanedDateStr)
                         safeLogDebug(TAG) { "Found expiry date from standard format: $dateStr" }
                         return date
                     } catch (e: ParseException) {
@@ -591,7 +581,7 @@ class TextExtractor {
         for (pattern in datePatterns) {
             try {
                 val sdf = SimpleDateFormat(pattern, Locale.getDefault())
-                val date = sdf.parse(text)
+                val date = sdf.parse(cleanedText)
                 safeLogDebug(TAG) { "Parsed text directly as date: $text" }
                 return date
             } catch (e: ParseException) {
@@ -608,6 +598,51 @@ class TextExtractor {
         }
 
         return null
+    }
+
+    private fun cleanDateCandidate(raw: String): String {
+        var cleaned = raw.trim()
+        cleaned = cleaned.replace(Regex(",\\s*\\d{1,2}:\\d{2}(?:\\s*[AP]M)?", RegexOption.IGNORE_CASE), "")
+        cleaned = cleaned.replace(Regex("\\s+at\\s+\\d{1,2}:\\d{2}(?:\\s*[AP]M)?", RegexOption.IGNORE_CASE), "")
+        cleaned = cleaned.replace(Regex("\\s+\\d{1,2}:\\d{2}(?:\\s*[AP]M)?", RegexOption.IGNORE_CASE), "")
+        cleaned = cleaned.replace(",", " ")
+        cleaned = cleaned.replace(Regex("\\s+"), " ")
+        return cleaned.trim()
+    }
+
+    private fun parseWithCommonPatterns(value: String): Date? {
+        for (pattern in COMMON_DATE_PATTERNS) {
+            try {
+                val sdf = SimpleDateFormat(pattern, Locale.getDefault())
+                val date = sdf.parse(value)
+                if (date != null) {
+                    return date
+                }
+            } catch (_: ParseException) {
+                // Try next pattern
+            }
+        }
+        return null
+    }
+
+    companion object {
+        private val COMMON_DATE_PATTERNS = listOf(
+            "dd/MM/yyyy",
+            "d/M/yyyy",
+            "MM/dd/yyyy",
+            "M/d/yyyy",
+            "yyyy-MM-dd",
+            "dd-MM-yyyy",
+            "d-M-yyyy",
+            "dd MMM yyyy",
+            "d MMM yyyy",
+            "dd MMMM yyyy",
+            "d MMMM yyyy",
+            "MMM dd yyyy",
+            "MMM d yyyy",
+            "MMMM dd yyyy",
+            "MMMM d yyyy"
+        )
     }
 
     /**
