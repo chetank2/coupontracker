@@ -313,42 +313,11 @@ class TextExtractor {
                 }
                 val combined = builder.toString().replace("\\s+".toRegex(), " ").trim()
                 safeLogDebug(TAG) { "Found multi-line offer description: $combined" }
-                // Don't sanitize for "buy X get Y" patterns - return raw combined text
-                return combined.takeIf { it.isNotBlank() }
-            }
-        }
-
-        // SECOND: try to form a clean description using store name and discount info
-        val storeName = extractStoreName(text) ?: ""
-        val discountType = extractDiscountType(text)
-        val cashbackAmount = extractCashbackAmount(text)
-
-        if (storeName.isNotBlank() && cashbackAmount != null) {
-            val amountStr = if (discountType == "PERCENTAGE") {
-                val normalized = text.findPercentagePhrase()?.takeIf { it.contains('%') }
-                normalized ?: "$cashbackAmount%"
-            } else {
-                val currencyPhrase = text.findRupeeAmountPhrase()
-                currencyPhrase ?: "₹$cashbackAmount"
-            }
-
-            val discountPhrase = when {
-                text.contains("cashback", ignoreCase = true) -> "$amountStr cashback"
-                text.contains("flat", ignoreCase = true) -> "Flat $amountStr off"
-                discountType == "PERCENTAGE" -> "Up to $amountStr off"
-                else -> "$amountStr off"
-            }
-
-            val cleanDescription = "$storeName Coupon - $discountPhrase"
-            safeLogDebug(TAG) { "Created clean description: $cleanDescription" }
-            sanitizeDescription(cleanDescription)?.let { described ->
-                if (described.isMeaningfulDescription()) {
-                    return described
+                if (combined.isMeaningfulDescription()) {
+                    return combined
                 }
             }
         }
-
-        // If we couldn't create a clean description, fall back to pattern matching
 
         // Look for "Offer:" pattern
         val offerPattern = Pattern.compile("(?i)Offer:\\s*(.+?)(?=\\n|$)")
@@ -399,7 +368,7 @@ class TextExtractor {
 
         fun addCandidate(raw: String?) {
             val sanitized = sanitizeDescription(raw)
-            if (sanitized != null && sanitized.length >= 4 && sanitized.isMeaningfulDescription()) {
+            if (sanitized != null && sanitized.isMeaningfulDescription()) {
                 candidates.add(sanitized)
             }
         }
@@ -414,7 +383,8 @@ class TextExtractor {
             Pattern.compile("(?i)(save\\s+\\d+%.{3,80})"),
             Pattern.compile("(?i)(up\\s+to\\s+₹\\d+\\s+off?.{0,80})"),
             Pattern.compile("(?i)(flat\\s+(?:₹\\s*)?\\d+[\\d,]*(?:\\.\\d+)?\\s+(?:off|cashback).{0,80})"),
-            Pattern.compile("(?i)(\\d+[\\d,]*(?:\\.\\d+)?\\s+cashback.{0,80})")
+            Pattern.compile("(?i)(\\d+[\\d,]*(?:\\.\\d+)?\\s+cashback.{0,80})"),
+            Pattern.compile("(?i)(extra\\s+\\d+%\\s+off.{0,80})")
         )
 
         for (pattern in discountPatterns) {
@@ -449,44 +419,28 @@ class TextExtractor {
             return false
         }
 
-        // Avoid extremely short fragments or single-word values
-        val trimmed = trim()
-        if (trimmed.length < 8 || trimmed.count { it.isLetterOrDigit() } < 5) {
+        val normalized = trim()
+        if (normalized.length < 4) {
             return false
         }
 
-        // Reject strings that look like they only contain indicators with no actual value
-        val indicatorOnly = trimmed.lowercase(Locale.ROOT)
-        if (indicatorOnly in setOf("offer", "coupon", "deal", "discount", "cashback")) {
+        val hasAlphaNumeric = normalized.any { it.isLetterOrDigit() }
+        if (!hasAlphaNumeric) {
             return false
         }
 
-        // Ensure at least one meaningful token (contains alphabetic character)
-        val hasWord = trimmed.split(" ").any { token ->
-            token.count { it.isLetter() } >= 2
+        val genericPhrases = listOf(
+            "offer",
+            "coupon",
+            "deal"
+        )
+
+        val lower = normalized.lowercase(Locale.ROOT)
+        if (genericPhrases.any { lower == it }) {
+            return false
         }
 
-        return hasWord
-    }
-
-    private fun String.findPercentagePhrase(): String? {
-        val match = Pattern.compile("(?i)(up to\\s+)?(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:off|cashback|discount)?")
-            .matcher(this)
-        return if (match.find()) {
-            match.group().trim()
-        } else {
-            null
-        }
-    }
-
-    private fun String.findRupeeAmountPhrase(): String? {
-        val match = Pattern.compile("(?i)(?:₹|rs\\.?|inr)\\s*(\\d[\\d,]*(?:\\.\\d+)?)")
-            .matcher(this)
-        return if (match.find()) {
-            match.group().trim()
-        } else {
-            null
-        }
+        return true
     }
 
     /**
