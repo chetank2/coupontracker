@@ -38,6 +38,7 @@ import java.net.URL
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.coroutines.resume
@@ -87,9 +88,24 @@ class CouponInputManager(
         private const val SCREENSHOTS_FOLDER = "Screenshots"
         private const val MULTI_COUPON_THRESHOLD = 2 // Minimum coupons to trigger multi-extraction
         private const val MULTI_COUPON_PREVIEW_PACKAGE = "com.example.coupontracker.ui.activity.MultiCouponSelectionActivity"
+        private const val MULTI_COUPON_SESSION_LIMIT = 10
     }
     private val contentResolver: ContentResolver = context.contentResolver
     private val uriPersistenceManager = UriPersistenceManager(context)
+
+    data class PendingMultiCouponResult(
+        val sessionId: String,
+        val screenshotType: ScreenshotClassifier.ScreenshotType,
+        val totalDetected: Int,
+        val totalExtracted: Int,
+        val totalFiltered: Int,
+        val coupons: List<CouponWithConfidence>,
+        val sourceImageUri: String?,
+        val captureTimestamp: Date?
+    )
+
+    private val multiCouponSessions = LinkedHashMap<String, PendingMultiCouponResult>()
+    private val sessionIdBySourceUri = ConcurrentHashMap<String, String>()
     
     // Screenshot classifier for multi-coupon detection
     private val screenshotClassifier by lazy {
@@ -104,23 +120,15 @@ class CouponInputManager(
 
     private fun handleMultiCouponResult(
         multiResult: MultiCouponResult,
-        captureTimestamp: Date?
+        captureTimestamp: Date?,
+        sourceImageUri: String?
     ): Coupon? {
         if (multiResult.coupons.isEmpty()) {
             Log.w(TAG, "Multi-coupon result contained no coupons")
             return null
         }
 
-        val bestCoupon = multiResult.coupons.maxByOrNull { it.confidence }
-        if (bestCoupon == null) {
-            Log.w(TAG, "Multi-coupon result had coupons but no confidence scores; returning null")
-            return null
-        }
-
-        Log.d(
-            TAG,
-            "Selected best coupon from multi-coupon result with confidence=${bestCoupon.confidence} and store='${bestCoupon.coupon.storeName}'"
-        )
+        val bestCoupon = multiResult.coupons.maxByOrNull { it.confidence } ?: return null
 
         val coupon = bestCoupon.coupon
         return coupon.copy(
@@ -260,7 +268,11 @@ class CouponInputManager(
                     if (multiResult != null && multiResult.coupons.isNotEmpty()) {
                         Log.d(TAG, "✅ Multi-coupon extraction succeeded: extracted ${multiResult.coupons.size} coupon(s)")
                         ExtractionLogBuffer.appendInfo(TAG, "Multi-coupon extraction succeeded: extracted ${multiResult.coupons.size} coupon(s)")
-                        handleMultiCouponResult(multiResult, captureTimestamp)?.let { combinedResult ->
+                        handleMultiCouponResult(
+                            multiResult = multiResult,
+                            captureTimestamp = captureTimestamp,
+                            sourceImageUri = null
+                        )?.let { combinedResult ->
                             return@withContext combinedResult
                         }
                     } else {
