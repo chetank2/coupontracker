@@ -73,14 +73,26 @@ class MultiCouponExtractionService @Inject constructor(
     
     companion object {
         private const val TAG = "MultiCouponExtractionService"
-        
+
         // Minimum confidence threshold for accepting extracted coupons
         private const val MIN_CONFIDENCE_THRESHOLD = 0.50f
-        
+
         // Maximum coupons to extract from a single screenshot
         private const val MAX_COUPONS_PER_SCREENSHOT = 10
     }
-    
+
+    private sealed class BootstrapOutcome {
+        data class Ready(
+            val ocrResult: MultiEngineOCR.OCRResult.Success,
+            val fullText: String,
+            val classification: ScreenshotClassifier.ClassificationResult,
+            val couponRegions: List<HybridCouponDetector.Region>,
+            val regionCandidates: List<CouponRegionizer.RegionCandidate>
+        ) : BootstrapOutcome()
+
+        data class NeedsFallback(val reason: String) : BootstrapOutcome()
+    }
+
     /**
      * Coupon with confidence metadata
      */
@@ -110,68 +122,25 @@ class MultiCouponExtractionService @Inject constructor(
         bitmap: Bitmap,
         imageUri: String? = null
     ): MultiCouponResult = withContext(Dispatchers.Default) {
-        
+
         Log.d(TAG, "========================================")
         Log.d(TAG, "Starting multi-coupon extraction")
         Log.d(TAG, "Image: ${bitmap.width}x${bitmap.height}")
         Log.d(TAG, "========================================")
 
         try {
-            // Step 1: Run OCR on full image
-            Log.d(TAG, "Step 1: Running OCR...")
-            lateinit var ocrResult: MultiEngineOCR.OCRResult
-            val ocrMillis = measureTimeMillis {
-                ocrResult = multiEngineOCR.processImage(bitmap)
-            }
-            Log.d(TAG, "OCR finished in ${ocrMillis}ms")
+            val bootstrap = bootstrapExtraction(bitmap)
 
-            if (ocrResult !is MultiEngineOCR.OCRResult.Success) {
-                Log.w(TAG, "OCR bootstrap failed: ${ocrResult}")
+            if (bootstrap is BootstrapOutcome.NeedsFallback) {
                 return@withContext fallbackToProgressiveExtraction(
                     bitmap = bitmap,
                     imageUri = imageUri,
-                    failureReason = "multi-engine OCR bootstrap"
-                )
-            }
-            
-            val fullText = ocrResult.extractedInfo.values.joinToString("\n")
-            Log.d(TAG, "OCR extracted ${fullText.length} characters")
-            
-            // Step 2: Classify screenshot type
-            Log.d(TAG, "Step 2: Classifying screenshot type...")
-            lateinit var classification: ScreenshotClassifier.ClassificationResult
-            val classifyMillis = measureTimeMillis {
-                classification = screenshotClassifier.classify(bitmap, fullText)
-            }
-            Log.d(TAG, "Classification finished in ${classifyMillis}ms")
-            Log.d(TAG, "Classification: ${classification.type} (confidence: ${classification.confidence})")
-
-            // Step 3: Detect coupon regions using hybrid detector
-            Log.d(TAG, "Step 3: Detecting coupon regions...")
-            lateinit var couponRegions: List<HybridCouponDetector.Region>
-            val detectMillis = measureTimeMillis {
-                couponRegions = hybridDetector.detectCoupons(bitmap, ocrResult)
-            }
-            Log.d(TAG, "Hybrid detector finished in ${detectMillis}ms")
-            Log.d(TAG, "Detected ${couponRegions.size} coupon region(s)")
-
-            val regionCandidates = logStageDuration("Regionizer") {
-                regionizer.regionize(
-                    bitmap = bitmap,
-                    screenshotType = classification.type,
-                    ocrText = fullText,
-                    fallbackRegions = couponRegions
+                    failureReason = bootstrap.reason
                 )
             }
 
-            if (regionCandidates.isEmpty()) {
-                Log.w(TAG, "Regionizer produced no candidates; falling back to progressive extraction")
-                return@withContext fallbackToProgressiveExtraction(
-                    bitmap = bitmap,
-                    imageUri = imageUri,
-                    failureReason = "no region candidates"
-                )
-            }
+            bootstrap as BootstrapOutcome.Ready
+            val (ocrResult, fullText, classification, couponRegions, regionCandidates) = bootstrap
 
             // Limit to MAX_COUPONS_PER_SCREENSHOT
             val regionsToProcess = regionCandidates.take(MAX_COUPONS_PER_SCREENSHOT)
@@ -399,6 +368,61 @@ class MultiCouponExtractionService @Inject constructor(
             }
         }
         return deduped
+    }
+
+    private fun bootstrapExtraction(bitmap: Bitmap): BootstrapOutcome {
+        Log.d(TAG, "Step 1: Running OCR...")
+        lateinit var ocrResult: MultiEngineOCR.OCRResult
+        val ocrMillis = measureTimeMillis {
+            ocrResult = multiEngineOCR.processImage(bitmap)
+        }
+        Log.d(TAG, "OCR finished in ${ocrMillis}ms")
+
+        if (ocrResult !is MultiEngineOCR.OCRResult.Success) {
+            Log.w(TAG, "OCR bootstrap failed: ${ocrResult}")
+            return BootstrapOutcome.NeedsFallback("multi-engine OCR bootstrap")
+        }
+
+        val fullText = ocrResult.extractedInfo.values.joinToString("\n")
+        Log.d(TAG, "OCR extracted ${fullText.length} characters")
+
+        Log.d(TAG, "Step 2: Classifying screenshot type...")
+        lateinit var classification: ScreenshotClassifier.ClassificationResult
+        val classifyMillis = measureTimeMillis {
+            classification = screenshotClassifier.classify(bitmap, fullText)
+        }
+        Log.d(TAG, "Classification finished in ${classifyMillis}ms")
+        Log.d(TAG, "Classification: ${classification.type} (confidence: ${classification.confidence})")
+
+        Log.d(TAG, "Step 3: Detecting coupon regions...")
+        lateinit var couponRegions: List<HybridCouponDetector.Region>
+        val detectMillis = measureTimeMillis {
+            couponRegions = hybridDetector.detectCoupons(bitmap, ocrResult)
+        }
+        Log.d(TAG, "Hybrid detector finished in ${detectMillis}ms")
+        Log.d(TAG, "Detected ${couponRegions.size} coupon region(s)")
+
+        val regionCandidates = logStageDuration("Regionizer") {
+            regionizer.regionize(
+                bitmap = bitmap,
+                screenshotType = classification.type,
+                ocrText = fullText,
+                fallbackRegions = couponRegions
+            )
+        }
+
+        if (regionCandidates.isEmpty()) {
+            Log.w(TAG, "Regionizer produced no candidates; falling back to progressive extraction")
+            return BootstrapOutcome.NeedsFallback("no region candidates")
+        }
+
+        return BootstrapOutcome.Ready(
+            ocrResult = ocrResult,
+            fullText = fullText,
+            classification = classification,
+            couponRegions = couponRegions,
+            regionCandidates = regionCandidates
+        )
     }
 
     private inline fun <T> logStageDuration(stageName: String, block: () -> T): T {
