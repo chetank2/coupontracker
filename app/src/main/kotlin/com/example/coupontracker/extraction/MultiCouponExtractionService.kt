@@ -211,7 +211,14 @@ class MultiCouponExtractionService @Inject constructor(
                 }
             }
             
-            val dedupedCoupons = dedupeCoupons(extractedCoupons)
+            val dedupedCoupons = logStageDuration("Deduping coupons") {
+                dedupeCoupons(extractedCoupons)
+            }
+
+            val dedupeDrop = extractedCoupons.size - dedupedCoupons.size
+            if (dedupeDrop > 0) {
+                Log.d(TAG, "Removed $dedupeDrop duplicate coupon candidate(s)")
+            }
 
             if (dedupedCoupons.isEmpty()) {
                 Log.w(TAG, "All regions filtered out; invoking progressive fallback")
