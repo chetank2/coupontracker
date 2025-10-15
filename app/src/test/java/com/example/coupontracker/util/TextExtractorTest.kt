@@ -1,7 +1,10 @@
 package com.example.coupontracker.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Test
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class TextExtractorTest {
 
@@ -52,5 +55,16 @@ class TextExtractorTest {
             "Minimalist Coupon - Flat ₹7100 off",
             result
         )
+    }
+
+    @Test
+    fun `parseExpiryDate handles day first format with trailing time`() {
+        val text = "Get 2 Months Audible Premium Plus\nExpires on 31 May, 2025, 11:59 PM"
+
+        val result = extractor.parseExpiryDate(text)
+
+        assertNotNull(result)
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        assertEquals("2025-05-31", formatter.format(result!!))
     }
 }
