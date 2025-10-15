@@ -21,4 +21,19 @@ class TextExtractorTest {
             result
         )
     }
+
+    @Test
+    fun `extractDescription preserves upto connector without whitespace`() {
+        val text = """
+            Buy 2 Get 2 FREE* +
+            Upto 5% Foxcoins
+        """.trimIndent()
+
+        val result = extractor.extractDescription(text)
+
+        assertEquals(
+            "Buy 2 Get 2 FREE* + Upto 5% Foxcoins",
+            result
+        )
+    }
 }
