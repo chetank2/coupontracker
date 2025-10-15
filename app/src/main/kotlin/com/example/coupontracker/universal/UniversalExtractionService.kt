@@ -302,7 +302,6 @@ class UniversalExtractionService @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = null,
             
             category = null,
             rating = null,
