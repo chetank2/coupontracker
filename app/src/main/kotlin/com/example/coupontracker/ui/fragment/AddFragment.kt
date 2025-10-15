@@ -506,7 +506,7 @@ class AddFragment : Fragment() {
         binding.llmProgressText.visibility = View.VISIBLE
         binding.llmDownloadButton.isEnabled = false
         binding.llmDownloadButton.text = "Downloading..."
-            ExtractionLogBuffer.appendInfo(TAG, "LLM download started")
+        ExtractionLogBuffer.appendInfo(TAG, "LLM download started")
         
         lifecycleScope.launch {
             try {

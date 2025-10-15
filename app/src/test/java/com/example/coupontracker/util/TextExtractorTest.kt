@@ -36,4 +36,21 @@ class TextExtractorTest {
             result
         )
     }
+
+    @Test
+    fun `extractDescription builds rupee summary when LLM returns placeholder`() {
+        val text = """
+            Minimalist
+            Offer Details
+            Flat 7100 Off + 750 Cashback
+            Use code MNPPRK100UAPR255QYSGZA
+        """.trimIndent()
+
+        val result = extractor.extractDescription(text)
+
+        assertEquals(
+            "Minimalist Coupon - Flat ₹7100 off",
+            result
+        )
+    }
 }
