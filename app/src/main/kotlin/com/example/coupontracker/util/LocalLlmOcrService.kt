@@ -3,6 +3,13 @@ package com.example.coupontracker.util
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.extraction.ExtractionContext
+import com.example.coupontracker.extraction.FieldCandidate
+import com.example.coupontracker.extraction.StructuredFieldExtractor
+import com.example.coupontracker.extraction.validation.FieldValidationCoordinator
+import com.example.coupontracker.extraction.validation.FieldValidationIssue
+import com.example.coupontracker.extraction.validation.FieldValueBundle
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.LlmTelemetryService
 import com.example.coupontracker.ocr.OcrEngine
@@ -11,6 +18,7 @@ import com.example.coupontracker.schema.PromptGenerator
 import com.example.coupontracker.schema.SchemaValidator
 import com.example.coupontracker.schema.ValidationResult
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -92,6 +100,8 @@ class LocalLlmOcrService(
     private val telemetryService = injectedTelemetryService ?: LlmTelemetryService.getInstance(context)
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor() // Fallback
+    private val structuredFieldExtractor = StructuredFieldExtractor()
+    private val fieldValidationCoordinator = FieldValidationCoordinator(textExtractor)
     private var modelPinned = false
     
     init {
@@ -172,6 +182,14 @@ class LocalLlmOcrService(
                     error = IllegalStateException("OCR returned blank text; cannot build prompt")
                 )
             val prompt = createCouponExtractionPrompt(rawOcrText)
+            val extractionContext = ExtractionContext(
+                imageUri = "inline://llm",
+                ocrText = rawOcrText,
+                captureTimestamp = captureTimestamp
+            )
+            val structuredCandidatesDeferred = async(Dispatchers.Default) {
+                structuredFieldExtractor.detectFieldsStructured(extractionContext)
+            }
             
             // Step 4: Run LLM inference with timeout and memory tracking
             memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
@@ -186,7 +204,17 @@ class LocalLlmOcrService(
                     Log.e(TAG, "LLM response did not start with '{': ${trimmedResponse.take(200)}")
                     throw IllegalStateException("LLM response not JSON (missing opening brace)")
                 }
-                val couponInfo = parseLlmResponseToCouponInfo(llmResponse, rawOcrText, captureTimestamp)
+                val structuredCandidates = runCatching { structuredCandidatesDeferred.await() }
+                    .onFailure { error ->
+                        Log.w(TAG, "Structured extraction failed: ${error.message}", error)
+                    }
+                    .getOrElse { emptyMap() }
+                val couponInfo = parseLlmResponseToCouponInfo(
+                    llmResponse,
+                    rawOcrText,
+                    captureTimestamp,
+                    structuredCandidates
+                )
                 
                 // CRITICAL: Detect mock responses and reject them
                 if (MockLlmResponseDetector.isMockResponse(couponInfo)) {
@@ -285,6 +313,14 @@ class LocalLlmOcrService(
             
             // Step 4: Create structured extraction prompt
             val prompt = createCouponExtractionPrompt(ocrText)
+            val extractionContext = ExtractionContext(
+                imageUri = "inline://llm",
+                ocrText = ocrText,
+                captureTimestamp = captureTimestamp
+            )
+            val structuredCandidatesDeferred = async(Dispatchers.Default) {
+                structuredFieldExtractor.detectFieldsStructured(extractionContext)
+            }
             
             // Step 5: Run TEXT-ONLY LLM inference with OCR text
             Log.d(TAG, "========================================")
@@ -304,7 +340,17 @@ class LocalLlmOcrService(
             // Step 6: Parse and validate response
             val couponInfo = if (llmResponse != null) {
                 // We already have OCR text from Step 3, no need to extract again
-                val parsedInfo = parseLlmResponseToCouponInfo(llmResponse, ocrText, captureTimestamp)
+                val structuredCandidates = runCatching { structuredCandidatesDeferred.await() }
+                    .onFailure { error ->
+                        Log.w(TAG, "Structured extraction failed: ${error.message}", error)
+                    }
+                    .getOrElse { emptyMap() }
+                val parsedInfo = parseLlmResponseToCouponInfo(
+                    llmResponse,
+                    ocrText,
+                    captureTimestamp,
+                    structuredCandidates
+                )
                 
                 // CRITICAL: Detect mock responses and fall back to OCR
                 if (MockLlmResponseDetector.isMockResponse(parsedInfo)) {
@@ -560,7 +606,8 @@ $sanitizedOcr
     private fun parseLlmResponseToCouponInfo(
         response: String,
         rawOcrText: String?,
-        captureTimestamp: Date?
+        captureTimestamp: Date?,
+        structuredCandidates: Map<FieldType, List<FieldCandidate>>
     ): CouponInfo {
         return try {
             // Clean response (remove any markdown formatting)
@@ -633,54 +680,75 @@ $sanitizedOcr
                 parsedJson
             }
             
-            // Extract fields with fallbacks and generic filtering
-            val storeName = json.optString("storeName", "Unknown Store").let {
-                when {
-                    it.isBlank() || it == "Unknown" -> "Unknown Store"
-                    GenericFieldHeuristics.isGenericOrMissing(it) -> "Unknown Store"
-                    else -> it
-                }
-            }
-            
-            val rawDescription = json.optString("description", "")
-            val cleanedDescription = cleanDescription(rawDescription)
-            val description = when {
-                cleanedDescription.isBlank() -> selectDescriptionFallback(rawOcrText)
-                cleanedDescription.equals("Unknown", ignoreCase = true) -> selectDescriptionFallback(rawOcrText)
-                GenericFieldHeuristics.isGenericOrMissing(cleanedDescription) -> selectDescriptionFallback(rawOcrText)
-                else -> cleanedDescription
-            }
-            
-        // Use universal code validation instead of brand-specific patterns
-            val code = (json.optString("redeemCode").takeIf { it.isNotBlank() && it != "Unknown" }
+            sanitizeSentinelValues(json)
+
+            val rawStoreName = json.optString("storeName").takeIf { it.isNotBlank() }
+            val cleanedDescription = cleanDescription(json.optString("description", "")).takeIf { it.isNotBlank() }
+            val codeCandidate = (json.optString("redeemCode").takeIf { it.isNotBlank() && it != "Unknown" }
                 ?: json.optString("code").takeIf { it.isNotBlank() && it != "Unknown" })
                 ?.let { rawCode ->
-                    // Basic sanitization and universal validation
                     val sanitized = RedeemCodeSanitizer.sanitizePreserve(rawCode)
                     val repaired = sanitized ?: RedeemCodeRepair.repair(rawCode)
-                    repaired?.takeIf { isValidUniversalCode(it) }?.also {
-                        Log.d(TAG, "Validated universal code: $it")
-                    }
+                    repaired?.takeIf { isValidUniversalCode(it) }
                 }
-                ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
-            
-            val expiryDate = json.optString("expiryDate").let {
-                if (it.isBlank() || it == "Unknown") null else it
+            val sanitizedCodeCandidate = codeCandidate?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+            val expiryCandidate = json.optString("expiryDate").takeIf { it.isNotBlank() && it != "Unknown" }
+
+            val validationSummary = fieldValidationCoordinator.refine(
+                initial = FieldValueBundle(
+                    storeName = rawStoreName,
+                    description = cleanedDescription,
+                    redeemCode = sanitizedCodeCandidate,
+                    expiryDateText = expiryCandidate
+                ),
+                rawOcrText = rawOcrText,
+                captureTimestamp = captureTimestamp,
+                structuredCandidates = structuredCandidates
+            )
+
+            validationSummary.issues.forEach { issue: FieldValidationIssue ->
+                val sourceInfo = issue.replacementSource?.let { source -> " via $source" } ?: ""
+                Log.w(TAG, "Field validation ${issue.severity} for ${issue.field}: ${issue.message}$sourceInfo")
             }
-            
-            // Check for duplicate values between fields (common LLM issue)
-            val finalStoreName = if (GenericFieldHeuristics.areDuplicateFields(storeName, code)) {
-                Log.w(TAG, "Detected duplicate store name and redeem code: '$storeName' - downgrading store name")
-                "Unknown Store"
-            } else storeName
-            
-            val finalCode = if (GenericFieldHeuristics.areDuplicateFields(storeName, code) || GenericFieldHeuristics.isGenericOrMissingCode(code)) {
-                Log.w(TAG, "Detected duplicate store name and redeem code: '$code' - clearing redeem code")
+
+            val candidateStoreName = validationSummary.fields.storeName?.trim()
+            val candidateDescription = validationSummary.fields.description
+            val candidateCode = validationSummary.fields.redeemCode
+            val candidateExpiry = validationSummary.fields.expiryDateText
+
+            val cleanedCandidateDescription = cleanDescription(candidateDescription)
+            val description = when {
+                cleanedCandidateDescription.isBlank() -> selectDescriptionFallback(rawOcrText)
+                cleanedCandidateDescription.equals("Unknown", ignoreCase = true) -> selectDescriptionFallback(rawOcrText)
+                GenericFieldHeuristics.isGenericOrMissing(cleanedCandidateDescription) -> selectDescriptionFallback(rawOcrText)
+                else -> cleanedCandidateDescription
+            }
+
+            val normalizedCode = candidateCode?.takeIf { isValidUniversalCode(it) }?.takeIf {
+                !GenericFieldHeuristics.isGenericOrMissingCode(it)
+            }
+
+            val finalStoreCandidate = if (GenericFieldHeuristics.areDuplicateFields(candidateStoreName, normalizedCode)) {
+                Log.w(TAG, "Detected duplicate store name and redeem code: '${candidateStoreName.orEmpty()}' - downgrading store name")
                 null
-            } else code
-            
+            } else candidateStoreName
+
+            val finalCode = if (
+                GenericFieldHeuristics.areDuplicateFields(candidateStoreName, normalizedCode) ||
+                GenericFieldHeuristics.isGenericOrMissingCode(normalizedCode)
+            ) {
+                if (!normalizedCode.isNullOrBlank()) {
+                    Log.w(TAG, "Detected invalid or duplicate redeem code: '$normalizedCode' - clearing redeem code")
+                }
+                null
+            } else normalizedCode
+
+            val finalStoreName = finalStoreCandidate?.takeIf {
+                it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it)
+            } ?: "Unknown Store"
+
             // Parse expiry date with enhanced pattern matching
-            val parsedExpiryDate = expiryDate?.let { dateStr ->
+            val parsedExpiryDate = candidateExpiry?.let { dateStr ->
                 try {
                     // First try extracting from the full text (in case LLM gave us a sentence)
                     var parseResult = IndianDateParser.extractExpiryFromText(dateStr)
