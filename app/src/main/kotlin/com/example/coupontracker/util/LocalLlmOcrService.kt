@@ -60,19 +60,14 @@ class LocalLlmOcrService(
                 return ""
             }
 
-            val normalized = raw.replace("\r", "")
-
-            if (normalized.equals("null", ignoreCase = true)) {
+            if (raw.equals("null", ignoreCase = true)) {
                 return ""
             }
 
-            val lines = normalized.lines()
-            val trimmed = lines
-                .dropWhile { it.isBlank() }
-                .dropLastWhile { it.isBlank() }
-                .map { it.trimEnd() }
-
-            return trimmed.joinToString(separator = "\n")
+            // Preserve the verbatim coupon copy while normalizing line endings
+            return raw
+                .replace("\r\n", "\n")
+                .replace('\r', '\n')
         }
 
     }
@@ -565,10 +560,8 @@ $sanitizedOcr
             cleanResponse = cleanResponse
                 .replace("'storeName'", "\"storeName\"")
                 .replace("'description'", "\"description\"")
-                .replace("'cashback'", "\"cashback\"")
                 .replace("'redeemCode'", "\"redeemCode\"")
                 .replace("'expiryDate'", "\"expiryDate\"")
-                .replace("'minOrderAmount'", "\"minOrderAmount\"")
             
             // Step 2: Fix duplicate key like `{"storeName":"storeName": null`
             if (cleanResponse.contains("\"storeName\":\"storeName\":")) {
@@ -640,7 +633,7 @@ $sanitizedOcr
                 cleanedDescription.isBlank() -> selectDescriptionFallback(rawOcrText)
                 cleanedDescription.equals("Unknown", ignoreCase = true) -> selectDescriptionFallback(rawOcrText)
                 GenericFieldHeuristics.isGenericOrMissing(cleanedDescription) -> selectDescriptionFallback(rawOcrText)
-                else -> cleanedDescription.trim().replace(Regex("\\s+"), " ")
+                else -> cleanedDescription
             }
             
         // Use universal code validation instead of brand-specific patterns
@@ -1151,12 +1144,14 @@ $sanitizedOcr
     private fun selectDescriptionFallback(rawOcrText: String?): String {
         if (rawOcrText.isNullOrBlank()) {
             Log.w(TAG, "No OCR text available for description fallback")
-            return "Coupon offer"
+            return ""
         }
 
-        val lines = rawOcrText.lineSequence()
-            .map { it.trim() }
-            .filter { it.length in 12..220 }
+        val normalized = rawOcrText.replace("\r\n", "\n").replace('\r', '\n')
+
+        val lines = normalized.lineSequence()
+            .map { it.trimEnd() }
+            .filter { it.isNotBlank() }
             .filter { !GenericFieldHeuristics.isGenericOrMissing(it) }
             .toList()
 
@@ -1166,13 +1161,14 @@ $sanitizedOcr
             if (Regex("%|₹|Rs|OFF|Flat|Buy|Cashback|Free|Code", RegexOption.IGNORE_CASE).containsMatchIn(line)) score += 3
             if (line.length > 60) score += 1
             if (line.contains("http", ignoreCase = true)) score -= 2
-            score to line.replace(Regex("\\s+"), " ")
+            score to line
         }.sortedByDescending { it.first }
 
         val primary = scoredLines.firstOrNull { it.first > 0 }?.second
-            ?: lines.firstOrNull()?.replace(Regex("\\s+"), " ")
+            ?: lines.firstOrNull()
+            ?: normalized.trim()
 
-        val description = primary ?: "Coupon offer"
+        val description = primary ?: ""
         Log.d(TAG, "Using fallback description: '$description'")
         return description
     }
