@@ -307,7 +307,7 @@ class TextExtractor {
                     if (nextLine.startsWith("+")) {
                         // Preserve the "+" as a connector
                         builder.append(' ').append(nextLine.trim())
-                    } else if (Pattern.compile("(?i)(up\\s+to|flat|plus|&)").matcher(nextLine).find()) {
+                    } else if (Pattern.compile("(?i)(\\bup\\s*to\\b|flat|plus|&)").matcher(nextLine).find()) {
                         builder.append(' ').append(nextLine)
                     }
                 }
