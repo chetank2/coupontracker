@@ -16,6 +16,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
 import org.json.JSONObject
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -671,7 +672,7 @@ class LocalLlmOcrService(
                     Log.e(TAG, "LLM response did not start with '{': ${trimmedResponse.take(200)}")
                     throw IllegalStateException("LLM response not JSON (missing opening brace)")
                 }
-                val couponInfo = parseLlmResponseToCouponInfo(llmResponse, rawOcrText)
+                val couponInfo = parseLlmResponseToCouponInfo(llmResponse, rawOcrText, captureTimestamp)
                 
                 // CRITICAL: Detect mock responses and reject them
                 if (MockLlmResponseDetector.isMockResponse(couponInfo)) {
@@ -789,7 +790,7 @@ class LocalLlmOcrService(
             // Step 6: Parse and validate response
             val couponInfo = if (llmResponse != null) {
                 // We already have OCR text from Step 3, no need to extract again
-                val parsedInfo = parseLlmResponseToCouponInfo(llmResponse, ocrText)
+                val parsedInfo = parseLlmResponseToCouponInfo(llmResponse, ocrText, captureTimestamp)
                 
                 // CRITICAL: Detect mock responses and fall back to OCR
                 if (MockLlmResponseDetector.isMockResponse(parsedInfo)) {
@@ -866,10 +867,8 @@ class LocalLlmOcrService(
         var count = 0
         if (couponInfo.storeName != "Unknown Store") count++
         if (!couponInfo.redeemCode.isNullOrBlank()) count++
-        if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) count++
         if (couponInfo.expiryDate != null) count++
         if (couponInfo.description != "Coupon offer") count++
-        if (couponInfo.minimumPurchase != null && couponInfo.minimumPurchase > 0) count++
         return count
     }
     
@@ -911,124 +910,54 @@ class LocalLlmOcrService(
      * NOTE: This is the manual/legacy prompt. When USE_SCHEMA_PROMPTS=true,
      * the prompt is generated from CouponSchema instead.
      */
-    private fun buildQwenPromptManual(sanitizedOcr: String): String = """<|im_start|>system
+    private fun buildQwenPromptManual(sanitizedOcr: String): String = """
+<|im_start|>system
 You are a JSON extractor. Extract coupon data and output ONLY valid JSON.
 
-🚨 MANDATORY FIELDS (MUST ALWAYS INCLUDE):
-1. "redeemCode" - THE coupon code (search for "Code:" in OCR)
-2. "expiryDate" - THE expiry date (search for "Expires on" in OCR)
-3. "storeName" - Store/brand name
-4. "description" - Offer description
-
-⚠️ CRITICAL: All 7 JSON keys MUST be present! Never skip redeemCode or expiryDate!
+🚨 REQUIRED JSON KEYS (always include these four keys):
+1. "storeName" - Store/brand name exactly from the coupon
+2. "redeemCode" - Coupon/promo code. Use null if no code is present
+3. "expiryDate" - Expiry date text exactly as written (no reformatting)
+4. "description" - Offer description verbatim, no extra math or commentary
 
 CRITICAL RULES:
-1. ONLY extract data that EXISTS in the OCR text
-2. DO NOT invent, generate, or hallucinate ANY data
-3. COPY dates EXACTLY as written - do NOT change format or create timestamps
-4. If data is missing, use null (NOT -1, NOT 0, NOT empty object)
-5. NEVER use negative numbers or placeholder values like -1
-6. Output ONLY the JSON object, NO explanations, NO extra text after JSON
+1. Output ONLY these four keys. No additional fields are allowed.
+2. If data is missing, output null (never invent values or placeholders).
+3. Preserve the coupon wording: do NOT add numbers together or rewrite text.
+4. Do not change date formats. Copy the characters exactly as seen.
+5. Output ONLY the JSON object. No explanations before or after the JSON.
 
-Schema (all 6 keys MUST be present):
-{"storeName":str|null,"description":str|null,"cashback":obj|null,"redeemCode":str|null,"expiryDate":str|null,"minOrderAmount":str|null}
+Schema:
+{"storeName":str|null,"redeemCode":str|null,"expiryDate":str|null,"description":str|null}
 
 EXTRACTION GUIDE:
 
 storeName:
-- Brand name ONLY (e.g., "PUMA", "Amazon", "Flipkart")
-- Must appear in OCR text
+- Brand name only (e.g., "PUMA", "Amazon", "Flipkart")
+- Ignore partner logos or watermarks.
 
 redeemCode:
-🚨 CRITICAL - MUST ALWAYS INCLUDE THIS KEY!
-- Search for: "Code:", "Coupon:", or standalone alphanumeric codes
-- Strip prefixes: "Code: KAPW1M3LAfAhSe" → "KAPW1M3LAfAhSe"
-- Examples: "SAVE50", "BTXS5T13LI9V5", "KAPW1M3LAfAhSe"
-- If NO code in OCR, use null (BUT key must be present!)
-- DO NOT invent codes
-- NEVER output "NULL" as a string - use null instead
+- Search for "Code:", "Coupon:", or standalone alphanumeric codes.
+- Strip prefixes and whitespace. Example: "Code: SAVE50" → "SAVE50".
+- Use null when no code is visible.
 
 expiryDate:
-🚨 CRITICAL - MOST IMPORTANT FOR APP REMINDERS! MUST ALWAYS INCLUDE THIS KEY!
-⚠️ Extract EXACTLY what you see in OCR. DO NOT change the date!
-
-STEP 1: Find expiry text in OCR
-- Look for: "Expires on", "Valid till", "Expires:", "Expiry:", "EXPIRES IN"
-
-STEP 2: Extract ONLY day, month, year (remove time)
-- Input: "Expires on 31 May, 2025, 11:59 PM"
-- Output: "31 May 2025"
-  
-- Input: "Expires on 05 May, 2025, 11:59 PM"
-- Output: "05 May 2025"
-
-- Input: "Valid till 15 Dec 2025"
-- Output: "15 Dec 2025"
-
-STEP 3: Remove ALL extra text
-- ❌ WRONG: "May,25|31" (mangled format!)
-- ❌ WRONG: "May/16th @ 11.59 PM IST / End of the OFFER."
-- ❌ WRONG: "May-31-2025T23:59Z"
-- ❌ WRONG: Put it in the WRONG field
-- ✅ CORRECT: "31 May 2025" in "expiryDate" field
-- ✅ CORRECT: "05 May 2025" in "expiryDate" field
-
-🚨 CRITICAL RULES:
-1. MUST include "expiryDate" key (even if null)!
-2. DO NOT change the date numbers (31 May → May,25|31 is WRONG!)
-3. DO NOT add "@", "PM", "IST", "|", weird symbols
-4. DO NOT put expiry in other fields - it goes in "expiryDate"!
-5. ONLY output: day month year (e.g., "31 May 2025")
-
-If NO date in OCR → use null (BUT key must be present!)
-
-cashback:
-⚠️ IMPORTANT: If you cannot CLEARLY identify the discount amount, set cashback to null
-- Only extract if discount is EXPLICIT: "50% off", "₹200 off", "Flat 11% Off"
-- If amount is unclear, misprinted, or ambiguous → use null
-- If multiple amounts are confusing → use null
-- The description field is more important than getting amount wrong
-
-- Convert clear discounts to object:
-  * Percentage: {"type":"percent","valueNum":50,"currency":null}
-  * Amount: {"type":"amount","valueNum":200,"currency":"INR"}
-- CRITICAL: valueNum must be a POSITIVE number (1 or greater)
-- NEVER use: -1, 0, negative numbers, or placeholder values
-- If NO discount exists in OCR → cashback must be null (NOT an object)
-
-⚠️ SKIP CASHBACK IF:
-- OCR text is garbled/unclear around numbers
-- Multiple discount amounts are present (confusing)
-- Numbers don't have clear "off"/"discount" keywords nearby
-- Small numbers (< 5) near "Details", "Redeem Now" = APP RATINGS
-- Numbers with stars (⭐) or near store names = RATINGS
+- Copy the date text exactly (e.g., "31 May 2025", "2025-12-31").
+- If the coupon only says "Expires in 5 days", return null (the app will compute it).
+- Never invent months or days.
 
 description:
-⭐ MOST IMPORTANT FIELD - Focus on getting this right!
-- ❗ NEVER leave this empty if any offer text exists in OCR.
-- ❗ Include the main discount sentence even if extra details exist.
-- DO NOT return an empty string. If no offer text exists, use null (NOT "").
-- Extract the FULL offer text from the coupon
-- Combine multi-line text to form complete sentences
-- Examples:
-  * "Flat 50% off\non orders" → "Flat 50% off on orders"
-  * "you won flat ₹100 off + ₹50 cashback\non your next order" → "Flat ₹100 Off + ₹50 Cashback on your next order"
-  * "Flat 75% Off on Radiance Kit from beminimalist.co" → "Flat 75% Off on Radiance Kit from beminimalist.co"
-- Include ALL key details: discount, product, conditions
-- Clean up OCR noise but keep the offer intact
-- DO NOT leave empty - if there's ANY offer text, extract it
-- Only use null if absolutely no offer information exists
+- Use the main offer sentence exactly as printed.
+- Keep symbols like "₹", "+", "%".
+- Do NOT append helper text like "(Hybrid)" or perform arithmetic.
 
-minOrderAmount:
-- Minimum order value (e.g., "₹999", "₹500")
-- If missing, use null
-
-REMEMBER: ONLY extract data that you can SEE in the OCR text. DO NOT make up data.<|im_end|>
+Provide the JSON object now.
+<|im_end|>
 <|im_start|>user
-Extract coupon from OCR:
-$sanitizedOcr<|im_end|>
-<|im_start|>assistant
-{""".trimIndent()
+OCR_TEXT:
+$sanitizedOcr
+<|im_end|>
+""".trimIndent()
 
     private suspend fun captureRawOcrText(bitmap: Bitmap): String? {
         customOcrTextProvider?.let { provider ->
@@ -1074,16 +1003,39 @@ $sanitizedOcr<|im_end|>
         return if (start >= 0 && end > start) text.substring(start, end + 1) else null
     }
 
-    private fun removeDeprecatedKeys(jsonString: String): String {
+    private fun enforceCanonicalFields(jsonString: String): String {
         return try {
             val jsonObject = JSONObject(jsonString)
-            jsonObject.remove("offerText")
+            val allowedKeys = setOf("storeName", "description", "redeemCode", "couponCode", "expiryDate")
+            val keysToRemove = jsonObject.keys().asSequence()
+                .filter { it !in allowedKeys }
+                .toList()
+            keysToRemove.forEach { jsonObject.remove(it) }
+
+            if (jsonObject.has("couponCode") && !jsonObject.has("redeemCode")) {
+                jsonObject.put("redeemCode", jsonObject.get("couponCode"))
+            }
+            jsonObject.remove("couponCode")
+
             jsonObject.toString()
         } catch (parseError: JSONException) {
-            var sanitized = jsonString.replace(Regex("\"offerText\"\\s*:\\s*\".*?\"\\s*,?"), "")
-            sanitized = sanitized.replace(Regex(",\\s*,"), ",")
+            var sanitized = jsonString
+            val removalPatterns = listOf(
+                "\"offerText\"\\s*:\\s*\".*?\"\\s*,?",
+                "\"cashback\"\\s*:\\s*\{.*?}\\s*,?",
+                "\"cashbackAmount\"\\s*:\\s*[^,{}]+,?",
+                "\"minOrderAmount\"\\s*:\\s*[^,{}]+,?",
+                "\"minimumPurchase\"\\s*:\\s*[^,{}]+,?",
+                "\"maximumDiscount\"\\s*:\\s*[^,{}]+,?"
+            )
+            removalPatterns.forEach { pattern ->
+                sanitized = sanitized.replace(Regex(pattern, RegexOption.DOT_MATCHES_ALL), "")
+            }
+
+            sanitized = sanitized.replace(Regex(",\\s*,+"), ",")
             sanitized = sanitized.replace(Regex("\\{\\s*,"), "{")
             sanitized = sanitized.replace(Regex(",\\s*\\}"), "}")
+            sanitized = sanitized.replace(Regex("\"couponCode\""), "\"redeemCode\"")
             sanitized
         }
     }
@@ -1091,7 +1043,11 @@ $sanitizedOcr<|im_end|>
     /**
      * Parse LLM JSON response to CouponInfo object with strict validation
      */
-    private fun parseLlmResponseToCouponInfo(response: String, rawOcrText: String?): CouponInfo {
+    private fun parseLlmResponseToCouponInfo(
+        response: String,
+        rawOcrText: String?,
+        captureTimestamp: Date?
+    ): CouponInfo {
         return try {
             // Clean response (remove any markdown formatting)
             var cleanResponse = response.trim()
@@ -1131,7 +1087,7 @@ $sanitizedOcr<|im_end|>
             
             val jsonCandidate = extractJsonSlice(cleanResponse)
                 ?: throw IllegalStateException("No JSON object found in LLM output")
-            val sanitizedJsonCandidate = removeDeprecatedKeys(jsonCandidate)
+            val sanitizedJsonCandidate = enforceCanonicalFields(jsonCandidate)
             
             // JSON validation: use schema-driven or legacy validator
             val json = if (USE_SCHEMA_VALIDATION) {
@@ -1200,25 +1156,6 @@ $sanitizedOcr<|im_end|>
                 if (it.isBlank() || it == "Unknown") null else it
             }
             
-        val cashbackData = json.optJSONObject("cashback")
-        val cashbackTriple = cashbackData?.let {
-            val type = it.optString("type", "text")
-            val valueNum = it.optDouble("valueNum", 0.0)
-            val currency = it.optString("currency", "").takeIf { c -> c.isNotBlank() }
-            Triple(type, valueNum, currency)
-        }
-        val validatedCashback = cashbackTriple?.takeIf { (type, valueNum, _) ->
-            when (type) {
-                "percent" -> valueNum > 0 && hasSupportingDigits("${valueNum}", rawOcrText, cleanedDescription)
-                "amount" -> valueNum > 0 && hasSupportingDigits("${valueNum}", rawOcrText, cleanedDescription)
-                else -> true
-            }
-        }
-            
-            val minOrderAmount = json.optString("minOrderAmount").let {
-                if (it.isBlank() || it == "Unknown") null else it
-            }
-            
             // Check for duplicate values between fields (common LLM issue)
             val finalStoreName = if (GenericFieldHeuristics.areDuplicateFields(storeName, code)) {
                 Log.w(TAG, "Detected duplicate store name and redeem code: '$storeName' - downgrading store name")
@@ -1271,89 +1208,47 @@ $sanitizedOcr<|im_end|>
                     null
                 }
             }
-            
-            val (cashbackType, cashbackValue, _) = validatedCashback ?: Triple("text", 0.0, null)
-            val normalizedCashback = when (cashbackType) {
-                "percent" -> cashbackValue
-                "amount" -> cashbackValue
-                else -> null
-            }
+
+            val resolvedExpiry = parsedExpiryDate
+                ?: resolveRelativeExpiry(rawOcrText, description, captureTimestamp)
 
             return CouponInfo(
                 storeName = finalStoreName,
                 description = description,
-                expiryDate = parsedExpiryDate,
-                cashbackAmount = normalizedCashback,
+                expiryDate = resolvedExpiry,
+                cashbackAmount = null,
                 redeemCode = finalCode,
-                minimumPurchase = parseNumericValue(minOrderAmount),
-                discountType = when (cashbackType) {
-                    "percent" -> "PERCENTAGE"
-                    "amount" -> "AMOUNT"
-                    else -> null
-                }
+                minimumPurchase = null,
+                discountType = null
             )
-            
+
         } catch (e: JSONException) {
             Log.e(TAG, "Failed to parse LLM JSON response: $response", e)
             throw IllegalStateException("Invalid JSON response from LLM: ${e.message}")
         }
     }
 
-    private fun hasSupportingDigits(amountText: String, rawOcrText: String?, cleanedDescription: String): Boolean {
-        val numericTokens = Regex("""\d[\d,]*(?:\.\d+)?""").findAll(amountText)
-            .map { it.value }
-            .filter { it.isNotBlank() }
-            .toList()
+    private fun resolveRelativeExpiry(
+        rawOcrText: String?,
+        description: String,
+        captureTimestamp: Date?
+    ): Date? {
+        if (captureTimestamp == null) return null
 
-        if (numericTokens.isEmpty()) {
-            Log.w(TAG, "No digit sequences found in cashback amount '$amountText'")
-            return false
+        val combinedText = listOfNotNull(rawOcrText, description)
+            .joinToString("\n")
+        if (combinedText.isBlank()) return null
+
+        val relativePattern = Regex("(?i)(?:expire|expiring|valid)\\s+(?:in|within)\\s+(\\d+)\\s+days?")
+        val match = relativePattern.find(combinedText) ?: return null
+        val dayCount = match.groupValues.getOrNull(1)?.toIntOrNull() ?: return null
+
+        return Calendar.getInstance().apply {
+            time = captureTimestamp
+            add(Calendar.DAY_OF_YEAR, dayCount)
+        }.time.also {
+            Log.d(TAG, "Resolved relative expiry using capture timestamp +$dayCount days → $it")
         }
-
-        val searchSpaces = mutableListOf<String>()
-        rawOcrText?.let { searchSpaces.add(it) }
-        if (cleanedDescription.isNotBlank()) {
-            searchSpaces.add(cleanedDescription)
-        }
-
-        if (searchSpaces.isEmpty()) {
-            Log.w(TAG, "No OCR text available to validate cashback amount '$amountText'")
-            return false
-        }
-
-        val missingTokens = numericTokens.filterNot { token ->
-            searchSpaces.any { text -> containsDigitSequence(text, token) }
-        }
-
-        if (missingTokens.isNotEmpty()) {
-            Log.w(TAG, "Missing numeric support for tokens $missingTokens in amount '$amountText'")
-            return false
-        }
-
-        return true
-    }
-
-    private fun containsDigitSequence(text: String?, token: String): Boolean {
-        if (text.isNullOrBlank() || token.isBlank()) {
-            return false
-        }
-
-        if (text.contains(token)) {
-            return true
-        }
-
-        val normalizedToken = token.replace(Regex("[^0-9]"), "")
-        if (normalizedToken.isBlank()) {
-            return false
-        }
-
-        val normalizedText = text.replace(Regex("[^0-9]"), "")
-        if (normalizedText.contains(normalizedToken)) {
-            return true
-        }
-
-        val trimmedToken = normalizedToken.trimStart('0')
-        return trimmedToken.isNotBlank() && normalizedText.contains(trimmedToken)
     }
 
     /**
@@ -1396,34 +1291,6 @@ $sanitizedOcr<|im_end|>
         return true
     }
 
-    /**
-     * Parse numeric value from currency/percentage strings
-     * Handles formats like: ₹150, $25, 25%, 150.50, etc.
-     */
-     private fun parseNumericValue(value: String?): Double? {
-        if (value.isNullOrBlank() || value == "Unknown") return null
-        
-        return try {
-            // Remove currency symbols and extract numeric value
-            val numericString = value
-                .replace(Regex("[₹$£€¥%,\\s]"), "") // Remove common currency symbols, %, commas, spaces
-                .replace(Regex("[^0-9.]"), "") // Keep only digits and decimal points
-                .trim()
-            
-            if (numericString.isBlank()) {
-                Log.w(TAG, "No numeric value found in: '$value'")
-                null
-            } else {
-                val parsed = numericString.toDoubleOrNull()
-                Log.d(TAG, "Parsed '$value' → $parsed")
-                parsed
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse numeric value: '$value'", e)
-            null
-        }
-    }
-    
     /**
      * Preprocess bitmap specifically for MiniCPM-Llama3-V2.5 vision model
      * Ensures optimal input format: 768px long side, RGB format, proper aspect ratio

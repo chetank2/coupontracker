@@ -14,7 +14,7 @@ import com.example.coupontracker.data.util.CouponDedupUtils
         LearnedPattern::class,          // V2: Pattern storage
         ExtractionFeedback::class       // V2: Feedback & telemetry
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -221,6 +221,63 @@ abstract class CouponDatabase : RoomDatabase() {
                 database.execSQL("CREATE INDEX IF NOT EXISTS `index_extraction_feedback_v1_couponId` ON `extraction_feedback_v1` (`couponId`)")
                 
                 android.util.Log.d("CouponDatabase", "✅ V2 Migration 6→7 complete: Pattern learning and feedback tables created")
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `coupons_new` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `storeName` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `normalizedDescription` TEXT,
+                        `expiryDate` INTEGER,
+                        `cashbackAmount` REAL NOT NULL,
+                        `redeemCode` TEXT,
+                        `cashbackType` TEXT,
+                        `cashbackValueNum` REAL,
+                        `cashbackCurrency` TEXT,
+                        `imageUri` TEXT,
+                        `imagePhash` TEXT,
+                        `imageSignature` TEXT,
+                        `category` TEXT,
+                        `status` TEXT,
+                        `minimumPurchase` REAL,
+                        `maximumDiscount` REAL,
+                        `isPriority` INTEGER NOT NULL DEFAULT 0,
+                        `paymentMethod` TEXT,
+                        `usageLimit` INTEGER,
+                        `usageCount` INTEGER NOT NULL DEFAULT 0,
+                        `reminderDate` INTEGER,
+                        `platformType` TEXT,
+                        `rating` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+
+                database.execSQL("""
+                    INSERT INTO `coupons_new` (
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`, `rating`, `createdAt`, `updatedAt`
+                    )
+                    SELECT
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`, `rating`, `createdAt`, `updatedAt`
+                    FROM `coupons`
+                """.trimIndent())
+
+                database.execSQL("DROP TABLE `coupons`")
+                database.execSQL("ALTER TABLE `coupons_new` RENAME TO `coupons`")
+
+                android.util.Log.d("CouponDatabase", "✅ Migration 7→8 complete: offerText column removed")
             }
         }
     }

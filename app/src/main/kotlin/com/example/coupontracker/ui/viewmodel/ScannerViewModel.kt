@@ -466,8 +466,7 @@ class ScannerViewModel @Inject constructor(
             updatedAt = Date(),
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
-            cashbackCurrency = cashbackInfo.currency,
-            offerText = null
+            cashbackCurrency = cashbackInfo.currency
         )
     }
     
@@ -783,14 +782,11 @@ class ScannerViewModel @Inject constructor(
             Pair(0.0, CashbackInfo(com.example.coupontracker.data.model.CashbackType.TEXT, 0.0))
         }
         
-        // Description: combine both sources
-        val description = when {
-            llmInfo.description.isNotBlank() && ocrCoupon.description.isNotBlank() -> 
-                "${llmInfo.description} (Hybrid: LLM + OCR)"
-            llmInfo.description.isNotBlank() -> llmInfo.description
-            ocrCoupon.description.isNotBlank() -> ocrCoupon.description
-            else -> "Extracted via Hybrid method"
-        }
+        // Description: prefer raw LLM text, otherwise fall back to OCR text
+        val description = listOf(llmInfo.description, ocrCoupon.description)
+            .map { it.trim() }
+            .firstOrNull { it.isNotBlank() }
+            ?: "Coupon offer"
         
         return Coupon(
             id = 0,
@@ -806,8 +802,7 @@ class ScannerViewModel @Inject constructor(
             updatedAt = Date(),
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
-            cashbackCurrency = cashbackInfo.currency,
-            offerText = null
+            cashbackCurrency = cashbackInfo.currency
         )
     }
 
@@ -1429,7 +1424,6 @@ class ScannerViewModel @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = null,
             category = determineCategory(extractedInfo),
             rating = null,
             status = when (couponInstance.status) {
@@ -1773,7 +1767,6 @@ class ScannerViewModel @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = null,
             category = determineCategory(extractedInfo),
             rating = null,
             status = "ACTIVE",
