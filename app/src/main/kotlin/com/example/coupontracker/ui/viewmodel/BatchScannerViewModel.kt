@@ -464,8 +464,7 @@ class BatchScannerViewModel @Inject constructor(
             updatedAt = java.util.Date(),
             cashbackType = com.example.coupontracker.data.model.CashbackType.TEXT.name.lowercase(),
             cashbackValueNum = 0.0,
-            cashbackCurrency = null,
-            offerText = null
+            cashbackCurrency = null
         )
     }
     
@@ -651,14 +650,11 @@ class BatchScannerViewModel @Inject constructor(
                 Tuple4(0.0, 0.0, com.example.coupontracker.data.model.CashbackType.TEXT.name.lowercase(), null)
             }
         
-        // Description: combine both sources
-        val description = when {
-            llmInfo.description.isNotBlank() && ocrCoupon.description.isNotBlank() -> 
-                "${llmInfo.description} (Hybrid: LLM + OCR)"
-            llmInfo.description.isNotBlank() -> llmInfo.description
-            ocrCoupon.description.isNotBlank() -> ocrCoupon.description
-            else -> "Extracted via Hybrid method"
-        }
+        // Description: prefer LLM verbatim text, fall back to OCR text
+        val description = listOf(llmInfo.description, ocrCoupon.description)
+            .map { it.trim() }
+            .firstOrNull { it.isNotBlank() }
+            ?: "Coupon offer"
         
         return Coupon(
             id = 0,
@@ -674,8 +670,7 @@ class BatchScannerViewModel @Inject constructor(
             updatedAt = java.util.Date(),
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
-            cashbackCurrency = cashbackCurrency,
-            offerText = null
+            cashbackCurrency = cashbackCurrency
         )
     }
     
@@ -928,8 +923,7 @@ class BatchScannerViewModel @Inject constructor(
             // V2: Typed cashback fields
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
-            cashbackCurrency = cashbackCurrency,
-            offerText = null
+            cashbackCurrency = cashbackCurrency
         )
     }
     
@@ -963,8 +957,7 @@ class BatchScannerViewModel @Inject constructor(
             // V2: Typed cashback fields (CRITICAL - was missing!)
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
-            cashbackCurrency = cashbackCurrency,
-            offerText = null
+            cashbackCurrency = cashbackCurrency
         )
     }
 
