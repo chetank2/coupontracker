@@ -318,32 +318,6 @@ class TextExtractor {
             }
         }
 
-        // SECOND: try to form a clean description using store name and discount info
-        val storeName = extractStoreName(text) ?: ""
-        val discountType = extractDiscountType(text)
-        val cashbackAmount = extractCashbackAmount(text)
-
-        if (storeName.isNotBlank() && cashbackAmount != null) {
-            val amountStr = if (discountType == "PERCENTAGE") {
-                "$cashbackAmount%"
-            } else {
-                "₹$cashbackAmount"
-            }
-
-            val discountPhrase = when {
-                text.contains("cashback", ignoreCase = true) -> "$amountStr cashback"
-                text.contains("flat", ignoreCase = true) -> "Flat $amountStr off"
-                discountType == "PERCENTAGE" -> "Up to $amountStr off"
-                else -> "$amountStr off"
-            }
-
-            val cleanDescription = "$storeName Coupon - $discountPhrase"
-            safeLogDebug(TAG) { "Created clean description: $cleanDescription" }
-            sanitizeDescription(cleanDescription)?.let { return it }
-        }
-
-        // If we couldn't create a clean description, fall back to pattern matching
-
         // Look for "Offer:" pattern
         val offerPattern = Pattern.compile("(?i)Offer:\\s*(.+?)(?=\\n|$)")
         val offerMatcher = offerPattern.matcher(text)

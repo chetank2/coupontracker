@@ -15,7 +15,7 @@ class LocalLlmOcrServiceCompanionTest {
         val result = LocalLlmOcrService.cleanDescription(raw)
 
         assertEquals(
-            "You won Leaf bass wireless bluetooth earphones worth ₹3999 for ₹899",
+            "You won Leaf bass wireless\nbluetooth earphones worth ₹3999 for ₹899",
             result
         )
     }
