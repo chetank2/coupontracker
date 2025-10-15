@@ -71,7 +71,22 @@ class LocalLlmOcrService(
         }
 
     }
-    
+
+    private fun CouponInfo.toCanonicalContract(): CouponInfo {
+        return copy(
+            cashbackAmount = null,
+            category = null,
+            rating = null,
+            status = null,
+            discountType = null,
+            minimumPurchase = null,
+            maximumDiscount = null,
+            paymentMethod = null,
+            platformType = null,
+            usageLimit = null
+        )
+    }
+
     // Dependencies
     private val llmRuntime = injectedLlmRuntimeManager ?: LlmRuntimeManager.getInstance(context)
     private val telemetryService = injectedTelemetryService ?: LlmTelemetryService.getInstance(context)
@@ -367,7 +382,7 @@ class LocalLlmOcrService(
         if (couponInfo.storeName != "Unknown Store") count++
         if (!couponInfo.redeemCode.isNullOrBlank()) count++
         if (couponInfo.expiryDate != null) count++
-        if (couponInfo.description != "Coupon offer") count++
+        if (couponInfo.description.isNotBlank()) count++
         return count
     }
     
@@ -993,6 +1008,7 @@ $sanitizedOcr
             val extractedInfo = textExtractor.extractCouponInfoSync(ocrText, captureTimestamp)
                 .let { info ->
                     info.copy(description = cleanDescription(info.description))
+                        .toCanonicalContract()
                 }
             
             // Validate that we got meaningful extraction results
@@ -1013,6 +1029,7 @@ $sanitizedOcr
                 val modelBasedService = ModelBasedOCRService(context, ocrEngine)
                 val result = modelBasedService.processCouponImage(bitmap)
                 val cleanedResult = result.copy(description = cleanDescription(result.description))
+                    .toCanonicalContract()
                 Log.d(TAG, "Model-based OCR fallback result: $cleanedResult")
                 return@withContext cleanedResult
             } catch (e2: Exception) {

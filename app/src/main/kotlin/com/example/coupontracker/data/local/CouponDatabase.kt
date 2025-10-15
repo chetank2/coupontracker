@@ -134,7 +134,6 @@ abstract class CouponDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE coupons ADD COLUMN cashbackType TEXT")
                 database.execSQL("ALTER TABLE coupons ADD COLUMN cashbackValueNum REAL")
                 database.execSQL("ALTER TABLE coupons ADD COLUMN cashbackCurrency TEXT DEFAULT 'INR'")
-                database.execSQL("ALTER TABLE coupons ADD COLUMN offerText TEXT")
 
                 // Migrate existing cashbackAmount data to typed fields
                 // This query attempts to detect percentages vs amounts based on value and description
@@ -148,17 +147,7 @@ abstract class CouponDatabase : RoomDatabase() {
                             ) THEN 'percent'
                             ELSE 'amount'
                         END,
-                        cashbackValueNum = cashbackAmount,
-                        offerText = CASE
-                            WHEN cashbackAmount <= 100 AND (
-                                description LIKE '%off%'
-                                OR instr(description, '%') > 0
-                                OR description LIKE '%percent%'
-                            ) THEN
-                                CAST(CAST(cashbackAmount AS INTEGER) AS TEXT) || '% Off'
-                            ELSE
-                                '₹' || CAST(CAST(cashbackAmount AS INTEGER) AS TEXT)
-                        END
+                        cashbackValueNum = cashbackAmount
                     WHERE cashbackType IS NULL
                 """)
             }
