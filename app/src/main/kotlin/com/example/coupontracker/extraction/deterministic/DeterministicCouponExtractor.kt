@@ -139,6 +139,6 @@ class DeterministicCouponExtractor(
     }
 
     private fun normalizeOffer(rawOffer: String): String {
-        return rawOffer.replace(Regex("\s+"), " ").trim()
+        return rawOffer.replace(Regex("""\s+"""), " ").trim()
     }
 }

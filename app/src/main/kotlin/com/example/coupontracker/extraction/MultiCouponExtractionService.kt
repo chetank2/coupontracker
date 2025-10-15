@@ -2,8 +2,8 @@ package com.example.coupontracker.extraction
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.os.SystemClock
 import android.util.Log
-import kotlin.system.measureTimeMillis
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.extraction.deterministic.DescriptionComposer
 import com.example.coupontracker.extraction.deterministic.DeterministicCouponExtractor
@@ -86,7 +86,7 @@ class MultiCouponExtractionService @Inject constructor(
             val ocrResult: MultiEngineOCR.OCRResult.Success,
             val fullText: String,
             val classification: ScreenshotClassifier.ClassificationResult,
-            val couponRegions: List<HybridCouponDetector.Region>,
+            val couponRegions: List<HybridCouponDetector.CouponRegion>,
             val regionCandidates: List<CouponRegionizer.RegionCandidate>
         ) : BootstrapOutcome()
 
@@ -140,7 +140,7 @@ class MultiCouponExtractionService @Inject constructor(
             }
 
             bootstrap as BootstrapOutcome.Ready
-            val (ocrResult, fullText, classification, couponRegions, regionCandidates) = bootstrap
+            val (_, _, classification, couponRegions, regionCandidates) = bootstrap
 
             // Limit to MAX_COUPONS_PER_SCREENSHOT
             val regionsToProcess = regionCandidates.take(MAX_COUPONS_PER_SCREENSHOT)
@@ -156,7 +156,7 @@ class MultiCouponExtractionService @Inject constructor(
             for ((index, region) in regionsToProcess.withIndex()) {
                 try {
                     Log.d(TAG, "  Extracting coupon ${index + 1}/${regionsToProcess.size} (mode=${region.mode})...")
-                    val couponWithConfidence = logStageDuration("Region ${index + 1} extraction") {
+                    val couponWithConfidence = timeStageSuspend("Region ${index + 1} extraction") {
                         extractSingleRegion(
                             bitmap = bitmap,
                             candidate = region,
@@ -180,7 +180,7 @@ class MultiCouponExtractionService @Inject constructor(
                 }
             }
             
-            val dedupedCoupons = logStageDuration("Deduping coupons") {
+            val dedupedCoupons = timeStage("Deduping coupons") {
                 dedupeCoupons(extractedCoupons)
             }
 
@@ -370,12 +370,11 @@ class MultiCouponExtractionService @Inject constructor(
         return deduped
     }
 
-    private fun bootstrapExtraction(bitmap: Bitmap): BootstrapOutcome {
+    private suspend fun bootstrapExtraction(bitmap: Bitmap): BootstrapOutcome {
         Log.d(TAG, "Step 1: Running OCR...")
-        lateinit var ocrResult: MultiEngineOCR.OCRResult
-        val ocrMillis = measureTimeMillis {
-            ocrResult = multiEngineOCR.processImage(bitmap)
-        }
+        val ocrStart = SystemClock.elapsedRealtime()
+        val ocrResult = multiEngineOCR.processImage(bitmap)
+        val ocrMillis = SystemClock.elapsedRealtime() - ocrStart
         Log.d(TAG, "OCR finished in ${ocrMillis}ms")
 
         if (ocrResult !is MultiEngineOCR.OCRResult.Success) {
@@ -383,26 +382,25 @@ class MultiCouponExtractionService @Inject constructor(
             return BootstrapOutcome.NeedsFallback("multi-engine OCR bootstrap")
         }
 
-        val fullText = ocrResult.extractedInfo.values.joinToString("\n")
+        val ocrSuccess = ocrResult
+        val fullText = ocrSuccess.extractedInfo.values.joinToString("\n")
         Log.d(TAG, "OCR extracted ${fullText.length} characters")
 
         Log.d(TAG, "Step 2: Classifying screenshot type...")
-        lateinit var classification: ScreenshotClassifier.ClassificationResult
-        val classifyMillis = measureTimeMillis {
-            classification = screenshotClassifier.classify(bitmap, fullText)
-        }
+        val classifyStart = SystemClock.elapsedRealtime()
+        val classification = screenshotClassifier.classify(bitmap, fullText)
+        val classifyMillis = SystemClock.elapsedRealtime() - classifyStart
         Log.d(TAG, "Classification finished in ${classifyMillis}ms")
         Log.d(TAG, "Classification: ${classification.type} (confidence: ${classification.confidence})")
 
         Log.d(TAG, "Step 3: Detecting coupon regions...")
-        lateinit var couponRegions: List<HybridCouponDetector.Region>
-        val detectMillis = measureTimeMillis {
-            couponRegions = hybridDetector.detectCoupons(bitmap, ocrResult)
-        }
+        val detectStart = SystemClock.elapsedRealtime()
+        val couponRegions = hybridDetector.detectCoupons(bitmap, ocrSuccess)
+        val detectMillis = SystemClock.elapsedRealtime() - detectStart
         Log.d(TAG, "Hybrid detector finished in ${detectMillis}ms")
         Log.d(TAG, "Detected ${couponRegions.size} coupon region(s)")
 
-        val regionCandidates = logStageDuration("Regionizer") {
+        val regionCandidates = timeStage("Regionizer") {
             regionizer.regionize(
                 bitmap = bitmap,
                 screenshotType = classification.type,
@@ -417,7 +415,7 @@ class MultiCouponExtractionService @Inject constructor(
         }
 
         return BootstrapOutcome.Ready(
-            ocrResult = ocrResult,
+            ocrResult = ocrSuccess,
             fullText = fullText,
             classification = classification,
             couponRegions = couponRegions,
@@ -425,12 +423,18 @@ class MultiCouponExtractionService @Inject constructor(
         )
     }
 
-    private inline fun <T> logStageDuration(stageName: String, block: () -> T): T {
-        var result: T? = null
-        val elapsed = measureTimeMillis { result = block() }
-        Log.d(TAG, "$stageName finished in ${elapsed}ms")
-        @Suppress("UNCHECKED_CAST")
-        return result as T
+    private fun <T> timeStage(stageName: String, block: () -> T): T {
+        val start = SystemClock.elapsedRealtime()
+        val result = block()
+        Log.d(TAG, "$stageName finished in ${SystemClock.elapsedRealtime() - start}ms")
+        return result
+    }
+
+    private suspend fun <T> timeStageSuspend(stageName: String, block: suspend () -> T): T {
+        val start = SystemClock.elapsedRealtime()
+        val result = block()
+        Log.d(TAG, "$stageName finished in ${SystemClock.elapsedRealtime() - start}ms")
+        return result
     }
 
     private suspend fun fallbackToProgressiveExtraction(
@@ -447,7 +451,7 @@ class MultiCouponExtractionService @Inject constructor(
         val captureTimestamp = Date()
         val fallbackUri = imageUri ?: "multi_coupon_fallback"
 
-        val progressive = logStageDuration("Progressive fallback") {
+        val progressive = timeStageSuspend("Progressive fallback") {
             progressiveExtractionService.extractCoupon(
                 androidContext = context,
                 image = bitmap,
@@ -490,4 +494,3 @@ class MultiCouponExtractionService @Inject constructor(
         )
     }
 }
-

@@ -22,9 +22,9 @@ class DescriptionComposer(
     fun normalizeOffer(rawOffer: String?): String? {
         if (rawOffer.isNullOrBlank()) return null
         return rawOffer
-            .replace(Regex("\s+"), " ")
-            .replace(Regex("₹\s*(\d)")) { match -> "₹${match.groupValues[1]}" }
-            .replace(Regex("\s*%"), "%")
+            .replace(Regex("""\s+"""), " ")
+            .replace(Regex("""₹\s*(\d)""")) { match -> "₹${match.groupValues[1]}" }
+            .replace(Regex("""\s*%"""), "%")
             .trim()
     }
 }

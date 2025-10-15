@@ -88,22 +88,27 @@ class StoreCanon private constructor(
 
         private fun parse(json: JSONObject): StoreCanonConfig {
             val entriesArray = json.optJSONArray("entries") ?: JSONArray()
-            val entries = buildList(entriesArray.length()) { index ->
-                val entry = entriesArray.optJSONObject(index) ?: return@buildList
-                val canonical = entry.optString("canonical").takeIf { it.isNotBlank() } ?: return@buildList
-                val aliases = entry.optJSONArray("aliases")?.let { array ->
-                    buildList(array.length()) { aliasIndex ->
-                        array.optString(aliasIndex).takeIf { it.isNotBlank() }?.lowercase()
-                    }.filterNotNull()
-                } ?: emptyList()
-                add(StoreEntry(canonical, aliases))
+            val entries = buildList {
+                for (index in 0 until entriesArray.length()) {
+                    val entry = entriesArray.optJSONObject(index) ?: continue
+                    val canonical = entry.optString("canonical").takeIf { it.isNotBlank() } ?: continue
+                    val aliases = entry.optJSONArray("aliases")?.let { array ->
+                        buildList {
+                            for (aliasIndex in 0 until array.length()) {
+                                val alias = array.optString(aliasIndex)
+                                if (alias.isNotBlank()) add(alias.lowercase())
+                            }
+                        }
+                    } ?: emptyList()
+                    add(StoreEntry(canonical, aliases))
+                }
             }
 
             val badWordsArray = json.optJSONArray("badWords") ?: JSONArray()
-            val badWords = buildSet(badWordsArray.length()) { index ->
-                val value = badWordsArray.optString(index)
-                if (!value.isNullOrBlank()) {
-                    add(value)
+            val badWords = buildSet {
+                for (index in 0 until badWordsArray.length()) {
+                    val value = badWordsArray.optString(index)
+                    if (!value.isNullOrBlank()) add(value)
                 }
             }
             return StoreCanonConfig(entries, badWords)
