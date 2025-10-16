@@ -8,7 +8,12 @@ import android.util.Log
  */
 object GenericFieldHeuristics {
     private const val TAG = "GenericFieldHeuristics"
-    
+    private val descriptionKeywords = setOf(
+        "off", "discount", "cashback", "save", "flat", "upto", "offer", "deal",
+        "free", "gift", "reward", "voucher", "bonus", "win"
+    )
+    private val currencyRegex = Regex("[₹$€£¥]")
+
     /**
      * Check if a field contains generic/boilerplate text that should be treated as missing
      */
@@ -54,6 +59,41 @@ object GenericFieldHeuristics {
             return true
         }
         return false
+    }
+
+    /**
+     * Determine if a description contains enough concrete detail to be treated as meaningful.
+     * Used for quality scoring so truncated or vague descriptions lose credit.
+     */
+    fun isMeaningfulDescription(value: String?): Boolean {
+        if (value.isNullOrBlank()) return false
+        if (isGenericOrMissing(value)) return false
+
+        val trimmed = value.trim()
+        val lower = trimmed.lowercase()
+        val words = lower.split(Regex("\\s+")).filter { it.isNotBlank() }
+        val hasNumberToken = trimmed.any { it.isDigit() } ||
+            trimmed.contains('%') ||
+            currencyRegex.containsMatchIn(trimmed)
+        val hasKeyword = descriptionKeywords.any { lower.contains(it) }
+        val looksTruncated = trimmed.endsWith("...") || trimmed.endsWith("..") || trimmed.endsWith("-")
+
+        if (looksTruncated) {
+            Log.d(TAG, "Treating '$value' as weak description - appears truncated")
+            return false
+        }
+
+        if (words.size < 3 && !hasNumberToken) {
+            Log.d(TAG, "Treating '$value' as weak description - too few words without numbers")
+            return false
+        }
+
+        if (!hasKeyword && !hasNumberToken) {
+            Log.d(TAG, "Treating '$value' as weak description - missing keywords or numbers")
+            return false
+        }
+
+        return true
     }
 
     fun isGenericOrMissingCode(value: String?): Boolean {
