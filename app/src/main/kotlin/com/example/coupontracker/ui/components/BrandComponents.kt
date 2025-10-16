@@ -1,5 +1,6 @@
 package com.example.coupontracker.ui.components
 
+import android.content.pm.ApplicationInfo
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -43,7 +44,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.ui.theme.BrandColors
 import com.example.coupontracker.ui.theme.BrandShapes
@@ -590,6 +590,9 @@ fun EnhancedCouponCard(
     val expiryStatus = DateFormatter.getExpiryStatus(expiryDate)
     val expiryText = DateFormatter.getExpiryText(expiryDate)
     val context = LocalContext.current
+    val isDebugBuild = remember {
+        (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
 
     Card(
         modifier = modifier
@@ -704,7 +707,7 @@ fun EnhancedCouponCard(
                     }
                 }
 
-                if (BuildConfig.DEBUG && debugSnapshot != null) {
+                if (isDebugBuild && debugSnapshot != null) {
                     Spacer(modifier = Modifier.height(12.dp))
                     ExtractionDebugPanel(snapshot = debugSnapshot)
                 }

@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -33,7 +34,6 @@ import coil.request.ImageRequest
 import com.example.coupontracker.ui.components.ImagePreviewDialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.R
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.ui.components.DateFormatter
@@ -55,6 +55,9 @@ fun CouponDetailScreen(
     // State for image preview
     var showImagePreview by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val isDebugBuild = remember {
+        (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
     val coupon by viewModel.coupon.collectAsState()
     val debugSnapshot by viewModel.debugSnapshot.collectAsState()
 
@@ -101,7 +104,8 @@ fun CouponDetailScreen(
                     onToggleImagePreview = { showImagePreview = it },
                     onTrackUsage = { viewModel.trackUsage(coupon.cashbackAmount) },
                     context = context,
-                    debugSnapshot = debugSnapshot
+                    debugSnapshot = debugSnapshot,
+                    isDebugBuild = isDebugBuild
                 )
             } ?: run {
                 Box(
@@ -122,7 +126,8 @@ private fun CouponDetailContent(
     onToggleImagePreview: (Boolean) -> Unit,
     onTrackUsage: () -> Unit,
     context: Context,
-    debugSnapshot: ExtractionDebugSnapshot?
+    debugSnapshot: ExtractionDebugSnapshot?,
+    isDebugBuild: Boolean
 ) {
     Column(
         modifier = Modifier
@@ -250,7 +255,7 @@ private fun CouponDetailContent(
             Spacer(modifier = Modifier.height(BrandSpacing.Large))
         }
 
-        if (BuildConfig.DEBUG && debugSnapshot != null) {
+        if (isDebugBuild && debugSnapshot != null) {
             ExtractionDebugPanel(snapshot = debugSnapshot)
             Spacer(modifier = Modifier.height(BrandSpacing.Large))
         }
