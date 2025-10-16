@@ -44,9 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.coupontracker.BuildConfig
-import com.example.coupontracker.debug.ExtractionComponent
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
-import com.example.coupontracker.debug.StageStatus
 import com.example.coupontracker.ui.theme.BrandColors
 import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
@@ -708,88 +706,11 @@ fun EnhancedCouponCard(
 
                 if (BuildConfig.DEBUG && debugSnapshot != null) {
                     Spacer(modifier = Modifier.height(12.dp))
-                    DebugExtractionPanel(snapshot = debugSnapshot)
+                    ExtractionDebugPanel(snapshot = debugSnapshot)
                 }
             }
         }
     }
-}
-
-@Composable
-private fun DebugExtractionPanel(snapshot: ExtractionDebugSnapshot) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = 0.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            val overallStatus = statusForScore(snapshot.overallScore)
-            Text(
-                text = "Debug score: ${snapshot.overallScore}",
-                style = MaterialTheme.typography.labelLarge,
-                color = statusColor(overallStatus)
-            )
-
-            snapshot.primaryCause?.let { cause ->
-                Text(
-                    text = "Primary culprit: ${cause.displayName}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = BrandColors.Error,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-            }
-
-            snapshot.stageScores.forEach { stage ->
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stage.component.displayName,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = stage.score.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = statusColor(stage.status)
-                    )
-                }
-                if (stage.notes.isNotEmpty()) {
-                    Text(
-                        text = stage.notes.first(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-                }
-            }
-
-            if (snapshot.notes.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = snapshot.notes.joinToString(separator = " • "),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
-            }
-        }
-    }
-}
-
-private fun statusColor(status: StageStatus): Color = when (status) {
-    StageStatus.HEALTHY -> BrandColors.Success
-    StageStatus.DEGRADED -> BrandColors.Warning
-    StageStatus.FAILED -> BrandColors.Error
-}
-
-private fun statusForScore(score: Int): StageStatus = when {
-    score >= 75 -> StageStatus.HEALTHY
-    score >= 45 -> StageStatus.DEGRADED
-    else -> StageStatus.FAILED
 }
 
 /**
