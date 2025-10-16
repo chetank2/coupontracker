@@ -579,7 +579,7 @@ private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.C
     val numericValue = coupon.getCashbackNumericValue()
     val amountValid = !GenericFieldHeuristics.isZeroOrMeaningless(numericValue)
     val expiryDate = coupon.expiryDate
-    val descriptionValid = !GenericFieldHeuristics.isGenericOrMissing(coupon.description)
+    val descriptionValid = GenericFieldHeuristics.isMeaningfulDescription(coupon.description)
 
     val expiryDescription = when {
         expiryDate == null -> "Add an expiry date to get reminders"
@@ -618,7 +618,7 @@ private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.C
         ),
         QualityMetric(
             label = "Offer clarity",
-            description = if (descriptionValid) "Offer description looks specific" else "Description is generic",
+            description = if (descriptionValid) "Offer description looks specific" else "Description looks incomplete",
             icon = Icons.Default.Article,
             earnedPoints = if (descriptionValid) 10 else 0,
             maxPoints = 10
