@@ -58,6 +58,31 @@ class TextExtractorTest {
     }
 
     @Test
+    fun `extractStoreName skips watermark noise like Pastm`() {
+        val text = """
+            Pastm rewards watermark
+            Redeem on Aha Annual Plan Offer
+        """.trimIndent()
+
+        val result = extractor.extractStoreName(text)
+
+        assertEquals("Aha", result)
+    }
+
+    @Test
+    fun `extractRedeemCode finds token on line after indicator`() {
+        val text = """
+            Stream exclusively on aha
+            Use code
+            XYXXCRED2024 today
+        """.trimIndent()
+
+        val result = extractor.extractRedeemCode(text)
+
+        assertEquals("XYXXCRED2024", result)
+    }
+
+    @Test
     fun `parseExpiryDate handles day first format with trailing time`() {
         val text = "Get 2 Months Audible Premium Plus\nExpires on 31 May, 2025, 11:59 PM"
 
