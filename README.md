@@ -85,6 +85,22 @@ python coupon_trainer_cli.py --url <URL> --output-dir <OUTPUT_DIR>
 
 ## 🧪 Testing
 
+### **Unit Tests (Local JVM Stubs)**
+Android projects generated with the Android Gradle Plugin do **not** expose the generic `testClasses` task that plain JVM Gradle projects provide. Instead, run the unit-test tasks that correspond to the build variant you want to verify:
+
+```bash
+# Debug build variant
+./gradlew testDebugUnitTest
+
+# Release build variant
+./gradlew testReleaseUnitTest
+
+# Run both debug and release unit tests
+./gradlew test
+```
+
+These commands execute the Robolectric-style JVM tests that exercise your view models, repositories, and other non-instrumented components. Pick the build variant that matches the code you are validating.
+
 ### **Instrumentation (Connected) Tests**
 Run the connected test suite to verify on-device TensorFlow Lite integration, including the `TwoStageDetectorProductionTest` that exercises the production detector with the device/emulator's native TensorFlow Lite runtime:
 
