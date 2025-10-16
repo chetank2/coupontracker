@@ -148,26 +148,40 @@ fun BatchScannerScreen(
             }
         }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Check if TwoStageDetector is available
-            val detectorAvailable = viewModel.isTwoStageDetectorAvailable()
-            
-            if (!detectorAvailable && uiState.selectedImages.isNotEmpty() && !uiState.isProcessing) {
-                // Show warning about batch scanning unavailability
-                BatchScanningUnavailableWarning(
-                    onUseSingleScan = {
-                        Toast.makeText(context, "Please use single scan mode", Toast.LENGTH_SHORT).show()
-                        navController.popBackStack()
-                    },
-                    onClearImages = {
-                        viewModel.clearImages()
-                    }
+            val usingFallback = viewModel.isOcrFallbackActive()
+
+            if (usingFallback) {
+                BatchScanningFallbackBanner(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 )
-            } else when {
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f, fill = true)
+            ) {
+                val batchScanningSupported = viewModel.isBatchScanningSupported()
+
+                if (!batchScanningSupported && uiState.selectedImages.isNotEmpty() && !uiState.isProcessing) {
+                    // Show warning about batch scanning unavailability
+                    BatchScanningUnavailableWarning(
+                        onUseSingleScan = {
+                            Toast.makeText(context, "Please use single scan mode", Toast.LENGTH_SHORT).show()
+                            navController.popBackStack()
+                        },
+                        onClearImages = {
+                            viewModel.clearImages()
+                        }
+                    )
+                } else when {
                 uiState.isProcessing -> {
                     // Show loading indicator
                     Box(
@@ -255,6 +269,51 @@ fun BatchScannerScreen(
                         }
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun BatchScanningFallbackBanner(modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "OCR Fallback Active",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "YOLO multi-coupon models are unavailable in this build. We're using OCR anchor segmentation instead.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Results may need a quick review before saving.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
             }
         }
     }

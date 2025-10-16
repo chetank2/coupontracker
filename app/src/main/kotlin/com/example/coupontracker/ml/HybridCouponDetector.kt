@@ -303,12 +303,21 @@ class HybridCouponDetector(
     fun isFullyAvailable(): Boolean {
         return twoStageDetector != null
     }
-    
+
     /**
      * Check if at least one detection method is available
      */
     fun isPartiallyAvailable(): Boolean {
         return twoStageDetector != null || ocrSegmenter != null
+    }
+
+    /**
+     * Returns true when the detector is operating in OCR-only fallback mode.
+     * This happens when the dedicated two-stage detector models are missing,
+     * but we can still segment coupons using OCR anchor heuristics.
+     */
+    fun isOcrOnlyMode(): Boolean {
+        return twoStageDetector == null && ocrSegmenter != null
     }
 }
 

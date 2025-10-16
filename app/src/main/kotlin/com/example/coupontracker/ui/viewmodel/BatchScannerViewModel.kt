@@ -77,8 +77,16 @@ class BatchScannerViewModel @Inject constructor(
 
         detectorInitErrorMessage?.let { error ->
             val message = "Multi-coupon detection unavailable: $error"
-            Log.e(TAG, message, detectorInitializationResult.exception)
-            updateState { it.copy(error = message) }
+            if (hybridDetector.isPartiallyAvailable()) {
+                Log.w(
+                    TAG,
+                    "$message - falling back to OCR anchor segmentation for batch scanning",
+                    detectorInitializationResult.exception
+                )
+            } else {
+                Log.e(TAG, message, detectorInitializationResult.exception)
+                updateState { it.copy(error = message) }
+            }
         }
     }
 
@@ -172,14 +180,28 @@ class BatchScannerViewModel @Inject constructor(
     }
     
     /**
-     * Check if TwoStageDetector is available for batch scanning
-     * Returns false if detector is null or models are not loaded
+     * Check if batch scanning is supported on this build. We consider the
+     * feature available when either the dedicated two-stage detector is ready
+     * or the OCR anchor fallback path can handle segmentation.
      */
-    fun isTwoStageDetectorAvailable(): Boolean {
+    fun isBatchScanningSupported(): Boolean {
         return try {
-            twoStageDetector != null && twoStageDetector?.getMemoryStats() != null
+            twoStageDetector != null || hybridDetector.isPartiallyAvailable()
         } catch (e: Exception) {
-            Log.e(TAG, "Error checking TwoStageDetector availability", e)
+            Log.e(TAG, "Error checking batch scanning support", e)
+            false
+        }
+    }
+
+    /**
+     * Indicates whether we're currently relying on the OCR-only fallback for
+     * coupon segmentation (i.e., two-stage models are unavailable).
+     */
+    fun isOcrFallbackActive(): Boolean {
+        return try {
+            twoStageDetector == null && hybridDetector.isOcrOnlyMode()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking OCR fallback state", e)
             false
         }
     }
@@ -195,11 +217,13 @@ class BatchScannerViewModel @Inject constructor(
                 val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
                 Log.d(TAG, "Batch: Starting with strategy ${strategy.name}, ${_uiState.value.selectedImages.size} images")
 
-                if (twoStageDetector == null) {
+                if (twoStageDetector == null && !hybridDetector.isPartiallyAvailable()) {
                     val message = detectorInitErrorMessage ?: "Multi-coupon detector is unavailable."
-                    Log.e(TAG, "Batch: TwoStageDetector unavailable - aborting processing")
+                    Log.e(TAG, "Batch: No detector or fallback available - aborting processing")
                     updateState { it.copy(isProcessing = false, error = message) }
                     return@launch
+                } else if (twoStageDetector == null) {
+                    Log.w(TAG, "Batch: TwoStageDetector unavailable - using OCR anchor fallback")
                 }
 
                 updateState {
@@ -420,8 +444,15 @@ class BatchScannerViewModel @Inject constructor(
      */
     private suspend fun processWithLegacyPath(uri: Uri, bitmap: android.graphics.Bitmap): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val detector = twoStageDetector
-                ?: throw IllegalStateException(detectorInitErrorMessage ?: "Multi-coupon detector is unavailable.")
+            val detector = twoStageDetector ?: run {
+                Log.w(TAG, "LEGACY path requested but TwoStageDetector is unavailable. Using OCR fallback instead.")
+                return@withContext processWithOcrFirstPath(
+                    uri = uri,
+                    bitmap = bitmap,
+                    allowLlmFallback = true,
+                    allowLegacyFallback = false
+                )
+            }
 
             // Run two-stage detection
             val couponInstances = detector.detectMultiCoupons(bitmap)
@@ -473,9 +504,10 @@ class BatchScannerViewModel @Inject constructor(
      * @param allowOcrFallback If true, can fall back to OCR. If false, falls back to LEGACY to prevent infinite loops.
      */
     private suspend fun processWithLlmFirstPath(
-        uri: Uri, 
+        uri: Uri,
         bitmap: android.graphics.Bitmap,
-        allowOcrFallback: Boolean = true
+        allowOcrFallback: Boolean = true,
+        allowLegacyFallback: Boolean = true
     ): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             val llmResult = localLlmOcrService.processCouponImageTyped(bitmap)
@@ -488,11 +520,21 @@ class BatchScannerViewModel @Inject constructor(
                     if (allowOcrFallback) {
                         // First fallback: Try OCR (but don't allow it to call back to LLM)
                         Log.d(TAG, "LLM_FIRST failed, falling back to OCR_FIRST (terminal)")
-                        processWithOcrFirstPath(uri, bitmap, allowLlmFallback = false)
+                        processWithOcrFirstPath(
+                            uri = uri,
+                            bitmap = bitmap,
+                            allowLlmFallback = false,
+                            allowLegacyFallback = allowLegacyFallback
+                        )
                     } else {
-                        // Terminal fallback: Use LEGACY two-stage detection
+                        // Terminal fallback: Use LEGACY two-stage detection if available
                         Log.d(TAG, "LLM_FIRST failed with no OCR fallback allowed, using LEGACY")
-                        processWithLegacyPath(uri, bitmap)
+                        if (allowLegacyFallback) {
+                            processWithLegacyPath(uri, bitmap)
+                        } else {
+                            Log.w(TAG, "LLM_FIRST fallback to LEGACY disabled, returning placeholder coupon")
+                            buildPlaceholderCoupon(uri)
+                        }
                     }
                 }
             }
@@ -504,9 +546,10 @@ class BatchScannerViewModel @Inject constructor(
      * @param allowLlmFallback If true, can fall back to LLM. If false, falls back to LEGACY to prevent infinite loops.
      */
     private suspend fun processWithOcrFirstPath(
-        uri: Uri, 
+        uri: Uri,
         bitmap: android.graphics.Bitmap,
-        allowLlmFallback: Boolean = true
+        allowLlmFallback: Boolean = true,
+        allowLegacyFallback: Boolean = true
     ): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val ocrResult = multiEngineOCR.processImage(bitmap)
@@ -524,11 +567,21 @@ class BatchScannerViewModel @Inject constructor(
                         if (allowLlmFallback) {
                             // First fallback: Try LLM (but don't allow it to call back to OCR)
                             Log.d(TAG, "OCR_FIRST low confidence, falling back to LLM_FIRST (terminal)")
-                            processWithLlmFirstPath(uri, bitmap, allowOcrFallback = false)
+                            processWithLlmFirstPath(
+                                uri = uri,
+                                bitmap = bitmap,
+                                allowOcrFallback = false,
+                                allowLegacyFallback = allowLegacyFallback
+                            )
                         } else {
                             // Terminal fallback: Use LEGACY two-stage detection
                             Log.d(TAG, "OCR_FIRST failed with no LLM fallback allowed, using LEGACY")
-                            processWithLegacyPath(uri, bitmap)
+                            if (allowLegacyFallback) {
+                                processWithLegacyPath(uri, bitmap)
+                            } else {
+                                Log.w(TAG, "OCR_FIRST fallback to LEGACY disabled, returning placeholder coupon")
+                                buildPlaceholderCoupon(uri)
+                            }
                         }
                     }
                 }
@@ -536,11 +589,21 @@ class BatchScannerViewModel @Inject constructor(
                     if (allowLlmFallback) {
                         // First fallback: Try LLM (but don't allow it to call back to OCR)
                         Log.d(TAG, "OCR_FIRST error, falling back to LLM_FIRST (terminal)")
-                        processWithLlmFirstPath(uri, bitmap, allowOcrFallback = false)
+                        processWithLlmFirstPath(
+                            uri = uri,
+                            bitmap = bitmap,
+                            allowOcrFallback = false,
+                            allowLegacyFallback = allowLegacyFallback
+                        )
                     } else {
                         // Terminal fallback: Use LEGACY two-stage detection
                         Log.d(TAG, "OCR_FIRST failed with no LLM fallback allowed, using LEGACY")
-                        processWithLegacyPath(uri, bitmap)
+                        if (allowLegacyFallback) {
+                            processWithLegacyPath(uri, bitmap)
+                        } else {
+                            Log.w(TAG, "OCR_FIRST fallback to LEGACY disabled, returning placeholder coupon")
+                            buildPlaceholderCoupon(uri)
+                        }
                     }
                 }
             }
