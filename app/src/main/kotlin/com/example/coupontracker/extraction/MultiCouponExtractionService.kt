@@ -120,7 +120,8 @@ class MultiCouponExtractionService @Inject constructor(
      */
     suspend fun extractMultipleCoupons(
         bitmap: Bitmap,
-        imageUri: String? = null
+        imageUri: String? = null,
+        captureTimestamp: Date? = null
     ): MultiCouponResult = withContext(Dispatchers.Default) {
 
         Log.d(TAG, "========================================")
@@ -135,7 +136,8 @@ class MultiCouponExtractionService @Inject constructor(
                 return@withContext fallbackToProgressiveExtraction(
                     bitmap = bitmap,
                     imageUri = imageUri,
-                    failureReason = bootstrap.reason
+                    failureReason = bootstrap.reason,
+                    captureTimestamp = captureTimestamp
                 )
             }
 
@@ -161,7 +163,8 @@ class MultiCouponExtractionService @Inject constructor(
                             bitmap = bitmap,
                             candidate = region,
                             regionIndex = index,
-                            imageUri = imageUri
+                            imageUri = imageUri,
+                            captureTimestamp = captureTimestamp
                         )
                     }
                     
@@ -194,7 +197,8 @@ class MultiCouponExtractionService @Inject constructor(
                 return@withContext fallbackToProgressiveExtraction(
                     bitmap = bitmap,
                     imageUri = imageUri,
-                    failureReason = "all regions filtered"
+                    failureReason = "all regions filtered",
+                    captureTimestamp = captureTimestamp
                 )
             }
 
@@ -230,7 +234,8 @@ class MultiCouponExtractionService @Inject constructor(
         bitmap: Bitmap,
         candidate: CouponRegionizer.RegionCandidate,
         regionIndex: Int,
-        imageUri: String?
+        imageUri: String?,
+        captureTimestamp: Date?
     ): CouponWithConfidence {
 
         val regionBitmap = cropBitmapToRegion(bitmap, candidate.bounds)
@@ -252,7 +257,7 @@ class MultiCouponExtractionService @Inject constructor(
                     ocrText = regionText,
                     ocrBlocks = emptyList(),
                     imageUri = imageUri ?: "multi_coupon_region_$regionIndex",
-                    captureTimestamp = Date()
+                    captureTimestamp = captureTimestamp
                 )
             } else {
                 null
@@ -263,14 +268,14 @@ class MultiCouponExtractionService @Inject constructor(
                 fields = mergedFields,
                 fallbackCoupon = fallbackExtraction?.coupon,
                 imageUri = imageUri,
-                captureTimestamp = Date()
+                captureTimestamp = captureTimestamp
             )
 
             val refinedCoupon = CouponPostProcessor.refine(
                 coupon = sanitized.coupon,
                 context = CouponFixContext(
                     ocrText = regionText,
-                    captureTimestamp = Date()
+                    captureTimestamp = captureTimestamp
                 )
             )
 
@@ -440,7 +445,8 @@ class MultiCouponExtractionService @Inject constructor(
     private suspend fun fallbackToProgressiveExtraction(
         bitmap: Bitmap,
         imageUri: String?,
-        failureReason: String
+        failureReason: String,
+        captureTimestamp: Date?
     ): MultiCouponResult {
         Log.w(TAG, "Falling back to progressive extraction due to $failureReason")
 
@@ -448,8 +454,8 @@ class MultiCouponExtractionService @Inject constructor(
             .onFailure { Log.e(TAG, "Fallback OCR recognize failed", it) }
             .getOrElse { "" }
 
-        val captureTimestamp = Date()
         val fallbackUri = imageUri ?: "multi_coupon_fallback"
+        val effectiveCaptureTimestamp = captureTimestamp
 
         val progressive = timeStageSuspend("Progressive fallback") {
             progressiveExtractionService.extractCoupon(
@@ -458,7 +464,7 @@ class MultiCouponExtractionService @Inject constructor(
                 ocrText = fallbackText,
                 ocrBlocks = emptyList(),
                 imageUri = fallbackUri,
-                captureTimestamp = captureTimestamp
+                captureTimestamp = effectiveCaptureTimestamp
             )
         }
 
@@ -466,7 +472,7 @@ class MultiCouponExtractionService @Inject constructor(
             coupon = progressive.coupon,
             context = CouponFixContext(
                 ocrText = fallbackText,
-                captureTimestamp = captureTimestamp
+                captureTimestamp = effectiveCaptureTimestamp
             )
         )
 

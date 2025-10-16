@@ -256,7 +256,8 @@ class CouponInputManager(
                         runCatching {
                             service.extractMultipleCoupons(
                                 bitmap = bitmap,
-                                imageUri = null
+                                imageUri = null,
+                                captureTimestamp = captureTimestamp
                             )
                         }.getOrElse { error ->
                             Log.e(TAG, "Multi-coupon extraction failed, falling back to single extraction", error)
