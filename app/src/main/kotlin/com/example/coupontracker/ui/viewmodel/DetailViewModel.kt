@@ -5,10 +5,18 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.debug.ExtractionDebugRepository
+import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.util.CouponNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Date
 import javax.inject.Inject
@@ -16,7 +24,8 @@ import javax.inject.Inject
 @HiltViewModel
 class DetailViewModel @Inject constructor(
     private val repository: CouponRepository,
-    private val notificationManager: CouponNotificationManager
+    private val notificationManager: CouponNotificationManager,
+    private val debugRepository: ExtractionDebugRepository
 ) : ViewModel() {
 
     companion object {
@@ -24,12 +33,29 @@ class DetailViewModel @Inject constructor(
     }
 
     private val _coupon = MutableStateFlow<Coupon?>(null)
-    val coupon: StateFlow<Coupon?> = _coupon
+    val coupon: StateFlow<Coupon?> = _coupon.asStateFlow()
+
+    private val currentCouponId = MutableStateFlow<Long?>(null)
+
+    val debugSnapshot: StateFlow<ExtractionDebugSnapshot?> = currentCouponId
+        .flatMapLatest { id ->
+            if (id == null) {
+                flowOf(null)
+            } else {
+                debugRepository.snapshots.map { it[id] }
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = null
+        )
 
     private var couponId: Long = 0
 
     fun loadCoupon(id: Long) {
         couponId = id
+        currentCouponId.value = id
         viewModelScope.launch {
             val couponData = repository.getCouponById(id)
             _coupon.value = couponData

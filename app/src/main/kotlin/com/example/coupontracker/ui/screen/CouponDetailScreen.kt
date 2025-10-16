@@ -23,20 +23,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.coupontracker.ui.components.ImagePreviewDialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.R
+import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.ui.components.DateFormatter
+import com.example.coupontracker.ui.components.ExtractionDebugPanel
 import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.ui.components.StatusType
 import com.example.coupontracker.ui.theme.BrandSpacing
@@ -52,8 +52,8 @@ fun CouponDetailScreen(
     // State for image preview
     var showImagePreview by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
     val coupon by viewModel.coupon.collectAsState()
+    val debugSnapshot by viewModel.debugSnapshot.collectAsState()
 
     // Load the coupon when the screen is first displayed
     LaunchedEffect(couponId) {
@@ -98,7 +98,7 @@ fun CouponDetailScreen(
                     onToggleImagePreview = { showImagePreview = it },
                     onTrackUsage = { viewModel.trackUsage(coupon.cashbackAmount) },
                     context = context,
-                    clipboardManager = clipboardManager
+                    debugSnapshot = debugSnapshot
                 )
             } ?: run {
                 Box(
@@ -119,7 +119,7 @@ private fun CouponDetailContent(
     onToggleImagePreview: (Boolean) -> Unit,
     onTrackUsage: () -> Unit,
     context: Context,
-    clipboardManager: androidx.compose.ui.platform.ClipboardManager
+    debugSnapshot: ExtractionDebugSnapshot?
 ) {
     Column(
         modifier = Modifier
@@ -230,7 +230,9 @@ private fun CouponDetailContent(
                     )
 
                     IconButton(onClick = {
-                        clipboardManager.setText(AnnotatedString(coupon.redeemCode))
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("Coupon code", coupon.redeemCode)
+                        clipboard.setPrimaryClip(clip)
                         Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
                     }) {
                         Icon(Icons.Default.ContentCopy, contentDescription = "Copy code")
@@ -238,6 +240,11 @@ private fun CouponDetailContent(
                 }
             }
 
+            Spacer(modifier = Modifier.height(BrandSpacing.Large))
+        }
+
+        if (BuildConfig.DEBUG && debugSnapshot != null) {
+            ExtractionDebugPanel(snapshot = debugSnapshot)
             Spacer(modifier = Modifier.height(BrandSpacing.Large))
         }
 
