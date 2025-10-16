@@ -35,3 +35,10 @@ Create a temporary, developer-facing diagnostic overlay that ranks every coupon 
 ### Phase 4 – Validation & cleanup hooks
 - Provide unit coverage for scorer heuristics to lock expected classifications for representative scenarios.
 - Document removal steps (delete repository + UI block) and flag TODO so the feature is not shipped in production builds.
+
+## Implementation status
+
+- ✅ `ExtractionDebugSnapshot`, `ExtractionStageScore`, and the stage status enums all ship in [`app/src/main/kotlin/com/example/coupontracker/debug/ExtractionDebugModels.kt`](../app/src/main/kotlin/com/example/coupontracker/debug/ExtractionDebugModels.kt). The file also contains the concrete `ExtractionDebugScorer` heuristics and a `@Singleton` in-memory `ExtractionDebugRepository` that backs the UI surface.
+- ✅ `ScannerViewModel` threads snapshots through every extraction branch (LLM-first, two-stage, universal, and traditional OCR) and forwards them to persistence paths, ensuring debug data accompanies real coupon saves.
+- ✅ `HomeViewModel` exposes repository data alongside coupon state so the feed can render the diagnostics for each persisted item.
+- ✅ `EnhancedCouponCard` renders the debug panel in Compose behind a `BuildConfig.DEBUG` guard, keeping the feature developer-only while providing per-stage context in internal builds.
