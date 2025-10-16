@@ -391,6 +391,7 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
                 ) {
                     items(coupons) { coupon ->
+                        val debugSnapshot = homeUiState.extractionDebug[coupon.id]
                         EnhancedCouponCard(
                             storeName = coupon.storeName,
                             description = coupon.description,
@@ -404,7 +405,8 @@ fun HomeScreen(
                             onCopyCode = { code ->
                                 clipboardManager.setText(AnnotatedString(code))
                             },
-                            cashbackDisplayText = coupon.getCashbackDisplayText()
+                            cashbackDisplayText = coupon.getCashbackDisplayText(),
+                            debugSnapshot = debugSnapshot
                         )
                     }
                 }
