@@ -14,7 +14,7 @@ internal data class FieldRepairDecision(
     val issue: FieldValidationIssue? = null
 )
 
-class StoreNameValidator {
+internal class StoreNameValidator {
     fun repair(
         current: String?,
         description: String?,
@@ -80,7 +80,7 @@ class StoreNameValidator {
     }
 }
 
-class DescriptionValidator {
+internal class DescriptionValidator {
     fun repair(
         current: String?,
         storeName: String?,
@@ -127,7 +127,7 @@ class DescriptionValidator {
     }
 }
 
-class ExpiryDateValidator {
+internal class ExpiryDateValidator {
     private val isoFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private val relativePattern = Regex("(?i)expires?\\s+in\\s+\\d+\\s+(days?|weeks?|months?|hrs?|hours?)")
 
