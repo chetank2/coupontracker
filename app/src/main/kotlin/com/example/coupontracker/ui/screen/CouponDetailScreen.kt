@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.ImageVector
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.coupontracker.ui.components.ImagePreviewDialog
@@ -41,6 +42,8 @@ import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.ui.components.StatusType
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.DetailViewModel
+import com.example.coupontracker.util.GenericFieldHeuristics
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -203,6 +206,10 @@ private fun CouponDetailContent(
             text = coupon.description,
             style = MaterialTheme.typography.bodyLarge
         )
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+        ExtractionQualityCard(coupon = coupon)
 
         Spacer(modifier = Modifier.height(BrandSpacing.Large))
 
@@ -372,6 +379,256 @@ private fun CouponDetailContent(
             }
         }
     }
+}
+
+@Composable
+private fun ExtractionQualityCard(coupon: com.example.coupontracker.data.model.Coupon) {
+    val insights = remember(coupon) { deriveQualityInsights(coupon) }
+    val statusColor = when (insights.status) {
+        QualityStatus.EXCELLENT -> MaterialTheme.colorScheme.primary
+        QualityStatus.GOOD -> MaterialTheme.colorScheme.tertiary
+        QualityStatus.REVIEW -> Color(0xFFFFA000)
+        QualityStatus.POOR -> MaterialTheme.colorScheme.error
+    }
+    val statusIcon = insights.status.icon
+    val score = insights.score.coerceIn(0, 100)
+    val progress = (score / 100f).coerceIn(0f, 1f)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier.padding(BrandSpacing.Medium)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Quality score",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(BrandSpacing.Tiny))
+                    Text(
+                        text = "Based on the fields captured from your screenshot.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = statusColor.copy(alpha = 0.16f)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = statusIcon,
+                            contentDescription = null,
+                            tint = statusColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+
+                        Spacer(modifier = Modifier.width(BrandSpacing.Tiny))
+
+                        Text(
+                            text = insights.status.label,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = statusColor,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(BrandSpacing.Small))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
+            ) {
+                Text(
+                    text = score.toString(),
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = statusColor
+                )
+
+                Column(modifier = Modifier.weight(1f)) {
+                    LinearProgressIndicator(
+                        progress = progress,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        color = statusColor,
+                        trackColor = statusColor.copy(alpha = 0.16f)
+                    )
+
+                    Spacer(modifier = Modifier.height(BrandSpacing.Tiny))
+
+                    Text(
+                        text = "$score / 100 confidence",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(BrandSpacing.Small))
+
+            Text(
+                text = insights.status.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+            insights.metrics.forEach { metric ->
+                val metricColor = if (metric.isAchieved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = if (metric.isAchieved) metricColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = metric.icon,
+                            contentDescription = null,
+                            tint = metricColor,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(BrandSpacing.Small))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = metric.label,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = if (metric.isAchieved) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                        Text(
+                            text = metric.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Text(
+                        text = "${metric.earnedPoints}/${metric.maxPoints}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = metricColor,
+                        fontWeight = if (metric.isAchieved) FontWeight.SemiBold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+}
+
+private data class QualityInsights(
+    val score: Int,
+    val metrics: List<QualityMetric>,
+    val status: QualityStatus
+)
+
+private data class QualityMetric(
+    val label: String,
+    val description: String,
+    val icon: ImageVector,
+    val earnedPoints: Int,
+    val maxPoints: Int
+) {
+    val isAchieved: Boolean get() = earnedPoints > 0
+}
+
+private enum class QualityStatus(val label: String, val message: String, val icon: ImageVector) {
+    EXCELLENT("Excellent", "All critical fields look reliable.", Icons.Default.Verified),
+    GOOD("Good", "Most key details look solid.", Icons.Default.ThumbUp),
+    REVIEW("Needs review", "Some important fields are missing or generic.", Icons.Default.Warning),
+    POOR("Incomplete", "Critical details are missing. Consider rescanning or editing.", Icons.Default.Error)
+}
+
+private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.Coupon): QualityInsights {
+    val storeValid = !GenericFieldHeuristics.isGenericOrMissing(coupon.storeName)
+    val codeValid = !GenericFieldHeuristics.isGenericOrMissingCode(coupon.redeemCode)
+    val numericValue = coupon.getCashbackNumericValue()
+    val amountValid = !GenericFieldHeuristics.isZeroOrMeaningless(numericValue)
+    val expiryDate = coupon.expiryDate
+    val descriptionValid = !GenericFieldHeuristics.isGenericOrMissing(coupon.description)
+
+    val expiryDescription = when {
+        expiryDate == null -> "Add an expiry date to get reminders"
+        expiryDate.before(Date()) -> "Expiry date captured (already past)"
+        else -> "Expiry date captured"
+    }
+
+    val metrics = listOf(
+        QualityMetric(
+            label = "Store recognition",
+            description = if (storeValid) "Recognized a specific store name" else "Store name looks generic",
+            icon = Icons.Default.Store,
+            earnedPoints = if (storeValid) 25 else 0,
+            maxPoints = 25
+        ),
+        QualityMetric(
+            label = "Code readiness",
+            description = if (codeValid) "Coupon code looks redeemable" else "Code missing or placeholder",
+            icon = Icons.Default.Key,
+            earnedPoints = if (codeValid) 30 else 0,
+            maxPoints = 30
+        ),
+        QualityMetric(
+            label = "Savings detected",
+            description = if (amountValid) "Cashback or discount captured" else "Savings not detected",
+            icon = Icons.Default.CurrencyRupee,
+            earnedPoints = if (amountValid) 20 else 0,
+            maxPoints = 20
+        ),
+        QualityMetric(
+            label = "Expiry tracking",
+            description = expiryDescription,
+            icon = Icons.Default.Event,
+            earnedPoints = if (expiryDate != null) 15 else 0,
+            maxPoints = 15
+        ),
+        QualityMetric(
+            label = "Offer clarity",
+            description = if (descriptionValid) "Offer description looks specific" else "Description is generic",
+            icon = Icons.Default.Article,
+            earnedPoints = if (descriptionValid) 10 else 0,
+            maxPoints = 10
+        )
+    )
+
+    val score = metrics.sumOf { it.earnedPoints }.coerceIn(0, 100)
+    val status = when {
+        score >= 85 -> QualityStatus.EXCELLENT
+        score >= 70 -> QualityStatus.GOOD
+        score >= 50 -> QualityStatus.REVIEW
+        else -> QualityStatus.POOR
+    }
+
+    return QualityInsights(score = score, metrics = metrics, status = status)
 }
 
 private fun shareCoupon(context: Context, coupon: com.example.coupontracker.data.model.Coupon) {
