@@ -163,7 +163,7 @@ class TextExtractor {
         val candidateOriginal = mutableMapOf<String, String>()
         val lines = text.lines()
 
-        fun addCandidate(raw: String?, isTitleCase: Boolean, lineIndex: Int) {
+        fun addCandidate(raw: String?, isTitleCase: Boolean, lineIndex: Int, line: String) {
             val candidate = cleanCandidate(raw) ?: return
             val normalized = candidate.lowercase(Locale.ROOT)
             if (COMMON_WORDS.contains(normalized)) {
@@ -181,7 +181,19 @@ class TextExtractor {
                 0.0
             }
 
-            val totalScore = baseScore + frequencyScore + lineBonus + positionScore
+            val lineWordCount = line.split("\\s+".toRegex()).count { it.isNotBlank() }
+            val headingBonus = if (lineWordCount <= 3) 3.0 else 0.0
+
+            val contextBonus = when {
+                line.contains("redeem", ignoreCase = true) -> 1.5
+                line.contains("exclusive", ignoreCase = true) -> 1.0
+                line.contains("plan", ignoreCase = true) || line.contains("offer", ignoreCase = true) -> 0.5
+                else -> 0.0
+            }
+
+            val shortNameBonus = if (candidate.length <= 4 && isTitleCase) 1.5 else 0.0
+
+            val totalScore = baseScore + frequencyScore + lineBonus + positionScore + headingBonus + contextBonus + shortNameBonus
             val currentScore = candidateScores[normalized]
             if (currentScore == null || totalScore > currentScore) {
                 candidateScores[normalized] = totalScore
@@ -224,16 +236,16 @@ class TextExtractor {
             while (titleMatcher.find()) {
                 val token = titleMatcher.group(1) ?: continue
                 titleTokens.add(TitleToken(token, titleMatcher.start(), titleMatcher.end()))
-                addCandidate(token, true, index)
+                addCandidate(token, true, index, line)
             }
 
             mergeAdjacentTitleTokens(line, titleTokens)
                 .filter { it.contains(' ') }
-                .forEach { combined -> addCandidate(combined, true, index) }
+                .forEach { combined -> addCandidate(combined, true, index, line) }
 
             val capsMatcher = allCapsPattern.matcher(line)
             while (capsMatcher.find()) {
-                addCandidate(capsMatcher.group(1), false, index)
+                addCandidate(capsMatcher.group(1), false, index, line)
             }
         }
 
@@ -293,6 +305,17 @@ class TextExtractor {
 
         if (!cleaned.any { it.isLetter() }) {
             // Guard against numeric dashboard counters like "428"
+            return null
+        }
+
+        val lower = cleaned.lowercase(Locale.ROOT)
+
+        if (!lower.any { it in "aeiouy" }) {
+            return null
+        }
+
+        val trailingConsonants = lower.takeLastWhile { it.isLetter() && it !in "aeiouy" }
+        if (trailingConsonants.length >= 3) {
             return null
         }
 
@@ -413,14 +436,144 @@ class TextExtractor {
             addCandidate(desc)
         }
 
-        return candidates
+        val summaryFallback = buildMonetarySummary(text, lines)
+
+        val bestCandidate = candidates
             .filter { it.isMeaningfulDescription() }
             .maxByOrNull { it.length }
+
+        if (bestCandidate != null) {
+            return refineDescriptionCandidate(bestCandidate, summaryFallback)
+        }
+
+        return summaryFallback
     }
 
     private fun sanitizeDescription(value: String?): String? {
         val cleaned = LocalLlmOcrService.cleanDescription(value)
         return cleaned.ifBlank { null }
+    }
+
+    private fun refineDescriptionCandidate(candidate: String, summaryFallback: String?): String {
+        val normalized = candidate.trim()
+        if (summaryFallback == null) {
+            return ensureRupeeSymbol(normalized)
+        }
+
+        val placeholder = GENERIC_DESCRIPTION_PATTERN.matcher(normalized).find()
+        val valueMatches = RUPEE_VALUE_PATTERN.findAll(normalized).toList()
+        val containsCashback = normalized.contains("cashback", ignoreCase = true)
+        val containsPlus = normalized.contains('+') || normalized.contains(" plus ", ignoreCase = true)
+        val containsMultipleAmounts = valueMatches.size >= 2
+
+        if (placeholder || (containsCashback && (containsPlus || containsMultipleAmounts))) {
+            return summaryFallback
+        }
+
+        if (valueMatches.isNotEmpty() && !normalized.contains('₹')) {
+            val ensured = ensureRupeeSymbol(normalized)
+            if (ensured != normalized) {
+                return ensured
+            }
+        }
+
+        return normalized
+    }
+
+    private fun ensureRupeeSymbol(candidate: String): String {
+        if (candidate.contains('₹') || candidate.contains('%')) {
+            return candidate
+        }
+
+        val matcher = LEADING_AMOUNT_PATTERN.matcher(candidate)
+        if (!matcher.find()) {
+            return candidate
+        }
+
+        val amountGroup = matcher.group(2)?.replace(",", "") ?: return candidate
+        val amountValue = amountGroup.toIntOrNull() ?: return candidate
+        if (amountValue < 50) {
+            return candidate
+        }
+
+        val replacement = buildString {
+            append(matcher.group(1))
+            append(" ₹")
+            append(amountGroup)
+        }
+
+        return candidate.replaceRange(matcher.start(), matcher.end(), replacement)
+    }
+
+    private fun buildMonetarySummary(text: String, lines: List<String>): String? {
+        data class MonetaryLine(val line: String, val amount: Int)
+
+        val monetaryCandidates = lines.mapNotNull { line ->
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) return@mapNotNull null
+            if (!MONETARY_LINE_PATTERN.matcher(trimmed).find()) return@mapNotNull null
+            if (trimmed.contains('%')) return@mapNotNull null
+
+            val dominantAmount = extractDominantAmount(trimmed) ?: return@mapNotNull null
+            MonetaryLine(trimmed, dominantAmount)
+        }
+
+        val best = monetaryCandidates.maxByOrNull { it.amount } ?: return null
+
+        val prefix = when {
+            best.line.contains("flat", ignoreCase = true) -> "Flat"
+            best.line.contains("upto", ignoreCase = true) || best.line.contains("up to", ignoreCase = true) -> "Up to"
+            best.line.contains("extra", ignoreCase = true) -> "Extra"
+            best.line.contains("save", ignoreCase = true) -> "Save"
+            else -> null
+        }
+
+        val suffix = when {
+            best.line.contains("off", ignoreCase = true) -> "off"
+            best.line.contains("cashback", ignoreCase = true) -> "cashback"
+            best.line.contains("discount", ignoreCase = true) -> "discount"
+            else -> "off"
+        }
+
+        val summaryCore = buildString {
+            if (prefix != null) {
+                append(prefix)
+                append(' ')
+            }
+            append('₹')
+            append(best.amount)
+            append(' ')
+            append(suffix.lowercase(Locale.ROOT))
+        }.trim()
+
+        val store = extractStoreName(text)?.takeIf { it.isNotBlank() } ?: findHeadingStoreFallback(lines)
+
+        return store?.let { "$it Coupon - $summaryCore" } ?: summaryCore
+    }
+
+    private fun extractDominantAmount(line: String): Int? {
+        var best: Int? = null
+        val matcher = DIGIT_RUN_PATTERN.matcher(line)
+        while (matcher.find()) {
+            val raw = matcher.group(1)?.replace(",", "") ?: continue
+            val value = raw.toIntOrNull() ?: continue
+            if (value < 50) continue
+            if (best == null || value > best!!) {
+                best = value
+            }
+        }
+        return best
+    }
+
+    private fun findHeadingStoreFallback(lines: List<String>): String? {
+        return lines.firstOrNull { line ->
+            if (line.isBlank()) return@firstOrNull false
+            val cleaned = line.trim()
+            if (!cleaned.any { it.isLetter() }) return@firstOrNull false
+            if (GENERIC_HEADING_PATTERN.matcher(cleaned).find()) return@firstOrNull false
+            val words = cleaned.split(" ").filter { it.isNotBlank() }
+            words.size in 1..3
+        }?.trim()
     }
 
     private fun String.isMeaningfulDescription(): Boolean {
@@ -866,6 +1019,21 @@ class TextExtractor {
             }
         }
 
+        val lines = text.lines()
+        for (i in lines.indices) {
+            val line = lines[i]
+            if (!line.contains("code", ignoreCase = true)) continue
+            val next = lines.getOrNull(i + 1)?.trim()?.split(" ")?.firstOrNull { token ->
+                token.length >= 5 && token.all { it.isLetterOrDigit() }
+            }
+            if (next != null) {
+                safeLogDebug(TAG) { "Found code on line following indicator: $next" }
+                RedeemCodeSanitizer.sanitize(next)?.let { sanitized ->
+                    return sanitized
+                }
+            }
+        }
+
         return null
     }
 
@@ -1143,8 +1311,17 @@ class TextExtractor {
         private val COMMON_WORDS = setOf(
             "the", "and", "for", "with", "off", "use", "get", "code", "coupon",
             "offer", "valid", "till", "from", "upto", "free", "save", "discount",
-            "multi", "product", "products", "kit", "combo", "pack", "value", "special"
+            "multi", "product", "products", "kit", "combo", "pack", "value", "special",
+            "now", "today", "details", "redeem", "claim", "activate", "shop", "buy",
+            "view", "apply", "tap", "click", "pastm", "patm"
         )
+
+        private val GENERIC_DESCRIPTION_PATTERN = Pattern.compile("(?i)^(coupon\\s*offer|offer\\s*details|coupon\\s*details|details|offer)")
+        private val MONETARY_LINE_PATTERN = Pattern.compile("(?i)(flat|up\\s*to|upto|extra|save).*(off|cashback|discount)")
+        private val LEADING_AMOUNT_PATTERN = Pattern.compile("(?i)(flat|up\\s*to|upto|extra|save)\\s+(\\d[\\d,]{2,})")
+        private val DIGIT_RUN_PATTERN = Pattern.compile("(\\d[\\d,]{2,})")
+        private val GENERIC_HEADING_PATTERN = Pattern.compile("(?i)(offer|details|coupon|code|cashback)")
+        private val RUPEE_VALUE_PATTERN = "(?i)(?:₹|rs\\.?\\s*)?\\d[\\d,]{2,}(?=\\s*(?:cashback|off|discount|\\+|$))".toRegex()
 
         private val CATEGORIES = listOf(
             "Food", "Travel", "Shopping", "Electronics", "Fashion", "Beauty",
