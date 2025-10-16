@@ -34,7 +34,12 @@ class HybridCouponDetector(
         null
     }
     
-    private val ocrSegmenter = OcrAnchorSegmenter(ocrEngine)
+    private val ocrSegmenter: OcrAnchorSegmenter? = try {
+        OcrAnchorSegmenter(ocrEngine)
+    } catch (e: Exception) {
+        Log.e(TAG, "OcrAnchorSegmenter not available: ${e.message}", e)
+        null
+    }
     
     companion object {
         private const val TAG = "HybridCouponDetector"
@@ -96,10 +101,15 @@ class HybridCouponDetector(
         }
         
         // Step 2: Run OCR anchor-based segmentation
-        val ocrSegments = try {
-            ocrSegmenter.segmentByAnchors(bitmap, ocrResult)
-        } catch (e: Exception) {
-            Log.w(TAG, "OCR segmentation failed: ${e.message}")
+        val ocrSegments = if (ocrSegmenter != null) {
+            try {
+                ocrSegmenter.segmentByAnchors(bitmap, ocrResult)
+            } catch (e: Exception) {
+                Log.w(TAG, "OCR segmentation failed: ${e.message}")
+                emptyList()
+            }
+        } else {
+            Log.w(TAG, "OCR segmenter unavailable, skipping OCR fallback")
             emptyList()
         }
         
@@ -308,7 +318,7 @@ class HybridCouponDetector(
      * Check if at least one detection method is available
      */
     fun isPartiallyAvailable(): Boolean {
-        return twoStageDetector != null || ocrSegmenter != null
+        return twoStageDetector != null || isOcrFallbackAvailable()
     }
 
     /**
@@ -317,7 +327,16 @@ class HybridCouponDetector(
      * but we can still segment coupons using OCR anchor heuristics.
      */
     fun isOcrOnlyMode(): Boolean {
-        return twoStageDetector == null && ocrSegmenter != null
+        return twoStageDetector == null && isOcrFallbackAvailable()
+    }
+
+    private fun isOcrFallbackAvailable(): Boolean {
+        return try {
+            ocrSegmenter != null && ocrEngine.isReady()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking OCR fallback availability", e)
+            false
+        }
     }
 }
 

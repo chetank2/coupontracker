@@ -77,7 +77,13 @@ class BatchScannerViewModel @Inject constructor(
 
         detectorInitErrorMessage?.let { error ->
             val message = "Multi-coupon detection unavailable: $error"
-            if (hybridDetector.isPartiallyAvailable()) {
+            val anyDetectorAvailable = runCatching { hybridDetector.isPartiallyAvailable() }
+                .onFailure { throwable ->
+                    Log.e(TAG, "Failed to evaluate hybrid detector availability", throwable)
+                }
+                .getOrDefault(false)
+
+            if (anyDetectorAvailable) {
                 Log.w(
                     TAG,
                     "$message - falling back to OCR anchor segmentation for batch scanning",
@@ -186,7 +192,7 @@ class BatchScannerViewModel @Inject constructor(
      */
     fun isBatchScanningSupported(): Boolean {
         return try {
-            twoStageDetector != null || hybridDetector.isPartiallyAvailable()
+            hybridDetector.isPartiallyAvailable()
         } catch (e: Exception) {
             Log.e(TAG, "Error checking batch scanning support", e)
             false
@@ -199,7 +205,7 @@ class BatchScannerViewModel @Inject constructor(
      */
     fun isOcrFallbackActive(): Boolean {
         return try {
-            twoStageDetector == null && hybridDetector.isOcrOnlyMode()
+            hybridDetector.isOcrOnlyMode()
         } catch (e: Exception) {
             Log.e(TAG, "Error checking OCR fallback state", e)
             false
