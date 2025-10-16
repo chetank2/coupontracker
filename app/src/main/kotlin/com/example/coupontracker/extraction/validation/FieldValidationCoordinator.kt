@@ -47,13 +47,13 @@ data class FieldValidationIssue(
  * Uses deterministic heuristics and structured extraction fallbacks to keep
  * store, description and expiry decisions isolated from one another.
  */
-class FieldValidationCoordinator(
+internal class FieldValidationCoordinator(
     private val textExtractor: TextExtractor,
     private val storeNameValidator: StoreNameValidator = StoreNameValidator(),
     private val descriptionValidator: DescriptionValidator = DescriptionValidator(),
     private val expiryDateValidator: ExpiryDateValidator = ExpiryDateValidator()
 ) {
-    fun refine(
+    internal fun refine(
         initial: FieldValueBundle,
         rawOcrText: String?,
         captureTimestamp: Date?,

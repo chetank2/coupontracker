@@ -660,26 +660,6 @@ class TextExtractor {
         return null
     }
 
-    companion object {
-        private val COMMON_DATE_PATTERNS = listOf(
-            "dd/MM/yyyy",
-            "d/M/yyyy",
-            "MM/dd/yyyy",
-            "M/d/yyyy",
-            "yyyy-MM-dd",
-            "dd-MM-yyyy",
-            "d-M-yyyy",
-            "dd MMM yyyy",
-            "d MMM yyyy",
-            "dd MMMM yyyy",
-            "d MMMM yyyy",
-            "MMM dd yyyy",
-            "MMM d yyyy",
-            "MMMM dd yyyy",
-            "MMMM d yyyy"
-        )
-    }
-
     /**
      * Extract cashback amount from text
      * @param text The text to extract from
@@ -1142,6 +1122,24 @@ class TextExtractor {
     }
 
     companion object {
+        private val COMMON_DATE_PATTERNS = listOf(
+            "dd/MM/yyyy",
+            "d/M/yyyy",
+            "MM/dd/yyyy",
+            "M/d/yyyy",
+            "yyyy-MM-dd",
+            "dd-MM-yyyy",
+            "d-M-yyyy",
+            "dd MMM yyyy",
+            "d MMM yyyy",
+            "dd MMMM yyyy",
+            "d MMMM yyyy",
+            "MMM dd yyyy",
+            "MMM d yyyy",
+            "MMMM dd yyyy",
+            "MMMM d yyyy"
+        )
+
         private val COMMON_WORDS = setOf(
             "the", "and", "for", "with", "off", "use", "get", "code", "coupon",
             "offer", "valid", "till", "from", "upto", "free", "save", "discount",
