@@ -77,9 +77,22 @@ object GenericFieldHeuristics {
             currencyRegex.containsMatchIn(trimmed)
         val hasKeyword = descriptionKeywords.any { lower.contains(it) }
         val looksTruncated = trimmed.endsWith("...") || trimmed.endsWith("..") || trimmed.endsWith("-")
+        val fetchFailurePhrases = listOf(
+            "not fetched",
+            "unable to fetch",
+            "failed to fetch",
+            "not available",
+            "coming soon",
+            "loading"
+        )
 
         if (looksTruncated) {
             Log.d(TAG, "Treating '$value' as weak description - appears truncated")
+            return false
+        }
+
+        if (fetchFailurePhrases.any { lower.contains(it) }) {
+            Log.d(TAG, "Treating '$value' as weak description - fetch failure phrase detected")
             return false
         }
 

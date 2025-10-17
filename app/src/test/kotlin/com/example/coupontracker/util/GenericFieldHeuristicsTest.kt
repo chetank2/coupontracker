@@ -30,4 +30,9 @@ class GenericFieldHeuristicsTest {
     fun `generic placeholder description fails`() {
         assertFalse(GenericFieldHeuristics.isMeaningfulDescription("Coupon offer"))
     }
+
+    @Test
+    fun `fetch failure phrase description fails`() {
+        assertFalse(GenericFieldHeuristics.isMeaningfulDescription("Description not fetched fully"))
+    }
 }
