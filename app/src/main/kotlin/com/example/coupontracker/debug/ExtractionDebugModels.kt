@@ -192,11 +192,11 @@ object ExtractionDebugScorer {
     }
 
     fun fromFieldExtraction(result: FieldExtractionResult, runPath: RunPath?): ExtractionDebugSnapshot {
-        val llmScore = when (result.miniCpmStatus) {
+        val llmScore = (result.qualityScore ?: when (result.miniCpmStatus) {
             MiniCpmProgress.SUCCESS -> 80
             MiniCpmProgress.NEEDS_REVIEW -> 55
             MiniCpmProgress.FALLBACK -> 35
-        }
+        }).coerceIn(0, 100)
         val ocrFallback = runPath?.final?.uppercase(Locale.getDefault())?.contains("OCR") == true
         val ocrScore = if (ocrFallback) 50 else 75
         val detectionScore = if (result.fields.isEmpty()) 30 else 78
@@ -226,7 +226,14 @@ object ExtractionDebugScorer {
                 component = ExtractionComponent.LLM,
                 score = llmScore,
                 status = statusFor(llmScore),
-                notes = listOf("MiniCPM status: ${result.miniCpmStatus}")
+                notes = buildList {
+                    add("MiniCPM status: ${result.miniCpmStatus}")
+                    result.qualityScore?.let { add("Reported quality: $it") }
+                    result.fieldConfidences.takeIf { it.isNotEmpty() }?.let { confidences ->
+                        val weakest = confidences.minByOrNull { it.value }
+                        weakest?.let { add("Weakest field: ${it.key} ${(it.value * 100).toInt()}%") }
+                    }
+                }
             ),
             ExtractionStageScore(
                 component = ExtractionComponent.FUSION,

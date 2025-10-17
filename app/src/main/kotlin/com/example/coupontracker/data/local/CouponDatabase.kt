@@ -2,11 +2,14 @@ package com.example.coupontracker.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.CouponDedupUtils
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 @Database(
     entities = [
@@ -14,7 +17,7 @@ import com.example.coupontracker.data.util.CouponDedupUtils
         LearnedPattern::class,          // V2: Pattern storage
         ExtractionFeedback::class       // V2: Feedback & telemetry
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -269,17 +272,50 @@ abstract class CouponDatabase : RoomDatabase() {
                 android.util.Log.d("CouponDatabase", "✅ Migration 7→8 complete: offerText column removed")
             }
         }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionQualityScore INTEGER")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionConfidenceBreakdown TEXT")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionStage TEXT")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionRunPath TEXT")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionTimestamp INTEGER")
+
+                database.execSQL(
+                    "UPDATE coupons SET extractionTimestamp = COALESCE(updatedAt, createdAt) WHERE extractionTimestamp IS NULL"
+                )
+            }
+        }
     }
 }
 
 object Converters {
-    @androidx.room.TypeConverter
+    private val gson: Gson = Gson()
+    private val floatMapType = object : TypeToken<Map<String, Float>>() {}.type
+
+    @TypeConverter
     fun fromTimestamp(value: Long?): java.util.Date? {
         return value?.let { java.util.Date(it) }
     }
 
-    @androidx.room.TypeConverter
+    @TypeConverter
     fun dateToTimestamp(date: java.util.Date?): Long? {
         return date?.time
+    }
+
+    @TypeConverter
+    fun fromConfidenceJson(value: String?): Map<String, Float> {
+        if (value.isNullOrBlank()) {
+            return emptyMap()
+        }
+        return gson.fromJson(value, floatMapType)
+    }
+
+    @TypeConverter
+    fun confidenceMapToJson(map: Map<String, Float>?): String? {
+        if (map == null || map.isEmpty()) {
+            return null
+        }
+        return gson.toJson(map, floatMapType)
     }
 }

@@ -44,6 +44,8 @@ import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.DetailViewModel
 import com.example.coupontracker.util.GenericFieldHeuristics
 import java.util.Date
+import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -484,17 +486,25 @@ private fun ExtractionQualityCard(coupon: com.example.coupontracker.data.model.C
                     Spacer(modifier = Modifier.height(BrandSpacing.Tiny))
 
                     Text(
-                        text = "$score / 100 confidence",
+                        text = insights.scoreLabel,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    insights.secondaryLabel?.let { secondary ->
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = secondary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(BrandSpacing.Small))
 
             Text(
-                text = insights.status.message,
+                text = insights.statusMessage,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -553,7 +563,10 @@ private fun ExtractionQualityCard(coupon: com.example.coupontracker.data.model.C
 private data class QualityInsights(
     val score: Int,
     val metrics: List<QualityMetric>,
-    val status: QualityStatus
+    val status: QualityStatus,
+    val scoreLabel: String,
+    val secondaryLabel: String?,
+    val statusMessage: String
 )
 
 private data class QualityMetric(
@@ -561,9 +574,11 @@ private data class QualityMetric(
     val description: String,
     val icon: ImageVector,
     val earnedPoints: Int,
-    val maxPoints: Int
+    val maxPoints: Int,
+    val achieved: Boolean,
+    val confidence: Float?
 ) {
-    val isAchieved: Boolean get() = earnedPoints > 0
+    val isAchieved: Boolean get() = achieved
 }
 
 private enum class QualityStatus(val label: String, val message: String, val icon: ImageVector) {
@@ -574,6 +589,7 @@ private enum class QualityStatus(val label: String, val message: String, val ico
 }
 
 private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.Coupon): QualityInsights {
+    val confidences = coupon.extractionConfidenceBreakdown
     val storeValid = !GenericFieldHeuristics.isGenericOrMissing(coupon.storeName)
     val codeValid = !GenericFieldHeuristics.isGenericOrMissingCode(coupon.redeemCode)
     val numericValue = coupon.getCashbackNumericValue()
@@ -581,51 +597,109 @@ private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.C
     val expiryDate = coupon.expiryDate
     val descriptionValid = GenericFieldHeuristics.isMeaningfulDescription(coupon.description)
 
-    val expiryDescription = when {
-        expiryDate == null -> "Add an expiry date to get reminders"
+    fun formatConfidence(confidence: Float?): Float? = confidence?.coerceIn(0f, 1f)
+
+    fun confidencePercent(confidence: Float?): Int? = confidence?.let { (it.coerceIn(0f, 1f) * 100).roundToInt() }
+
+    fun buildMetric(
+        label: String,
+        confidence: Float?,
+        fallbackAchieved: Boolean,
+        successDescription: String,
+        failureDescription: String,
+        icon: ImageVector,
+        maxPoints: Int
+    ): QualityMetric {
+        val normalized = formatConfidence(confidence)
+        return if (normalized != null) {
+            val points = (normalized * maxPoints).roundToInt()
+            val achieved = normalized >= 0.6f
+            val description = if (achieved) {
+                val percent = confidencePercent(normalized)
+                if (percent != null) "$successDescription • $percent% confidence" else successDescription
+            } else {
+                val percent = confidencePercent(normalized) ?: 0
+                "Weak signal ($percent%) – $failureDescription"
+            }
+            QualityMetric(
+                label = label,
+                description = description,
+                icon = icon,
+                earnedPoints = points,
+                maxPoints = maxPoints,
+                achieved = achieved,
+                confidence = normalized
+            )
+        } else {
+            QualityMetric(
+                label = label,
+                description = if (fallbackAchieved) successDescription else failureDescription,
+                icon = icon,
+                earnedPoints = if (fallbackAchieved) maxPoints else 0,
+                maxPoints = maxPoints,
+                achieved = fallbackAchieved,
+                confidence = null
+            )
+        }
+    }
+
+    val expirySuccess = when {
+        expiryDate == null -> "Expiry date missing"
         expiryDate.before(Date()) -> "Expiry date captured (already past)"
         else -> "Expiry date captured"
     }
+    val expiryFailure = "Add an expiry date to get reminders"
 
     val metrics = listOf(
-        QualityMetric(
+        buildMetric(
             label = "Store recognition",
-            description = if (storeValid) "Recognized a specific store name" else "Store name looks generic",
+            confidence = confidences["storeName"],
+            fallbackAchieved = storeValid,
+            successDescription = "Recognized a specific store name",
+            failureDescription = "Store name looks generic",
             icon = Icons.Default.Store,
-            earnedPoints = if (storeValid) 25 else 0,
             maxPoints = 25
         ),
-        QualityMetric(
+        buildMetric(
             label = "Code readiness",
-            description = if (codeValid) "Coupon code looks redeemable" else "Code missing or placeholder",
+            confidence = confidences["redeemCode"],
+            fallbackAchieved = codeValid,
+            successDescription = "Coupon code looks redeemable",
+            failureDescription = "Code missing or placeholder",
             icon = Icons.Default.Key,
-            earnedPoints = if (codeValid) 30 else 0,
             maxPoints = 30
         ),
-        QualityMetric(
+        buildMetric(
             label = "Savings detected",
-            description = if (amountValid) "Cashback or discount captured" else "Savings not detected",
+            confidence = confidences["cashbackAmount"],
+            fallbackAchieved = amountValid,
+            successDescription = "Cashback or discount captured",
+            failureDescription = "Savings not detected",
             icon = Icons.Default.CurrencyRupee,
-            earnedPoints = if (amountValid) 20 else 0,
             maxPoints = 20
         ),
-        QualityMetric(
+        buildMetric(
             label = "Expiry tracking",
-            description = expiryDescription,
+            confidence = confidences["expiryDate"],
+            fallbackAchieved = expiryDate != null,
+            successDescription = expirySuccess,
+            failureDescription = expiryFailure,
             icon = Icons.Default.Event,
-            earnedPoints = if (expiryDate != null) 15 else 0,
             maxPoints = 15
         ),
-        QualityMetric(
+        buildMetric(
             label = "Offer clarity",
-            description = if (descriptionValid) "Offer description looks specific" else "Description looks incomplete",
+            confidence = confidences["description"],
+            fallbackAchieved = descriptionValid,
+            successDescription = "Offer description looks specific",
+            failureDescription = "Description looks incomplete",
             icon = Icons.Default.Article,
-            earnedPoints = if (descriptionValid) 10 else 0,
             maxPoints = 10
         )
     )
 
-    val score = metrics.sumOf { it.earnedPoints }.coerceIn(0, 100)
+    val rawScore = coupon.extractionQualityScore ?: metrics.sumOf { it.earnedPoints }
+    val score = rawScore.coerceIn(0, 100)
     val status = when {
         score >= 85 -> QualityStatus.EXCELLENT
         score >= 70 -> QualityStatus.GOOD
@@ -633,7 +707,53 @@ private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.C
         else -> QualityStatus.POOR
     }
 
-    return QualityInsights(score = score, metrics = metrics, status = status)
+    val weakestMetric = metrics
+        .filterNot { it.achieved }
+        .minByOrNull { metric -> metric.confidence ?: (metric.earnedPoints.toFloat() / metric.maxPoints).coerceIn(0f, 1f) }
+
+    val statusMessage = weakestMetric?.let { metric ->
+        val percent = metric.confidence?.let { (it * 100).roundToInt() }
+        if (percent != null) {
+            "${metric.label} needs attention ($percent% confidence)"
+        } else {
+            "${metric.label} needs attention"
+        }
+    } ?: status.message
+
+    val stageLabel = coupon.extractionStage
+        ?.takeIf { it.isNotBlank() }
+        ?.lowercase(Locale.getDefault())
+        ?.replace('_', ' ')
+        ?.replaceFirstChar { char ->
+            if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
+        }
+
+    val telemetryAvailable = coupon.extractionQualityScore != null || confidences.isNotEmpty()
+
+    val secondaryLabel = if (telemetryAvailable) {
+        listOfNotNull(
+            stageLabel?.let { "Stage: $it" },
+            coupon.extractionRunPath?.takeIf { it.isNotBlank() }?.let { "Path: $it" },
+            coupon.extractionTimestamp?.let { "Captured ${DateFormatter.formatShort(it)}" }
+        ).joinToString(" • ").ifBlank { null }
+    } else {
+        null
+    }
+
+    val scoreLabel = if (telemetryAvailable) {
+        "$score / 100 confidence"
+    } else {
+        "$score / 100 confidence (heuristic)"
+    }
+
+    return QualityInsights(
+        score = score,
+        metrics = metrics,
+        status = status,
+        scoreLabel = scoreLabel,
+        secondaryLabel = secondaryLabel,
+        statusMessage = statusMessage
+    )
 }
 
 private fun shareCoupon(context: Context, coupon: com.example.coupontracker.data.model.Coupon) {

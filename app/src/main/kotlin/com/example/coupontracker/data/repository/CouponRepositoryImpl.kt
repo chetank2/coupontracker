@@ -135,9 +135,32 @@ class CouponRepositoryImpl @Inject constructor(
             usageCount = max(incoming.usageCount, existing.usageCount),
             reminderDate = incoming.reminderDate ?: existing.reminderDate,
             platformType = incoming.platformType ?: existing.platformType,
+            extractionQualityScore = selectBestQualityScore(incoming, existing),
+            extractionConfidenceBreakdown = selectConfidenceMap(incoming, existing),
+            extractionStage = incoming.extractionStage ?: existing.extractionStage,
+            extractionRunPath = incoming.extractionRunPath ?: existing.extractionRunPath,
+            extractionTimestamp = incoming.extractionTimestamp ?: existing.extractionTimestamp,
             rating = incoming.rating ?: existing.rating,
             createdAt = existing.createdAt,
             updatedAt = Date()
         )
+    }
+
+    private fun selectBestQualityScore(incoming: Coupon, existing: Coupon): Int? {
+        val incomingScore = incoming.extractionQualityScore
+        val existingScore = existing.extractionQualityScore
+        return when {
+            incomingScore == null -> existingScore
+            existingScore == null -> incomingScore
+            else -> max(incomingScore, existingScore)
+        }
+    }
+
+    private fun selectConfidenceMap(incoming: Coupon, existing: Coupon): Map<String, Float> {
+        return when {
+            incoming.extractionConfidenceBreakdown.isNotEmpty() -> incoming.extractionConfidenceBreakdown
+            existing.extractionConfidenceBreakdown.isNotEmpty() -> existing.extractionConfidenceBreakdown
+            else -> emptyMap()
+        }
     }
 }
