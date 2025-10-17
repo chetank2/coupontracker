@@ -273,6 +273,10 @@ fun BatchScannerScreen(
         }
     }
 }
+}
+
+
+
 
 @Composable
 fun BatchScanningFallbackBanner(modifier: Modifier = Modifier) {
