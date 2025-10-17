@@ -35,6 +35,13 @@ data class Coupon(
     val reminderDate: Date? = null,
     val platformType: String? = null,
 
+    // Extraction telemetry
+    val extractionQualityScore: Int? = null,
+    val extractionConfidenceBreakdown: Map<String, Float> = emptyMap(),
+    val extractionStage: String? = null,
+    val extractionRunPath: String? = null,
+    val extractionTimestamp: Date? = null,
+
     // Existing tracking fields
     val rating: String? = null,
     val createdAt: Date = Date(),

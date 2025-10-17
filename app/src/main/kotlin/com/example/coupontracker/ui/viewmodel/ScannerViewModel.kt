@@ -908,7 +908,7 @@ class ScannerViewModel @Inject constructor(
             val coupon = finalizeCoupon(
                 base = createCouponFromInstance(
                     couponInstance = couponInstance,
-                    extractedInfo = extractionResult.fields,
+                    extractionResult = extractionResult,
                     imageUri = imageUri
                 ),
                 ocrText = extractionResult.fields.values.joinToString("\n"),
@@ -1159,7 +1159,7 @@ class ScannerViewModel @Inject constructor(
         for ((index, instance) in couponInstances.withIndex()) {
             try {
                 val extractionResult = extractTextFromFields(instance)
-                val coupon = createCouponFromInstance(instance, extractionResult.fields, originalImageUri)
+                val coupon = createCouponFromInstance(instance, extractionResult, originalImageUri)
 
                 couponRepository.insertCoupon(coupon)
                 processedResults.add(CouponProcessingSummary(coupon, extractionResult.miniCpmStatus))
@@ -1225,6 +1225,9 @@ class ScannerViewModel @Inject constructor(
             var progress = MiniCpmProgress.SUCCESS
             val triedStages = mutableListOf<String>()
             var finalStage = "UNKNOWN"
+            var qualityScore: Int? = null
+            var fieldConfidences: Map<String, Float> = emptyMap()
+            var sourceStage: ExtractionStage? = null
 
             extractedInfo["minicpmConfidence"] = couponInstance.confidence.toString()
             extractedInfo["minicpmDetectionStatus"] = couponInstance.status.name
@@ -1240,13 +1243,19 @@ class ScannerViewModel @Inject constructor(
                     is ExtractResult.Good -> {
                         extractedInfo.putAll(mapCouponInfoToFields(result.info))
                         progress = MiniCpmProgress.SUCCESS
+                        qualityScore = result.signals.qualityScore
+                        fieldConfidences = result.signals.fieldConfidences
+                        sourceStage = result.signals.stage
                         Log.d(TAG, "✅ LLM extraction successful (quality: ${result.signals.qualityScore})")
                     }
-                    
+
                     is ExtractResult.LowQuality -> {
                         extractedInfo.putAll(mapCouponInfoToFields(result.info))
                         progress = MiniCpmProgress.NEEDS_REVIEW
-                        
+                        qualityScore = result.signals.qualityScore
+                        fieldConfidences = result.signals.fieldConfidences
+                        sourceStage = result.signals.stage
+
                         // Try fallback for low quality
                         triedStages.add("FALLBACK_OCR")
                         finalStage = "FALLBACK_OCR"
@@ -1261,9 +1270,12 @@ class ScannerViewModel @Inject constructor(
                         triedStages.add("FALLBACK_OCR")
                         finalStage = "FALLBACK_OCR"
                         progress = MiniCpmProgress.FALLBACK
+                        qualityScore = result.signals?.qualityScore
+                        fieldConfidences = result.signals?.fieldConfidences ?: emptyMap()
+                        sourceStage = result.signals?.stage ?: result.stage
                         val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
                         extractedInfo.putAll(fallbackFields)
-                        
+
                         Log.e(TAG, "❌ LLM extraction failed: ${result.error.message}")
                     }
                 }
@@ -1273,6 +1285,8 @@ class ScannerViewModel @Inject constructor(
                 triedStages.add("FALLBACK_OCR")
                 finalStage = "FALLBACK_OCR"
                 progress = MiniCpmProgress.FALLBACK
+                qualityScore = qualityScore ?: 0
+                sourceStage = sourceStage ?: ExtractionStage.LLM
                 val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
                 extractedInfo.putAll(fallbackFields)
             }
@@ -1292,11 +1306,19 @@ class ScannerViewModel @Inject constructor(
             extractedInfo["minicpmProcessing"] = progress.name
             extractedInfo["runPath"] = "${runPath.strategy} → ${runPath.final}"
             extractedInfo["processingTimeMs"] = totalTime.toString()
+            qualityScore?.let { extractedInfo["qualityScore"] = it.toString() }
+
+            if (sourceStage == null && finalStage == "FALLBACK_OCR") {
+                sourceStage = ExtractionStage.MLKIT
+            }
 
             val baseResult = FieldExtractionResult(
                 fields = extractedInfo.toMap(),
                 miniCpmStatus = progress,
-                runPath = runPath
+                runPath = runPath,
+                qualityScore = qualityScore,
+                fieldConfidences = fieldConfidences,
+                sourceStage = sourceStage
             )
 
             val snapshot = ExtractionDebugScorer.fromFieldExtraction(baseResult, runPath)
@@ -1434,10 +1456,12 @@ class ScannerViewModel @Inject constructor(
      * Create a Coupon object from a detected coupon instance
      */
     private fun createCouponFromInstance(
-        couponInstance: CouponInstance, 
-        extractedInfo: Map<String, String>, 
+        couponInstance: CouponInstance,
+        extractionResult: FieldExtractionResult,
         imageUri: String?
     ): Coupon {
+        val extractedInfo = extractionResult.fields
+
         // Parse expiry date string to Date if available
         val expiryDate = parseExpiryDate(extractedInfo["expiryDate"])
 
@@ -1451,6 +1475,16 @@ class ScannerViewModel @Inject constructor(
             CashbackInfo.fromText(amountText)
         } ?: CashbackInfo.fromLegacyAmount(amount, extractedInfo["description"])
 
+        val runPathSummary = extractionResult.runPath?.let { path ->
+            buildString {
+                append(path.strategy.ifBlank { "LLM" })
+                if (path.final.isNotBlank()) {
+                    append(" → ")
+                    append(path.final)
+                }
+            }.ifBlank { null }
+        }
+
         return Coupon(
             id = 0, // Auto-generated by Room
             storeName = extractedInfo["storeName"] ?: extractedInfo["app"] ?: "Unknown Store",
@@ -1459,7 +1493,7 @@ class ScannerViewModel @Inject constructor(
             cashbackAmount = amount, // Keep for backward compatibility
             redeemCode = extractedInfo["code"], // Don't generate fallback - use null if not extracted
             imageUri = imageUri,
-            
+
             // New typed cashback fields
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
@@ -1471,6 +1505,11 @@ class ScannerViewModel @Inject constructor(
                 com.example.coupontracker.ml.CouponStatus.PARTIAL_TOP -> "PARTIAL"
                 com.example.coupontracker.ml.CouponStatus.PARTIAL_BOTTOM -> "PARTIAL"
             },
+            extractionQualityScore = extractionResult.qualityScore,
+            extractionConfidenceBreakdown = extractionResult.fieldConfidences,
+            extractionStage = extractionResult.sourceStage?.name,
+            extractionRunPath = runPathSummary,
+            extractionTimestamp = Date(),
             createdAt = Date(),
             updatedAt = Date()
         )
@@ -2072,5 +2111,8 @@ data class FieldExtractionResult(
     val fields: Map<String, String>,
     val miniCpmStatus: MiniCpmProgress,
     val runPath: RunPath? = null,
-    val debugSnapshot: ExtractionDebugSnapshot? = null
+    val debugSnapshot: ExtractionDebugSnapshot? = null,
+    val qualityScore: Int? = null,
+    val fieldConfidences: Map<String, Float> = emptyMap(),
+    val sourceStage: ExtractionStage? = null
 )
