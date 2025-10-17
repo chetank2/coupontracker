@@ -88,7 +88,7 @@ class LlmOcrFusionService(
                 }
                 
                 if (closeMatches.isNotEmpty()) {
-                    val rankedMatches = rankCodesUniversally(closeMatches)
+                    val rankedMatches = rankCodesUniversally(closeMatches, normalizedLlmCode)
                     val bestMatch = rankedMatches.firstOrNull()
                     
                     if (bestMatch != null && bestMatch.score > 0.6) {
@@ -435,53 +435,87 @@ class LlmOcrFusionService(
     /**
      * Universal code ranking - replaces brand-specific BrandAwareCouponValidator
      */
-    private fun rankCodesUniversally(codeTokens: List<String>): List<CodeCandidate> {
+    private fun rankCodesUniversally(
+        codeTokens: List<String>,
+        reference: String? = null
+    ): List<CodeCandidate> {
+        val normalizedReference = reference?.normalize()
         return codeTokens
             .map { it.trim().uppercase() }
             .filter { it.length in 4..16 }
             .map { token ->
                 val baseScore = calculateUniversalCodeScore(token)
-                CodeCandidate(token, baseScore > 0.5, false, baseScore)
+                val contextualBonus = normalizedReference?.let { ref ->
+                    calculateReferenceBonus(token, ref)
+                } ?: 0.0
+                val finalScore = (baseScore + contextualBonus).coerceIn(0.0, 1.0)
+                CodeCandidate(token, finalScore >= 0.5, false, finalScore)
             }
             .filter { it.baseMatch }
             .sortedByDescending { it.score }
     }
-    
+
     /**
      * Calculate universal code score without brand-specific patterns
      */
     private fun calculateUniversalCodeScore(code: String): Double {
         var score = 0.0
-        
+
         // Base format validation
         val basePattern = Regex("^[A-Z0-9][A-Z0-9_-]{3,15}$")
         if (!basePattern.matches(code)) return 0.0
-        
+
         // Length scoring (sweet spot 6-12 chars)
         score += when (code.length) {
             in 6..12 -> 0.4
             in 4..5, in 13..16 -> 0.2
             else -> 0.0
         }
-        
+
         // Character variety (good codes have mix of letters and numbers)
         val hasLetters = code.any { it.isLetter() }
         val hasNumbers = code.any { it.isDigit() }
         if (hasLetters && hasNumbers) score += 0.3
         else if (hasLetters || hasNumbers) score += 0.1
-        
+
+        // Reward solid uppercase alphabetic tokens of reasonable length
+        val allLetters = code.all { it.isLetter() }
+        if (allLetters && code.length in 6..12) {
+            score += 0.2
+        }
+
         // Penalize obvious non-codes
         val junkPatterns = listOf("VOUCHER", "COUPON", "OFFER", "DISCOUNT", "NEEDED", "USING")
         if (junkPatterns.any { code.contains(it) }) score -= 0.5
-        
+
         // Penalize all same character
         if (code.toSet().size < 2) score -= 0.3
         
         // Reasonable dash/underscore usage
         val separatorCount = code.count { it == '-' || it == '_' }
         if (separatorCount > 3) score -= 0.2
-        
+
         return maxOf(0.0, minOf(1.0, score))
+    }
+
+    private fun calculateReferenceBonus(token: String, reference: String): Double {
+        val normalizedToken = token.normalize()
+
+        if (normalizedToken == reference) {
+            return 0.2
+        }
+
+        if (normalizedToken.contains(reference)) {
+            val extraChars = normalizedToken.length - reference.length
+            val hasLeadingPrefix = normalizedToken.endsWith(reference)
+            val hasTrailingSuffix = normalizedToken.startsWith(reference)
+            if (extraChars in 1..2 && (hasLeadingPrefix || hasTrailingSuffix)) {
+                return 0.15
+            }
+        }
+
+        val distance = editDistance(normalizedToken, reference)
+        return if (distance <= 2) 0.05 else 0.0
     }
     
     /**
