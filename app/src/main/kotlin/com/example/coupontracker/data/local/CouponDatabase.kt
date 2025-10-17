@@ -276,13 +276,16 @@ abstract class CouponDatabase : RoomDatabase() {
         val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE coupons ADD COLUMN extractionQualityScore INTEGER")
-                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionConfidenceBreakdown TEXT")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionConfidenceBreakdown TEXT NOT NULL DEFAULT '{}'")
                 database.execSQL("ALTER TABLE coupons ADD COLUMN extractionStage TEXT")
                 database.execSQL("ALTER TABLE coupons ADD COLUMN extractionRunPath TEXT")
                 database.execSQL("ALTER TABLE coupons ADD COLUMN extractionTimestamp INTEGER")
 
                 database.execSQL(
                     "UPDATE coupons SET extractionTimestamp = COALESCE(updatedAt, createdAt) WHERE extractionTimestamp IS NULL"
+                )
+                database.execSQL(
+                    "UPDATE coupons SET extractionConfidenceBreakdown = '{}' WHERE extractionConfidenceBreakdown IS NULL OR extractionConfidenceBreakdown = ''"
                 )
             }
         }

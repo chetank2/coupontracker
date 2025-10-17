@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 9,
-    "identityHash": "f6717a76f584ad0d1b1ba1cfb6e6fa55",
+    "identityHash": "77032eb3abfef970170dddceab8d2d79",
     "entities": [
       {
         "tableName": "coupons",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `storeName` TEXT NOT NULL, `description` TEXT NOT NULL, `normalizedDescription` TEXT, `expiryDate` INTEGER, `cashbackAmount` REAL NOT NULL, `redeemCode` TEXT, `cashbackType` TEXT, `cashbackValueNum` REAL, `cashbackCurrency` TEXT, `imageUri` TEXT, `imagePhash` TEXT, `imageSignature` TEXT, `category` TEXT, `status` TEXT, `minimumPurchase` REAL, `maximumDiscount` REAL, `isPriority` INTEGER NOT NULL, `paymentMethod` TEXT, `usageLimit` INTEGER, `usageCount` INTEGER NOT NULL, `reminderDate` INTEGER, `platformType` TEXT, `extractionQualityScore` INTEGER, `extractionConfidenceBreakdown` TEXT, `extractionStage` TEXT, `extractionRunPath` TEXT, `extractionTimestamp` INTEGER, `rating` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `storeName` TEXT NOT NULL, `description` TEXT NOT NULL, `normalizedDescription` TEXT, `expiryDate` INTEGER, `cashbackAmount` REAL NOT NULL, `redeemCode` TEXT, `cashbackType` TEXT, `cashbackValueNum` REAL, `cashbackCurrency` TEXT, `imageUri` TEXT, `imagePhash` TEXT, `imageSignature` TEXT, `category` TEXT, `status` TEXT, `minimumPurchase` REAL, `maximumDiscount` REAL, `isPriority` INTEGER NOT NULL, `paymentMethod` TEXT, `usageLimit` INTEGER, `usageCount` INTEGER NOT NULL, `reminderDate` INTEGER, `platformType` TEXT, `extractionQualityScore` INTEGER, `extractionConfidenceBreakdown` TEXT NOT NULL, `extractionStage` TEXT, `extractionRunPath` TEXT, `extractionTimestamp` INTEGER, `rating` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -156,7 +156,7 @@
             "fieldPath": "extractionConfidenceBreakdown",
             "columnName": "extractionConfidenceBreakdown",
             "affinity": "TEXT",
-            "notNull": false
+            "notNull": true
           },
           {
             "fieldPath": "extractionStage",
@@ -431,7 +431,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'f6717a76f584ad0d1b1ba1cfb6e6fa55')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '77032eb3abfef970170dddceab8d2d79')"
     ]
   }
 }
