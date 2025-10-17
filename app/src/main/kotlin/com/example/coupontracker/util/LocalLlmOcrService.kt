@@ -1003,11 +1003,11 @@ $sanitizedOcr
         if (!couponInfo.redeemCode.isNullOrBlank()) qualityScore += 25
         if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) qualityScore += 25
         if (couponInfo.expiryDate != null) qualityScore += 10
-        if (couponInfo.description != "Coupon offer") qualityScore += 10
+        if (GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)) qualityScore += 10
         
         // Additional quality checks for boilerplate/generic content
         val hasGenericStoreName = GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)
-        val hasGenericDescription = GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)
+        val hasGenericDescription = !GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)
         val hasGenericCode = GenericFieldHeuristics.isGenericOrMissing(couponInfo.redeemCode)
         val hasMeaninglessAmount = GenericFieldHeuristics.isZeroOrMeaningless(couponInfo.cashbackAmount)
         
@@ -1179,7 +1179,7 @@ $sanitizedOcr
         if (!couponInfo.redeemCode.isNullOrBlank()) qualityScore += 30
         if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) qualityScore += 20
         if (couponInfo.expiryDate != null) qualityScore += 15
-        if (!GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)) qualityScore += 10
+        if (GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)) qualityScore += 10
         
         return qualityScore
     }
@@ -1190,7 +1190,7 @@ $sanitizedOcr
     private fun calculateFieldConfidences(couponInfo: CouponInfo): Map<String, Float> {
         return mapOf(
             "storeName" to if (GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)) 0.3f else 0.9f,
-            "description" to if (GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)) 0.3f else 0.8f,
+            "description" to if (GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)) 0.8f else 0.3f,
             "redeemCode" to if (couponInfo.redeemCode.isNullOrBlank()) 0.0f else 0.9f,
             "cashbackAmount" to if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) 0.8f else 0.2f,
             "expiryDate" to if (couponInfo.expiryDate != null) 0.7f else 0.1f
@@ -1202,7 +1202,7 @@ $sanitizedOcr
      */
     private fun determineQualityReason(couponInfo: CouponInfo): QualityReason {
         val hasGenericStoreName = GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)
-        val hasGenericDescription = GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)
+        val hasGenericDescription = !GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)
         val hasGenericCode = GenericFieldHeuristics.isGenericOrMissing(couponInfo.redeemCode)
         val hasMeaninglessAmount = GenericFieldHeuristics.isZeroOrMeaningless(couponInfo.cashbackAmount)
         val hasDuplicateFields = GenericFieldHeuristics.areDuplicateFields(
@@ -1237,7 +1237,7 @@ $sanitizedOcr
         val lines = normalized.lineSequence()
             .map { it.trimEnd() }
             .filter { it.isNotBlank() }
-            .filter { !GenericFieldHeuristics.isGenericOrMissing(it) }
+            .filter { GenericFieldHeuristics.isMeaningfulDescription(it) }
             .toList()
 
         val scoredLines = lines.map { line ->

@@ -577,14 +577,11 @@ class TextExtractor {
     }
 
     private fun String.isMeaningfulDescription(): Boolean {
-        if (isBlank()) {
+        if (!GenericFieldHeuristics.isMeaningfulDescription(this)) {
             return false
         }
 
         val normalized = trim()
-        if (normalized.length < 4) {
-            return false
-        }
 
         val hasAlphaNumeric = normalized.any { it.isLetterOrDigit() }
         if (!hasAlphaNumeric) {
@@ -592,17 +589,6 @@ class TextExtractor {
         }
 
         if (looksLikeDashboardStats(normalized)) {
-            return false
-        }
-
-        val genericPhrases = listOf(
-            "offer",
-            "coupon",
-            "deal"
-        )
-
-        val lower = normalized.lowercase(Locale.ROOT)
-        if (genericPhrases.any { lower == it }) {
             return false
         }
 
