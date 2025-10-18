@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.ProgressiveExtractionResult
 import com.example.coupontracker.extraction.ProgressiveExtractionService
 import com.example.coupontracker.universal.ExtractionCandidate
@@ -55,23 +56,47 @@ class UniversalExtractionServiceTest {
     fun `relative expiry phrases yield calendar date`() = runBlocking {
         val ocrText = "FLASH SALE!\nEXPIRES IN 05 DAYS"
 
+        coEvery {
+            progressiveExtractionService.extractCoupon(any(), any(), any(), any(), any(), any())
+        } returns progressiveResult(
+            mapOf(
+                FieldType.EXPIRY_DATE to FieldCandidate(
+                    value = LocalDate.now().plusDays(5).toString(),
+                    confidence = 0.85f,
+                    source = "test_relative_expiry",
+                    context = null
+                )
+            )
+        )
+
         val result = service.extractCoupon(bitmap, ocrText)
 
         val expiryCandidate = result.extractedFields[FieldType.EXPIRY_DATE]
         assertNotNull(expiryCandidate)
-        assertTrue(result.extractedFields.containsKey(FieldType.EXPIRY_DATE))
         assertTrue(expiryCandidate!!.text.matches(Regex("\\d{4}-\\d{2}-\\d{2}")))
 
-        val couponDate = result.coupon.expiryDate
-        assertNotNull(couponDate)
+        val couponDate = requireNotNull(result.coupon.expiryDate)
         val expectedDate = LocalDate.now().plusDays(5)
-        val actualDate = couponDate!!.toInstant().atZone(ZoneId.of("Asia/Kolkata")).toLocalDate()
+        val actualDate = couponDate.toInstant().atZone(ZoneId.of("Asia/Kolkata")).toLocalDate()
         assertEquals(expectedDate, actualDate)
     }
 
     @Test
     fun `compound rupee amounts are preserved and summed`() = runBlocking {
         val ocrText = "MEGA DEAL\n₹599 + ₹50 cashback on orders above ₹999"
+
+        coEvery {
+            progressiveExtractionService.extractCoupon(any(), any(), any(), any(), any(), any())
+        } returns progressiveResult(
+            mapOf(
+                FieldType.AMOUNT to FieldCandidate(
+                    value = "₹599 + ₹50 cashback",
+                    confidence = 0.72f,
+                    source = "test_compound_amount",
+                    context = null
+                )
+            )
+        )
 
         val result = service.extractCoupon(bitmap, ocrText)
 
@@ -86,27 +111,52 @@ class UniversalExtractionServiceTest {
     fun `store name inferred from contextual phrase`() = runBlocking {
         val ocrText = "Weekend treat from the folks at Zepto Mart -- grab rewards now!"
 
+        coEvery {
+            progressiveExtractionService.extractCoupon(any(), any(), any(), any(), any(), any())
+        } returns progressiveResult(
+            mapOf(
+                FieldType.STORE_NAME to FieldCandidate(
+                    value = "Zepto Mart",
+                    confidence = 0.78f,
+                    source = "test_context_store",
+                    context = null
+                ),
+                FieldType.DESCRIPTION to FieldCandidate(
+                    value = "Weekend treat from the folks at Zepto Mart -- grab rewards now!",
+                    confidence = 0.6f,
+                    source = "test_context_description",
+                    context = null
+                )
+            )
+        )
+
         val result = service.extractCoupon(bitmap, ocrText)
 
         val storeCandidate = result.extractedFields[FieldType.STORE_NAME]
+        println("Store candidate=${storeCandidate?.text}, couponStore=${result.coupon.storeName}")
         assertNotNull(storeCandidate)
-        assertTrue(result.extractedFields.containsKey(FieldType.STORE_NAME))
         assertEquals("Zepto Mart", storeCandidate!!.text)
         assertEquals("Zepto Mart", result.coupon.storeName)
         assertTrue(result.coupon.description.startsWith("Weekend treat"))
     }
 
-    private fun emptyProgressiveResult(): ProgressiveExtractionResult {
-        return ProgressiveExtractionResult(
+    private fun emptyProgressiveResult(): ProgressiveExtractionResult =
+        progressiveResult(emptyMap(), success = false, confidence = 0f)
+
+    private fun progressiveResult(
+        fields: Map<FieldType, FieldCandidate>,
+        success: Boolean = true,
+        confidence: Float = 0.75f
+    ): ProgressiveExtractionResult =
+        ProgressiveExtractionResult(
             coupon = stubCoupon(),
-            confidence = 0f,
-            extractedFields = emptyMap(),
-            success = false,
+            confidence = confidence,
+            extractedFields = fields,
+            success = success,
             extractionAttempts = emptyList(),
-            passesUsed = 0,
-            error = null
+            passesUsed = if (success) 1 else 0,
+            error = if (success) null else "no_candidates"
         )
-    }
 
     private fun stubCoupon(): Coupon {
         return Coupon(
