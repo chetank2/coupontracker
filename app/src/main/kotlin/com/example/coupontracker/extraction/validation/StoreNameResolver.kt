@@ -15,7 +15,9 @@ class StoreNameResolver(
         val issue: FieldValidationIssue?,
         val source: String?,
         val evidence: List<String>,
-        val needsAttention: Boolean
+        val needsAttention: Boolean,
+        val violations: List<String>,
+        val confidence: Float?
     )
 
     fun resolve(
@@ -33,7 +35,9 @@ class StoreNameResolver(
                 issue = null,
                 source = "llm",
                 evidence = llmAssessment.signals.map { it.detail },
-                needsAttention = llmAssessment.needsAttention
+                needsAttention = llmAssessment.needsAttention,
+                violations = llmAssessment.issues,
+                confidence = null
             )
         }
 
@@ -63,7 +67,9 @@ class StoreNameResolver(
                 issue = issue,
                 source = candidate.source,
                 evidence = assessment.signals.map { it.detail },
-                needsAttention = assessment.needsAttention
+                needsAttention = assessment.needsAttention,
+                violations = llmAssessment.issues + assessment.issues,
+                confidence = candidate.confidence
             )
         }
 
@@ -87,7 +93,9 @@ class StoreNameResolver(
                 issue = issue,
                 source = "text_extractor",
                 evidence = fallbackAssessment.signals.map { it.detail },
-                needsAttention = fallbackAssessment.needsAttention
+                needsAttention = fallbackAssessment.needsAttention,
+                violations = llmAssessment.issues + fallbackAssessment.issues,
+                confidence = null
             )
         }
 
@@ -108,7 +116,9 @@ class StoreNameResolver(
             issue = issue,
             source = "unresolved",
             evidence = evidence,
-            needsAttention = true
+            needsAttention = true,
+            violations = llmAssessment.issues,
+            confidence = null
         )
     }
 }

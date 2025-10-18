@@ -43,6 +43,21 @@ data class FieldValidationIssue(
     val replacementSource: String?
 )
 
+data class ValidationEvent(
+    val initial: FieldValueBundle,
+    val summary: FieldValidationSummary,
+    val structuredCandidates: Map<FieldType, List<FieldCandidate>>,
+    val rawOcrText: String?
+)
+
+fun interface ValidationEventLogger {
+    fun log(event: ValidationEvent)
+
+    companion object {
+        val NO_OP = ValidationEventLogger { _ -> }
+    }
+}
+
 /**
  * Coordinates validation of the core coupon fields returned by the LLM.
  * Uses deterministic heuristics and structured extraction fallbacks to keep
@@ -52,7 +67,8 @@ internal class FieldValidationCoordinator(
     private val textExtractor: TextExtractor,
     private val storeNameResolver: StoreNameResolver,
     private val descriptionValidator: DescriptionValidator = DescriptionValidator(),
-    private val expiryDateValidator: ExpiryDateValidator = ExpiryDateValidator()
+    private val expiryDateValidator: ExpiryDateValidator = ExpiryDateValidator(),
+    private val validationEventLogger: ValidationEventLogger = ValidationEventLogger.NO_OP
 ) {
     internal fun refine(
         initial: FieldValueBundle,
@@ -101,6 +117,16 @@ internal class FieldValidationCoordinator(
         bundle = bundle.copy(expiryDateText = expiryDecision.value)
         expiryDecision.issue?.let { issues += it }
 
-        return FieldValidationSummary(bundle, issues, storeResolution)
+        val summary = FieldValidationSummary(bundle, issues, storeResolution)
+        validationEventLogger.log(
+            ValidationEvent(
+                initial = initial,
+                summary = summary,
+                structuredCandidates = structuredCandidates,
+                rawOcrText = rawOcrText
+            )
+        )
+
+        return summary
     }
 }
