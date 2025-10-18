@@ -110,6 +110,13 @@ android {
         jvmTarget = "17"
     }
 
+    sourceSets {
+        getByName("test") {
+            java.srcDir("tests")
+            resources.srcDir("tests/fixtures")
+        }
+    }
+
     kapt {
         correctErrorTypes = true
     }

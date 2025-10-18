@@ -1,0 +1,61 @@
+[
+  {
+    "id": "banner_shop_now",
+    "type": "cta",
+    "source": "banner",
+    "value": "Shop Now",
+    "description": "Shop Now and get rewards",
+    "redeemCode": "SHOP100"
+  },
+  {
+    "id": "email_tap_to_claim",
+    "type": "cta",
+    "source": "email",
+    "value": "Tap to Claim",
+    "description": "Tap to claim your exclusive reward",
+    "redeemCode": "CLAIM50"
+  },
+  {
+    "id": "screenshot_claim_now_caps",
+    "type": "cta",
+    "source": "screenshot",
+    "value": "CLAIM NOW",
+    "description": "CLAIM NOW before it expires",
+    "redeemCode": "FAST10"
+  },
+  {
+    "id": "banner_copy_code",
+    "type": "cta",
+    "source": "banner",
+    "value": "Copy Code",
+    "description": "Copy code to use at checkout",
+    "redeemCode": "CODE11"
+  },
+  {
+    "id": "screenshot_myntra",
+    "type": "brand",
+    "source": "screenshot",
+    "value": "MYNTRA",
+    "description": "MYNTRA Big Fashion Days",
+    "redeemCode": "MYNTRA20",
+    "expectedCanonical": "Myntra"
+  },
+  {
+    "id": "email_boat",
+    "type": "brand",
+    "source": "email",
+    "value": "boAt",
+    "description": "boAt audio fest",
+    "redeemCode": "BOAT25",
+    "expectedCanonical": "boAt"
+  },
+  {
+    "id": "banner_nykaa_alias",
+    "type": "brand",
+    "source": "banner",
+    "value": "NYKAA",
+    "description": "Nykaa Pink Friday Sale",
+    "redeemCode": "NYKAA100",
+    "expectedCanonical": "Nykaa"
+  }
+]
