@@ -123,4 +123,3 @@ internal class StoreNameResolver(
         )
     }
 }
-

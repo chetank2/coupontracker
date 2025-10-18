@@ -212,7 +212,7 @@ fun ScannerScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            val currentState = uiState
+            val state = uiState
             when {
                 showCamera -> {
                     CameraView(
@@ -255,12 +255,12 @@ fun ScannerScreen(
                     }
                 }
 
-                currentState is ScannerUiState.Scanning -> {
+                state is ScannerUiState.Scanning -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        val progress = currentState.progress
+                        val progress = state.progress
                         val message = progress?.message ?: stringResource(id = R.string.scanner_progress_default)
                         val percent = progress?.percent
                         Column(

@@ -16,7 +16,7 @@ import org.junit.runner.RunWith
 class ExtractionConfigTest {
 
     private lateinit var context: Context
-    private lateinit var originalLoader: MlcLlmNative.NativeLibraryLoader
+    private lateinit var originalLoader: MlcLlmNative.Companion.NativeLibraryLoader
 
     @Before
     fun setUp() {
@@ -78,7 +78,7 @@ class ExtractionConfigTest {
 
     @Test
     fun availableStrategiesIncludeAdvancedWhenLibraryReadyAndGuardEnabled() {
-        val stubLoader = object : MlcLlmNative.NativeLibraryLoader {
+        val stubLoader = object : MlcLlmNative.Companion.NativeLibraryLoader {
             override fun loadLibrary(name: String) {}
             override fun load(path: String) {}
         }

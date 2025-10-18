@@ -13,9 +13,9 @@ import io.mockk.mockk
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Date
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.Test
@@ -59,12 +59,12 @@ class UniversalExtractionServiceTest {
 
         val expiryCandidate = result.extractedFields[FieldType.EXPIRY_DATE]
         assertNotNull(expiryCandidate)
-        assertTrue(expiryCandidate.text.matches(Regex("\\d{4}-\\d{2}-\\d{2}")))
+        assertTrue(expiryCandidate!!.text.matches(Regex("\\d{4}-\\d{2}-\\d{2}")))
 
         val couponDate = result.coupon.expiryDate
         assertNotNull(couponDate)
         val expectedDate = LocalDate.now().plusDays(5)
-        val actualDate = couponDate.toInstant().atZone(ZoneId.of("Asia/Kolkata")).toLocalDate()
+        val actualDate = couponDate!!.toInstant().atZone(ZoneId.of("Asia/Kolkata")).toLocalDate()
         assertEquals(expectedDate, actualDate)
     }
 
@@ -76,7 +76,7 @@ class UniversalExtractionServiceTest {
 
         val amountCandidate = result.extractedFields[FieldType.AMOUNT]
         assertNotNull(amountCandidate)
-        assertEquals("₹599 + ₹50 cashback", amountCandidate.text)
+        assertEquals("₹599 + ₹50 cashback", amountCandidate!!.text)
         assertEquals(649.0, result.coupon.cashbackAmount)
     }
 
@@ -88,7 +88,7 @@ class UniversalExtractionServiceTest {
 
         val storeCandidate = result.extractedFields[FieldType.STORE_NAME]
         assertNotNull(storeCandidate)
-        assertEquals("Zepto Mart", storeCandidate.text)
+        assertEquals("Zepto Mart", storeCandidate!!.text)
         assertTrue(result.coupon.description.startsWith("Weekend treat"))
     }
 
