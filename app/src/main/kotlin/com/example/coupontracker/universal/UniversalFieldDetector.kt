@@ -492,5 +492,7 @@ enum class ExtractionSource {
 data class ExtractionContext(
     val brandHint: String? = null,
     val categoryHint: String? = null,
-    val previousSuccesses: List<String> = emptyList()
+    val previousSuccesses: List<String> = emptyList(),
+    val cleanedOcrText: String? = null,
+    val originalOcrText: String? = null
 )
