@@ -41,6 +41,8 @@ class AnalyticsTracker @Inject constructor(
         const val EVENT_MULTIPLE_COUPONS_DETECTED = "multiple_coupons_detected"
         const val EVENT_QR_CODE_DETECTED = "qr_code_detected"
         const val EVENT_PROCESSING_TIME = "processing_time"
+        const val EVENT_STRATEGY_EXECUTED = "strategy_executed"
+        const val EVENT_STRATEGY_FALLBACK = "strategy_fallback"
     }
     
     // Get or create a unique user ID
@@ -128,6 +130,42 @@ class AnalyticsTracker @Inject constructor(
             "time_ms" to processingTimeMs,
             "operation" to operation
         ))
+    }
+
+    suspend fun trackStrategyExecution(
+        surface: String,
+        requestedStrategy: ExtractionStrategy,
+        executedStrategy: String,
+        reason: String? = null
+    ) {
+        val normalizedExecuted = executedStrategy.lowercase(Locale.getDefault())
+        val properties = mutableMapOf<String, Any>(
+            "surface" to surface,
+            "requested" to requestedStrategy.name.lowercase(Locale.getDefault()),
+            "executed" to normalizedExecuted
+        )
+
+        reason?.let { properties["reason"] = it }
+        val mismatch = !requestedStrategy.name.equals(normalizedExecuted, ignoreCase = true)
+        properties["mismatch"] = mismatch.toString()
+
+        trackEvent(EVENT_STRATEGY_EXECUTED, properties)
+    }
+
+    suspend fun trackStrategyFallback(
+        surface: String,
+        fromStrategy: ExtractionStrategy,
+        fallbackTarget: String,
+        reason: String
+    ) {
+        val properties = mapOf(
+            "surface" to surface,
+            "from" to fromStrategy.name.lowercase(Locale.getDefault()),
+            "to" to fallbackTarget.lowercase(Locale.getDefault()),
+            "reason" to reason
+        )
+
+        trackEvent(EVENT_STRATEGY_FALLBACK, properties)
     }
     
     /**

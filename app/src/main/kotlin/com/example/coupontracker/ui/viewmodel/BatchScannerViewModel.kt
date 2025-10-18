@@ -9,6 +9,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.util.AnalyticsTracker
 import com.example.coupontracker.util.CouponInputManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -31,7 +33,8 @@ class BatchScannerViewModel @Inject constructor(
     private val ocrEngine: com.example.coupontracker.ocr.OcrEngine,  // Tesseract OCR engine
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Bitmap memory management
     private val localLlmOcrService: com.example.coupontracker.util.LocalLlmOcrService,  // V2: LLM service
-    private val universalExtractionService: com.example.coupontracker.universal.UniversalExtractionService  // V2: Universal extraction
+    private val universalExtractionService: com.example.coupontracker.universal.UniversalExtractionService,  // V2: Universal extraction
+    private val analyticsTracker: AnalyticsTracker
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(BatchScannerUiState())
@@ -48,6 +51,7 @@ class BatchScannerViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "BatchScannerViewModel"
+        private const val STRATEGY_SURFACE_BATCH = "batch_capture"
     }
 
     private data class DetectorInitializationResult(
@@ -536,6 +540,11 @@ class BatchScannerViewModel @Inject constructor(
                         // Terminal fallback: Use LEGACY two-stage detection if available
                         Log.d(TAG, "LLM_FIRST failed with no OCR fallback allowed, using LEGACY")
                         if (allowLegacyFallback) {
+                            logStrategyExecution(
+                                requested = com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST,
+                                executed = "legacy",
+                                reason = "llm_terminal_failure"
+                            )
                             processWithLegacyPath(uri, bitmap)
                         } else {
                             Log.w(TAG, "LLM_FIRST fallback to LEGACY disabled, returning placeholder coupon")
@@ -583,6 +592,11 @@ class BatchScannerViewModel @Inject constructor(
                             // Terminal fallback: Use LEGACY two-stage detection
                             Log.d(TAG, "OCR_FIRST failed with no LLM fallback allowed, using LEGACY")
                             if (allowLegacyFallback) {
+                                logStrategyExecution(
+                                    requested = com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST,
+                                    executed = "legacy",
+                                    reason = "ocr_low_confidence"
+                                )
                                 processWithLegacyPath(uri, bitmap)
                             } else {
                                 Log.w(TAG, "OCR_FIRST fallback to LEGACY disabled, returning placeholder coupon")
@@ -605,6 +619,11 @@ class BatchScannerViewModel @Inject constructor(
                         // Terminal fallback: Use LEGACY two-stage detection
                         Log.d(TAG, "OCR_FIRST failed with no LLM fallback allowed, using LEGACY")
                         if (allowLegacyFallback) {
+                            logStrategyExecution(
+                                requested = com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST,
+                                executed = "legacy",
+                                reason = "ocr_exception"
+                            )
                             processWithLegacyPath(uri, bitmap)
                         } else {
                             Log.w(TAG, "OCR_FIRST fallback to LEGACY disabled, returning placeholder coupon")
@@ -659,12 +678,52 @@ class BatchScannerViewModel @Inject constructor(
                 else -> {
                     // Both failed - use LEGACY
                     Log.d(TAG, "HYBRID: Both failed, falling back to LEGACY")
+                    logStrategyExecution(
+                        requested = com.example.coupontracker.util.ExtractionStrategy.HYBRID,
+                        executed = "legacy",
+                        reason = "hybrid_no_success"
+                    )
                     processWithLegacyPath(uri, bitmap)
                 }
             }
         }
     }
-    
+
+    private suspend fun logStrategyExecution(
+        requested: com.example.coupontracker.util.ExtractionStrategy,
+        executed: String,
+        reason: String? = null
+    ) {
+        val normalizedExecuted = executed.lowercase(Locale.getDefault())
+        val message = buildString {
+            append("Strategy[batch]: requested=")
+            append(requested.name)
+            append(", executed=")
+            append(normalizedExecuted)
+            if (!reason.isNullOrBlank()) {
+                append(", reason=")
+                append(reason)
+            }
+        }
+
+        Log.i(TAG, message)
+        analyticsTracker.trackStrategyExecution(
+            STRATEGY_SURFACE_BATCH,
+            requested,
+            normalizedExecuted,
+            reason
+        )
+
+        if (!requested.name.equals(normalizedExecuted, ignoreCase = true) && !reason.isNullOrBlank()) {
+            analyticsTracker.trackStrategyFallback(
+                STRATEGY_SURFACE_BATCH,
+                requested,
+                normalizedExecuted,
+                reason
+            )
+        }
+    }
+
     /**
      * Fuse LLM and OCR results by choosing best field per confidence
      * This is the REAL HYBRID fusion logic (mirrors ScannerViewModel)
@@ -1136,14 +1195,34 @@ class BatchScannerViewModel @Inject constructor(
         strategy: com.example.coupontracker.util.ExtractionStrategy
     ): Coupon {
         return when (strategy) {
-            com.example.coupontracker.util.ExtractionStrategy.LEGACY -> 
+            com.example.coupontracker.util.ExtractionStrategy.LEGACY -> {
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = strategy.name.lowercase(Locale.getDefault())
+                )
                 processWithLegacyPath(uri, bitmap)
-            com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST -> 
+            }
+            com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST -> {
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = strategy.name.lowercase(Locale.getDefault())
+                )
                 processWithLlmFirstPath(uri, bitmap)
-            com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST -> 
+            }
+            com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST -> {
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = strategy.name.lowercase(Locale.getDefault())
+                )
                 processWithOcrFirstPath(uri, bitmap)
-            com.example.coupontracker.util.ExtractionStrategy.HYBRID -> 
+            }
+            com.example.coupontracker.util.ExtractionStrategy.HYBRID -> {
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = strategy.name.lowercase(Locale.getDefault())
+                )
                 processWithHybridPath(uri, bitmap)
+            }
         }
     }
     
