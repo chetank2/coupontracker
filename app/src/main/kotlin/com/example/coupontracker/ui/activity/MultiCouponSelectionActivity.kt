@@ -149,6 +149,13 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
                     is ScannerUiState.Scanning -> {
                         binding.progressBar.visibility = View.VISIBLE
                         binding.buttonsContainer.visibility = View.GONE
+                        val progress = state.progress
+                        if (progress?.percent != null) {
+                            binding.progressBar.isIndeterminate = false
+                            binding.progressBar.progress = progress.percent
+                        } else {
+                            binding.progressBar.isIndeterminate = true
+                        }
                     }
                     is ScannerUiState.Success -> {
                         binding.progressBar.visibility = View.GONE

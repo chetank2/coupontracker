@@ -3,6 +3,7 @@ package com.example.coupontracker.llm
 import android.content.Context
 import android.util.Log
 import com.example.coupontracker.util.AnalyticsTracker
+import com.example.coupontracker.util.LlmProgressUpdate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -125,25 +126,56 @@ class LlmTelemetryService(
         timeoutInferences.incrementAndGet()
         recordInference(durationMs, false, "TIMEOUT", null, 0, memoryUsageMB)
     }
-    
+
+    /**
+     * Record granular progress updates so we can monitor drop-off
+     * between warmup, inference, and completion stages.
+     */
+    fun recordProgress(update: LlmProgressUpdate) {
+        Log.d(TAG, "Progress update: stage=${update.stage}, percent=${update.percent}, message=${update.message}")
+
+        analyticsTracker?.let { tracker ->
+            CoroutineScope(Dispatchers.IO).launch {
+                val eventData = mapOf(
+                    "stage" to update.stage.name,
+                    "percent" to (update.percent ?: -1),
+                    "message" to update.message
+                )
+                tracker.trackEvent("llm_progress", eventData)
+            }
+        }
+    }
+
     /**
      * Record model load/unload events
      */
     fun recordModelLoad(success: Boolean, loadTimeMs: Long) {
-        if (success) {
-            modelLoadCount.incrementAndGet()
-            Log.d(TAG, "Model load recorded: ${loadTimeMs}ms")
-            
-            // Send analytics event for model loading
+        if (!success) {
+            Log.w(TAG, "Model load failed after ${loadTimeMs}ms")
             analyticsTracker?.let { tracker ->
                 CoroutineScope(Dispatchers.IO).launch {
                     val eventData = mapOf(
                         "load_time_ms" to loadTimeMs,
-                        "success" to success,
-                        "total_loads" to modelLoadCount.get()
+                        "success" to false
                     )
                     tracker.trackEvent("llm_model_load", eventData)
                 }
+            }
+            return
+        }
+
+        modelLoadCount.incrementAndGet()
+        Log.d(TAG, "Model load recorded: ${loadTimeMs}ms")
+
+        // Send analytics event for model loading
+        analyticsTracker?.let { tracker ->
+            CoroutineScope(Dispatchers.IO).launch {
+                val eventData = mapOf(
+                    "load_time_ms" to loadTimeMs,
+                    "success" to true,
+                    "total_loads" to modelLoadCount.get()
+                )
+                tracker.trackEvent("llm_model_load", eventData)
             }
         }
     }

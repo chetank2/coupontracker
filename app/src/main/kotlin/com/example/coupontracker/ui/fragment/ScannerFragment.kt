@@ -157,9 +157,22 @@ class ScannerFragment : Fragment() {
                     is ScannerUiState.Scanning -> {
                         binding.progressBar.visibility = View.VISIBLE
                         binding.captureButton.isEnabled = false
+                        binding.progressMessage.visibility = View.VISIBLE
+
+                        val progress = state.progress
+                        if (progress?.percent != null) {
+                            binding.progressBar.isIndeterminate = false
+                            binding.progressBar.progress = progress.percent
+                        } else {
+                            binding.progressBar.isIndeterminate = true
+                        }
+
+                        binding.progressMessage.text = progress?.message
+                            ?: getString(R.string.scanner_progress_default)
                     }
                     is ScannerUiState.Success -> {
                         binding.progressBar.visibility = View.GONE
+                        binding.progressMessage.visibility = View.GONE
                         binding.captureButton.isEnabled = true
 
                         // Show success message with coupon details
@@ -176,6 +189,7 @@ class ScannerFragment : Fragment() {
                     }
                     is ScannerUiState.Error -> {
                         binding.progressBar.visibility = View.GONE
+                        binding.progressMessage.visibility = View.GONE
                         binding.captureButton.isEnabled = true
                         Snackbar.make(
                             binding.root,
@@ -185,6 +199,7 @@ class ScannerFragment : Fragment() {
                     }
                     is ScannerUiState.Saved -> {
                         binding.progressBar.visibility = View.GONE
+                        binding.progressMessage.visibility = View.GONE
                         binding.captureButton.isEnabled = true
                         // Handle saved state
                         Snackbar.make(
@@ -196,6 +211,7 @@ class ScannerFragment : Fragment() {
                     }
                     is ScannerUiState.AlreadySaved -> {
                         binding.progressBar.visibility = View.GONE
+                        binding.progressMessage.visibility = View.GONE
                         binding.captureButton.isEnabled = true
                         // Handle already saved state
                         Snackbar.make(
@@ -207,6 +223,7 @@ class ScannerFragment : Fragment() {
                     }
                     is ScannerUiState.MultiCouponDetected -> {
                         binding.progressBar.visibility = View.GONE
+                        binding.progressMessage.visibility = View.GONE
                         binding.captureButton.isEnabled = true
 
                         val selectionIntent = Intent(
@@ -230,6 +247,7 @@ class ScannerFragment : Fragment() {
                     }
                     is ScannerUiState.AllCouponsSaved -> {
                         binding.progressBar.visibility = View.GONE
+                        binding.progressMessage.visibility = View.GONE
                         binding.captureButton.isEnabled = true
 
                         Snackbar.make(

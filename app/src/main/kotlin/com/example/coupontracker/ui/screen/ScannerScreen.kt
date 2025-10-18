@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
+import com.example.coupontracker.R
 import com.example.coupontracker.ui.components.ExtractionFeedbackDialog
 import com.example.coupontracker.ui.components.RepairNeededDialog
 import com.example.coupontracker.ui.components.CorrectedCoupon
@@ -77,7 +78,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -256,12 +259,23 @@ fun ScannerScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
+                        val progress = uiState.progress
+                        val message = progress?.message ?: stringResource(id = R.string.scanner_progress_default)
+                        val percent = progress?.percent
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            CircularProgressIndicator()
+                            if (percent != null) {
+                                CircularProgressIndicator(progress = percent.coerceIn(0, 100) / 100f)
+                            } else {
+                                CircularProgressIndicator()
+                            }
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text("Processing image...")
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
