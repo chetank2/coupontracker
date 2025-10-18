@@ -47,6 +47,7 @@ class ExtractionConfigTest {
     fun enablingAdvancedStrategiesRestoresPersistedSelection() {
         ExtractionConfig.init(context)
         ExtractionConfig.setAdvancedStrategiesEnabled(true)
+        assertTrue(ExtractionConfig.areAdvancedStrategiesEnabled())
         ExtractionConfig.setStrategy(ExtractionStrategy.LLM_FIRST)
 
         assertEquals(ExtractionStrategy.LLM_FIRST, ExtractionConfig.getStrategy())
@@ -73,6 +74,7 @@ class ExtractionConfigTest {
 
         ExtractionConfig.setAdvancedStrategiesEnabled(true)
 
+        assertTrue(ExtractionConfig.areAdvancedStrategiesEnabled())
         assertEquals(ExtractionStrategy.HYBRID, ExtractionConfig.getStrategy())
     }
 
@@ -84,6 +86,7 @@ class ExtractionConfigTest {
         }
         MlcLlmNative.libraryLoader = stubLoader
         assertTrue(MlcLlmNative.loadLibrary(context))
+        assertTrue(MlcLlmNative.isAvailable())
 
         ExtractionConfig.init(context)
         ExtractionConfig.setAdvancedStrategiesEnabled(true)

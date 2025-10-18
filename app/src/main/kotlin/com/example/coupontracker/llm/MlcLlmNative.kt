@@ -18,7 +18,7 @@ class MlcLlmNative {
         private var isLibraryLoaded = false
 
         @VisibleForTesting
-        interface NativeLibraryLoader {
+        internal interface NativeLibraryLoader {
             fun loadLibrary(name: String)
             fun load(path: String)
         }

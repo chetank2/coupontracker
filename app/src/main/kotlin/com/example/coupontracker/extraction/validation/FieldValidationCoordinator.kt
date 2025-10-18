@@ -9,10 +9,19 @@ import java.util.Date
 /**
  * Summary of field validation containing the normalized fields and any issues raised.
  */
+data class StoreResolutionSummary(
+    val value: String?,
+    val source: String?,
+    val evidence: List<String>,
+    val needsAttention: Boolean,
+    val violations: List<String>,
+    val confidence: Float?
+)
+
 data class FieldValidationSummary(
     val fields: FieldValueBundle,
     val issues: List<FieldValidationIssue>,
-    val storeResolution: StoreNameResolution
+    val storeResolution: StoreResolutionSummary
 )
 
 /**
@@ -100,6 +109,15 @@ internal class FieldValidationCoordinator(
         bundle = bundle.copy(storeName = storeResolution.value)
         storeResolution.issue?.let { issues += it }
 
+        val storeResolutionSummary = StoreResolutionSummary(
+            value = storeResolution.value,
+            source = storeResolution.source,
+            evidence = storeResolution.evidence,
+            needsAttention = storeResolution.needsAttention,
+            violations = storeResolution.violations,
+            confidence = storeResolution.confidence
+        )
+
         val descriptionDecision = descriptionValidator.repair(
             current = bundle.description,
             storeName = bundle.storeName,
@@ -117,7 +135,7 @@ internal class FieldValidationCoordinator(
         bundle = bundle.copy(expiryDateText = expiryDecision.value)
         expiryDecision.issue?.let { issues += it }
 
-        val summary = FieldValidationSummary(bundle, issues, storeResolution)
+        val summary = FieldValidationSummary(bundle, issues, storeResolutionSummary)
         validationEventLogger.log(
             ValidationEvent(
                 initial = initial,
