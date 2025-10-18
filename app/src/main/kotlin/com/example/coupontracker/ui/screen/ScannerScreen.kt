@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
 import com.example.coupontracker.ui.components.ExtractionFeedbackDialog
+import com.example.coupontracker.ui.components.RepairNeededDialog
 import com.example.coupontracker.ui.components.CorrectedCoupon
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -117,6 +118,7 @@ fun ScannerScreen(
     var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
     var extractedCoupon by remember { mutableStateOf<com.example.coupontracker.data.model.Coupon?>(null) }
+    var showRepairDialog by remember { mutableStateOf(false) }
 
     // Form fields
     var code by remember { mutableStateOf("") }
@@ -159,7 +161,11 @@ fun ScannerScreen(
         val currentState = uiState
         if (currentState is ScannerUiState.Success) {
             extractedCoupon = currentState.coupon
-            
+
+            if (currentState.coupon.needsAttention) {
+                showRepairDialog = true
+            }
+
             // Show feedback dialog if we can collect feedback (universal extraction was used)
             if (viewModel.canCollectFeedback()) {
                 showFeedbackDialog = true
@@ -174,6 +180,8 @@ fun ScannerScreen(
                     )
                 }
             }
+        } else {
+            showRepairDialog = false
         }
     }
 
@@ -543,6 +551,14 @@ fun ScannerScreen(
                         )
                     }
                 }
+            )
+        }
+
+        if (showRepairDialog && extractedCoupon?.needsAttention == true) {
+            RepairNeededDialog(
+                coupon = extractedCoupon!!,
+                onDismiss = { showRepairDialog = false },
+                onAcknowledge = { showRepairDialog = false }
             )
         }
     }

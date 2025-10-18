@@ -11,7 +11,8 @@ import java.util.Date
  */
 data class FieldValidationSummary(
     val fields: FieldValueBundle,
-    val issues: List<FieldValidationIssue>
+    val issues: List<FieldValidationIssue>,
+    val storeResolution: StoreNameResolver.Resolution
 )
 
 /**
@@ -49,7 +50,7 @@ data class FieldValidationIssue(
  */
 internal class FieldValidationCoordinator(
     private val textExtractor: TextExtractor,
-    private val storeNameValidator: StoreNameValidator = StoreNameValidator(),
+    private val storeNameResolver: StoreNameResolver,
     private val descriptionValidator: DescriptionValidator = DescriptionValidator(),
     private val expiryDateValidator: ExpiryDateValidator = ExpiryDateValidator()
 ) {
@@ -73,15 +74,15 @@ internal class FieldValidationCoordinator(
 
         var bundle = initial
 
-        val storeDecision = storeNameValidator.repair(
+        val storeResolution = storeNameResolver.resolve(
             current = bundle.storeName,
             description = bundle.description,
             redeemCode = bundle.redeemCode,
             structuredCandidates = structuredStoreCandidates,
             fallbackStore = fallbackInfo?.storeName?.takeUnless { GenericFieldHeuristics.isGenericOrMissing(it) }
         )
-        bundle = bundle.copy(storeName = storeDecision.value)
-        storeDecision.issue?.let { issues += it }
+        bundle = bundle.copy(storeName = storeResolution.value)
+        storeResolution.issue?.let { issues += it }
 
         val descriptionDecision = descriptionValidator.repair(
             current = bundle.description,
@@ -100,6 +101,6 @@ internal class FieldValidationCoordinator(
         bundle = bundle.copy(expiryDateText = expiryDecision.value)
         expiryDecision.issue?.let { issues += it }
 
-        return FieldValidationSummary(bundle, issues)
+        return FieldValidationSummary(bundle, issues, storeResolution)
     }
 }

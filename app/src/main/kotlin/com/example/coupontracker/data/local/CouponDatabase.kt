@@ -17,7 +17,7 @@ import com.google.gson.reflect.TypeToken
         LearnedPattern::class,          // V2: Pattern storage
         ExtractionFeedback::class       // V2: Feedback & telemetry
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -343,12 +343,87 @@ abstract class CouponDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE `coupons_v9` RENAME TO `coupons`")
             }
         }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `coupons_v10` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `storeName` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `normalizedDescription` TEXT,
+                        `expiryDate` INTEGER,
+                        `cashbackAmount` REAL NOT NULL,
+                        `redeemCode` TEXT,
+                        `cashbackType` TEXT,
+                        `cashbackValueNum` REAL,
+                        `cashbackCurrency` TEXT,
+                        `imageUri` TEXT,
+                        `imagePhash` TEXT,
+                        `imageSignature` TEXT,
+                        `category` TEXT,
+                        `status` TEXT,
+                        `minimumPurchase` REAL,
+                        `maximumDiscount` REAL,
+                        `isPriority` INTEGER NOT NULL DEFAULT 0,
+                        `paymentMethod` TEXT,
+                        `usageLimit` INTEGER,
+                        `usageCount` INTEGER NOT NULL DEFAULT 0,
+                        `reminderDate` INTEGER,
+                        `platformType` TEXT,
+                        `extractionQualityScore` INTEGER,
+                        `extractionConfidenceBreakdown` TEXT NOT NULL,
+                        `extractionStage` TEXT,
+                        `extractionRunPath` TEXT,
+                        `extractionTimestamp` INTEGER,
+                        `rating` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `needsAttention` INTEGER NOT NULL DEFAULT 0,
+                        `storeNameSource` TEXT,
+                        `storeNameEvidence` TEXT
+                    )
+                    """.trimIndent()
+                )
+
+                database.execSQL(
+                    """
+                    INSERT INTO `coupons_v10` (
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`, `extractionQualityScore`, `extractionConfidenceBreakdown`,
+                        `extractionStage`, `extractionRunPath`, `extractionTimestamp`, `rating`, `createdAt`, `updatedAt`,
+                        `needsAttention`, `storeNameSource`, `storeNameEvidence`
+                    )
+                    SELECT
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`,
+                        `extractionQualityScore`, `extractionConfidenceBreakdown`,
+                        `extractionStage`, `extractionRunPath`, `extractionTimestamp`, `rating`, `createdAt`, `updatedAt`,
+                        0 AS `needsAttention`,
+                        NULL AS `storeNameSource`,
+                        NULL AS `storeNameEvidence`
+                    FROM `coupons`
+                    """.trimIndent()
+                )
+
+                database.execSQL("DROP TABLE `coupons`")
+                database.execSQL("ALTER TABLE `coupons_v10` RENAME TO `coupons`")
+            }
+        }
     }
 }
 
 object Converters {
     private val gson: Gson = Gson()
     private val floatMapType = object : TypeToken<Map<String, Float>>() {}.type
+    private val stringListType = object : TypeToken<List<String>>() {}.type
 
     @TypeConverter
     fun fromTimestamp(value: Long?): java.util.Date? {
@@ -374,5 +449,21 @@ object Converters {
             return null
         }
         return gson.toJson(map, floatMapType)
+    }
+
+    @TypeConverter
+    fun fromStringListJson(value: String?): List<String> {
+        if (value.isNullOrBlank()) {
+            return emptyList()
+        }
+        return gson.fromJson(value, stringListType)
+    }
+
+    @TypeConverter
+    fun stringListToJson(values: List<String>?): String? {
+        if (values.isNullOrEmpty()) {
+            return null
+        }
+        return gson.toJson(values, stringListType)
     }
 }

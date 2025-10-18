@@ -45,7 +45,12 @@ data class Coupon(
     // Existing tracking fields
     val rating: String? = null,
     val createdAt: Date = Date(),
-    val updatedAt: Date = Date()
+    val updatedAt: Date = Date(),
+
+    // Provenance metadata
+    val needsAttention: Boolean = false,
+    val storeNameSource: String? = null,
+    val storeNameEvidence: List<String> = emptyList()
 ) {
     /**
      * Gets the typed cashback information, falling back to legacy cashbackAmount if needed.

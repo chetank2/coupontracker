@@ -488,7 +488,10 @@ class ScannerViewModel @Inject constructor(
             updatedAt = Date(),
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
-            cashbackCurrency = cashbackInfo.currency
+            cashbackCurrency = cashbackInfo.currency,
+            needsAttention = couponInfo.needsAttention,
+            storeNameSource = couponInfo.storeNameSource,
+            storeNameEvidence = couponInfo.storeNameEvidence
         )
     }
     

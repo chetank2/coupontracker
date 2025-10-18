@@ -1,5 +1,6 @@
 package com.example.coupontracker.extraction.validation
 
+import android.util.Log
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.util.DateParser
@@ -14,69 +15,145 @@ internal data class FieldRepairDecision(
     val issue: FieldValidationIssue? = null
 )
 
-internal class StoreNameValidator {
-    fun repair(
-        current: String?,
+internal class StoreNameValidator(
+    private val brandLexicon: BrandLexicon = BrandLexicon.empty(),
+    private val sourceLogger: (StoreSourceLog) -> Unit = {}
+) {
+    data class Signal(
+        val category: String,
+        val detail: String,
+        val tier: Int
+    )
+
+    data class Assessment(
+        val original: String?,
+        val canonical: String?,
+        val normalized: String?,
+        val signals: List<Signal>,
+        val issues: List<String>,
+        val highConfidenceCount: Int,
+        val isAccepted: Boolean,
+        val needsAttention: Boolean
+    )
+
+    data class StoreSourceLog(
+        val source: String,
+        val candidate: String?,
+        val canonical: String?,
+        val signals: List<Signal>,
+        val issues: List<String>
+    )
+
+    private val ctaStopwords: Set<String> =
+        if (brandLexicon.ctaStopwords.isEmpty()) DEFAULT_CTA_STOPWORDS else brandLexicon.ctaStopwords
+
+    fun assessCandidate(
+        value: String?,
         description: String?,
         redeemCode: String?,
-        structuredCandidates: List<FieldCandidate>,
-        fallbackStore: String?
-    ): FieldRepairDecision {
-        val normalized = current?.trim()
-        if (isValid(normalized, description, redeemCode)) {
-            return FieldRepairDecision(normalized)
+        source: String
+    ): Assessment {
+        val trimmed = value?.trim()?.takeIf { it.isNotEmpty() }
+        val signals = mutableListOf<Signal>()
+        val issues = mutableListOf<String>()
+        var canonical: String? = trimmed
+        var normalized: String? = trimmed?.lowercase(Locale.ROOT)
+
+        if (trimmed == null) {
+            val assessment = Assessment(null, null, null, emptyList(), listOf("empty"), 0, false, true)
+            logAssessment(source, assessment)
+            return assessment
         }
 
-        val structured = structuredCandidates.firstOrNull { candidate ->
-            isValid(candidate.value, description, redeemCode)
-        }
-        if (structured != null) {
-            return FieldRepairDecision(
-                value = structured.value,
-                issue = FieldValidationIssue(
-                    field = FieldType.STORE_NAME,
-                    message = "Replaced invalid store name '${normalized.orEmpty()}' with '${structured.value}'",
-                    severity = FieldValidationSeverity.ERROR,
-                    replacementSource = structured.source
-                )
-            )
+        val lower = trimmed.lowercase()
+        if (ctaStopwords.any { lower.contains(it) }) {
+            issues += "cta_stopword"
         }
 
-        val fallback = fallbackStore?.trim()
-        if (isValid(fallback, description, redeemCode)) {
-            return FieldRepairDecision(
-                value = fallback,
-                issue = FieldValidationIssue(
-                    field = FieldType.STORE_NAME,
-                    message = "Replaced invalid store name '${normalized.orEmpty()}' with fallback '$fallback'",
-                    severity = FieldValidationSeverity.ERROR,
-                    replacementSource = "text_extractor"
-                )
-            )
+        if (trimmed.length < 3) issues += "too_short"
+        if (!trimmed.any { it.isLetter() }) issues += "no_letters"
+        if (trimmed.equals("unknown", ignoreCase = true) || trimmed.equals("unknown store", ignoreCase = true)) {
+            issues += "unknown_token"
         }
 
-        return FieldRepairDecision(
-            value = normalized,
-            issue = FieldValidationIssue(
-                field = FieldType.STORE_NAME,
-                message = "Store name '${normalized.orEmpty()}' failed validation and no fallback was available",
-                severity = FieldValidationSeverity.ERROR,
-                replacementSource = null
-            )
+        if (GenericFieldHeuristics.isGenericOrMissing(trimmed)) {
+            issues += "generic"
+        } else {
+            signals += Signal("heuristic", "non_generic", tier = 3)
+        }
+
+        if (GenericFieldHeuristics.areDuplicateFields(trimmed, redeemCode)) {
+            issues += "duplicate_code"
+        }
+        if (GenericFieldHeuristics.areDuplicateFields(trimmed, description)) {
+            issues += "duplicate_description"
+        }
+
+        val brandMatch = brandLexicon.match(trimmed)
+        if (brandMatch != null) {
+            canonical = brandMatch.entry.canonical
+            normalized = brandMatch.alias
+            signals += Signal("lexicon", "alias:${brandMatch.alias}", tier = brandMatch.priority)
+        }
+
+        if (issues.isEmpty()) {
+            signals += Signal("source", "${source.lowercase()}", tier = 3)
+            if (trimmed.any { it.isUpperCase() }) {
+                signals += Signal("shape", "capitalized", tier = 4)
+            }
+        }
+
+        val uniqueCategories = signals.map { it.category }.toSet()
+        val highConfidenceCount = signals.count { it.tier <= 2 }
+        val meetsSignalThreshold = uniqueCategories.size >= 2
+        val isAccepted = issues.isEmpty() && meetsSignalThreshold
+        // @critical-invariant: require at least two independent signal categories before accepting store name.
+        val needsAttention = !isAccepted || highConfidenceCount < 2
+
+        val assessment = Assessment(
+            original = trimmed,
+            canonical = canonical,
+            normalized = normalized,
+            signals = signals,
+            issues = issues,
+            highConfidenceCount = highConfidenceCount,
+            isAccepted = isAccepted,
+            needsAttention = needsAttention
         )
+        logAssessment(source, assessment)
+        return assessment
     }
 
-    private fun isValid(value: String?, description: String?, redeemCode: String?): Boolean {
-        if (value.isNullOrBlank()) return false
-        val normalized = value.trim()
-        if (normalized.equals("unknown", ignoreCase = true)) return false
-        if (normalized.equals("unknown store", ignoreCase = true)) return false
-        if (normalized.length < 3) return false
-        if (!normalized.any { it.isLetter() }) return false
-        if (GenericFieldHeuristics.isGenericOrMissing(normalized)) return false
-        if (GenericFieldHeuristics.areDuplicateFields(normalized, redeemCode)) return false
-        if (GenericFieldHeuristics.areDuplicateFields(normalized, description)) return false
-        return true
+    private fun logAssessment(source: String, assessment: Assessment) {
+        val log = StoreSourceLog(
+            source = source,
+            candidate = assessment.original,
+            canonical = assessment.canonical,
+            signals = assessment.signals,
+            issues = assessment.issues
+        )
+        sourceLogger(log)
+        if (LOGGING_ENABLED) {
+            runCatching {
+                Log.d(
+                    TAG,
+                    "store-source=${log.source} candidate='${log.candidate}' issues=${log.issues} signals=${log.signals}"
+                )
+            }
+        }
+    }
+
+    companion object {
+        private const val TAG = "StoreNameValidator"
+        private val DEFAULT_CTA_STOPWORDS = setOf(
+            "apply now",
+            "claim now",
+            "tap to claim",
+            "use coupon",
+            "copy code",
+            "redeem now"
+        )
+        private const val LOGGING_ENABLED = true
     }
 }
 

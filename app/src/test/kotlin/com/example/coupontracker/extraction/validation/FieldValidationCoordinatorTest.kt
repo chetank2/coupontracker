@@ -13,7 +13,8 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class FieldValidationCoordinatorTest {
     private val textExtractor = TextExtractor()
-    private val coordinator = FieldValidationCoordinator(textExtractor)
+    private val storeNameResolver = StoreNameResolver(StoreNameValidator())
+    private val coordinator = FieldValidationCoordinator(textExtractor, storeNameResolver)
 
     @Test
     fun `refine replaces invalid store with structured candidate`() {
@@ -35,6 +36,7 @@ class FieldValidationCoordinatorTest {
         )
 
         assertEquals("Myntra", summary.fields.storeName)
+        assertEquals("Myntra", summary.storeResolution.value)
         assertTrue(summary.issues.any { it.field == FieldType.STORE_NAME })
     }
 

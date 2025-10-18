@@ -1,0 +1,42 @@
+{
+  "tiers": [
+    {
+      "priority": 1,
+      "entries": [
+        {
+          "canonical": "Amazon",
+          "aliases": ["Amazon India", "Amazon.in", "Amazon Pay", "Amazon Prime"]
+        },
+        {
+          "canonical": "Flipkart",
+          "aliases": ["Flipkart Online", "Flipkart Supermart", "Flipkart Axis"]
+        },
+        {
+          "canonical": "Myntra",
+          "aliases": ["Myntra Fashion", "Myntra Insider", "Myntra Style"]
+        }
+      ]
+    },
+    {
+      "priority": 2,
+      "entries": [
+        {
+          "canonical": "Paytm",
+          "aliases": ["Paytm Mall", "Paytm Payments Bank", "Paytm Wallet"]
+        },
+        {
+          "canonical": "Swiggy",
+          "aliases": ["Swiggy Instamart", "Swiggy Genie", "Swiggy One"]
+        }
+      ]
+    }
+  ],
+  "ctaStopwords": [
+    "apply now",
+    "claim now",
+    "tap to claim",
+    "use coupon",
+    "copy code",
+    "redeem now"
+  ]
+}
