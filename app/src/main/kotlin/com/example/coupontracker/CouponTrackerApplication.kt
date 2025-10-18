@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.WorkManager
+import com.example.coupontracker.analytics.StoreNameMetricsTracker
 import com.example.coupontracker.worker.ReminderWorker
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -41,6 +42,9 @@ class CouponTrackerApplication : Application(), Configuration.Provider {
 
     private fun initializeWorkers() {
         try {
+            // Initialize AI telemetry guardrails
+            StoreNameMetricsTracker.initialize(this)
+
             // Schedule daily reminder checks
             ReminderWorker.scheduleDaily(WorkManager.getInstance(this))
             Log.d("CouponTracker", "Scheduled reminder worker")
