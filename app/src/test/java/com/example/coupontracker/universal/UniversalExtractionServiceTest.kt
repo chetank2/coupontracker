@@ -59,6 +59,7 @@ class UniversalExtractionServiceTest {
 
         val expiryCandidate = result.extractedFields[FieldType.EXPIRY_DATE]
         assertNotNull(expiryCandidate)
+        assertTrue(result.extractedFields.containsKey(FieldType.EXPIRY_DATE))
         assertTrue(expiryCandidate!!.text.matches(Regex("\\d{4}-\\d{2}-\\d{2}")))
 
         val couponDate = result.coupon.expiryDate
@@ -76,8 +77,9 @@ class UniversalExtractionServiceTest {
 
         val amountCandidate = result.extractedFields[FieldType.AMOUNT]
         assertNotNull(amountCandidate)
+        assertTrue(result.extractedFields.containsKey(FieldType.AMOUNT))
         assertEquals("₹599 + ₹50 cashback", amountCandidate!!.text)
-        assertEquals(649.0, result.coupon.cashbackAmount)
+        assertEquals(649.0, result.coupon.cashbackAmount, 0.0)
     }
 
     @Test
@@ -88,7 +90,9 @@ class UniversalExtractionServiceTest {
 
         val storeCandidate = result.extractedFields[FieldType.STORE_NAME]
         assertNotNull(storeCandidate)
+        assertTrue(result.extractedFields.containsKey(FieldType.STORE_NAME))
         assertEquals("Zepto Mart", storeCandidate!!.text)
+        assertEquals("Zepto Mart", result.coupon.storeName)
         assertTrue(result.coupon.description.startsWith("Weekend treat"))
     }
 
