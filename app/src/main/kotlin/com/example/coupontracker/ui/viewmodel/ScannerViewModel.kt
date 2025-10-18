@@ -88,6 +88,7 @@ class ScannerViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "ScannerViewModel"
+        private const val STRATEGY_SURFACE_SINGLE = "single_capture"
 
         @VisibleForTesting
         internal fun parseExpiryDate(
@@ -155,6 +156,28 @@ class ScannerViewModel @Inject constructor(
             }
 
             return null // Don't return fallback date - use null if parsing fails
+        }
+    }
+
+    private suspend fun logStrategyExecution(
+        requested: com.example.coupontracker.util.ExtractionStrategy,
+        executed: String,
+        surface: String,
+        reason: String? = null
+    ) {
+        val normalizedExecuted = executed.lowercase(Locale.getDefault())
+        val baseMessage = "Strategy[$surface]: requested=${requested.name}, executed=$normalizedExecuted"
+        val fullMessage = if (!reason.isNullOrBlank()) {
+            "$baseMessage, reason=$reason"
+        } else {
+            baseMessage
+        }
+
+        Log.i(TAG, fullMessage)
+        analyticsTracker.trackStrategyExecution(surface, requested, normalizedExecuted, reason)
+
+        if (!requested.name.equals(normalizedExecuted, ignoreCase = true) && !reason.isNullOrBlank()) {
+            analyticsTracker.trackStrategyFallback(surface, requested, normalizedExecuted, reason)
         }
     }
 
@@ -245,18 +268,38 @@ class ScannerViewModel @Inject constructor(
                 // V2: Route based on extraction strategy
                 when (strategy) {
                     com.example.coupontracker.util.ExtractionStrategy.LEGACY -> {
+                        logStrategyExecution(
+                            requested = strategy,
+                            executed = strategy.name.lowercase(Locale.getDefault()),
+                            surface = STRATEGY_SURFACE_SINGLE
+                        )
                         // LEGACY: Two-stage detection → LLM → OCR fallback
                         scanWithLegacyPath(imageUri, bitmap, persistImmediately)
                     }
                     com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST -> {
+                        logStrategyExecution(
+                            requested = strategy,
+                            executed = strategy.name.lowercase(Locale.getDefault()),
+                            surface = STRATEGY_SURFACE_SINGLE
+                        )
                         // LLM_FIRST: LLM locates ROIs → OCR extracts → Fusion
                         scanWithLlmFirstPath(imageUri, bitmap, persistImmediately)
                     }
                     com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST -> {
+                        logStrategyExecution(
+                            requested = strategy,
+                            executed = strategy.name.lowercase(Locale.getDefault()),
+                            surface = STRATEGY_SURFACE_SINGLE
+                        )
                         // OCR_FIRST: OCR finds text → LLM validates → Fusion
                         scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
                     }
                     com.example.coupontracker.util.ExtractionStrategy.HYBRID -> {
+                        logStrategyExecution(
+                            requested = strategy,
+                            executed = strategy.name.lowercase(Locale.getDefault()),
+                            surface = STRATEGY_SURFACE_SINGLE
+                        )
                         // HYBRID: Parallel LLM + OCR → Fusion arbitrates
                         scanWithHybridPath(imageUri, bitmap, persistImmediately)
                     }
@@ -725,7 +768,13 @@ class ScannerViewModel @Inject constructor(
                 
             } else {
                 Log.w(TAG, "HYBRID: Both methods failed, falling back to LEGACY")
-                
+                logStrategyExecution(
+                    requested = com.example.coupontracker.util.ExtractionStrategy.HYBRID,
+                    executed = "legacy",
+                    surface = STRATEGY_SURFACE_SINGLE,
+                    reason = "hybrid_no_success"
+                )
+
                 performanceMonitor.recordExtractionAttempt(
                     method = ExtractionMethod.HYBRID_FUSION,
                     success = false,
@@ -740,8 +789,14 @@ class ScannerViewModel @Inject constructor(
             
         } catch (e: Exception) {
             Log.e(TAG, "HYBRID: Exception during hybrid extraction", e)
+            logStrategyExecution(
+                requested = com.example.coupontracker.util.ExtractionStrategy.HYBRID,
+                executed = "legacy",
+                surface = STRATEGY_SURFACE_SINGLE,
+                reason = "hybrid_exception_${e.javaClass.simpleName}"
+            )
             val processingTime = System.currentTimeMillis() - startTime
-            
+
             performanceMonitor.recordExtractionAttempt(
                 method = ExtractionMethod.HYBRID_FUSION,
                 success = false,
