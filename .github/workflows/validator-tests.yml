@@ -4,6 +4,10 @@ on:
   pull_request:
     branches:
       - '**'
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "**/*.mdx"
 
 jobs:
   unit-tests:
