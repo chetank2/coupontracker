@@ -165,8 +165,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 We welcome improvements, bug fixes, and documentation updates from the community. To contribute:
 
-1. Fork the repository and create a feature branch.
-2. Make your changes and ensure all relevant tests pass.
-3. Submit a pull request with a clear description of the updates and any testing performed.
+1. Review and acknowledge the [Coupon Extraction Guardrail Rules](docs/ai_guardrails/COUPON_EXTRACTION_RULES.md) and the [AI Editing Checklist](docs/ai_guardrails/AI_EDITING_CHECKLIST.md) in your pull request description. Every contributor (human or AI) must confirm these policies before pushing changes.
+2. Fork the repository and create a feature branch.
+3. Make your changes and ensure all relevant tests pass.
+4. Submit a pull request with a clear description of the updates, checklist verification, and any testing performed.
 
 For significant updates, consider opening an issue first so we can discuss the proposed changes before you begin development.
