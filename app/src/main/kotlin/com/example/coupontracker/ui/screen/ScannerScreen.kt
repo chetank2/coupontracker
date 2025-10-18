@@ -468,7 +468,7 @@ fun ScannerScreen(
                                 }
 
                                 // Show success message
-                                if (currentState is ScannerUiState.Saved) {
+                                if (state is ScannerUiState.Saved) {
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
                                         text = "Coupon saved successfully!",
@@ -484,8 +484,8 @@ fun ScannerScreen(
                                 }
 
                                 // Show already saved message
-                                if (currentState is ScannerUiState.AlreadySaved) {
-                                    val alreadySavedState = currentState
+                                if (state is ScannerUiState.AlreadySaved) {
+                                    val alreadySavedState = state as ScannerUiState.AlreadySaved
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
                                         text = "Coupon already saved: ${alreadySavedState.existingCoupon.redeemCode ?: alreadySavedState.existingCoupon.storeName}",
@@ -501,10 +501,10 @@ fun ScannerScreen(
                                 }
 
                                 // Show error message
-                                if (currentState is ScannerUiState.Error) {
+                                if (state is ScannerUiState.Error) {
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
-                                        text = currentState.message,
+                                        text = state.message,
                                         color = MaterialTheme.colorScheme.error,
                                         style = MaterialTheme.typography.bodyMedium
                                     )
