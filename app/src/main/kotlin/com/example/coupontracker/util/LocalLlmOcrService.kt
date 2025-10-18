@@ -20,9 +20,14 @@ import com.example.coupontracker.schema.CouponSchema
 import com.example.coupontracker.schema.PromptGenerator
 import com.example.coupontracker.schema.SchemaValidator
 import com.example.coupontracker.schema.ValidationResult
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
@@ -46,10 +51,10 @@ class LocalLlmOcrService(
     companion object {
         private const val TAG = "LocalLlmOcrService"
 
-        // Inference timeout (180 seconds - accommodates warmup + generation)
-        // First run: ~68s (model warmup), subsequent runs: ~10-20s
-        // Increased from 120s after observing 138s timeouts on device
-        private const val INFERENCE_TIMEOUT_MS = 180_000L
+        // Inference timeout (90 seconds - matches production SLA with warmup)
+        // First run: ~60s (model warmup), subsequent runs: ~10-20s
+        // Increased from 60s after observing 68s warmups; stays aligned with docs
+        private const val INFERENCE_TIMEOUT_MS = 90_000L
 
         // Model version tracking
         private const val SERVICE_VERSION = "1.4.0"  // Qwen2.5 migration
@@ -151,6 +156,8 @@ class LocalLlmOcrService(
     )
     private val fieldValidationCoordinator = FieldValidationCoordinator(textExtractor, storeNameResolver)
     private var modelPinned = false
+    private val warmupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val warmupMutex = Mutex()
     
     init {
         Log.d(TAG, "🔍 LocalLlmOcrService initialization started")
@@ -162,6 +169,17 @@ class LocalLlmOcrService(
             Log.d(TAG, "   Version: ${modelInfo.version}")
             Log.d(TAG, "   Size: ${modelInfo.sizeMB}MB")
             Log.d(TAG, "   Loaded: ${modelInfo.isLoaded}")
+            if (modelInfo.isLoaded) {
+                modelPinned = true
+            } else {
+                warmupScope.launch {
+                    runCatching {
+                        ensureModelWarm("service_init", null)
+                    }.onFailure { warmupError ->
+                        Log.w(TAG, "Deferred model warmup failed: ${warmupError.message}", warmupError)
+                    }
+                }
+            }
         } else {
             Log.w(TAG, "⚠️  MiniCPM model NOT available - extraction will use pattern fallbacks")
             Log.w(TAG, "   Download the model from Settings to enable AI-powered extraction")
@@ -181,7 +199,7 @@ class LocalLlmOcrService(
     fun getServiceStatus(): LlmServiceStatus {
         val modelInfo = llmRuntime.getModelInfo()
         val memoryStats = llmRuntime.getMemoryStats()
-        
+
         return LlmServiceStatus(
             isAvailable = modelInfo.isAvailable,
             isModelLoaded = modelInfo.isLoaded,
@@ -192,21 +210,101 @@ class LocalLlmOcrService(
             referenceCount = modelInfo.referenceCount
         )
     }
+
+    private suspend fun ensureModelWarm(
+        reason: String,
+        progressCallback: ((LlmProgressUpdate) -> Unit)?
+    ) {
+        if (modelPinned || llmRuntime.getModelInfo().isLoaded) {
+            return
+        }
+
+        warmupMutex.withLock {
+            if (modelPinned || llmRuntime.getModelInfo().isLoaded) {
+                return
+            }
+
+            notifyProgress(
+                stage = LlmProgressStage.WARMING_UP,
+                percent = 20,
+                message = "Loading AI model…",
+                progressCallback = progressCallback
+            )
+
+            val warmupStart = System.currentTimeMillis()
+            val warmed = warmUpModel()
+            val warmupDuration = System.currentTimeMillis() - warmupStart
+
+            if (!warmed) {
+                notifyProgress(
+                    stage = LlmProgressStage.FAILED,
+                    percent = 100,
+                    message = "AI model warmup failed",
+                    progressCallback = progressCallback
+                )
+                throw IllegalStateException("Failed to warm up LLM model ($reason)")
+            }
+
+            notifyProgress(
+                stage = LlmProgressStage.WARMING_UP,
+                percent = 25,
+                message = "AI model ready in ${(warmupDuration / 1000).coerceAtLeast(1)}s",
+                progressCallback = progressCallback
+            )
+        }
+    }
+
+    private fun notifyProgress(
+        stage: LlmProgressStage,
+        percent: Int?,
+        message: String,
+        progressCallback: ((LlmProgressUpdate) -> Unit)?
+    ) {
+        val update = LlmProgressUpdate(stage, percent?.coerceIn(0, 100), message)
+        progressCallback?.invoke(update)
+        telemetryService.recordProgress(update)
+    }
+
+    private fun shouldFallbackToLegacy(error: Throwable): Boolean {
+        if (error is JSONException) {
+            return true
+        }
+
+        val message = error.message?.lowercase(Locale.getDefault()) ?: return false
+        return when (error) {
+            is IllegalArgumentException -> message.contains("json") || message.contains("schema")
+            is IllegalStateException -> message.contains("mock") ||
+                message.contains("response") ||
+                message.contains("json") ||
+                message.contains("schema")
+            else -> false
+        }
+    }
     
     /**
      * Process coupon image using local LLM with typed results
      * New entry point that returns ExtractResult for better error handling
      */
-    suspend fun processCouponImageTyped(bitmap: Bitmap, captureTimestamp: Date? = null): ExtractResult = coroutineScope {
+    suspend fun processCouponImageTyped(
+        bitmap: Bitmap,
+        captureTimestamp: Date? = null,
+        progressCallback: ((LlmProgressUpdate) -> Unit)? = null
+    ): ExtractResult = coroutineScope {
         val startTime = System.currentTimeMillis()
         var memoryUsage = 0L
         var extractedFieldCount = 0
         val triedStages = mutableListOf<String>()
         
         try {
+            notifyProgress(
+                stage = LlmProgressStage.PREPARING,
+                percent = 5,
+                message = "Preparing on-device AI extraction…",
+                progressCallback = progressCallback
+            )
             Log.d(TAG, "Processing coupon with Qwen2-1.5B (text-only, typed)")
             triedStages.add("LLM")
-            
+
             // Step 1: Validate input
             if (bitmap.isRecycled) {
                 return@coroutineScope ExtractResult.Failed(
@@ -217,18 +315,46 @@ class LocalLlmOcrService(
             
             // Step 2: Check service availability
             if (!isServiceAvailable()) {
+                notifyProgress(
+                    stage = LlmProgressStage.FAILED,
+                    percent = 100,
+                    message = "AI model missing – download required",
+                    progressCallback = progressCallback
+                )
                 return@coroutineScope ExtractResult.Failed(
                     stage = ExtractionStage.LLM,
                     error = IllegalStateException("LLM model not available on device")
                 )
             }
-            
+
+            ensureModelWarm("typed_inference", progressCallback)
+
             // Step 3: Capture OCR text (used for prompt and post-processing)
-            val rawOcrText = captureRawOcrText(bitmap)
-                ?: return@coroutineScope ExtractResult.Failed(
-                    stage = ExtractionStage.LLM,
-                    error = IllegalStateException("OCR returned blank text; cannot build prompt")
-                )
+            notifyProgress(
+                stage = LlmProgressStage.OCR,
+                percent = 30,
+                message = "Reading coupon text…",
+                progressCallback = progressCallback
+            )
+            val rawOcrText = captureRawOcrText(bitmap)?.takeIf { it.isNotBlank() }
+                ?: run {
+                    notifyProgress(
+                        stage = LlmProgressStage.FAILED,
+                        percent = 100,
+                        message = "OCR returned blank text",
+                        progressCallback = progressCallback
+                    )
+                    return@coroutineScope ExtractResult.Failed(
+                        stage = ExtractionStage.LLM,
+                        error = IllegalStateException("OCR returned blank text; cannot build prompt")
+                    )
+                }
+            notifyProgress(
+                stage = LlmProgressStage.PROMPTING,
+                percent = 45,
+                message = "Asking the AI to structure the coupon…",
+                progressCallback = progressCallback
+            )
             val prompt = createCouponExtractionPrompt(rawOcrText)
             val extractionContext = ExtractionContext(
                 imageUri = "inline://llm",
@@ -238,8 +364,14 @@ class LocalLlmOcrService(
             val structuredCandidatesDeferred = async(Dispatchers.Default) {
                 structuredFieldExtractor.detectFieldsStructured(extractionContext)
             }
-            
+
             // Step 4: Run LLM inference with timeout and memory tracking
+            notifyProgress(
+                stage = LlmProgressStage.INFERENCE,
+                percent = 65,
+                message = "Running on-device AI…",
+                progressCallback = progressCallback
+            )
             memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
             val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
                 llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned)
@@ -247,6 +379,12 @@ class LocalLlmOcrService(
 
             // Step 5: Parse and validate response
             if (llmResponse != null) {
+                notifyProgress(
+                    stage = LlmProgressStage.PARSING,
+                    percent = 80,
+                    message = "Interpreting AI response…",
+                    progressCallback = progressCallback
+                )
                 val trimmedResponse = llmResponse.trimStart()
                 if (!trimmedResponse.startsWith("{")) {
                     Log.e(TAG, "LLM response did not start with '{': ${trimmedResponse.take(200)}")
@@ -268,6 +406,12 @@ class LocalLlmOcrService(
                 if (MockLlmResponseDetector.isMockResponse(couponInfo)) {
                     Log.w(TAG, "Mock response signature: store='${couponInfo.storeName}', code='${couponInfo.redeemCode}', desc='${couponInfo.description}'")
                     Log.w(TAG, "⚠️ MOCK LLM RESPONSE DETECTED - Falling back to OCR")
+                    notifyProgress(
+                        stage = LlmProgressStage.FAILED,
+                        percent = 100,
+                        message = "Detected placeholder AI response",
+                        progressCallback = progressCallback
+                    )
                     return@coroutineScope ExtractResult.Failed(
                         stage = ExtractionStage.LLM,
                         error = IllegalStateException("Mock LLM response detected (placeholder runtime output)")
@@ -275,8 +419,14 @@ class LocalLlmOcrService(
                 }
                 
                 extractedFieldCount = countExtractedFields(couponInfo)
-                
+
                 // Step 7: Quality validation
+                notifyProgress(
+                    stage = LlmProgressStage.VALIDATING,
+                    percent = 90,
+                    message = "Validating coupon fields…",
+                    progressCallback = progressCallback
+                )
                 val qualityScore = calculateQualityScore(couponInfo)
                 val signals = ExtractionSignals(
                     qualityScore = qualityScore,
@@ -302,15 +452,27 @@ class LocalLlmOcrService(
                 }
             } else {
                 // Timeout occurred
+                notifyProgress(
+                    stage = LlmProgressStage.FAILED,
+                    percent = 100,
+                    message = "AI inference exceeded 90s timeout",
+                    progressCallback = progressCallback
+                )
                 return@coroutineScope ExtractResult.Failed(
                     stage = ExtractionStage.LLM,
                     error = Exception("LLM inference timeout after ${INFERENCE_TIMEOUT_MS}ms")
                 )
             }
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "LLM processing failed: ${e.message}", e)
-            
+            notifyProgress(
+                stage = LlmProgressStage.FAILED,
+                percent = 100,
+                message = "AI extraction failed – please retry",
+                progressCallback = progressCallback
+            )
+
             val signals = ExtractionSignals(
                 qualityScore = 0,
                 fieldConfidences = emptyMap(),
@@ -324,6 +486,15 @@ class LocalLlmOcrService(
                 stage = ExtractionStage.LLM,
                 error = e,
                 signals = signals
+            )
+        }
+    }.also { result ->
+        if (result is ExtractResult.Good || result is ExtractResult.LowQuality) {
+            notifyProgress(
+                stage = LlmProgressStage.COMPLETE,
+                percent = 100,
+                message = "Coupon extracted successfully",
+                progressCallback = progressCallback
             )
         }
     }
@@ -350,7 +521,9 @@ class LocalLlmOcrService(
             if (!isServiceAvailable()) {
                 throw IllegalStateException("LLM model not available on device")
             }
-            
+
+            ensureModelWarm("legacy_entry", null)
+
             // Step 3: Extract OCR text from image
             Log.d(TAG, "Extracting OCR text from image...")
             val ocrText = captureRawOcrText(bitmap)
@@ -433,7 +606,7 @@ class LocalLlmOcrService(
             
         } catch (e: Exception) {
             Log.e(TAG, "LLM processing failed: ${e.message}", e)
-            
+
             // Record failure
             val duration = System.currentTimeMillis() - startTime
             val errorType = when {
@@ -443,21 +616,32 @@ class LocalLlmOcrService(
                 e.message?.contains("model", ignoreCase = true) == true -> "MODEL_ERROR"
                 else -> "PROCESSING_ERROR"
             }
-            
-            // Fallback to traditional OCR
-            Log.d(TAG, "Falling back to traditional OCR")
+            val allowFallback = shouldFallbackToLegacy(e)
+
+            if (!allowFallback) {
+                telemetryService.recordInference(
+                    durationMs = duration,
+                    success = false,
+                    errorType = errorType,
+                    extractedFieldCount = extractedFieldCount,
+                    memoryUsageMB = memoryUsage
+                )
+                throw e
+            }
+
+            Log.d(TAG, "Falling back to traditional OCR after invalid LLM response")
             val fallbackResult = fallbackToTraditionalOCR(bitmap, captureTimestamp)
-            
+
             // Determine which fallback was used based on result quality
-            fallbackUsed = if (fallbackResult.storeName != "Unknown Store" || 
+            fallbackUsed = if (fallbackResult.storeName != "Unknown Store" ||
                              !fallbackResult.redeemCode.isNullOrBlank()) {
                 "ML_KIT"
             } else {
                 "MODEL_BASED"
             }
-            
+
             extractedFieldCount = countExtractedFields(fallbackResult)
-            
+
             telemetryService.recordInference(
                 durationMs = duration,
                 success = false,
@@ -466,7 +650,7 @@ class LocalLlmOcrService(
                 extractedFieldCount = extractedFieldCount,
                 memoryUsageMB = memoryUsage
             )
-            
+
             fallbackResult
         }
     }
@@ -1330,15 +1514,20 @@ $sanitizedOcr
      * Warm up the model (preload for faster inference)
      */
     suspend fun warmUpModel(): Boolean {
+        val warmupStart = System.currentTimeMillis()
         return try {
             Log.d(TAG, "Warming up LLM model...")
             val loaded = llmRuntime.loadModel()
+            val warmupDuration = System.currentTimeMillis() - warmupStart
+            telemetryService.recordModelLoad(loaded, warmupDuration)
             if (loaded) {
                 modelPinned = true
-                Log.d(TAG, "LLM model pinned in memory for reuse")
+                Log.d(TAG, "LLM model pinned in memory for reuse (warmup ${warmupDuration}ms)")
             }
             loaded
         } catch (e: Exception) {
+            val warmupDuration = System.currentTimeMillis() - warmupStart
+            telemetryService.recordModelLoad(false, warmupDuration)
             Log.e(TAG, "Failed to warm up model", e)
             false
         }
@@ -1353,6 +1542,7 @@ $sanitizedOcr
             llmRuntime.releaseModel()
             modelPinned = false
             Log.d(TAG, "LLM model reference released")
+            telemetryService.recordModelUnload()
         }
     }
     

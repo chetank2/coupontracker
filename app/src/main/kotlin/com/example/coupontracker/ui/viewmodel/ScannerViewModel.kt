@@ -39,6 +39,7 @@ import com.example.coupontracker.util.LocalLlmOcrService
 import com.example.coupontracker.util.MultiEngineOCR
 import com.example.coupontracker.util.RunPath
 import com.example.coupontracker.util.UriPersistenceManager
+import com.example.coupontracker.util.LlmProgressUpdate
 import com.example.coupontracker.util.normalizeExpiryDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -82,7 +83,7 @@ class ScannerViewModel @Inject constructor(
     private val fieldHeuristics: GenericFieldHeuristics = GenericFieldHeuristics
     private val manualOverrides = mutableMapOf<String, CouponInstance>()
     private var pendingPreview: PendingPreview? = null
-    
+
     // Store extraction results for feedback learning
     private var lastExtractionResult: Pair<com.example.coupontracker.universal.UniversalExtractionResult, String>? = null
 
@@ -164,6 +165,12 @@ class ScannerViewModel @Inject constructor(
         val exception: Throwable?
     )
 
+    private fun emitLlmProgress(update: LlmProgressUpdate) {
+        viewModelScope.launch {
+            _uiState.value = ScannerUiState.Scanning(update)
+        }
+    }
+
     private fun initializeTwoStageDetector(): DetectorInitializationResult {
         return try {
             DetectorInitializationResult(TwoStageDetector(context), null, null)
@@ -222,7 +229,7 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch {
             var bitmap: Bitmap? = null
             try {
-                _uiState.value = ScannerUiState.Scanning
+                _uiState.value = ScannerUiState.Scanning()
                 
                 // V2: Get current extraction strategy
                 val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
@@ -341,7 +348,9 @@ class ScannerViewModel @Inject constructor(
         
         try {
             // Step 1: Call LLM service to extract fields directly
-            val llmResult = localLlmOcrService.processCouponImageTyped(bitmap)
+            val llmResult = localLlmOcrService.processCouponImageTyped(bitmap) { update ->
+                emitLlmProgress(update)
+            }
             val processingTime = System.currentTimeMillis() - startTime
             
             when (llmResult) {
@@ -627,7 +636,9 @@ class ScannerViewModel @Inject constructor(
                 val llmDeferred = async(Dispatchers.Default) {
                     try {
                         Log.d(TAG, "HYBRID: Starting LLM extraction...")
-                        localLlmOcrService.processCouponImageTyped(bitmap)
+                        localLlmOcrService.processCouponImageTyped(bitmap) { update ->
+                            emitLlmProgress(update)
+                        }
                     } catch (e: Exception) {
                         Log.w(TAG, "HYBRID: LLM extraction failed", e)
                         null
@@ -841,7 +852,7 @@ class ScannerViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                _uiState.value = ScannerUiState.Scanning
+                _uiState.value = ScannerUiState.Scanning()
                 Log.d(TAG, "Processing captured bitmap with two-stage detection")
 
                 val detector = twoStageDetector ?: run {
@@ -1063,7 +1074,7 @@ class ScannerViewModel @Inject constructor(
     fun selectCoupon(selectedInstance: CouponInstance, originalImageUri: String?) {
         viewModelScope.launch {
             try {
-                _uiState.value = ScannerUiState.Scanning
+                _uiState.value = ScannerUiState.Scanning()
                 Log.d(TAG, "Processing selected coupon: ${selectedInstance.id}")
 
                 // Process the selected coupon
@@ -1086,7 +1097,7 @@ class ScannerViewModel @Inject constructor(
     fun processAllCoupons(couponInstances: List<CouponInstance>, originalImageUri: String?) {
         viewModelScope.launch {
             try {
-                _uiState.value = ScannerUiState.Scanning
+                _uiState.value = ScannerUiState.Scanning()
                 val adjustedInstances = getManualAdjustedInstances(couponInstances, includeManualExtras = true)
                 Log.d(
                     TAG,
@@ -1105,7 +1116,7 @@ class ScannerViewModel @Inject constructor(
     fun processSelectedCoupons(couponInstances: List<CouponInstance>, originalImageUri: String?) {
         viewModelScope.launch {
             try {
-                _uiState.value = ScannerUiState.Scanning
+                _uiState.value = ScannerUiState.Scanning()
                 val adjustedInstances = getManualAdjustedInstances(couponInstances, includeManualExtras = false)
                 Log.d(
                     TAG,
@@ -1240,7 +1251,9 @@ class ScannerViewModel @Inject constructor(
                 triedStages.add("LLM")
                 finalStage = "LLM"
                 
-                val result = localLlmOcrService.processCouponImageTyped(couponInstance.cropBitmap)
+                val result = localLlmOcrService.processCouponImageTyped(couponInstance.cropBitmap) { update ->
+                    emitLlmProgress(update)
+                }
                 
                 when (result) {
                     is ExtractResult.Good -> {
@@ -2069,7 +2082,7 @@ class ScannerViewModel @Inject constructor(
  */
 sealed class ScannerUiState {
     object Initial : ScannerUiState()
-    object Scanning : ScannerUiState()
+    data class Scanning(val progress: LlmProgressUpdate? = null) : ScannerUiState()
     data class Success(val coupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
     data class Saved(val coupon: Coupon) : ScannerUiState()
     data class AlreadySaved(val existingCoupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
