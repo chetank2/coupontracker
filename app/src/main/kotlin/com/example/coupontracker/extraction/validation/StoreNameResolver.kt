@@ -4,21 +4,22 @@ import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.util.GenericFieldHeuristics
 
+data class StoreNameResolution(
+    val value: String?,
+    val issue: FieldValidationIssue?,
+    val source: String?,
+    val evidence: List<String>,
+    val needsAttention: Boolean,
+    val violations: List<String>,
+    val confidence: Float?
+)
+
 /**
  * Resolves store name candidates using the validator and exposes provenance metadata.
  */
-class StoreNameResolver(
+internal class StoreNameResolver(
     private val validator: StoreNameValidator
 ) {
-    data class Resolution(
-        val value: String?,
-        val issue: FieldValidationIssue?,
-        val source: String?,
-        val evidence: List<String>,
-        val needsAttention: Boolean,
-        val violations: List<String>,
-        val confidence: Float?
-    )
 
     fun resolve(
         current: String?,
@@ -26,11 +27,11 @@ class StoreNameResolver(
         redeemCode: String?,
         structuredCandidates: List<FieldCandidate>,
         fallbackStore: String?
-    ): Resolution {
+    ): StoreNameResolution {
         val llmAssessment = validator.assessCandidate(current, description, redeemCode, source = "llm")
         if (llmAssessment.isAccepted) {
             val value = llmAssessment.canonical ?: llmAssessment.original
-            return Resolution(
+            return StoreNameResolution(
                 value = value,
                 issue = null,
                 source = "llm",
@@ -62,7 +63,7 @@ class StoreNameResolver(
                 severity = FieldValidationSeverity.ERROR,
                 replacementSource = candidate.source
             )
-            return Resolution(
+            return StoreNameResolution(
                 value = canonical,
                 issue = issue,
                 source = candidate.source,
@@ -88,7 +89,7 @@ class StoreNameResolver(
                 severity = FieldValidationSeverity.ERROR,
                 replacementSource = "text_extractor"
             )
-            return Resolution(
+            return StoreNameResolution(
                 value = canonical,
                 issue = issue,
                 source = "text_extractor",
@@ -111,7 +112,7 @@ class StoreNameResolver(
         )
 
         val sanitized = fallbackValue?.takeUnless { GenericFieldHeuristics.isGenericOrMissing(it) }
-        return Resolution(
+        return StoreNameResolution(
             value = sanitized,
             issue = issue,
             source = "unresolved",
