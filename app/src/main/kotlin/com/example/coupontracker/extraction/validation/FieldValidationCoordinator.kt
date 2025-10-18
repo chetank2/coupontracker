@@ -12,7 +12,7 @@ import java.util.Date
 data class FieldValidationSummary(
     val fields: FieldValueBundle,
     val issues: List<FieldValidationIssue>,
-    val storeResolution: StoreNameResolver.Resolution
+    val storeResolution: StoreNameResolution
 )
 
 /**

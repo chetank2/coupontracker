@@ -50,7 +50,7 @@ object StoreNameMetricsTracker {
         }
     }
 
-    fun recordAssessment(source: String, assessment: StoreNameValidator.Assessment) {
+    internal fun recordAssessment(source: String, assessment: StoreNameValidator.Assessment) {
         if (!initialized) {
             Log.w(TAG, "recordAssessment called before initialization")
             return

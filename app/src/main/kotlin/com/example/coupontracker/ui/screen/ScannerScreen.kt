@@ -212,6 +212,7 @@ fun ScannerScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            val currentState = uiState
             when {
                 showCamera -> {
                     CameraView(
@@ -254,12 +255,12 @@ fun ScannerScreen(
                     }
                 }
 
-                uiState is ScannerUiState.Scanning -> {
+                currentState is ScannerUiState.Scanning -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        val progress = uiState.progress
+                        val progress = currentState.progress
                         val message = progress?.message ?: stringResource(id = R.string.scanner_progress_default)
                         val percent = progress?.percent
                         Column(
@@ -467,7 +468,7 @@ fun ScannerScreen(
                                 }
 
                                 // Show success message
-                                if (uiState is ScannerUiState.Saved) {
+                                if (currentState is ScannerUiState.Saved) {
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
                                         text = "Coupon saved successfully!",
@@ -483,8 +484,8 @@ fun ScannerScreen(
                                 }
 
                                 // Show already saved message
-                                if (uiState is ScannerUiState.AlreadySaved) {
-                                    val alreadySavedState = uiState as ScannerUiState.AlreadySaved
+                                if (currentState is ScannerUiState.AlreadySaved) {
+                                    val alreadySavedState = currentState
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
                                         text = "Coupon already saved: ${alreadySavedState.existingCoupon.redeemCode ?: alreadySavedState.existingCoupon.storeName}",
@@ -500,10 +501,10 @@ fun ScannerScreen(
                                 }
 
                                 // Show error message
-                                if (uiState is ScannerUiState.Error) {
+                                if (currentState is ScannerUiState.Error) {
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
-                                        text = (uiState as ScannerUiState.Error).message,
+                                        text = currentState.message,
                                         color = MaterialTheme.colorScheme.error,
                                         style = MaterialTheme.typography.bodyMedium
                                     )
