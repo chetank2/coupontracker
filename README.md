@@ -114,6 +114,14 @@ For CI or local scripting workflows, use the helper wrapper which simply forward
 ./scripts/run_connected_android_tests.sh
 ```
 
+### **Continuous Integration Status**
+Two CI workflows validate incoming pull requests:
+
+- **CI Guardrails** – enforces repository hygiene checks and linting.
+- **Validator Test Suite** – runs the end-to-end unit test suite.
+
+Both jobs can take several minutes to finish after a pull request is opened or updated. Wait for these checks to report a ✅ status before merging to ensure all automated quality gates have passed. Pure documentation-only pull requests automatically skip these pipelines so minor README or docs updates do not waste CI capacity.
+
 ## 📊 Key Features
 
 ### **Advanced OCR Pipeline**
