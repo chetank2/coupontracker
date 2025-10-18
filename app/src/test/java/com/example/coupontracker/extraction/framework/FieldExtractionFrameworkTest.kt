@@ -69,7 +69,7 @@ class FieldExtractionFrameworkTest {
         val traces = mutableListOf<FieldExtractionFramework.FieldTrace>()
         val pipeline = Pipeline(
             registry = StrategyRegistry(listOf(first, second)),
-            listeners = listOf { _, trace -> traces += trace }
+            listeners = listOf(FieldExtractionFramework.TraceListener { _, trace -> traces += trace })
         )
 
         val result = pipeline.resolveField(FieldType.COUPON_CODE, context)

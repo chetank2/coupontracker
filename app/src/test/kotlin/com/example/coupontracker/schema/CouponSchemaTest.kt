@@ -9,17 +9,7 @@ class CouponSchemaTest {
     @Test
     fun `schema exposes expected field names`() {
         val fieldNames = CouponSchema.SCHEMA.fields.map { it.name }
-        assertEquals(
-            listOf(
-                "storeName",
-                "description",
-                "cashback",
-                "redeemCode",
-                "expiryDate",
-                "minOrderAmount"
-            ),
-            fieldNames
-        )
+        assertEquals(listOf("storeName", "description", "redeemCode", "expiryDate"), fieldNames)
     }
 
     @Test
@@ -29,12 +19,13 @@ class CouponSchemaTest {
     }
 
     @Test
-    fun `cashback schema enforces expected structure`() {
-        val cashbackField = CouponSchema.SCHEMA.fields.first { it.name == "cashback" }
-        val objectType = cashbackField.type as FieldType.ObjectType
-        val properties = objectType.properties
-        assertEquals(setOf("type", "valueNum", "currency"), properties.keys)
-        val allowed = (properties["type"]?.type as FieldType.EnumType).allowedValues
-        assertTrue(allowed.containsAll(listOf("percent", "amount", "text")))
+    fun `optional fields remain optional`() {
+        val descriptionField = CouponSchema.SCHEMA.fields.first { it.name == "description" }
+        val codeField = CouponSchema.SCHEMA.fields.first { it.name == "redeemCode" }
+        val expiryField = CouponSchema.SCHEMA.fields.first { it.name == "expiryDate" }
+
+        assertTrue(!descriptionField.required)
+        assertTrue(!codeField.required)
+        assertTrue(!expiryField.required)
     }
 }

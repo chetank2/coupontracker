@@ -275,18 +275,72 @@ abstract class CouponDatabase : RoomDatabase() {
 
         val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(database: SupportSQLiteDatabase) {
-                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionQualityScore INTEGER")
-                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionConfidenceBreakdown TEXT NOT NULL DEFAULT '{}'")
-                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionStage TEXT")
-                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionRunPath TEXT")
-                database.execSQL("ALTER TABLE coupons ADD COLUMN extractionTimestamp INTEGER")
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `coupons_v9` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `storeName` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `normalizedDescription` TEXT,
+                        `expiryDate` INTEGER,
+                        `cashbackAmount` REAL NOT NULL,
+                        `redeemCode` TEXT,
+                        `cashbackType` TEXT,
+                        `cashbackValueNum` REAL,
+                        `cashbackCurrency` TEXT,
+                        `imageUri` TEXT,
+                        `imagePhash` TEXT,
+                        `imageSignature` TEXT,
+                        `category` TEXT,
+                        `status` TEXT,
+                        `minimumPurchase` REAL,
+                        `maximumDiscount` REAL,
+                        `isPriority` INTEGER NOT NULL DEFAULT 0,
+                        `paymentMethod` TEXT,
+                        `usageLimit` INTEGER,
+                        `usageCount` INTEGER NOT NULL DEFAULT 0,
+                        `reminderDate` INTEGER,
+                        `platformType` TEXT,
+                        `extractionQualityScore` INTEGER,
+                        `extractionConfidenceBreakdown` TEXT NOT NULL,
+                        `extractionStage` TEXT,
+                        `extractionRunPath` TEXT,
+                        `extractionTimestamp` INTEGER,
+                        `rating` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
 
                 database.execSQL(
-                    "UPDATE coupons SET extractionTimestamp = COALESCE(updatedAt, createdAt) WHERE extractionTimestamp IS NULL"
+                    """
+                    INSERT INTO `coupons_v9` (
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`, `extractionQualityScore`, `extractionConfidenceBreakdown`,
+                        `extractionStage`, `extractionRunPath`, `extractionTimestamp`, `rating`, `createdAt`, `updatedAt`
+                    )
+                    SELECT
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`,
+                        NULL AS `extractionQualityScore`,
+                        '{}' AS `extractionConfidenceBreakdown`,
+                        NULL AS `extractionStage`,
+                        NULL AS `extractionRunPath`,
+                        COALESCE(`updatedAt`, `createdAt`) AS `extractionTimestamp`,
+                        `rating`, `createdAt`, `updatedAt`
+                    FROM `coupons`
+                    """.trimIndent()
                 )
-                database.execSQL(
-                    "UPDATE coupons SET extractionConfidenceBreakdown = '{}' WHERE extractionConfidenceBreakdown IS NULL OR extractionConfidenceBreakdown = ''"
-                )
+
+                database.execSQL("DROP TABLE `coupons`")
+                database.execSQL("ALTER TABLE `coupons_v9` RENAME TO `coupons`")
             }
         }
     }

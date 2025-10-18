@@ -63,6 +63,40 @@ class LocalLlmOcrService(
         // Compact prompts rely on grammar enforcement for structure, reducing verbosity
         private const val USE_COMPACT_PROMPTS = true
 
+        private val STORE_CONTEXT_ANCHORS = listOf(
+            "Claim Now",
+            "Use Code",
+            "Use coupon",
+            "Apply Code",
+            "Apply coupon",
+            "I'll use it later",
+            "Get ",
+            "Exclusive",
+            "Limited time",
+            "Reward"
+        )
+
+        private val STORE_FALLBACK_STOPWORDS = setOf(
+            "ORDER",
+            "RECEIVED",
+            "ITEMS",
+            "CLAIM",
+            "NOW",
+            "SAVE",
+            "DISCOUNT",
+            "OFF",
+            "GET",
+            "ADD",
+            "DEL",
+            "EXPLORE",
+            "WHILE",
+            "SCRATCH",
+            "CARD",
+            "GOOGLE",
+            "ORDERED",
+            "MINUTES"
+        )
+
         fun cleanDescription(raw: String?): String {
             if (raw == null) {
                 return ""
@@ -647,21 +681,21 @@ $sanitizedOcr
             val jsonCandidate = extractJsonSlice(cleanResponse)
                 ?: throw IllegalStateException("No JSON object found in LLM output")
             val sanitizedJsonCandidate = enforceCanonicalFields(jsonCandidate)
+            val baseJson = try {
+                JSONObject(sanitizedJsonCandidate)
+            } catch (jsonException: JSONException) {
+                Log.w(TAG, "Unable to parse LLM JSON payload", jsonException)
+                throw IllegalArgumentException("Invalid JSON schema: ${jsonException.message}")
+            }
             
             // JSON validation: use schema-driven or legacy validator
             val json = if (USE_SCHEMA_VALIDATION) {
-                // Schema-driven validation
-                val validationResult = SchemaValidator.validate(sanitizedJsonCandidate, CouponSchema.SCHEMA)
-                when (validationResult) {
-                    is ValidationResult.Valid -> {
-                        Log.d(TAG, "Schema validation passed")
-                        JSONObject(sanitizedJsonCandidate)
-                    }
-                    is ValidationResult.Invalid -> {
-                        Log.w(TAG, "Schema validation failed: ${validationResult.issues}")
-                        throw IllegalArgumentException("Invalid JSON schema: ${validationResult.issues.joinToString(", ")}")
-                    }
-                }
+                enforceSchemaWithFallback(
+                    jsonObject = baseJson,
+                    rawOcrText = rawOcrText,
+                    captureTimestamp = captureTimestamp,
+                    structuredCandidates = structuredCandidates
+                )
             } else {
                 // Legacy validation
                 val parsedJson = CouponJsonValidator.parseStrict(sanitizedJsonCandidate)
@@ -806,6 +840,154 @@ $sanitizedOcr
             Log.e(TAG, "Failed to parse LLM JSON response: $response", e)
             throw IllegalStateException("Invalid JSON response from LLM: ${e.message}")
         }
+    }
+
+    private fun enforceSchemaWithFallback(
+        jsonObject: JSONObject,
+        rawOcrText: String?,
+        captureTimestamp: Date?,
+        structuredCandidates: Map<FieldType, List<FieldCandidate>>
+    ): JSONObject {
+        var validationResult = SchemaValidator.validateObject(jsonObject, CouponSchema.SCHEMA)
+        if (validationResult is ValidationResult.Valid) {
+            Log.d(TAG, "Schema validation passed")
+            return jsonObject
+        }
+
+        val issues = (validationResult as ValidationResult.Invalid).issues
+        Log.w(TAG, "Schema validation failed: $issues")
+
+        val recoverable = issues.filter { it.contains("storeName", ignoreCase = true) }
+        val unrecoverable = issues - recoverable.toSet()
+        if (unrecoverable.isNotEmpty()) {
+            throw IllegalArgumentException("Invalid JSON schema: ${issues.joinToString(", ")}")
+        }
+
+        val fallbackStore = resolveStoreNameFallback(structuredCandidates, rawOcrText, captureTimestamp)
+        if (fallbackStore != null) {
+            Log.w(TAG, "Schema self-heal: injecting fallback store name '$fallbackStore'")
+            jsonObject.put("storeName", fallbackStore)
+            validationResult = SchemaValidator.validateObject(jsonObject, CouponSchema.SCHEMA)
+            if (validationResult is ValidationResult.Valid) {
+                Log.d(TAG, "Schema validation passed after storeName repair")
+                return jsonObject
+            }
+            Log.w(TAG, "Fallback store name '$fallbackStore' still failed schema validation: ${(validationResult as ValidationResult.Invalid).issues}")
+        } else {
+            Log.w(TAG, "No fallback store candidate available to repair schema")
+        }
+
+        throw IllegalArgumentException("Invalid JSON schema: ${issues.joinToString(", ")}")
+    }
+
+    private fun resolveStoreNameFallback(
+        structuredCandidates: Map<FieldType, List<FieldCandidate>>,
+        rawOcrText: String?,
+        captureTimestamp: Date?
+    ): String? {
+        val contextual = guessStoreFromOfferContext(rawOcrText)
+        if (contextual != null) {
+            return contextual
+        }
+
+        val structured = structuredCandidates[FieldType.STORE_NAME]
+            .orEmpty()
+            .sortedByDescending { it.confidence }
+            .firstOrNull { isStoreCandidateAcceptable(it.value, rawOcrText) }
+            ?.value
+        if (structured != null) {
+            return normalizeStoreCandidate(structured)
+        }
+
+        val fallbackFromText = runCatching {
+            rawOcrText?.let { textExtractor.extractCouponInfoSync(it, captureTimestamp).storeName }
+        }.getOrNull()
+
+        return fallbackFromText?.takeIf { isStoreCandidateAcceptable(it, rawOcrText) }?.let(::normalizeStoreCandidate)
+    }
+
+    private fun guessStoreFromOfferContext(rawText: String?): String? {
+        if (rawText.isNullOrBlank()) return null
+
+        val uppercasePattern = Regex("""\b([A-Z][A-Z&']{2,})\b""")
+        val candidates = mutableListOf<String>()
+
+        STORE_CONTEXT_ANCHORS.forEach { anchor ->
+            var searchIndex = rawText.indexOf(anchor, ignoreCase = true)
+            while (searchIndex >= 0) {
+                val windowStart = (searchIndex - 160).coerceAtLeast(0)
+                val windowEnd = (searchIndex + anchor.length + 160).coerceAtMost(rawText.length)
+                val window = rawText.substring(windowStart, windowEnd)
+                uppercasePattern.findAll(window).forEach { match ->
+                    val rawCandidate = match.value.trim()
+                    if (isStoreCandidateAcceptable(rawCandidate, rawText)) {
+                        candidates += rawCandidate
+                    }
+                }
+                searchIndex = rawText.indexOf(anchor, searchIndex + anchor.length, ignoreCase = true)
+            }
+        }
+
+        if (candidates.isEmpty()) {
+            return null
+        }
+
+        val ranked = candidates
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .sortedWith(
+                compareByDescending<Map.Entry<String, Int>> { it.value }
+                    .thenBy { it.key.length }
+            )
+
+        return ranked.firstOrNull()?.key?.let(::normalizeStoreCandidate)
+    }
+
+    private fun isStoreCandidateAcceptable(candidate: String?, fullText: String?): Boolean {
+        if (candidate.isNullOrBlank()) return false
+        val trimmed = candidate.trim()
+        if (trimmed.length < 3 || trimmed.length > 40) return false
+        if (!trimmed.any { it.isLetter() }) return false
+        if (GenericFieldHeuristics.isGenericOrMissing(trimmed)) return false
+        val upper = trimmed.uppercase(Locale.US)
+        if (STORE_FALLBACK_STOPWORDS.contains(upper)) return false
+        if (upper.any { it.isDigit() }) return false
+
+        if (!trimmed.any { it.lowercaseChar() in "aeiouy" }) return false
+
+        if (!fullText.isNullOrBlank()) {
+            val occurrences = countOccurrences(fullText, trimmed)
+            if (occurrences >= 3) {
+                return false
+            }
+        }
+
+        return true
+    }
+
+    private fun normalizeStoreCandidate(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return trimmed
+        val upper = trimmed.uppercase(Locale.US)
+        if (upper == trimmed) {
+            return trimmed
+                .lowercase(Locale.US)
+                .split(Regex("\\s+"))
+                .filter { it.isNotBlank() }
+                .joinToString(" ") { segment ->
+                    segment.replaceFirstChar { char ->
+                        if (char.isLowerCase()) char.titlecase(Locale.US) else char.toString()
+                    }
+                }
+        }
+        return trimmed
+    }
+
+    private fun countOccurrences(text: String, needle: String): Int {
+        if (needle.isBlank()) return 0
+        val pattern = Regex("\\b${Regex.escape(needle)}\\b", RegexOption.IGNORE_CASE)
+        return pattern.findAll(text).count()
     }
 
     private fun resolveRelativeExpiry(

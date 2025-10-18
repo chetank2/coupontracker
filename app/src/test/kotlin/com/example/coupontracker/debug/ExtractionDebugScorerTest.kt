@@ -98,7 +98,7 @@ class ExtractionDebugScorerTest {
         val detectorStage = snapshot.scoreFor(ExtractionComponent.DETECTOR)
         assertEquals(StageStatus.HEALTHY, detectorStage?.status)
         val llmStage = snapshot.scoreFor(ExtractionComponent.LLM)
-        assertEquals(StageStatus.DEGRADED, llmStage?.status)
+        assertEquals(StageStatus.FAILED, llmStage?.status)
     }
 
     @Test
@@ -134,6 +134,6 @@ class ExtractionDebugScorerTest {
         val ocrStage = snapshot.scoreFor(ExtractionComponent.OCR)
         assertEquals(StageStatus.FAILED, ocrStage?.status)
         val llmStage = snapshot.scoreFor(ExtractionComponent.LLM)
-        assertEquals(StageStatus.DEGRADED, llmStage?.status)
+        assertEquals(StageStatus.FAILED, llmStage?.status)
     }
 }

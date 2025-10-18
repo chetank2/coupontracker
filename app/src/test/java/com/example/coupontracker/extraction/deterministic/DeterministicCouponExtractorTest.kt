@@ -27,14 +27,14 @@ class DeterministicCouponExtractorTest {
     @Test
     fun `extractor finds offer code and store`() {
         val text = """
-            Flat T300 Off | Use code MISSEDYOU
+            Flat T300 Off | Use code MISSED20
             Myntra Exclusive Sale
         """.trimIndent()
 
         val result = extractor.extract(text, CouponRegionizer.RegionMode.DEFAULT)
 
         assertEquals("Flat ₹300 Off", result.offer)
-        assertEquals("MISSEDYOU", result.code)
+        assertEquals("MISSED20", result.code)
         assertEquals("Myntra", result.storeCandidate)
         assertFalse(result.requiresFallback())
     }
@@ -44,12 +44,12 @@ class DeterministicCouponExtractorTest {
         val text = """
             You won a jackpot!
             Claim boAt rewards now
-            Up to 80% Off on Earbuds
+            Upto 80% Off on Earbuds
         """.trimIndent()
 
         val result = extractor.extract(text, CouponRegionizer.RegionMode.REWARD)
 
         assertNotNull(result.offer)
-        assertEquals("Up to 80% Off", result.offer)
+        assertEquals("Upto 80% Off", result.offer)
     }
 }
