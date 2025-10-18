@@ -27,6 +27,7 @@ object StoreNameMetricsTracker {
     private const val SECURE_KEY_PROVENANCE = "store_name_provenance_samples"
     private const val MAX_PENDING = 200
     private const val MAX_SECURE = 200
+    // Applied when promoting pending evidence to secure storage so ~1% of assessments are retained.
     private const val PROVENANCE_SAMPLE_RATE = 0.01
     private const val WORK_NAME = "store_name_provenance_sampling"
 
@@ -119,9 +120,6 @@ object StoreNameMetricsTracker {
     }
 
     private fun enqueuePendingEvidence(source: String, assessment: StoreNameValidator.Assessment) {
-        if (random.nextDouble() >= PROVENANCE_SAMPLE_RATE) {
-            return
-        }
         try {
             val pendingRaw = prefs.getString(KEY_PENDING, "[]") ?: "[]"
             val pendingArray = JSONArray(pendingRaw)
