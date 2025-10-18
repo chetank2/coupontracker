@@ -1,6 +1,7 @@
 package com.example.coupontracker.extraction.validation
 
 import android.util.Log
+import com.example.coupontracker.analytics.StoreNameMetricsTracker
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.util.DateParser
@@ -120,6 +121,7 @@ internal class StoreNameValidator(
             isAccepted = isAccepted,
             needsAttention = needsAttention
         )
+        StoreNameMetricsTracker.recordAssessment(source, assessment)
         logAssessment(source, assessment)
         return assessment
     }
