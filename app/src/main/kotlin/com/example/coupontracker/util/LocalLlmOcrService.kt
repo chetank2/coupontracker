@@ -13,9 +13,11 @@ import com.example.coupontracker.extraction.validation.FieldValidationIssue
 import com.example.coupontracker.extraction.validation.FieldValueBundle
 import com.example.coupontracker.extraction.validation.StoreNameResolver
 import com.example.coupontracker.extraction.validation.StoreNameValidator
+import com.example.coupontracker.extraction.validation.ValidationEventLogger
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.LlmTelemetryService
 import com.example.coupontracker.ocr.OcrEngine
+import com.example.coupontracker.feedback.ValidatorFeedbackRecorder
 import com.example.coupontracker.schema.CouponSchema
 import com.example.coupontracker.schema.PromptGenerator
 import com.example.coupontracker.schema.SchemaValidator
@@ -45,7 +47,8 @@ class LocalLlmOcrService(
     private val ocrEngine: OcrEngine,
     private val injectedLlmRuntimeManager: LlmRuntimeManager? = null,
     private val injectedTelemetryService: LlmTelemetryService? = null,
-    private val customOcrTextProvider: (suspend (Bitmap) -> String?)? = null
+    private val customOcrTextProvider: (suspend (Bitmap) -> String?)? = null,
+    private val validatorFeedbackRecorder: ValidatorFeedbackRecorder? = null
 ) {
     
     companion object {
@@ -154,7 +157,27 @@ class LocalLlmOcrService(
             }
         }
     )
-    private val fieldValidationCoordinator = FieldValidationCoordinator(textExtractor, storeNameResolver)
+    private val validationEventLogger = ValidationEventLogger { event ->
+        if (event.summary.issues.isEmpty()) {
+            return@ValidationEventLogger
+        }
+        validatorFeedbackRecorder?.recordValidatorOverride(
+            rawOcrText = event.rawOcrText,
+            initialBundle = event.initial,
+            summary = event.summary,
+            structuredCandidates = event.structuredCandidates,
+            metadata = mapOf(
+                "serviceVersion" to SERVICE_VERSION,
+                "validator" to "FieldValidationCoordinator",
+                "modelVersion" to SUPPORTED_MODEL_VERSION
+            )
+        )
+    }
+    private val fieldValidationCoordinator = FieldValidationCoordinator(
+        textExtractor,
+        storeNameResolver,
+        validationEventLogger = validationEventLogger
+    )
     private var modelPinned = false
     private val warmupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val warmupMutex = Mutex()

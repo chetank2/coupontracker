@@ -7,6 +7,8 @@ import androidx.work.Configuration
 import androidx.work.WorkManager
 import com.example.coupontracker.analytics.StoreNameMetricsTracker
 import com.example.coupontracker.worker.ReminderWorker
+import com.example.coupontracker.feedback.FeedbackFeatureToggle
+import com.example.coupontracker.worker.OfflineRetrainingWorker
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
@@ -14,6 +16,9 @@ import javax.inject.Inject
 class CouponTrackerApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
+
+    @Inject
+    lateinit var feedbackFeatureToggle: FeedbackFeatureToggle
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -48,6 +53,13 @@ class CouponTrackerApplication : Application(), Configuration.Provider {
             // Schedule daily reminder checks
             ReminderWorker.scheduleDaily(WorkManager.getInstance(this))
             Log.d("CouponTracker", "Scheduled reminder worker")
+
+            if (feedbackFeatureToggle.isOfflineRetrainingEnabled()) {
+                OfflineRetrainingWorker.schedule(WorkManager.getInstance(this))
+                Log.d("CouponTracker", "Scheduled offline retraining worker")
+            } else {
+                Log.d("CouponTracker", "Offline retraining worker disabled by feature flag")
+            }
         } catch (e: Exception) {
             Log.e("CouponTracker", "Error scheduling reminder worker", e)
         }

@@ -33,6 +33,7 @@ import com.example.coupontracker.util.ExtractionConfig
 import com.example.coupontracker.util.ExtractionLogBuffer
 import com.example.coupontracker.util.ExtractionStage
 import com.example.coupontracker.util.ExtractionTelemetryService
+import com.example.coupontracker.feedback.ValidatorFeedbackRecorder
 import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.util.IndianCurrencyParser
 import com.example.coupontracker.util.LocalLlmOcrService
@@ -69,7 +70,8 @@ class ScannerViewModel @Inject constructor(
     private val performanceMonitor: ExtractionPerformanceMonitor,
     private val analyticsTracker: AnalyticsTracker,
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Injected bitmap memory management
-    private val debugRepository: ExtractionDebugRepository
+    private val debugRepository: ExtractionDebugRepository,
+    private val validatorFeedbackRecorder: ValidatorFeedbackRecorder
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -2024,6 +2026,16 @@ class ScannerViewModel @Inject constructor(
                         correctedCoupon = correctedCoupon,
                         originalText = ocrText,
                         context = context
+                    )
+
+                    validatorFeedbackRecorder.recordUserCorrection(
+                        rawOcrText = ocrText,
+                        extractionResult = extractionResult,
+                        correctedCoupon = correctedCoupon,
+                        metadata = mapOf(
+                            "source" to TAG,
+                            "strategy" to ExtractionMethod.UNIVERSAL_EXTRACTION.name
+                        )
                     )
                     
                     // Update the current coupon with corrections if it's still in preview

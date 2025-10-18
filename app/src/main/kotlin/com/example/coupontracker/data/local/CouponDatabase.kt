@@ -15,9 +15,10 @@ import com.google.gson.reflect.TypeToken
     entities = [
         Coupon::class,
         LearnedPattern::class,          // V2: Pattern storage
-        ExtractionFeedback::class       // V2: Feedback & telemetry
+        ExtractionFeedback::class,      // V2: Feedback & telemetry
+        ValidatorFeedbackRecord::class  // Validator override & correction dataset
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -25,6 +26,7 @@ abstract class CouponDatabase : RoomDatabase() {
     abstract fun couponDao(): CouponDao
     abstract fun learnedPatternDao(): LearnedPatternDao              // V2: Pattern management
     abstract fun extractionFeedbackDao(): ExtractionFeedbackDao      // V2: Feedback management
+    abstract fun validatorFeedbackDao(): ValidatorFeedbackDao        // Validator dataset management
 
     companion object {
         const val DATABASE_NAME = "coupon_database"
@@ -415,6 +417,32 @@ abstract class CouponDatabase : RoomDatabase() {
 
                 database.execSQL("DROP TABLE `coupons`")
                 database.execSQL("ALTER TABLE `coupons_v10` RENAME TO `coupons`")
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `validator_feedback_v1` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `eventType` TEXT NOT NULL,
+                        `fieldOutcomesJson` TEXT NOT NULL,
+                        `rationaleJson` TEXT NOT NULL,
+                        `metadataJson` TEXT NOT NULL,
+                        `ocrHash` TEXT,
+                        `ocrPreview` TEXT,
+                        `timestamp` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_validator_feedback_v1_timestamp` ON `validator_feedback_v1` (`timestamp` DESC)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_validator_feedback_v1_eventType` ON `validator_feedback_v1` (`eventType`)"
+                )
             }
         }
     }
