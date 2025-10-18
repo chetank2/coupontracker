@@ -1215,21 +1215,24 @@ class BatchScannerViewModel @Inject constructor(
         val runPathSummary = runPath.final.takeIf { it.isNotBlank() }?.let { final ->
             "${runPath.strategy} → $final"
         }
-        return Coupon(
-            id = 0,
-            storeName = couponInfo.storeName,
-            description = couponInfo.description,
-            cashbackAmount = couponInfo.cashbackAmount ?: 0.0,
-            cashbackType = couponInfo.discountType ?: "",
-            expiryDate = couponInfo.expiryDate,
-            redeemCode = couponInfo.redeemCode,
-            imageUri = uri.toString(),
-            status = "Active",
-            extractionQualityScore = signals.qualityScore,
-            extractionConfidenceBreakdown = signals.fieldConfidences,
-            extractionStage = signals.stage.name,
-            extractionRunPath = runPathSummary,
-            extractionTimestamp = java.util.Date(),
+            return Coupon(
+                id = 0,
+                storeName = couponInfo.storeName,
+                description = couponInfo.description,
+                cashbackAmount = couponInfo.cashbackAmount ?: 0.0,
+                cashbackType = couponInfo.discountType ?: "",
+                expiryDate = couponInfo.expiryDate,
+                redeemCode = couponInfo.redeemCode,
+                imageUri = uri.toString(),
+                status = "Active",
+                needsAttention = couponInfo.needsAttention,
+                storeNameSource = couponInfo.storeNameSource,
+                storeNameEvidence = couponInfo.storeNameEvidence,
+                extractionQualityScore = signals.qualityScore,
+                extractionConfidenceBreakdown = signals.fieldConfidences,
+                extractionStage = signals.stage.name,
+                extractionRunPath = runPathSummary,
+                extractionTimestamp = java.util.Date(),
             createdAt = java.util.Date(),
             updatedAt = java.util.Date()
         )

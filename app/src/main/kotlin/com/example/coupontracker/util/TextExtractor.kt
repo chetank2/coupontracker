@@ -23,6 +23,11 @@ data class CouponInfo(
     val status: String? = null,
     val discountType: String? = null, // "PERCENTAGE" or "AMOUNT"
 
+    // Provenance metadata
+    val needsAttention: Boolean = false,
+    val storeNameSource: String? = null,
+    val storeNameEvidence: List<String> = emptyList(),
+
     // New fields
     val minimumPurchase: Double? = null,
     val maximumDiscount: Double? = null,

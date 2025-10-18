@@ -7,9 +7,12 @@ import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.ExtractionContext
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.StructuredFieldExtractor
+import com.example.coupontracker.extraction.validation.BrandLexicon
 import com.example.coupontracker.extraction.validation.FieldValidationCoordinator
 import com.example.coupontracker.extraction.validation.FieldValidationIssue
 import com.example.coupontracker.extraction.validation.FieldValueBundle
+import com.example.coupontracker.extraction.validation.StoreNameResolver
+import com.example.coupontracker.extraction.validation.StoreNameValidator
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.LlmTelemetryService
 import com.example.coupontracker.ocr.OcrEngine
@@ -135,7 +138,18 @@ class LocalLlmOcrService(
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor() // Fallback
     private val structuredFieldExtractor = StructuredFieldExtractor()
-    private val fieldValidationCoordinator = FieldValidationCoordinator(textExtractor)
+    private val brandLexicon = BrandLexicon.load(context)
+    private val storeNameResolver = StoreNameResolver(
+        StoreNameValidator(brandLexicon) { log ->
+            runCatching {
+                Log.d(
+                    TAG,
+                    "store-source=${log.source} candidate='${log.candidate}' issues=${log.issues}"
+                )
+            }
+        }
+    )
+    private val fieldValidationCoordinator = FieldValidationCoordinator(textExtractor, storeNameResolver)
     private var modelPinned = false
     
     init {
@@ -745,7 +759,8 @@ $sanitizedOcr
                 Log.w(TAG, "Field validation ${issue.severity} for ${issue.field}: ${issue.message}$sourceInfo")
             }
 
-            val candidateStoreName = validationSummary.fields.storeName?.trim()
+            val storeResolution = validationSummary.storeResolution
+            val candidateStoreName = storeResolution.value?.trim()
             val candidateDescription = validationSummary.fields.description
             val candidateCode = validationSummary.fields.redeemCode
             val candidateExpiry = validationSummary.fields.expiryDateText
@@ -780,6 +795,10 @@ $sanitizedOcr
             val finalStoreName = finalStoreCandidate?.takeIf {
                 it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it)
             } ?: "Unknown Store"
+
+            val storeNeedsAttention = storeResolution.needsAttention || finalStoreName == "Unknown Store"
+            val storeEvidence = storeResolution.evidence
+            val storeSource = storeResolution.source
 
             // Parse expiry date with enhanced pattern matching
             val parsedExpiryDate = candidateExpiry?.let { dateStr ->
@@ -832,6 +851,9 @@ $sanitizedOcr
                 expiryDate = resolvedExpiry,
                 cashbackAmount = null,
                 redeemCode = finalCode,
+                needsAttention = storeNeedsAttention,
+                storeNameSource = storeSource,
+                storeNameEvidence = storeEvidence,
                 minimumPurchase = null,
                 discountType = null
             )
