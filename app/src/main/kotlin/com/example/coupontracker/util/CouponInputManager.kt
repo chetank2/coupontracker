@@ -248,9 +248,9 @@ class CouponInputManager(
                 ExtractionLogBuffer.appendInfo(TAG, "Screenshot classification: type=${classification.type}, confidence=${classification.confidence}")
 
                 if (classification.type == ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP) {
-                    val couponCount = (classification.indicators["coupon_count"] as? Int) ?: 0
-                    Log.d(TAG, "🚨 Multi-coupon screenshot detected ($couponCount coupons)")
-                    ExtractionLogBuffer.appendInfo(TAG, "Multi-coupon screenshot detected ($couponCount coupons)")
+                    val indicatorCount = (classification.indicators["couponIndicatorCount"] as? Int) ?: 0
+                    Log.d(TAG, "🚨 Multi-coupon screenshot detected (indicator hits=$indicatorCount)")
+                    ExtractionLogBuffer.appendInfo(TAG, "Multi-coupon screenshot detected (indicator hits=$indicatorCount)")
 
                     val multiResult = multiCouponExtractionService?.let { service ->
                         runCatching {
@@ -267,14 +267,23 @@ class CouponInputManager(
                     }
 
                     if (multiResult != null && multiResult.coupons.isNotEmpty()) {
-                        Log.d(TAG, "✅ Multi-coupon extraction succeeded: extracted ${multiResult.coupons.size} coupon(s)")
-                        ExtractionLogBuffer.appendInfo(TAG, "Multi-coupon extraction succeeded: extracted ${multiResult.coupons.size} coupon(s)")
-                        handleMultiCouponResult(
-                            multiResult = multiResult,
-                            captureTimestamp = captureTimestamp,
-                            sourceImageUri = null
-                        )?.let { combinedResult ->
-                            return@withContext combinedResult
+                        val extractedCount = multiResult.coupons.size
+                        val detectedCount = multiResult.totalDetected
+                        Log.d(TAG, "✅ Multi-coupon extraction succeeded: extracted $extractedCount coupon(s), detected=$detectedCount")
+                        ExtractionLogBuffer.appendInfo(TAG, "Multi-coupon extraction succeeded: extracted $extractedCount coupon(s), detected=$detectedCount")
+
+                        val shouldReturnMulti = extractedCount >= 2 || detectedCount >= 2
+                        if (shouldReturnMulti) {
+                            handleMultiCouponResult(
+                                multiResult = multiResult,
+                                captureTimestamp = captureTimestamp,
+                                sourceImageUri = null
+                            )?.let { combinedResult ->
+                                return@withContext combinedResult
+                            }
+                        } else {
+                            Log.d(TAG, "Multi-coupon pipeline produced a single coupon; falling back to single-coupon extraction")
+                            ExtractionLogBuffer.appendInfo(TAG, "Multi-coupon pipeline produced a single coupon; using single-coupon flow")
                         }
                     } else {
                         Log.w(TAG, "⚠️ Multi-coupon extraction returned no coupons, falling back to single extraction")
