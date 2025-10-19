@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -216,6 +218,22 @@ private fun CouponDetailContent(
 
         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
+        CouponActionButtons(
+            onTrackUsageClick = {
+                onTrackUsage()
+                Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
+            },
+            onSetReminderClick = {
+                Toast.makeText(
+                    context,
+                    "Reminder functionality would be implemented here",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        )
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
         ExtractionQualityCard(coupon = coupon)
 
         Spacer(modifier = Modifier.height(BrandSpacing.Large))
@@ -354,36 +372,35 @@ private fun CouponDetailContent(
             Spacer(modifier = Modifier.height(BrandSpacing.Medium))
         }
 
-        // Action buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+        Spacer(modifier = Modifier.height(BrandSpacing.Large))
+    }
+}
+
+@Composable
+private fun CouponActionButtons(
+    onTrackUsageClick: () -> Unit,
+    onSetReminderClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
+    ) {
+        Button(
+            onClick = onTrackUsageClick,
+            modifier = Modifier.weight(1f)
         ) {
-            Button(
-                onClick = {
-                    onTrackUsage()
-                    Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null)
-                Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                Text("Track Usage")
-            }
+            Icon(Icons.Default.CheckCircle, contentDescription = null)
+            Spacer(modifier = Modifier.width(BrandSpacing.Small))
+            Text("Track Usage")
+        }
 
-            Spacer(modifier = Modifier.width(BrandSpacing.Medium))
-
-            Button(
-                onClick = {
-                    // Set reminder
-                    Toast.makeText(context, "Reminder functionality would be implemented here", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Notifications, contentDescription = null)
-                Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                Text("Set Reminder")
-            }
+        Button(
+            onClick = onSetReminderClick,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(Icons.Default.Notifications, contentDescription = null)
+            Spacer(modifier = Modifier.width(BrandSpacing.Small))
+            Text("Set Reminder")
         }
     }
 }
@@ -400,20 +417,23 @@ private fun ExtractionQualityCard(coupon: com.example.coupontracker.data.model.C
     val statusIcon = insights.status.icon
     val score = insights.score.coerceIn(0, 100)
     val progress = (score / 100f).coerceIn(0f, 1f)
+    var expanded by rememberSaveable { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
     ) {
-        Column(
-            modifier = Modifier.padding(BrandSpacing.Medium)
-        ) {
+        Column {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = BrandSpacing.Medium, vertical = BrandSpacing.Small),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -424,136 +444,187 @@ private fun ExtractionQualityCard(coupon: com.example.coupontracker.data.model.C
                     )
                     Spacer(modifier = Modifier.height(BrandSpacing.Tiny))
                     Text(
-                        text = "Based on the fields captured from your screenshot.",
+                        text = if (expanded) {
+                            "Hide quality score details"
+                        } else {
+                            "Tap to view quality score details"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = statusColor.copy(alpha = 0.16f)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = statusIcon,
-                            contentDescription = null,
-                            tint = statusColor,
-                            modifier = Modifier.size(18.dp)
-                        )
-
-                        Spacer(modifier = Modifier.width(BrandSpacing.Tiny))
-
-                        Text(
-                            text = insights.status.label,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = statusColor,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(BrandSpacing.Small))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
-            ) {
-                Text(
-                    text = score.toString(),
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = statusColor
-                )
-
-                Column(modifier = Modifier.weight(1f)) {
-                    LinearProgressIndicator(
-                        progress = progress,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        color = statusColor,
-                        trackColor = statusColor.copy(alpha = 0.16f)
-                    )
-
-                    Spacer(modifier = Modifier.height(BrandSpacing.Tiny))
-
-                    Text(
-                        text = insights.scoreLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    insights.secondaryLabel?.let { secondary ->
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = secondary,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(BrandSpacing.Small))
-
-            Text(
-                text = insights.statusMessage,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Spacer(modifier = Modifier.height(BrandSpacing.Medium))
-
-            insights.metrics.forEach { metric ->
-                val metricColor = if (metric.isAchieved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
 
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
                 ) {
                     Surface(
-                        shape = CircleShape,
-                        color = if (metric.isAchieved) metricColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.size(36.dp)
+                        shape = RoundedCornerShape(16.dp),
+                        color = statusColor.copy(alpha = 0.16f)
                     ) {
-                        Icon(
-                            imageVector = metric.icon,
-                            contentDescription = null,
-                            tint = metricColor,
-                            modifier = Modifier.padding(8.dp)
-                        )
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = statusIcon,
+                                contentDescription = null,
+                                tint = statusColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(BrandSpacing.Tiny))
+
+                            Text(
+                                text = insights.status.label,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = statusColor,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.width(BrandSpacing.Small))
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
-                    Column(modifier = Modifier.weight(1f)) {
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(BrandSpacing.Medium)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
+                        ) {
+                            Text(
+                                text = score.toString(),
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = statusColor
+                            )
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                LinearProgressIndicator(
+                                    progress = progress,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    color = statusColor,
+                                    trackColor = statusColor.copy(alpha = 0.16f)
+                                )
+
+                                Spacer(modifier = Modifier.height(BrandSpacing.Tiny))
+
+                                Text(
+                                    text = insights.scoreLabel,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                insights.secondaryLabel?.let { secondary ->
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = secondary,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(BrandSpacing.Small))
+
+                        if (!insights.telemetryAvailable) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+                            ) {
+                                Text(
+                                    text = "Telemetry hasn't been reported yet. Showing an estimated score based on the captured fields.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(BrandSpacing.Small)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(BrandSpacing.Small))
+                        }
+
                         Text(
-                            text = metric.label,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = if (metric.isAchieved) FontWeight.SemiBold else FontWeight.Normal
-                        )
-                        Text(
-                            text = metric.description,
+                            text = insights.statusMessage,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    }
 
-                    Text(
-                        text = "${metric.earnedPoints}/${metric.maxPoints}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = metricColor,
-                        fontWeight = if (metric.isAchieved) FontWeight.SemiBold else FontWeight.Normal
-                    )
+                        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+                        insights.metrics.forEach { metric ->
+                            val metricColor = if (metric.isAchieved) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (metric.isAchieved) {
+                                        metricColor.copy(alpha = 0.15f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surface
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = metric.icon,
+                                        contentDescription = null,
+                                        tint = metricColor,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(BrandSpacing.Small))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = metric.label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (metric.isAchieved) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                    Text(
+                                        text = metric.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Text(
+                                    text = "${metric.earnedPoints}/${metric.maxPoints}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = metricColor,
+                                    fontWeight = if (metric.isAchieved) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -566,7 +637,8 @@ private data class QualityInsights(
     val status: QualityStatus,
     val scoreLabel: String,
     val secondaryLabel: String?,
-    val statusMessage: String
+    val statusMessage: String,
+    val telemetryAvailable: Boolean
 )
 
 private data class QualityMetric(
@@ -752,7 +824,8 @@ private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.C
         status = status,
         scoreLabel = scoreLabel,
         secondaryLabel = secondaryLabel,
-        statusMessage = statusMessage
+        statusMessage = statusMessage,
+        telemetryAvailable = telemetryAvailable
     )
 }
 
