@@ -25,6 +25,7 @@ class ExtractionConfigTest {
         clearPreferences()
         MlcLlmNative.resetForTests()
         ExtractionConfig.resetForTesting()
+        ExtractionConfig.runtimeAvailabilityChecker = { false }
     }
 
     @After
@@ -32,6 +33,7 @@ class ExtractionConfigTest {
         MlcLlmNative.libraryLoader = originalLoader
         MlcLlmNative.resetForTests()
         ExtractionConfig.resetForTesting()
+        ExtractionConfig.runtimeAvailabilityChecker = { false }
         clearPreferences()
     }
 
@@ -45,6 +47,7 @@ class ExtractionConfigTest {
 
     @Test
     fun enablingAdvancedStrategiesRestoresPersistedSelection() {
+        ExtractionConfig.runtimeAvailabilityChecker = { true }
         ExtractionConfig.init(context)
         ExtractionConfig.setAdvancedStrategiesEnabled(true)
         assertTrue(ExtractionConfig.areAdvancedStrategiesEnabled())
@@ -53,6 +56,7 @@ class ExtractionConfigTest {
         assertEquals(ExtractionStrategy.LLM_FIRST, ExtractionConfig.getStrategy())
 
         ExtractionConfig.resetForTesting()
+        ExtractionConfig.runtimeAvailabilityChecker = { true }
         ExtractionConfig.init(context)
 
         assertTrue(ExtractionConfig.areAdvancedStrategiesEnabled())
@@ -61,6 +65,7 @@ class ExtractionConfigTest {
 
     @Test
     fun persistedAdvancedSelectionResumesWhenGuardToggledOn() {
+        ExtractionConfig.runtimeAvailabilityChecker = { false }
         ExtractionConfig.init(context)
         context.getSharedPreferences("extraction_config", Context.MODE_PRIVATE)
             .edit()
@@ -68,10 +73,13 @@ class ExtractionConfigTest {
             .apply()
 
         ExtractionConfig.resetForTesting()
+        ExtractionConfig.runtimeAvailabilityChecker = { false }
         ExtractionConfig.init(context)
 
         assertEquals(ExtractionStrategy.OCR_FIRST, ExtractionConfig.getStrategy())
 
+        ExtractionConfig.runtimeAvailabilityChecker = { true }
+        ExtractionConfig.refreshRuntimeAvailability(context)
         ExtractionConfig.setAdvancedStrategiesEnabled(true)
 
         assertTrue(ExtractionConfig.areAdvancedStrategiesEnabled())
@@ -80,14 +88,7 @@ class ExtractionConfigTest {
 
     @Test
     fun availableStrategiesIncludeAdvancedWhenLibraryReadyAndGuardEnabled() {
-        val stubLoader = object : MlcLlmNative.Companion.NativeLibraryLoader {
-            override fun loadLibrary(name: String) {}
-            override fun load(path: String) {}
-        }
-        MlcLlmNative.libraryLoader = stubLoader
-        assertTrue(MlcLlmNative.loadLibrary(context))
-        assertTrue(MlcLlmNative.isAvailable())
-
+        ExtractionConfig.runtimeAvailabilityChecker = { true }
         ExtractionConfig.init(context)
         ExtractionConfig.setAdvancedStrategiesEnabled(true)
 
@@ -95,6 +96,15 @@ class ExtractionConfigTest {
 
         assertTrue(strategies.contains(ExtractionStrategy.LLM_FIRST))
         assertTrue(strategies.contains(ExtractionStrategy.HYBRID))
+    }
+
+    @Test
+    fun runtimeAvailabilityAutomaticallyEnablesAdvancedStrategies() {
+        ExtractionConfig.runtimeAvailabilityChecker = { true }
+        ExtractionConfig.init(context)
+
+        assertTrue(ExtractionConfig.areAdvancedStrategiesEnabled())
+        assertEquals(ExtractionStrategy.LLM_FIRST, ExtractionConfig.getStrategy())
     }
 
     private fun clearPreferences() {
