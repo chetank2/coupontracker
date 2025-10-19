@@ -83,6 +83,16 @@ python coupon_trainer_cli.py --url <URL> --output-dir <OUTPUT_DIR>
 ./gradlew assembleDebug
 ```
 
+## 🔐 Protected Branch Workflow
+
+We enforce branch protection on `main`, `release/*`, and `hotfix/*` to keep production code stable. All contributions must:
+
+- Land via pull requests with at least one approving review from the appropriate code owner.
+- Pass all required status checks before the merge button is enabled.
+- Avoid force pushes or history rewrites against the protected branches; create feature branches for new work instead.
+
+See [`docs/git-maintenance/protected-branches.md`](docs/git-maintenance/protected-branches.md) for the full policy, including expectations for release and hotfix procedures.
+
 ## 🧪 Testing
 
 ### **Unit Tests (Local JVM Stubs)**
