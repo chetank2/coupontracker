@@ -109,7 +109,7 @@ internal class StoreNameValidator(
         val meetsSignalThreshold = uniqueCategories.size >= 2
         val isAccepted = issues.isEmpty() && meetsSignalThreshold
         // @critical-invariant: require at least two independent signal categories before accepting store name.
-        val needsAttention = !isAccepted || highConfidenceCount < 2
+        val needsAttention = !isAccepted || highConfidenceCount == 0
 
         val assessment = Assessment(
             original = trimmed,
