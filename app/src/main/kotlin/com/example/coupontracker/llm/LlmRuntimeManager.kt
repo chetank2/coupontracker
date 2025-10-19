@@ -462,7 +462,27 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             return@withContext null
         }
     }
-    
+
+    fun cancelOngoingInference() {
+        val handle = modelHandle ?: return
+        runCatching {
+            nativeInterface.cancelInference(handle)
+        }.onFailure { error ->
+            Log.w(TAG, "Failed to cancel inference", error)
+        }
+    }
+
+    suspend fun resetAfterTimeout() {
+        lifecycleMutex.withLock {
+            autoUnloadJob?.cancel()
+            autoUnloadJob = null
+            unloadModelInternal(modelHandle)
+            modelHandle = null
+            referenceCount.set(0)
+            Log.d(TAG, "Model state reset after timeout")
+        }
+    }
+
     /**
      * Internal method to unload model (called under mutex)
      */

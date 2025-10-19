@@ -69,10 +69,12 @@ class LocalLlmOcrService(
         // Set to true to enable schema-driven prompts/validation, false to use manual/legacy
         private const val USE_SCHEMA_PROMPTS = true
         private const val USE_SCHEMA_VALIDATION = true
-        
+
         // Prompt optimization: Use compact prompts to reduce token count (920 → ~350 tokens)
         // Compact prompts rely on grammar enforcement for structure, reducing verbosity
         private const val USE_COMPACT_PROMPTS = true
+
+        private const val MAX_LLM_ATTEMPTS = 2
 
         private val STORE_CONTEXT_ANCHORS = listOf(
             "Claim Now",
@@ -124,6 +126,11 @@ class LocalLlmOcrService(
         }
 
     }
+
+    private data class LlmInferenceOutcome(
+        val response: String?,
+        val memoryUsageMb: Long
+    )
 
     private fun CouponInfo.toCanonicalContract(): CouponInfo {
         return copy(
@@ -277,6 +284,54 @@ class LocalLlmOcrService(
         }
     }
 
+    private suspend fun runLlmInferenceWithRetry(
+        rawOcrText: String,
+        prompt: String,
+        progressCallback: ((LlmProgressUpdate) -> Unit)?
+    ): LlmInferenceOutcome {
+        var attempt = 0
+        var lastMemoryUsage = 0L
+        var response: String? = null
+
+        while (attempt < MAX_LLM_ATTEMPTS && response == null) {
+            lastMemoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
+            val attemptStart = System.currentTimeMillis()
+            response = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
+                llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned)
+            }
+
+            if (response != null) {
+                break
+            }
+
+            val elapsed = System.currentTimeMillis() - attemptStart
+            telemetryService.recordTimeout(elapsed, lastMemoryUsage)
+            Log.w(
+                TAG,
+                "LLM inference timed out after ${elapsed}ms (attempt ${attempt + 1}/$MAX_LLM_ATTEMPTS)"
+            )
+
+            llmRuntime.cancelOngoingInference()
+            runCatching { llmRuntime.resetAfterTimeout() }
+                .onFailure { error -> Log.w(TAG, "Failed to reset LLM after timeout", error) }
+            modelPinned = false
+
+            if (attempt + 1 < MAX_LLM_ATTEMPTS) {
+                notifyProgress(
+                    stage = LlmProgressStage.WARMING_UP,
+                    percent = 30,
+                    message = "AI timeout – retrying…",
+                    progressCallback = progressCallback
+                )
+                ensureModelWarm("timeout_retry", progressCallback)
+            }
+
+            attempt++
+        }
+
+        return LlmInferenceOutcome(response, lastMemoryUsage)
+    }
+
     private fun notifyProgress(
         stage: LlmProgressStage,
         percent: Int?,
@@ -395,10 +450,9 @@ class LocalLlmOcrService(
                 message = "Running on-device AI…",
                 progressCallback = progressCallback
             )
-            memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
-            val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
-                llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned)
-            }
+            val llmOutcome = runLlmInferenceWithRetry(rawOcrText, prompt, progressCallback)
+            memoryUsage = llmOutcome.memoryUsageMb
+            val llmResponse = llmOutcome.response
 
             // Step 5: Parse and validate response
             if (llmResponse != null) {
@@ -573,12 +627,11 @@ class LocalLlmOcrService(
             Log.d(TAG, "⏱️  Subsequent runs: ~10s")
             Log.d(TAG, "⏳ Please wait... (max ${INFERENCE_TIMEOUT_MS / 1000}s)")
             Log.d(TAG, "========================================")
-            memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
             val inferenceStartTime = System.currentTimeMillis()
-            val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
-                llmRuntime.runTextInference(ocrText, prompt, keepLoaded = modelPinned)
-            }
+            val llmOutcome = runLlmInferenceWithRetry(ocrText, prompt, progressCallback = null)
             val inferenceElapsed = System.currentTimeMillis() - inferenceStartTime
+            memoryUsage = llmOutcome.memoryUsageMb
+            val llmResponse = llmOutcome.response
             Log.d(TAG, "⏱️  Inference completed in ${inferenceElapsed / 1000}s")
 
             // Step 6: Parse and validate response

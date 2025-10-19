@@ -49,16 +49,32 @@ object ExtractionConfig {
 
     private var prefs: SharedPreferences? = null
 
-    // Default strategy (OCR_FIRST - most reliable with current model availability)
-    // LLM_FIRST and HYBRID disabled due to missing MLC-LLM binaries (see CRITICAL_PRODUCTION_BLOCKERS.md)
+    // Default strategy (OCR_FIRST - most reliable when advanced runtime unavailable)
     private var _strategy: ExtractionStrategy = ExtractionStrategy.OCR_FIRST
     @Volatile
     private var advancedStrategiesEnabled: Boolean = false
     @Volatile
     private var pendingAdvancedFlag: PendingAdvancedFlag? = null
     private var isInitialized = false
+    @Volatile
+    private var runtimeAdvancedAvailable: Boolean = false
 
     private data class PendingAdvancedFlag(val enabled: Boolean, val persist: Boolean)
+
+    @VisibleForTesting
+    internal var runtimeAvailabilityChecker: (Context) -> Boolean = { context ->
+        val nativeReady = runCatching {
+            com.example.coupontracker.llm.MlcLlmNative.loadLibrary(context)
+        }.getOrDefault(false) ||
+            runCatching { com.example.coupontracker.llm.MlcLlmNative.isAvailable() }
+                .getOrDefault(false)
+
+        val modelReady = runCatching {
+            com.example.coupontracker.llm.LlmRuntimeManager.getInstance(context).isModelAvailable()
+        }.getOrDefault(false)
+
+        nativeReady && modelReady
+    }
     
     /**
      * Initialize with application context
@@ -71,14 +87,23 @@ object ExtractionConfig {
 
         val pending = pendingAdvancedFlag
         val persistedAdvanced = prefs?.getBoolean(KEY_ADVANCED_ENABLED, false) ?: false
+        runtimeAdvancedAvailable = runCatching { runtimeAvailabilityChecker(context) }.getOrDefault(false)
+
+        advancedStrategiesEnabled = when {
+            pending != null -> pending.enabled
+            persistedAdvanced -> true
+            else -> runtimeAdvancedAvailable
+        }
+
         if (pending != null) {
-            advancedStrategiesEnabled = pending.enabled
             if (pending.persist) {
                 prefs?.edit()?.putBoolean(KEY_ADVANCED_ENABLED, pending.enabled)?.apply()
             }
             pendingAdvancedFlag = null
-        } else {
-            advancedStrategiesEnabled = persistedAdvanced
+        }
+
+        if (advancedStrategiesEnabled && !runtimeAdvancedAvailable) {
+            Log.i(TAG, "Advanced strategies preference set but runtime unavailable – awaiting model readiness")
         }
 
         val savedStrategy = readSavedStrategy()
@@ -89,7 +114,13 @@ object ExtractionConfig {
             )
         }
 
-        _strategy = savedStrategy?.takeIf { isStrategyAllowed(it) } ?: ExtractionStrategy.OCR_FIRST
+        val defaultStrategy = if (advancedStrategiesEnabled && runtimeAdvancedAvailable) {
+            ExtractionStrategy.LLM_FIRST
+        } else {
+            ExtractionStrategy.OCR_FIRST
+        }
+
+        _strategy = savedStrategy?.takeIf { isStrategyAllowed(it) } ?: defaultStrategy
 
         Log.d(TAG, "Loaded strategy: ${_strategy.name} (advanced=${advancedStrategiesEnabled})")
 
@@ -147,7 +178,7 @@ object ExtractionConfig {
         return getAvailableStrategies().contains(strategy)
     }
 
-    fun areAdvancedStrategiesEnabled(): Boolean = advancedStrategiesEnabled
+    fun areAdvancedStrategiesEnabled(): Boolean = advancedStrategiesEnabled && runtimeAdvancedAvailable
 
     fun setAdvancedStrategiesEnabled(enabled: Boolean, persist: Boolean = true) {
         if (!isInitialized) {
@@ -167,17 +198,43 @@ object ExtractionConfig {
             prefs?.edit()?.putBoolean(KEY_ADVANCED_ENABLED, enabled)?.apply()
         }
 
-        if (isInitialized) {
-            if (enabled) {
-                val savedStrategy = readSavedStrategy()
-                if (savedStrategy != null && isStrategyGuarded(savedStrategy)) {
-                    Log.i(TAG, "Advanced strategies enabled – restoring saved strategy ${savedStrategy.name}")
-                    updateStrategyInternal(savedStrategy, persist = false)
-                }
-            } else if (isStrategyGuarded(_strategy)) {
-                Log.i(TAG, "Advanced strategies disabled – reverting to OCR_FIRST in memory")
-                updateStrategyInternal(ExtractionStrategy.OCR_FIRST, persist = false)
+        if (!isInitialized) {
+            return
+        }
+
+        if (enabled) {
+            if (!runtimeAdvancedAvailable) {
+                Log.i(TAG, "Advanced strategies requested but runtime unavailable – waiting for availability")
+                return
             }
+
+            val savedStrategy = readSavedStrategy()
+            if (savedStrategy != null && isStrategyGuarded(savedStrategy)) {
+                Log.i(TAG, "Advanced strategies enabled – restoring saved strategy ${savedStrategy.name}")
+                updateStrategyInternal(savedStrategy, persist = false)
+            }
+        } else if (isStrategyGuarded(_strategy)) {
+            Log.i(TAG, "Advanced strategies disabled – reverting to OCR_FIRST in memory")
+            updateStrategyInternal(ExtractionStrategy.OCR_FIRST, persist = false)
+        }
+    }
+
+    fun refreshRuntimeAvailability(context: Context) {
+        if (!isInitialized) {
+            return
+        }
+
+        val previous = runtimeAdvancedAvailable
+        runtimeAdvancedAvailable = runCatching { runtimeAvailabilityChecker(context) }.getOrDefault(false)
+
+        if (!advancedStrategiesEnabled && runtimeAdvancedAvailable) {
+            Log.i(TAG, "Runtime advanced capabilities detected – enabling guarded strategies")
+            setAdvancedStrategiesEnabled(true, persist = false)
+        } else if (advancedStrategiesEnabled && !runtimeAdvancedAvailable) {
+            Log.w(TAG, "Runtime advanced capabilities lost – reverting to OCR_FIRST")
+            setAdvancedStrategiesEnabled(false, persist = false)
+        } else if (previous != runtimeAdvancedAvailable) {
+            Log.d(TAG, "Runtime advanced availability changed: $previous → $runtimeAdvancedAvailable")
         }
     }
 
@@ -188,6 +245,20 @@ object ExtractionConfig {
         advancedStrategiesEnabled = false
         pendingAdvancedFlag = null
         isInitialized = false
+        runtimeAdvancedAvailable = false
+        runtimeAvailabilityChecker = { context ->
+            val nativeReady = runCatching {
+                com.example.coupontracker.llm.MlcLlmNative.loadLibrary(context)
+            }.getOrDefault(false) ||
+                runCatching { com.example.coupontracker.llm.MlcLlmNative.isAvailable() }
+                    .getOrDefault(false)
+
+            val modelReady = runCatching {
+                com.example.coupontracker.llm.LlmRuntimeManager.getInstance(context).isModelAvailable()
+            }.getOrDefault(false)
+
+            nativeReady && modelReady
+        }
     }
 
     private fun updateStrategyInternal(strategy: ExtractionStrategy, persist: Boolean) {
@@ -215,7 +286,7 @@ object ExtractionConfig {
     }
 
     private fun isStrategyAllowed(strategy: ExtractionStrategy): Boolean {
-        return !isStrategyGuarded(strategy) || advancedStrategiesEnabled
+        return !isStrategyGuarded(strategy) || (advancedStrategiesEnabled && runtimeAdvancedAvailable)
     }
 
     private fun shouldExposeAdvancedStrategies(): Boolean {
@@ -227,11 +298,7 @@ object ExtractionConfig {
             return true
         }
 
-        return try {
-            com.example.coupontracker.llm.MlcLlmNative.isAvailable()
-        } catch (e: Exception) {
-            false
-        }
+        return runtimeAdvancedAvailable
     }
     
     /**
