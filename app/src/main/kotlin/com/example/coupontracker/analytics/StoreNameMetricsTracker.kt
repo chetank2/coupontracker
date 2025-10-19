@@ -27,8 +27,8 @@ object StoreNameMetricsTracker {
     private const val SECURE_KEY_PROVENANCE = "store_name_provenance_samples"
     private const val MAX_PENDING = 200
     private const val MAX_SECURE = 200
-    // Applied when promoting pending evidence to secure storage so ~1% of assessments are retained.
-    private const val PROVENANCE_SAMPLE_RATE = 0.01
+    // Applied when deciding whether to enqueue evidence so ~1% of assessments are retained.
+    private const val PROVENANCE_ENQUEUE_RATE = 0.01
     private const val WORK_NAME = "store_name_provenance_sampling"
 
     private val lock = Any()
@@ -121,6 +121,9 @@ object StoreNameMetricsTracker {
 
     private fun enqueuePendingEvidence(source: String, assessment: StoreNameValidator.Assessment) {
         try {
+            if (random.nextDouble() >= PROVENANCE_ENQUEUE_RATE) {
+                return
+            }
             val pendingRaw = prefs.getString(KEY_PENDING, "[]") ?: "[]"
             val pendingArray = JSONArray(pendingRaw)
             val entry = JSONObject().apply {
@@ -183,8 +186,7 @@ object StoreNameMetricsTracker {
                 return
             }
 
-            val sampleSize = max(1, (pendingArray.length() * PROVENANCE_SAMPLE_RATE).toInt())
-            val indices = (0 until pendingArray.length()).shuffled(random).take(sampleSize).sorted()
+            val indices = (0 until pendingArray.length()).shuffled(random)
             val selected = JSONArray()
             indices.forEach { index ->
                 selected.put(pendingArray.get(index))
@@ -203,18 +205,9 @@ object StoreNameMetricsTracker {
             }
             securePrefs.saveString(SECURE_KEY_PROVENANCE, trimmed.toString())
 
-            val remaining = JSONArray()
-            var pointer = 0
-            for (i in 0 until pendingArray.length()) {
-                if (pointer < indices.size && indices[pointer] == i) {
-                    pointer += 1
-                } else {
-                    remaining.put(pendingArray.get(i))
-                }
-            }
-            prefs.edit().putString(KEY_PENDING, remaining.toString()).apply()
+            prefs.edit().putString(KEY_PENDING, "[]").apply()
 
-            Log.i(TAG, "Sampled ${selected.length()} provenance records into secure storage")
+            Log.i(TAG, "Promoted ${selected.length()} provenance records into secure storage")
         }
     }
 }
