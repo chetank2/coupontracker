@@ -31,7 +31,8 @@ object DatabaseModule {
                 CouponDatabase.MIGRATION_3_4,
                 CouponDatabase.MIGRATION_4_5,
                 CouponDatabase.MIGRATION_5_6,
-                CouponDatabase.MIGRATION_6_7  // V2: Pattern learning and feedback tables
+                CouponDatabase.MIGRATION_6_7,  // V2: Pattern learning and feedback tables
+                CouponDatabase.MIGRATION_7_8
             )
             .fallbackToDestructiveMigration()
             .build()
