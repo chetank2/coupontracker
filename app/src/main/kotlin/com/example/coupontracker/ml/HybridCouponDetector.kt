@@ -29,6 +29,9 @@ class HybridCouponDetector(
     
     private val twoStageDetector: TwoStageDetector? = try {
         TwoStageDetector(context)
+    } catch (e: IllegalStateException) {
+        Log.e(TAG, "TwoStageDetector integrity check failed: ${e.message}", e)
+        throw e
     } catch (e: Exception) {
         Log.w(TAG, "TwoStageDetector not available: ${e.message}")
         null

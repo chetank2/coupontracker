@@ -540,9 +540,9 @@ object Converters {
     }
 
     @TypeConverter
-    fun confidenceMapToJson(map: Map<String, Float>?): String? {
+    fun confidenceMapToJson(map: Map<String, Float>?): String {
         if (map == null || map.isEmpty()) {
-            return null
+            return "{}"
         }
         return gson.toJson(map, floatMapType)
     }

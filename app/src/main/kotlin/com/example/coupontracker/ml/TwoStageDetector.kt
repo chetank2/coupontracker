@@ -55,6 +55,12 @@ class TwoStageDetector(
         private const val STAGE1_MODEL_PATH = "models/multi_coupon/stage1_coupon_detector.tflite"
         private const val STAGE2_MODEL_PATH = "models/multi_coupon/stage2_field_detector.tflite"
         private const val MANIFEST_PATH = "models/multi_coupon/manifest.json"
+
+        private const val MIN_STAGE1_MODEL_BYTES = 1_000_000L
+        private const val MIN_STAGE2_MODEL_BYTES = 500_000L
+        private const val INTEGRITY_REMEDIATION_HINT =
+            "Replace the placeholder TensorFlow Lite files with the trained" +
+                " multi-coupon detectors exported from the ML pipeline."
     }
     
     // V2: BitmapManager for memory-safe operations
@@ -174,10 +180,11 @@ class TwoStageDetector(
     
     private fun loadStage1Model() {
         try {
+            validateModelAsset(STAGE1_MODEL_PATH, MIN_STAGE1_MODEL_BYTES)
             val stage1ModelBuffer = FileUtil.loadMappedFile(context, STAGE1_MODEL_PATH)
             stage1Interpreter = Interpreter(stage1ModelBuffer)
             Log.d(TAG, "Stage 1 model loaded successfully")
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "Error loading Stage 1 model", e)
             throw e
@@ -186,13 +193,33 @@ class TwoStageDetector(
     
     private fun loadStage2Model() {
         try {
+            validateModelAsset(STAGE2_MODEL_PATH, MIN_STAGE2_MODEL_BYTES)
             val stage2ModelBuffer = FileUtil.loadMappedFile(context, STAGE2_MODEL_PATH)
             stage2Interpreter = Interpreter(stage2ModelBuffer)
             Log.d(TAG, "Stage 2 model loaded successfully")
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "Error loading Stage 2 model", e)
             throw e
+        }
+    }
+
+    private fun validateModelAsset(assetPath: String, minExpectedBytes: Long) {
+        try {
+            context.assets.openFd(assetPath).use { descriptor ->
+                val assetSize = descriptor.length
+                ModelAssetIntegrity.ensureMinSize(
+                    assetPath,
+                    assetSize,
+                    minExpectedBytes,
+                    INTEGRITY_REMEDIATION_HINT
+                )
+            }
+        } catch (e: IllegalStateException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to validate model asset $assetPath", e)
+            throw IllegalStateException("Unable to validate model asset $assetPath", e)
         }
     }
     
