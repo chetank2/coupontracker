@@ -6,7 +6,7 @@
     "entities": [
       {
         "tableName": "coupons",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `storeName` TEXT NOT NULL, `description` TEXT NOT NULL, `normalizedDescription` TEXT, `expiryDate` INTEGER, `cashbackAmount` REAL NOT NULL, `redeemCode` TEXT, `cashbackType` TEXT, `cashbackValueNum` REAL, `cashbackCurrency` TEXT, `imageUri` TEXT, `imagePhash` TEXT, `imageSignature` TEXT, `category` TEXT, `status` TEXT, `minimumPurchase` REAL, `maximumDiscount` REAL, `isPriority` INTEGER NOT NULL, `paymentMethod` TEXT, `usageLimit` INTEGER, `usageCount` INTEGER NOT NULL, `reminderDate` INTEGER, `platformType` TEXT, `extractionQualityScore` INTEGER, `extractionConfidenceBreakdown` TEXT NOT NULL, `extractionStage` TEXT, `extractionRunPath` TEXT, `extractionTimestamp` INTEGER, `rating` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `needsAttention` INTEGER NOT NULL, `storeNameSource` TEXT, `storeNameEvidence` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `storeName` TEXT NOT NULL, `description` TEXT NOT NULL, `normalizedDescription` TEXT, `expiryDate` INTEGER, `cashbackAmount` REAL NOT NULL, `redeemCode` TEXT, `cashbackType` TEXT, `cashbackValueNum` REAL, `cashbackCurrency` TEXT, `imageUri` TEXT, `imagePhash` TEXT, `imageSignature` TEXT, `category` TEXT, `status` TEXT, `minimumPurchase` REAL, `maximumDiscount` REAL, `isPriority` INTEGER NOT NULL, `paymentMethod` TEXT, `usageLimit` INTEGER, `usageCount` INTEGER NOT NULL, `reminderDate` INTEGER, `platformType` TEXT, `extractionQualityScore` INTEGER, `extractionConfidenceBreakdown` TEXT NOT NULL DEFAULT '{}', `extractionStage` TEXT, `extractionRunPath` TEXT, `extractionTimestamp` INTEGER, `rating` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `needsAttention` INTEGER NOT NULL, `storeNameSource` TEXT, `storeNameEvidence` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -156,7 +156,8 @@
             "fieldPath": "extractionConfidenceBreakdown",
             "columnName": "extractionConfidenceBreakdown",
             "affinity": "TEXT",
-            "notNull": true
+            "notNull": true,
+            "defaultValue": "'{}'"
           },
           {
             "fieldPath": "extractionStage",

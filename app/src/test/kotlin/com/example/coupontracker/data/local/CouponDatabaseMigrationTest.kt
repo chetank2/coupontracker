@@ -30,11 +30,11 @@ class CouponDatabaseMigrationTest {
     }
 
     @Test
-    fun migration7To8_addsConfidenceBreakdownWithDefault() {
-        createVersion7DatabaseWithSampleRow()
+    fun migration8To9_preservesConfidenceBreakdownWithDefault() {
+        createVersion8DatabaseWithSampleRow()
 
         val database = Room.databaseBuilder(context, CouponDatabase::class.java, dbName)
-            .addMigrations(CouponDatabase.MIGRATION_7_8)
+            .addMigrations(CouponDatabase.MIGRATION_8_9)
             .allowMainThreadQueries()
             .build()
 
@@ -46,14 +46,14 @@ class CouponDatabaseMigrationTest {
         database.close()
     }
 
-    private fun createVersion7DatabaseWithSampleRow() {
+    private fun createVersion8DatabaseWithSampleRow() {
         context.deleteDatabase(dbName)
 
-        val schema = loadSchemaJson(7)
+        val schema = loadSchemaJson(8)
         val openHelperFactory = FrameworkSQLiteOpenHelperFactory()
         val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
             .name(dbName)
-            .callback(object : SupportSQLiteOpenHelper.Callback(7) {
+            .callback(object : SupportSQLiteOpenHelper.Callback(8) {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     applySchema(schema, db)
                     seedCouponRow(db)
@@ -124,7 +124,6 @@ class CouponDatabaseMigrationTest {
                     val isNotNull = cursor.getInt(notNullIndex)
                     val defaultValue = cursor.getString(defaultIndex)
                     assertEquals(1, isNotNull)
-                    // SQLite reports TEXT defaults wrapped in single quotes
                     assertEquals("'{}'", defaultValue)
                 }
             }
