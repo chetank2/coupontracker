@@ -14,7 +14,7 @@ import com.example.coupontracker.data.util.CouponDedupUtils
         LearnedPattern::class,          // V2: Pattern storage
         ExtractionFeedback::class       // V2: Feedback & telemetry
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -223,17 +223,13 @@ abstract class CouponDatabase : RoomDatabase() {
                 android.util.Log.d("CouponDatabase", "✅ V2 Migration 6→7 complete: Pattern learning and feedback tables created")
             }
         }
-    }
-}
 
-object Converters {
-    @androidx.room.TypeConverter
-    fun fromTimestamp(value: Long?): java.util.Date? {
-        return value?.let { java.util.Date(it) }
-    }
-
-    @androidx.room.TypeConverter
-    fun dateToTimestamp(date: java.util.Date?): Long? {
-        return date?.time
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE coupons ADD COLUMN extractionConfidenceBreakdown TEXT NOT NULL DEFAULT '{}'"
+                )
+            }
+        }
     }
 }
