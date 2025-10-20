@@ -1304,7 +1304,7 @@ class TextExtractor {
             "offer", "valid", "till", "from", "upto", "free", "save", "discount",
             "multi", "product", "products", "kit", "combo", "pack", "value", "special",
             "now", "today", "details", "redeem", "claim", "activate", "shop", "buy",
-            "view", "apply", "tap", "click", "pastm", "patm"
+            "view", "apply", "tap", "click", "pastm", "patm", "just"
         )
 
         private val GENERIC_DESCRIPTION_PATTERN = Pattern.compile("(?i)^(coupon\\s*offer|offer\\s*details|coupon\\s*details|details|offer)")

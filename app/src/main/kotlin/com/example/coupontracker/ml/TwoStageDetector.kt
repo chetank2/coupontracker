@@ -55,8 +55,8 @@ class TwoStageDetector(
         private const val STAGE1_MODEL_PATH = "models/multi_coupon/stage1_coupon_detector.tflite"
         private const val STAGE2_MODEL_PATH = "models/multi_coupon/stage2_field_detector.tflite"
         private const val MANIFEST_PATH = "models/multi_coupon/manifest.json"
-        private const val MIN_STAGE1_MODEL_BYTES = 5_000_000L
-        private const val MIN_STAGE2_MODEL_BYTES = 5_000_000L
+        private const val MIN_STAGE1_MODEL_BYTES = 1_000_000L
+        private const val MIN_STAGE2_MODEL_BYTES = 500_000L
     }
     
     // V2: BitmapManager for memory-safe operations
@@ -214,21 +214,12 @@ class TwoStageDetector(
     }
 
     private fun validateModelAsset(assetPath: String, minExpectedBytes: Long) {
-        try {
-            context.assets.openFd(assetPath).use { descriptor ->
-                val assetSize = descriptor.length
-                ModelAssetIntegrity.ensureMinSize(
-                    assetPath,
-                    assetSize,
-                    minExpectedBytes,
-                    INTEGRITY_REMEDIATION_HINT
-                )
-            }
-        } catch (e: IllegalStateException) {
-            throw e
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to validate model asset $assetPath", e)
-            throw IllegalStateException("Unable to validate model asset $assetPath", e)
+        val friendlyName = assetPath.substringAfterLast('/')
+        runCatching {
+            ModelAssetIntegrity.ensureAssetMinSize(context, assetPath, minExpectedBytes, friendlyName)
+        }.getOrElse { error ->
+            Log.e(TAG, "Failed to validate model asset $assetPath", error)
+            throw IllegalStateException("Unable to validate model asset $assetPath", error)
         }
     }
     
