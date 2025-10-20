@@ -9,7 +9,8 @@ A comprehensive coupon recognition system featuring both mobile Android app and 
 This repository contains a complete production-ready coupon recognition system with:
 
 ### 📱 **Android Mobile App** ⭐ **NEW: LLM Integration**
-- **🧠 MiniCPM-Llama3-V2.5 Vision Model**: On-device LLM for intelligent coupon extraction
+- **🧠 Qwen2-1.5B-Instruct (Default)**: Lightweight on-device LLM with fast inference
+- **🧠 MiniCPM-Llama3-V2.5 (Legacy Optional)**: Vision-enabled LLM for multimodal extraction
 - **🎯 Two-Stage Multi-Coupon Detection**: YOLO-based detection with interactive boundary adjustment
 - **🔄 Smart Fallback Chain**: LLM → Model-Based → Pattern → MLKit OCR with quality validation
 - **📝 Deferred Persistence**: Preview-before-save workflow with duplicate detection
@@ -82,7 +83,33 @@ python coupon_trainer_cli.py --url <URL> --output-dir <OUTPUT_DIR>
 ./gradlew assembleDebug
 ```
 
+## 🔐 Protected Branch Workflow
+
+We enforce branch protection on `main`, `release/*`, and `hotfix/*` to keep production code stable. All contributions must:
+
+- Land via pull requests with at least one approving review from the appropriate code owner.
+- Pass all required status checks before the merge button is enabled.
+- Avoid force pushes or history rewrites against the protected branches; create feature branches for new work instead.
+
+See [`docs/git-maintenance/protected-branches.md`](docs/git-maintenance/protected-branches.md) for the full policy, including expectations for release and hotfix procedures.
+
 ## 🧪 Testing
+
+### **Unit Tests (Local JVM Stubs)**
+Android projects generated with the Android Gradle Plugin do **not** expose the generic `testClasses` task that plain JVM Gradle projects provide. Instead, run the unit-test tasks that correspond to the build variant you want to verify:
+
+```bash
+# Debug build variant
+./gradlew testDebugUnitTest
+
+# Release build variant
+./gradlew testReleaseUnitTest
+
+# Run both debug and release unit tests
+./gradlew test
+```
+
+These commands execute the Robolectric-style JVM tests that exercise your view models, repositories, and other non-instrumented components. Pick the build variant that matches the code you are validating.
 
 ### **Instrumentation (Connected) Tests**
 Run the connected test suite to verify on-device TensorFlow Lite integration, including the `TwoStageDetectorProductionTest` that exercises the production detector with the device/emulator's native TensorFlow Lite runtime:
@@ -96,6 +123,14 @@ For CI or local scripting workflows, use the helper wrapper which simply forward
 ```bash
 ./scripts/run_connected_android_tests.sh
 ```
+
+### **Continuous Integration Status**
+Two CI workflows validate incoming pull requests:
+
+- **CI Guardrails** – enforces repository hygiene checks and linting.
+- **Validator Test Suite** – runs the end-to-end unit test suite.
+
+Both jobs can take several minutes to finish after a pull request is opened or updated. Wait for these checks to report a ✅ status before merging to ensure all automated quality gates have passed. Pure documentation-only pull requests automatically skip these pipelines so minor README or docs updates do not waste CI capacity.
 
 ## 📊 Key Features
 
@@ -121,7 +156,7 @@ For CI or local scripting workflows, use the helper wrapper which simply forward
 
 - **Android**: Kotlin, Jetpack Compose, Room DB, ML Kit
 - **Backend**: Python, Flask, MLflow, PyTorch
-- **ML Models**: YOLOv8, Custom OCR models, TensorFlow Lite
+- **ML Models**: Qwen2-1.5B-Instruct (default), MiniCPM-Llama3-V2.5 (optional vision), YOLOv8, Custom OCR models, TensorFlow Lite
 - **Frontend**: Progressive Web App, IndexedDB, Service Workers
 - **Infrastructure**: Docker, Gradle, Git LFS
 
@@ -143,3 +178,14 @@ This system is designed for enterprise deployment with:
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🤝 Contributing
+
+We welcome improvements, bug fixes, and documentation updates from the community. To contribute:
+
+1. Review and acknowledge the [Coupon Extraction Guardrail Rules](docs/ai_guardrails/COUPON_EXTRACTION_RULES.md) and the [AI Editing Checklist](docs/ai_guardrails/AI_EDITING_CHECKLIST.md) in your pull request description. Every contributor (human or AI) must confirm these policies before pushing changes.
+2. Fork the repository and create a feature branch.
+3. Make your changes and ensure all relevant tests pass.
+4. Submit a pull request with a clear description of the updates, checklist verification, and any testing performed.
+
+For significant updates, consider opening an issue first so we can discuss the proposed changes before you begin development.

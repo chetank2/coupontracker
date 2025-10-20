@@ -2,19 +2,23 @@ package com.example.coupontracker.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.CouponDedupUtils
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 
 @Database(
     entities = [
         Coupon::class,
         LearnedPattern::class,          // V2: Pattern storage
-        ExtractionFeedback::class       // V2: Feedback & telemetry
+        ExtractionFeedback::class,      // V2: Feedback & telemetry
+        ValidatorFeedbackRecord::class  // Validator override & correction dataset
     ],
-    version = 8,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -22,6 +26,7 @@ abstract class CouponDatabase : RoomDatabase() {
     abstract fun couponDao(): CouponDao
     abstract fun learnedPatternDao(): LearnedPatternDao              // V2: Pattern management
     abstract fun extractionFeedbackDao(): ExtractionFeedbackDao      // V2: Feedback management
+    abstract fun validatorFeedbackDao(): ValidatorFeedbackDao        // Validator dataset management
 
     companion object {
         const val DATABASE_NAME = "coupon_database"
@@ -134,7 +139,6 @@ abstract class CouponDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE coupons ADD COLUMN cashbackType TEXT")
                 database.execSQL("ALTER TABLE coupons ADD COLUMN cashbackValueNum REAL")
                 database.execSQL("ALTER TABLE coupons ADD COLUMN cashbackCurrency TEXT DEFAULT 'INR'")
-                database.execSQL("ALTER TABLE coupons ADD COLUMN offerText TEXT")
 
                 // Migrate existing cashbackAmount data to typed fields
                 // This query attempts to detect percentages vs amounts based on value and description
@@ -148,17 +152,7 @@ abstract class CouponDatabase : RoomDatabase() {
                             ) THEN 'percent'
                             ELSE 'amount'
                         END,
-                        cashbackValueNum = cashbackAmount,
-                        offerText = CASE
-                            WHEN cashbackAmount <= 100 AND (
-                                description LIKE '%off%'
-                                OR instr(description, '%') > 0
-                                OR description LIKE '%percent%'
-                            ) THEN
-                                CAST(CAST(cashbackAmount AS INTEGER) AS TEXT) || '% Off'
-                            ELSE
-                                '₹' || CAST(CAST(cashbackAmount AS INTEGER) AS TEXT)
-                        END
+                        cashbackValueNum = cashbackAmount
                     WHERE cashbackType IS NULL
                 """)
             }
@@ -226,10 +220,343 @@ abstract class CouponDatabase : RoomDatabase() {
 
         val MIGRATION_7_8 = object : Migration(7, 8) {
             override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""
+                    CREATE TABLE IF NOT EXISTS `coupons_new` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `storeName` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `normalizedDescription` TEXT,
+                        `expiryDate` INTEGER,
+                        `cashbackAmount` REAL NOT NULL,
+                        `redeemCode` TEXT,
+                        `cashbackType` TEXT,
+                        `cashbackValueNum` REAL,
+                        `cashbackCurrency` TEXT,
+                        `imageUri` TEXT,
+                        `imagePhash` TEXT,
+                        `imageSignature` TEXT,
+                        `category` TEXT,
+                        `status` TEXT,
+                        `minimumPurchase` REAL,
+                        `maximumDiscount` REAL,
+                        `isPriority` INTEGER NOT NULL DEFAULT 0,
+                        `paymentMethod` TEXT,
+                        `usageLimit` INTEGER,
+                        `usageCount` INTEGER NOT NULL DEFAULT 0,
+                        `reminderDate` INTEGER,
+                        `platformType` TEXT,
+                        `rating` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                """.trimIndent())
+
+                database.execSQL("""
+                    INSERT INTO `coupons_new` (
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`, `rating`, `createdAt`, `updatedAt`
+                    )
+                    SELECT
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`, `rating`, `createdAt`, `updatedAt`
+                    FROM `coupons`
+                """.trimIndent())
+
+                database.execSQL("DROP TABLE `coupons`")
+                database.execSQL("ALTER TABLE `coupons_new` RENAME TO `coupons`")
+
+                android.util.Log.d("CouponDatabase", "✅ Migration 7→8 complete: offerText column removed")
+            }
+        }
+
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
-                    "ALTER TABLE coupons ADD COLUMN extractionConfidenceBreakdown TEXT NOT NULL DEFAULT '{}'"
+                    """
+                    CREATE TABLE IF NOT EXISTS `coupons_v9` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `storeName` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `normalizedDescription` TEXT,
+                        `expiryDate` INTEGER,
+                        `cashbackAmount` REAL NOT NULL,
+                        `redeemCode` TEXT,
+                        `cashbackType` TEXT,
+                        `cashbackValueNum` REAL,
+                        `cashbackCurrency` TEXT,
+                        `imageUri` TEXT,
+                        `imagePhash` TEXT,
+                        `imageSignature` TEXT,
+                        `category` TEXT,
+                        `status` TEXT,
+                        `minimumPurchase` REAL,
+                        `maximumDiscount` REAL,
+                        `isPriority` INTEGER NOT NULL DEFAULT 0,
+                        `paymentMethod` TEXT,
+                        `usageLimit` INTEGER,
+                        `usageCount` INTEGER NOT NULL DEFAULT 0,
+                        `reminderDate` INTEGER,
+                        `platformType` TEXT,
+                        `extractionQualityScore` INTEGER,
+                        `extractionConfidenceBreakdown` TEXT NOT NULL,
+                        `extractionStage` TEXT,
+                        `extractionRunPath` TEXT,
+                        `extractionTimestamp` INTEGER,
+                        `rating` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+
+                database.execSQL(
+                    """
+                    INSERT INTO `coupons_v9` (
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`, `extractionQualityScore`, `extractionConfidenceBreakdown`,
+                        `extractionStage`, `extractionRunPath`, `extractionTimestamp`, `rating`, `createdAt`, `updatedAt`
+                    )
+                    SELECT
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`,
+                        NULL AS `extractionQualityScore`,
+                        '{}' AS `extractionConfidenceBreakdown`,
+                        NULL AS `extractionStage`,
+                        NULL AS `extractionRunPath`,
+                        COALESCE(`updatedAt`, `createdAt`) AS `extractionTimestamp`,
+                        `rating`, `createdAt`, `updatedAt`
+                    FROM `coupons`
+                    """.trimIndent()
+                )
+
+                database.execSQL("DROP TABLE `coupons`")
+                database.execSQL("ALTER TABLE `coupons_v9` RENAME TO `coupons`")
+            }
+        }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `coupons_v10` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `storeName` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `normalizedDescription` TEXT,
+                        `expiryDate` INTEGER,
+                        `cashbackAmount` REAL NOT NULL,
+                        `redeemCode` TEXT,
+                        `cashbackType` TEXT,
+                        `cashbackValueNum` REAL,
+                        `cashbackCurrency` TEXT,
+                        `imageUri` TEXT,
+                        `imagePhash` TEXT,
+                        `imageSignature` TEXT,
+                        `category` TEXT,
+                        `status` TEXT,
+                        `minimumPurchase` REAL,
+                        `maximumDiscount` REAL,
+                        `isPriority` INTEGER NOT NULL DEFAULT 0,
+                        `paymentMethod` TEXT,
+                        `usageLimit` INTEGER,
+                        `usageCount` INTEGER NOT NULL DEFAULT 0,
+                        `reminderDate` INTEGER,
+                        `platformType` TEXT,
+                        `extractionQualityScore` INTEGER,
+                        `extractionConfidenceBreakdown` TEXT NOT NULL,
+                        `extractionStage` TEXT,
+                        `extractionRunPath` TEXT,
+                        `extractionTimestamp` INTEGER,
+                        `rating` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `needsAttention` INTEGER NOT NULL DEFAULT 0,
+                        `storeNameSource` TEXT,
+                        `storeNameEvidence` TEXT NOT NULL DEFAULT '[]'
+                    )
+                    """.trimIndent()
+                )
+
+                database.execSQL(
+                    """
+                    INSERT INTO `coupons_v10` (
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`, `extractionQualityScore`, `extractionConfidenceBreakdown`,
+                        `extractionStage`, `extractionRunPath`, `extractionTimestamp`, `rating`, `createdAt`, `updatedAt`,
+                        `needsAttention`, `storeNameSource`, `storeNameEvidence`
+                    )
+                    SELECT
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`,
+                        `extractionQualityScore`, `extractionConfidenceBreakdown`,
+                        `extractionStage`, `extractionRunPath`, `extractionTimestamp`, `rating`, `createdAt`, `updatedAt`,
+                        0 AS `needsAttention`,
+                        NULL AS `storeNameSource`,
+                        '[]' AS `storeNameEvidence`
+                    FROM `coupons`
+                    """.trimIndent()
+                )
+
+                database.execSQL("DROP TABLE `coupons`")
+                database.execSQL("ALTER TABLE `coupons_v10` RENAME TO `coupons`")
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `coupons_v11` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `storeName` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `normalizedDescription` TEXT,
+                        `expiryDate` INTEGER,
+                        `cashbackAmount` REAL NOT NULL,
+                        `redeemCode` TEXT,
+                        `cashbackType` TEXT,
+                        `cashbackValueNum` REAL,
+                        `cashbackCurrency` TEXT,
+                        `imageUri` TEXT,
+                        `imagePhash` TEXT,
+                        `imageSignature` TEXT,
+                        `category` TEXT,
+                        `status` TEXT,
+                        `minimumPurchase` REAL,
+                        `maximumDiscount` REAL,
+                        `isPriority` INTEGER NOT NULL DEFAULT 0,
+                        `paymentMethod` TEXT,
+                        `usageLimit` INTEGER,
+                        `usageCount` INTEGER NOT NULL DEFAULT 0,
+                        `reminderDate` INTEGER,
+                        `platformType` TEXT,
+                        `extractionQualityScore` INTEGER,
+                        `extractionConfidenceBreakdown` TEXT NOT NULL,
+                        `extractionStage` TEXT,
+                        `extractionRunPath` TEXT,
+                        `extractionTimestamp` INTEGER,
+                        `rating` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `needsAttention` INTEGER NOT NULL DEFAULT 0,
+                        `storeNameSource` TEXT,
+                        `storeNameEvidence` TEXT NOT NULL DEFAULT '[]'
+                    )
+                    """.trimIndent()
+                )
+
+                database.execSQL(
+                    """
+                    INSERT INTO `coupons_v11` (
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`, `extractionQualityScore`, `extractionConfidenceBreakdown`,
+                        `extractionStage`, `extractionRunPath`, `extractionTimestamp`, `rating`, `createdAt`, `updatedAt`,
+                        `needsAttention`, `storeNameSource`, `storeNameEvidence`
+                    )
+                    SELECT
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `cashbackAmount`, `redeemCode`, `cashbackType`, `cashbackValueNum`, `cashbackCurrency`,
+                        `imageUri`, `imagePhash`, `imageSignature`, `category`, `status`,
+                        `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`, `usageLimit`,
+                        `usageCount`, `reminderDate`, `platformType`,
+                        `extractionQualityScore`, `extractionConfidenceBreakdown`,
+                        `extractionStage`, `extractionRunPath`, `extractionTimestamp`, `rating`, `createdAt`, `updatedAt`,
+                        `needsAttention`, `storeNameSource`, COALESCE(`storeNameEvidence`, '[]')
+                    FROM `coupons`
+                    """.trimIndent()
+                )
+
+                database.execSQL("DROP TABLE `coupons`")
+                database.execSQL("ALTER TABLE `coupons_v11` RENAME TO `coupons`")
+
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `validator_feedback_v1` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `eventType` TEXT NOT NULL,
+                        `fieldOutcomesJson` TEXT NOT NULL,
+                        `rationaleJson` TEXT NOT NULL,
+                        `metadataJson` TEXT NOT NULL,
+                        `ocrHash` TEXT,
+                        `ocrPreview` TEXT,
+                        `timestamp` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_validator_feedback_v1_timestamp` ON `validator_feedback_v1` (`timestamp` DESC)"
+                )
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_validator_feedback_v1_eventType` ON `validator_feedback_v1` (`eventType`)"
                 )
             }
         }
+    }
+}
+
+object Converters {
+    private val gson: Gson = Gson()
+    private val floatMapType = object : TypeToken<Map<String, Float>>() {}.type
+    private val stringListType = object : TypeToken<List<String>>() {}.type
+
+    @TypeConverter
+    fun fromTimestamp(value: Long?): java.util.Date? {
+        return value?.let { java.util.Date(it) }
+    }
+
+    @TypeConverter
+    fun dateToTimestamp(date: java.util.Date?): Long? {
+        return date?.time
+    }
+
+    @TypeConverter
+    fun fromConfidenceJson(value: String?): Map<String, Float> {
+        if (value.isNullOrBlank()) {
+            return emptyMap()
+        }
+        return gson.fromJson(value, floatMapType)
+    }
+
+    @TypeConverter
+    fun confidenceMapToJson(map: Map<String, Float>?): String {
+        if (map == null || map.isEmpty()) {
+            return "{}"
+        }
+        return gson.toJson(map, floatMapType)
+    }
+
+    @TypeConverter
+    fun fromStringListJson(value: String?): List<String> {
+        if (value.isNullOrBlank()) {
+            return emptyList()
+        }
+        return gson.fromJson(value, stringListType)
+    }
+
+    @TypeConverter
+    fun stringListToJson(values: List<String>?): String? {
+        return gson.toJson(values ?: emptyList<String>(), stringListType)
     }
 }

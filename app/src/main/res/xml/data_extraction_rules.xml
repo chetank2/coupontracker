@@ -1,20 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <!-- Exclude model directory from cloud backup (too large) -->
-        <exclude domain="file" path="models/"/>
-        <!-- Exclude cache -->
-        <exclude domain="cache" path="."/>
         <!-- Include database and preferences -->
         <include domain="database" path="."/>
         <include domain="sharedpref" path="."/>
     </cloud-backup>
     
     <device-transfer>
-        <!-- Exclude model directory from device transfer -->
-        <exclude domain="file" path="models/"/>
-        <!-- Exclude cache -->
-        <exclude domain="cache" path="."/>
         <!-- Include database and preferences -->
         <include domain="database" path="."/>
         <include domain="sharedpref" path="."/>

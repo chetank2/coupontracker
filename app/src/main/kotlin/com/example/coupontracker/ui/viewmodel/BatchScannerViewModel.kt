@@ -3,11 +3,13 @@ package com.example.coupontracker.ui.viewmodel
 import android.app.Application
 import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.util.AnalyticsTracker
 import com.example.coupontracker.util.CouponInputManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.Locale
 import javax.inject.Inject
 import java.util.Locale
 
@@ -31,7 +34,8 @@ class BatchScannerViewModel @Inject constructor(
     private val ocrEngine: com.example.coupontracker.ocr.OcrEngine,  // Tesseract OCR engine
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Bitmap memory management
     private val localLlmOcrService: com.example.coupontracker.util.LocalLlmOcrService,  // V2: LLM service
-    private val universalExtractionService: com.example.coupontracker.universal.UniversalExtractionService  // V2: Universal extraction
+    private val universalExtractionService: com.example.coupontracker.universal.UniversalExtractionService,  // V2: Universal extraction
+    private val analyticsTracker: AnalyticsTracker
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(BatchScannerUiState())
@@ -42,9 +46,13 @@ class BatchScannerViewModel @Inject constructor(
     private val detectorInitializationResult = initializeTwoStageDetector()
     private val twoStageDetector = detectorInitializationResult.detector
     private val detectorInitErrorMessage = detectorInitializationResult.errorMessage
+    
+    // V2.1: Hybrid detector for multi-coupon per image detection
+    private val hybridDetector = com.example.coupontracker.ml.HybridCouponDetector(context, ocrEngine)
 
     companion object {
         private const val TAG = "BatchScannerViewModel"
+        private const val STRATEGY_SURFACE_BATCH = "batch_capture"
     }
 
     private data class DetectorInitializationResult(
@@ -74,8 +82,22 @@ class BatchScannerViewModel @Inject constructor(
 
         detectorInitErrorMessage?.let { error ->
             val message = "Multi-coupon detection unavailable: $error"
-            Log.e(TAG, message, detectorInitializationResult.exception)
-            updateState { it.copy(error = message) }
+            val anyDetectorAvailable = runCatching { hybridDetector.isPartiallyAvailable() }
+                .onFailure { throwable ->
+                    Log.e(TAG, "Failed to evaluate hybrid detector availability", throwable)
+                }
+                .getOrDefault(false)
+
+            if (anyDetectorAvailable) {
+                Log.w(
+                    TAG,
+                    "$message - falling back to OCR anchor segmentation for batch scanning",
+                    detectorInitializationResult.exception
+                )
+            } else {
+                Log.e(TAG, message, detectorInitializationResult.exception)
+                updateState { it.copy(error = message) }
+            }
         }
     }
 
@@ -84,9 +106,33 @@ class BatchScannerViewModel @Inject constructor(
      * @param uris List of image URIs to add
      */
     fun addImages(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+
         val currentImages = _uiState.value.selectedImages.toMutableList()
-        currentImages.addAll(uris)
-        _uiState.value = _uiState.value.copy(selectedImages = currentImages)
+        val existingUris = currentImages.map { it.uri.toString() }.toMutableSet()
+        val newImages = mutableListOf<SelectedImage>()
+
+        for (uri in uris) {
+            val uriKey = uri.toString()
+            if (existingUris.contains(uriKey) || newImages.any { it.uri.toString() == uriKey }) {
+                Log.d(TAG, "Skipping duplicate image uri=$uriKey")
+                continue
+            }
+
+            val selectionOrder = currentImages.size + newImages.size + 1
+            val selectedImage = createSelectedImage(
+                uri = uri,
+                selectionOrder = selectionOrder,
+                explicitMimeType = null
+            )
+
+            newImages.add(selectedImage)
+        }
+
+        if (newImages.isNotEmpty()) {
+            currentImages.addAll(newImages)
+            _uiState.value = _uiState.value.copy(selectedImages = currentImages)
+        }
     }
 
     /**
@@ -95,7 +141,20 @@ class BatchScannerViewModel @Inject constructor(
      */
     fun addPdf(uri: Uri) {
         val currentImages = _uiState.value.selectedImages.toMutableList()
-        currentImages.add(uri)
+        val uriKey = uri.toString()
+        if (currentImages.any { it.uri.toString() == uriKey }) {
+            Log.d(TAG, "Skipping duplicate PDF uri=$uriKey")
+            return
+        }
+
+        val selectionOrder = currentImages.size + 1
+        val selectedImage = createSelectedImage(
+            uri = uri,
+            selectionOrder = selectionOrder,
+            explicitMimeType = "application/pdf"
+        )
+
+        currentImages.add(selectedImage)
         _uiState.value = _uiState.value.copy(selectedImages = currentImages)
     }
 
@@ -106,8 +165,14 @@ class BatchScannerViewModel @Inject constructor(
     fun removeImage(index: Int) {
         val currentImages = _uiState.value.selectedImages.toMutableList()
         if (index in currentImages.indices) {
-            currentImages.removeAt(index)
-            _uiState.value = _uiState.value.copy(selectedImages = currentImages)
+            val removed = currentImages.removeAt(index)
+            val updatedStatuses = _uiState.value.imageProcessingStatuses.filterNot {
+                it.image.uri.toString() == removed.uri.toString()
+            }
+            _uiState.value = _uiState.value.copy(
+                selectedImages = currentImages,
+                imageProcessingStatuses = updatedStatuses
+            )
         }
     }
 
@@ -115,18 +180,39 @@ class BatchScannerViewModel @Inject constructor(
      * Clear all selected images
      */
     fun clearImages() {
-        _uiState.value = _uiState.value.copy(selectedImages = emptyList())
+        _uiState.value = _uiState.value.copy(
+            selectedImages = emptyList(),
+            processedCoupons = emptyList(),
+            imageProcessingStatuses = emptyList(),
+            processedCount = 0,
+            currentlyProcessingImage = null,
+            error = null
+        )
     }
     
     /**
-     * Check if TwoStageDetector is available for batch scanning
-     * Returns false if detector is null or models are not loaded
+     * Check if batch scanning is supported on this build. We consider the
+     * feature available when either the dedicated two-stage detector is ready
+     * or the OCR anchor fallback path can handle segmentation.
      */
-    fun isTwoStageDetectorAvailable(): Boolean {
+    fun isBatchScanningSupported(): Boolean {
         return try {
-            twoStageDetector != null && twoStageDetector?.getMemoryStats() != null
+            hybridDetector.isPartiallyAvailable()
         } catch (e: Exception) {
-            Log.e(TAG, "Error checking TwoStageDetector availability", e)
+            Log.e(TAG, "Error checking batch scanning support", e)
+            false
+        }
+    }
+
+    /**
+     * Indicates whether we're currently relying on the OCR-only fallback for
+     * coupon segmentation (i.e., two-stage models are unavailable).
+     */
+    fun isOcrFallbackActive(): Boolean {
+        return try {
+            hybridDetector.isOcrOnlyMode()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking OCR fallback state", e)
             false
         }
     }
@@ -142,75 +228,138 @@ class BatchScannerViewModel @Inject constructor(
                 val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
                 Log.d(TAG, "Batch: Starting with strategy ${strategy.name}, ${_uiState.value.selectedImages.size} images")
 
-                if (twoStageDetector == null) {
+                if (twoStageDetector == null && !hybridDetector.isPartiallyAvailable()) {
                     val message = detectorInitErrorMessage ?: "Multi-coupon detector is unavailable."
-                    Log.e(TAG, "Batch: TwoStageDetector unavailable - aborting processing")
+                    Log.e(TAG, "Batch: No detector or fallback available - aborting processing")
                     updateState { it.copy(isProcessing = false, error = message) }
                     return@launch
+                } else if (twoStageDetector == null) {
+                    Log.w(TAG, "Batch: TwoStageDetector unavailable - using OCR anchor fallback")
                 }
 
-                updateState { it.copy(isProcessing = true, processedCount = 0, error = null) }
+                updateState {
+                    it.copy(
+                        isProcessing = true,
+                        processedCount = 0,
+                        error = null,
+                        imageProcessingStatuses = emptyList(),
+                        currentlyProcessingImage = null
+                    )
+                }
 
                 val images = _uiState.value.selectedImages
                 val processedCoupons = mutableListOf<Coupon>()
                 var failedCount = 0
+                val imageStatuses = mutableListOf<ImageProcessingStatus>()
 
-                for ((index, uri) in images.withIndex()) {
+                for ((index, selectedImage) in images.withIndex()) {
+                    val uri = selectedImage.uri
+                    updateState { it.copy(currentlyProcessingImage = selectedImage) }
                     var bitmap: android.graphics.Bitmap? = null
                     try {
+                        if (!selectedImage.isImage()) {
+                            Log.w(TAG, "Batch: Unsupported file type ${selectedImage.mimeType} for uri=$uri")
+                            failedCount++
+                            imageStatuses.add(
+                                ImageProcessingStatus(
+                                    image = selectedImage,
+                                    success = false,
+                                    message = "Unsupported file type"
+                                )
+                            )
+                            continue
+                        }
+
                         // Load and track bitmap
                         bitmap = android.graphics.BitmapFactory.decodeStream(
                             context.contentResolver.openInputStream(uri)
                         )
-                        
+
                         if (bitmap == null) {
                             Log.e(TAG, "Batch: Failed to decode bitmap ${index + 1}")
                             failedCount++
+                            imageStatuses.add(
+                                ImageProcessingStatus(
+                                    image = selectedImage,
+                                    success = false,
+                                    message = "Unable to open image"
+                                )
+                            )
                             continue
                         }
                         
                         bitmapManager.trackBitmap(bitmap)
                         
-                        // V2: Route through selected strategy (NOT CouponInputManager!)
-                        val coupon = when (strategy) {
-                            com.example.coupontracker.util.ExtractionStrategy.LEGACY -> 
-                                processWithLegacyPath(uri, bitmap)
-                            com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST -> 
-                                processWithLlmFirstPath(uri, bitmap)
-                            com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST -> 
-                                processWithOcrFirstPath(uri, bitmap)
-                            com.example.coupontracker.util.ExtractionStrategy.HYBRID -> 
-                                processWithHybridPath(uri, bitmap)
+                        // V2.1: Detect multiple coupons per image using hybrid detector
+                        val imageCoupons = detectAndExtractMultipleCoupons(uri, bitmap, strategy)
+                        
+                        if (imageCoupons.isNotEmpty()) {
+                            processedCoupons.addAll(imageCoupons)
+                            Log.d(TAG, "Batch: Extracted ${imageCoupons.size} coupon(s) from image ${index + 1}/${images.size}")
+                            imageStatuses.add(
+                                ImageProcessingStatus(
+                                    image = selectedImage,
+                                    success = true,
+                                    message = null,
+                                    couponsFound = imageCoupons.size
+                                )
+                            )
+                        } else {
+                            Log.w(TAG, "Batch: No coupons extracted from image ${index + 1}/${images.size}")
+                            failedCount++
+                            imageStatuses.add(
+                                ImageProcessingStatus(
+                                    image = selectedImage,
+                                    success = false,
+                                    message = "No coupons detected"
+                                )
+                            )
                         }
-                        
-                        processedCoupons.add(coupon)
-                        Log.d(TAG, "Batch: Successfully processed ${index + 1}/${images.size} via ${strategy.name}")
-                        
+
                     } catch (e: Exception) {
                         Log.e(TAG, "Batch: Error processing ${index + 1}/${images.size}", e)
                         failedCount++
+                        imageStatuses.add(
+                            ImageProcessingStatus(
+                                image = selectedImage,
+                                success = false,
+                                message = e.message ?: "Unexpected error"
+                            )
+                        )
                     } finally {
-                        bitmap?.let { 
+                        bitmap?.let {
                             bitmapManager.releaseBitmap(it)
                         }
                     }
 
                     // Update progress
-                    updateState { it.copy(processedCount = index + 1) }
+                    updateState {
+                        it.copy(
+                            processedCount = index + 1,
+                            currentlyProcessingImage = null,
+                            imageProcessingStatuses = imageStatuses.toList()
+                        )
+                    }
                 }
 
                 // Show success or partial success message
+                val failedImages = imageStatuses.filterNot { it.success }
                 val statusMessage = when {
                     failedCount == 0 -> null
-                    failedCount < images.size -> "Processed ${images.size - failedCount} of ${images.size} images. Some images could not be processed."
-                    else -> "Failed to process any images."
+                    failedCount < images.size -> {
+                        val failedNames = failedImages.joinToString { it.image.displayName }
+                        "Processed ${images.size - failedCount} of ${images.size} files. Issues with: $failedNames"
+                    }
+                    else -> "Failed to process any files."
                 }
 
                 updateState {
                     it.copy(
                         isProcessing = false,
                         processedCoupons = processedCoupons,
-                        error = statusMessage
+                        error = statusMessage,
+                        imageProcessingStatuses = imageStatuses.toList(),
+                        currentlyProcessingImage = null
                     )
                 }
             } catch (e: Exception) {
@@ -218,7 +367,8 @@ class BatchScannerViewModel @Inject constructor(
                 updateState {
                     it.copy(
                         isProcessing = false,
-                        error = "Error processing images: ${e.message}"
+                        error = "Error processing images: ${e.message}",
+                        currentlyProcessingImage = null
                     )
                 }
             }
@@ -283,6 +433,9 @@ class BatchScannerViewModel @Inject constructor(
     fun resetProcessedCoupons() {
         _uiState.value = _uiState.value.copy(
             processedCoupons = emptyList(),
+            imageProcessingStatuses = emptyList(),
+            processedCount = 0,
+            currentlyProcessingImage = null,
             error = null
         )
     }
@@ -302,8 +455,15 @@ class BatchScannerViewModel @Inject constructor(
      */
     private suspend fun processWithLegacyPath(uri: Uri, bitmap: android.graphics.Bitmap): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val detector = twoStageDetector
-                ?: throw IllegalStateException(detectorInitErrorMessage ?: "Multi-coupon detector is unavailable.")
+            val detector = twoStageDetector ?: run {
+                Log.w(TAG, "LEGACY path requested but TwoStageDetector is unavailable. Using OCR fallback instead.")
+                return@withContext processWithOcrFirstPath(
+                    uri = uri,
+                    bitmap = bitmap,
+                    allowLlmFallback = true,
+                    allowLegacyFallback = false
+                )
+            }
 
             // Run two-stage detection
             val couponInstances = detector.detectMultiCoupons(bitmap)
@@ -350,8 +510,7 @@ class BatchScannerViewModel @Inject constructor(
             updatedAt = java.util.Date(),
             cashbackType = com.example.coupontracker.data.model.CashbackType.TEXT.name.lowercase(),
             cashbackValueNum = 0.0,
-            cashbackCurrency = null,
-            offerText = null
+            cashbackCurrency = null
         )
     }
     
@@ -360,9 +519,10 @@ class BatchScannerViewModel @Inject constructor(
      * @param allowOcrFallback If true, can fall back to OCR. If false, falls back to LEGACY to prevent infinite loops.
      */
     private suspend fun processWithLlmFirstPath(
-        uri: Uri, 
+        uri: Uri,
         bitmap: android.graphics.Bitmap,
-        allowOcrFallback: Boolean = true
+        allowOcrFallback: Boolean = true,
+        allowLegacyFallback: Boolean = true
     ): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
             val llmResult = localLlmOcrService.processCouponImageTyped(bitmap)
@@ -379,11 +539,26 @@ class BatchScannerViewModel @Inject constructor(
                     if (allowOcrFallback) {
                         // First fallback: Try OCR (but don't allow it to call back to LLM)
                         Log.d(TAG, "LLM_FIRST failed, falling back to OCR_FIRST (terminal)")
-                        processWithOcrFirstPath(uri, bitmap, allowLlmFallback = false)
+                        processWithOcrFirstPath(
+                            uri = uri,
+                            bitmap = bitmap,
+                            allowLlmFallback = false,
+                            allowLegacyFallback = allowLegacyFallback
+                        )
                     } else {
-                        // Terminal fallback: Use LEGACY two-stage detection
+                        // Terminal fallback: Use LEGACY two-stage detection if available
                         Log.d(TAG, "LLM_FIRST failed with no OCR fallback allowed, using LEGACY")
-                        processWithLegacyPath(uri, bitmap)
+                        if (allowLegacyFallback) {
+                            logStrategyExecution(
+                                requested = com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST,
+                                executed = "legacy",
+                                reason = "llm_terminal_failure"
+                            )
+                            processWithLegacyPath(uri, bitmap)
+                        } else {
+                            Log.w(TAG, "LLM_FIRST fallback to LEGACY disabled, returning placeholder coupon")
+                            buildPlaceholderCoupon(uri)
+                        }
                     }
                 }
             }
@@ -395,9 +570,10 @@ class BatchScannerViewModel @Inject constructor(
      * @param allowLlmFallback If true, can fall back to LLM. If false, falls back to LEGACY to prevent infinite loops.
      */
     private suspend fun processWithOcrFirstPath(
-        uri: Uri, 
+        uri: Uri,
         bitmap: android.graphics.Bitmap,
-        allowLlmFallback: Boolean = true
+        allowLlmFallback: Boolean = true,
+        allowLegacyFallback: Boolean = true
     ): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             val ocrResult = multiEngineOCR.processImage(bitmap)
@@ -415,11 +591,26 @@ class BatchScannerViewModel @Inject constructor(
                         if (allowLlmFallback) {
                             // First fallback: Try LLM (but don't allow it to call back to OCR)
                             Log.d(TAG, "OCR_FIRST low confidence, falling back to LLM_FIRST (terminal)")
-                            processWithLlmFirstPath(uri, bitmap, allowOcrFallback = false)
+                            processWithLlmFirstPath(
+                                uri = uri,
+                                bitmap = bitmap,
+                                allowOcrFallback = false,
+                                allowLegacyFallback = allowLegacyFallback
+                            )
                         } else {
                             // Terminal fallback: Use LEGACY two-stage detection
                             Log.d(TAG, "OCR_FIRST failed with no LLM fallback allowed, using LEGACY")
-                            processWithLegacyPath(uri, bitmap)
+                            if (allowLegacyFallback) {
+                                logStrategyExecution(
+                                    requested = com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST,
+                                    executed = "legacy",
+                                    reason = "ocr_low_confidence"
+                                )
+                                processWithLegacyPath(uri, bitmap)
+                            } else {
+                                Log.w(TAG, "OCR_FIRST fallback to LEGACY disabled, returning placeholder coupon")
+                                buildPlaceholderCoupon(uri)
+                            }
                         }
                     }
                 }
@@ -427,11 +618,26 @@ class BatchScannerViewModel @Inject constructor(
                     if (allowLlmFallback) {
                         // First fallback: Try LLM (but don't allow it to call back to OCR)
                         Log.d(TAG, "OCR_FIRST error, falling back to LLM_FIRST (terminal)")
-                        processWithLlmFirstPath(uri, bitmap, allowOcrFallback = false)
+                        processWithLlmFirstPath(
+                            uri = uri,
+                            bitmap = bitmap,
+                            allowOcrFallback = false,
+                            allowLegacyFallback = allowLegacyFallback
+                        )
                     } else {
                         // Terminal fallback: Use LEGACY two-stage detection
                         Log.d(TAG, "OCR_FIRST failed with no LLM fallback allowed, using LEGACY")
-                        processWithLegacyPath(uri, bitmap)
+                        if (allowLegacyFallback) {
+                            logStrategyExecution(
+                                requested = com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST,
+                                executed = "legacy",
+                                reason = "ocr_exception"
+                            )
+                            processWithLegacyPath(uri, bitmap)
+                        } else {
+                            Log.w(TAG, "OCR_FIRST fallback to LEGACY disabled, returning placeholder coupon")
+                            buildPlaceholderCoupon(uri)
+                        }
                     }
                 }
             }
@@ -485,12 +691,52 @@ class BatchScannerViewModel @Inject constructor(
                 else -> {
                     // Both failed - use LEGACY
                     Log.d(TAG, "HYBRID: Both failed, falling back to LEGACY")
+                    logStrategyExecution(
+                        requested = com.example.coupontracker.util.ExtractionStrategy.HYBRID,
+                        executed = "legacy",
+                        reason = "hybrid_no_success"
+                    )
                     processWithLegacyPath(uri, bitmap)
                 }
             }
         }
     }
-    
+
+    private suspend fun logStrategyExecution(
+        requested: com.example.coupontracker.util.ExtractionStrategy,
+        executed: String,
+        reason: String? = null
+    ) {
+        val normalizedExecuted = executed.lowercase(Locale.getDefault())
+        val message = buildString {
+            append("Strategy[batch]: requested=")
+            append(requested.name)
+            append(", executed=")
+            append(normalizedExecuted)
+            if (!reason.isNullOrBlank()) {
+                append(", reason=")
+                append(reason)
+            }
+        }
+
+        Log.i(TAG, message)
+        analyticsTracker.trackStrategyExecution(
+            STRATEGY_SURFACE_BATCH,
+            requested,
+            normalizedExecuted,
+            reason
+        )
+
+        if (!requested.name.equals(normalizedExecuted, ignoreCase = true) && !reason.isNullOrBlank()) {
+            analyticsTracker.trackStrategyFallback(
+                STRATEGY_SURFACE_BATCH,
+                requested,
+                normalizedExecuted,
+                reason
+            )
+        }
+    }
+
     /**
      * Fuse LLM and OCR results by choosing best field per confidence
      * This is the REAL HYBRID fusion logic (mirrors ScannerViewModel)
@@ -545,17 +791,12 @@ class BatchScannerViewModel @Inject constructor(
                 Tuple4(0.0, 0.0, com.example.coupontracker.data.model.CashbackType.TEXT.name.lowercase(), null)
             }
         
-        // Description: combine both sources
-        val description = when {
-            llmInfo.description.isNotBlank() && ocrCoupon.description.isNotBlank() ->
-                "${llmInfo.description} (Hybrid: LLM + OCR)"
-            llmInfo.description.isNotBlank() -> llmInfo.description
-            ocrCoupon.description.isNotBlank() -> ocrCoupon.description
-            else -> "Extracted via Hybrid method"
-        }
-
-        val confidenceBreakdown = mergeConfidenceBreakdown(llmConf, ocrResult)
-
+        // Description: prefer LLM verbatim text, fall back to OCR text
+        val description = listOf(llmInfo.description, ocrCoupon.description)
+            .map { it.trim() }
+            .firstOrNull { it.isNotBlank() }
+            ?: "Coupon offer"
+        
         return Coupon(
             id = 0,
             storeName = storeName,
@@ -570,9 +811,7 @@ class BatchScannerViewModel @Inject constructor(
             updatedAt = java.util.Date(),
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
-            cashbackCurrency = cashbackCurrency,
-            offerText = null,
-            extractionConfidenceBreakdown = confidenceBreakdown
+            cashbackCurrency = cashbackCurrency
         )
     }
 
@@ -854,9 +1093,7 @@ class BatchScannerViewModel @Inject constructor(
             // V2: Typed cashback fields
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
-            cashbackCurrency = cashbackCurrency,
-            offerText = null,
-            extractionConfidenceBreakdown = confidenceBreakdown.ifEmpty { emptyMap() }
+            cashbackCurrency = cashbackCurrency
         )
     }
     
@@ -894,9 +1131,7 @@ class BatchScannerViewModel @Inject constructor(
             // V2: Typed cashback fields (CRITICAL - was missing!)
             cashbackType = cashbackType,
             cashbackValueNum = cashbackValueNum,
-            cashbackCurrency = cashbackCurrency,
-            offerText = null,
-            extractionConfidenceBreakdown = fieldConfidences.ifEmpty { emptyMap() }
+            cashbackCurrency = cashbackCurrency
         )
     }
 
@@ -910,16 +1145,287 @@ class BatchScannerViewModel @Inject constructor(
             Log.e(TAG, "Error cleaning up TwoStageDetector", e)
         }
     }
+    
+    /**
+     * V2.1: Detect and extract multiple coupons from a single image
+     * Uses HybridCouponDetector to find coupon regions, then extracts each
+     */
+    private suspend fun detectAndExtractMultipleCoupons(
+        uri: Uri,
+        bitmap: android.graphics.Bitmap,
+        strategy: com.example.coupontracker.util.ExtractionStrategy
+    ): List<Coupon> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+        
+        Log.d(TAG, "Detecting multiple coupons in image...")
+        
+        try {
+            // Step 1: Run OCR on full image
+            val ocrResult = multiEngineOCR.processImage(bitmap)
+            
+            if (ocrResult !is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success) {
+                Log.w(TAG, "OCR failed, falling back to single coupon extraction")
+                return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+            }
+            
+            // Step 2: Detect coupon regions using hybrid detector
+            val couponRegions = hybridDetector.detectCoupons(bitmap, ocrResult)
+            
+            Log.d(TAG, "Hybrid detector found ${couponRegions.size} coupon region(s)")
+            
+            // Step 3: If only one region or full-image fallback, use standard extraction
+            if (couponRegions.size == 1 && couponRegions[0].source == com.example.coupontracker.ml.HybridCouponDetector.DetectionSource.FALLBACK) {
+                Log.d(TAG, "Single coupon detected, using standard extraction")
+                return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+            }
+            
+            // Step 4: Extract each detected coupon region
+            val extractedCoupons = mutableListOf<Coupon>()
+            
+            for ((regionIndex, region) in couponRegions.withIndex()) {
+                try {
+                    Log.d(TAG, "Extracting coupon region ${regionIndex + 1}/${couponRegions.size}")
+                    
+                    // Crop bitmap to region
+                    val regionBitmap = cropBitmapToRegion(bitmap, region.boundingBox)
+                    
+                    if (regionBitmap == null) {
+                        Log.w(TAG, "Failed to crop region ${regionIndex + 1}, skipping")
+                        continue
+                    }
+                    
+                    bitmapManager.trackBitmap(regionBitmap)
+                    
+                    try {
+                        // Extract coupon from cropped region
+                        val coupon = extractCouponFromRegion(
+                            regionBitmap = regionBitmap,
+                            region = region,
+                            strategy = strategy,
+                            uri = uri
+                        )
+                        
+                        extractedCoupons.add(coupon)
+                        Log.d(TAG, "Successfully extracted coupon ${regionIndex + 1}: store='${coupon.storeName}', code='${coupon.redeemCode}'")
+                        
+                    } finally {
+                        bitmapManager.releaseBitmap(regionBitmap)
+                    }
+                    
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error extracting region ${regionIndex + 1}", e)
+                    // Continue with next region
+                }
+            }
+            
+            // If no coupons extracted from regions, fallback to single coupon
+            if (extractedCoupons.isEmpty()) {
+                Log.w(TAG, "No coupons extracted from regions, falling back to single coupon extraction")
+                return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+            }
+            
+            return@withContext extractedCoupons
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in multi-coupon detection", e)
+            // Fallback to single coupon extraction
+            return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+        }
+    }
+    
+    /**
+     * Extract single coupon using standard strategy
+     */
+    private suspend fun extractSingleCoupon(
+        uri: Uri,
+        bitmap: android.graphics.Bitmap,
+        strategy: com.example.coupontracker.util.ExtractionStrategy
+    ): Coupon {
+        return when (strategy) {
+            com.example.coupontracker.util.ExtractionStrategy.LEGACY -> {
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = strategy.name.lowercase(Locale.getDefault())
+                )
+                processWithLegacyPath(uri, bitmap)
+            }
+            com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST -> {
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = strategy.name.lowercase(Locale.getDefault())
+                )
+                processWithLlmFirstPath(uri, bitmap)
+            }
+            com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST -> {
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = strategy.name.lowercase(Locale.getDefault())
+                )
+                processWithOcrFirstPath(uri, bitmap)
+            }
+            com.example.coupontracker.util.ExtractionStrategy.HYBRID -> {
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = strategy.name.lowercase(Locale.getDefault())
+                )
+                processWithHybridPath(uri, bitmap)
+            }
+        }
+    }
+    
+    /**
+     * Extract coupon from a detected region
+     */
+    private suspend fun extractCouponFromRegion(
+        regionBitmap: android.graphics.Bitmap,
+        region: com.example.coupontracker.ml.HybridCouponDetector.CouponRegion,
+        strategy: com.example.coupontracker.util.ExtractionStrategy,
+        uri: Uri
+    ): Coupon {
+        // If region already has OCR text, use it directly with LLM
+        if (region.ocrText.isNotBlank() && strategy in listOf(
+            com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST,
+            com.example.coupontracker.util.ExtractionStrategy.HYBRID
+        )) {
+            try {
+                Log.d(TAG, "Using pre-extracted OCR text (${region.ocrText.length} chars) for LLM extraction")
+                
+                // Use LLM with pre-extracted OCR text
+                val llmResult = localLlmOcrService.processCouponImageTyped(regionBitmap)
+                
+                if (llmResult is com.example.coupontracker.util.ExtractResult.Good) {
+                    return convertExtractResultToCoupon(llmResult, uri)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "LLM extraction with pre-extracted OCR failed: ${e.message}")
+            }
+        }
+        
+        // Fallback: extract using standard strategy path
+        return extractSingleCoupon(uri, regionBitmap, strategy)
+    }
+    
+    /**
+     * Crop bitmap to region bounds
+     */
+    private fun cropBitmapToRegion(bitmap: android.graphics.Bitmap, region: android.graphics.Rect): android.graphics.Bitmap? {
+        return try {
+            // Validate bounds
+            val left = region.left.coerceIn(0, bitmap.width)
+            val top = region.top.coerceIn(0, bitmap.height)
+            val right = region.right.coerceIn(left, bitmap.width)
+            val bottom = region.bottom.coerceIn(top, bitmap.height)
+            
+            val width = right - left
+            val height = bottom - top
+            
+            if (width <= 0 || height <= 0) {
+                Log.w(TAG, "Invalid crop region: width=$width, height=$height")
+                return null
+            }
+            
+            android.graphics.Bitmap.createBitmap(bitmap, left, top, width, height)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error cropping bitmap", e)
+            null
+        }
+    }
+    
+    /**
+     * Convert ExtractResult to Coupon
+     */
+    private fun convertExtractResultToCoupon(result: com.example.coupontracker.util.ExtractResult.Good, uri: Uri): Coupon {
+        val couponInfo = result.info
+        val signals = result.signals
+        val runPath = result.runPath
+        val runPathSummary = runPath.final.takeIf { it.isNotBlank() }?.let { final ->
+            "${runPath.strategy} → $final"
+        }
+            return Coupon(
+                id = 0,
+                storeName = couponInfo.storeName,
+                description = couponInfo.description,
+                cashbackAmount = couponInfo.cashbackAmount ?: 0.0,
+                cashbackType = couponInfo.discountType ?: "",
+                expiryDate = couponInfo.expiryDate,
+                redeemCode = couponInfo.redeemCode,
+                imageUri = uri.toString(),
+                status = "Active",
+                needsAttention = couponInfo.needsAttention,
+                storeNameSource = couponInfo.storeNameSource,
+                storeNameEvidence = couponInfo.storeNameEvidence,
+                extractionQualityScore = signals.qualityScore,
+                extractionConfidenceBreakdown = signals.fieldConfidences,
+                extractionStage = signals.stage.name,
+                extractionRunPath = runPathSummary,
+                extractionTimestamp = java.util.Date(),
+            createdAt = java.util.Date(),
+            updatedAt = java.util.Date()
+        )
+    }
+
+    private fun createSelectedImage(
+        uri: Uri,
+        selectionOrder: Int,
+        explicitMimeType: String?
+    ): SelectedImage {
+        val displayName = resolveDisplayName(uri) ?: "Image $selectionOrder"
+        val resolvedMimeType = explicitMimeType ?: context.contentResolver.getType(uri)
+        val guessedMimeType = resolvedMimeType ?: guessMimeType(displayName)
+        return SelectedImage(
+            uri = uri,
+            displayName = displayName,
+            mimeType = guessedMimeType,
+            selectionOrder = selectionOrder
+        )
+    }
+
+    private fun resolveDisplayName(uri: Uri): String? {
+        return runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { cursor ->
+                    if (!cursor.moveToFirst()) return@use null
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0) cursor.getString(index) else null
+                }
+        }.getOrNull()
+    }
+
+    private fun guessMimeType(displayName: String): String {
+        return when {
+            displayName.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
+            displayName.endsWith(".png", ignoreCase = true) -> "image/png"
+            displayName.endsWith(".jpg", ignoreCase = true) || displayName.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
+            else -> "image/*"
+        }
+    }
 }
 
 /**
  * UI state for the batch scanner
  */
 data class BatchScannerUiState(
-    val selectedImages: List<Uri> = emptyList(),
+    val selectedImages: List<SelectedImage> = emptyList(),
     val processedCoupons: List<Coupon> = emptyList(),
     val isProcessing: Boolean = false,
     val isSaving: Boolean = false,
     val processedCount: Int = 0,
-    val error: String? = null
+    val error: String? = null,
+    val imageProcessingStatuses: List<ImageProcessingStatus> = emptyList(),
+    val currentlyProcessingImage: SelectedImage? = null
+)
+
+data class SelectedImage(
+    val uri: Uri,
+    val displayName: String,
+    val mimeType: String,
+    val selectionOrder: Int
+) {
+    fun isImage(): Boolean = mimeType.startsWith("image/") || mimeType == "image/*"
+}
+
+data class ImageProcessingStatus(
+    val image: SelectedImage,
+    val success: Boolean,
+    val message: String?,
+    val couponsFound: Int = 0
 )

@@ -1,6 +1,7 @@
 package com.example.coupontracker.di
 
 import android.content.Context
+import com.example.coupontracker.feedback.ValidatorFeedbackRecorder
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.LlmTelemetryService
 import com.example.coupontracker.llm.ModelDownloadManager
@@ -53,9 +54,10 @@ object LlmModule {
     fun provideLocalLlmOcrService(
         @ApplicationContext context: Context,
         ocrEngine: com.example.coupontracker.ocr.OcrEngine,
-        llmRuntimeManager: LlmRuntimeManager
+        llmRuntimeManager: LlmRuntimeManager,
+        validatorFeedbackRecorder: ValidatorFeedbackRecorder
     ): LocalLlmOcrService {
-        return LocalLlmOcrService(context, ocrEngine, llmRuntimeManager)
+        return LocalLlmOcrService(context, ocrEngine, llmRuntimeManager, validatorFeedbackRecorder = validatorFeedbackRecorder)
     }
 
     @Provides

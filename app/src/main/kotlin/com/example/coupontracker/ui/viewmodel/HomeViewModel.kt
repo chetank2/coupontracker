@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.SortOrder
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.debug.ExtractionDebugRepository
+import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.ui.model.CouponStatusFilter
 import com.example.coupontracker.ui.model.ExpiryRange
 import com.example.coupontracker.ui.model.FilterState
@@ -51,14 +53,16 @@ data class HomeUiState(
     val modelProgress: Int = 0,
     val modelMessage: String = "",
     val showModelCard: Boolean = true,
-    val modelError: String? = null
+    val modelError: String? = null,
+    val extractionDebug: Map<Long, ExtractionDebugSnapshot> = emptyMap()
 )
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val couponRepository: CouponRepository,
     private val modelImportManager: com.example.coupontracker.model.ModelImportManager,
-    private val securePreferencesManager: com.example.coupontracker.util.SecurePreferencesManager
+    private val securePreferencesManager: com.example.coupontracker.util.SecurePreferencesManager,
+    private val debugRepository: ExtractionDebugRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(HomeUiState())
@@ -101,8 +105,9 @@ class HomeViewModel @Inject constructor(
         combine(
             allCouponsFlow,
             modelStatusFlow,
-            _filters
-        ) { coupons, modelStatus, filters ->
+            _filters,
+            debugRepository.snapshots
+        ) { coupons, modelStatus, filters, debugSnapshots ->
             val filteredCoupons = applyCouponFilters(coupons, filters)
             _uiState.value.copy(
                 coupons = filteredCoupons,
@@ -111,7 +116,8 @@ class HomeViewModel @Inject constructor(
                 modelProgress = modelProgressFlow.value,
                 modelMessage = modelMessageFlow.value,
                 modelError = if (modelStatus == ModelAvailabilityStatus.ERROR) modelMessageFlow.value else null,
-                showModelCard = shouldShowModelCard(modelStatus)
+                showModelCard = shouldShowModelCard(modelStatus),
+                extractionDebug = debugSnapshots
             )
         }.onEach { updated ->
             _uiState.value = updated

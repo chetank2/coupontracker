@@ -1,0 +1,113 @@
+[
+    {
+        "image_id": "Screenshot_20250502-192658.png",
+        "ground_truth": {
+            "store_name": "Foxtale",
+            "coupon_code": "FOXPPB2G2BIY5W1V8",
+            "description": "Buy 2 Get 2 FREE* + Up to 5% Foxcoins",
+            "expiry_date": "2025-05-31"
+        },
+        "extracted": {
+            "store_name": "Foxtale",
+            "coupon_code": "FOXPPB2G2BIY5W1V8",
+            "description": "Up to 5% Foxcoins",
+            "expiry_date": "Unknown"
+        },
+        "discrepancies": [
+            "missing_expiry_date",
+            "truncated_description"
+        ]
+    },
+    {
+        "image_id": "Screenshot_20250502-193014.png",
+        "ground_truth": {
+            "store_name": "Aha",
+            "coupon_code": "AHAPPE20",
+            "description": "Get flat 20% off on annual plan \u20b9499/\u20b9699/\u20b9999",
+            "expiry_date": "2025-05-31"
+        },
+        "extracted": {
+            "store_name": "Pastm",
+            "coupon_code": "AHAPPE20",
+            "description": "Flat 20% off",
+            "expiry_date": "2025-05-31"
+        },
+        "discrepancies": [
+            "store_name_misidentification"
+        ]
+    },
+    {
+        "image_id": "Screenshot_20250502-193330.png",
+        "ground_truth": {
+            "store_name": "XYXX",
+            "coupon_code": "XYXXCRED2024",
+            "description": "Get XYXX polo t-shirts from \u20b9599 + \u20b950 cashback via CRED Pay",
+            "expiry_date": "2025-09-29"
+        },
+        "extracted": {
+            "store_name": "428",
+            "coupon_code": "",
+            "description": "\u20b9599 + \u20b950 cashback via CRED pay",
+            "expiry_date": "2025-09-29 (Expired)"
+        },
+        "discrepancies": [
+            "store_name_misidentification",
+            "coupon_code_misclassification",
+            "incorrect_expiry_parsing"
+        ]
+    },
+    {
+        "image_id": "Screenshot_20250502-194012.png",
+        "ground_truth": {
+            "store_name": "Elver",
+            "coupon_code": "SEWK72",
+            "description": "Flat 72% off",
+            "expiry_date": "relative:6_days"
+        },
+        "extracted": {
+            "store_name": "Elver",
+            "coupon_code": "SEWK72",
+            "description": "Flat 72% off",
+            "expiry_date": "2025-09-30 (Expired)"
+        },
+        "discrepancies": [
+            "incorrect_expiry_parsing"
+        ]
+    },
+    {
+        "image_id": "Screenshot_20250502-194523.png",
+        "ground_truth": {
+            "store_name": "Amazon Pay",
+            "coupon_code": null,
+            "description": "Multiple offers visible (Furniture, Soundbars, Laptops, Cameras, Kitchen, etc.)",
+            "expiry_date": null
+        },
+        "extracted": {
+            "store_name": null,
+            "coupon_code": null,
+            "description": null,
+            "expiry_date": null
+        },
+        "discrepancies": [
+            "multiple_coupons_not_parsed"
+        ]
+    },
+    {
+        "image_id": "Screenshot_20250502-195045.png",
+        "ground_truth": {
+            "store_name": "Boat",
+            "coupon_code": "BTXSSGHW83N4R",
+            "description": "Up to 80% off",
+            "expiry_date": "Unknown"
+        },
+        "extracted": {
+            "store_name": "Boat",
+            "coupon_code": "BTXSSGHW83N4R",
+            "description": "Up to 80% off",
+            "expiry_date": "Unknown"
+        },
+        "discrepancies": [
+            "missing_expiry_date"
+        ]
+    }
+]

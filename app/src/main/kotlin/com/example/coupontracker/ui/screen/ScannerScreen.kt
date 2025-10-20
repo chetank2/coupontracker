@@ -41,7 +41,9 @@ import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Image
+import com.example.coupontracker.R
 import com.example.coupontracker.ui.components.ExtractionFeedbackDialog
+import com.example.coupontracker.ui.components.RepairNeededDialog
 import com.example.coupontracker.ui.components.CorrectedCoupon
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -76,7 +78,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -117,6 +121,7 @@ fun ScannerScreen(
     var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
     var showFeedbackDialog by remember { mutableStateOf(false) }
     var extractedCoupon by remember { mutableStateOf<com.example.coupontracker.data.model.Coupon?>(null) }
+    var showRepairDialog by remember { mutableStateOf(false) }
 
     // Form fields
     var code by remember { mutableStateOf("") }
@@ -159,7 +164,11 @@ fun ScannerScreen(
         val currentState = uiState
         if (currentState is ScannerUiState.Success) {
             extractedCoupon = currentState.coupon
-            
+
+            if (currentState.coupon.needsAttention) {
+                showRepairDialog = true
+            }
+
             // Show feedback dialog if we can collect feedback (universal extraction was used)
             if (viewModel.canCollectFeedback()) {
                 showFeedbackDialog = true
@@ -174,6 +183,8 @@ fun ScannerScreen(
                     )
                 }
             }
+        } else {
+            showRepairDialog = false
         }
     }
 
@@ -201,6 +212,7 @@ fun ScannerScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            val state = uiState
             when {
                 showCamera -> {
                     CameraView(
@@ -243,17 +255,28 @@ fun ScannerScreen(
                     }
                 }
 
-                uiState is ScannerUiState.Scanning -> {
+                state is ScannerUiState.Scanning -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
+                        val progress = state.progress
+                        val message = progress?.message ?: stringResource(id = R.string.scanner_progress_default)
+                        val percent = progress?.percent
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            CircularProgressIndicator()
+                            if (percent != null) {
+                                CircularProgressIndicator(progress = percent.coerceIn(0, 100) / 100f)
+                            } else {
+                                CircularProgressIndicator()
+                            }
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text("Processing image...")
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
@@ -445,7 +468,7 @@ fun ScannerScreen(
                                 }
 
                                 // Show success message
-                                if (uiState is ScannerUiState.Saved) {
+                                if (state is ScannerUiState.Saved) {
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
                                         text = "Coupon saved successfully!",
@@ -461,8 +484,8 @@ fun ScannerScreen(
                                 }
 
                                 // Show already saved message
-                                if (uiState is ScannerUiState.AlreadySaved) {
-                                    val alreadySavedState = uiState as ScannerUiState.AlreadySaved
+                                if (state is ScannerUiState.AlreadySaved) {
+                                    val alreadySavedState = state as ScannerUiState.AlreadySaved
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
                                         text = "Coupon already saved: ${alreadySavedState.existingCoupon.redeemCode ?: alreadySavedState.existingCoupon.storeName}",
@@ -478,10 +501,10 @@ fun ScannerScreen(
                                 }
 
                                 // Show error message
-                                if (uiState is ScannerUiState.Error) {
+                                if (state is ScannerUiState.Error) {
                                     Spacer(modifier = Modifier.height(16.dp))
                                     Text(
-                                        text = (uiState as ScannerUiState.Error).message,
+                                        text = state.message,
                                         color = MaterialTheme.colorScheme.error,
                                         style = MaterialTheme.typography.bodyMedium
                                     )
@@ -543,6 +566,14 @@ fun ScannerScreen(
                         )
                     }
                 }
+            )
+        }
+
+        if (showRepairDialog && extractedCoupon?.needsAttention == true) {
+            RepairNeededDialog(
+                coupon = extractedCoupon!!,
+                onDismiss = { showRepairDialog = false },
+                onAcknowledge = { showRepairDialog = false }
             )
         }
     }

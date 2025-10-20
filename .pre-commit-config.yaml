@@ -1,0 +1,21 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.6
+    hooks:
+      - id: ruff
+        args: ["--select", "E,F"]
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: check-ai-invariants
+        name: check-ai-invariants
+        entry: python3 scripts/check_ai_invariants.py
+        language: system
+        pass_filenames: false
+        stages: [commit, push]

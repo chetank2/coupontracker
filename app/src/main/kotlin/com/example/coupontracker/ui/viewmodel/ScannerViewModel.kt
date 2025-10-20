@@ -12,6 +12,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.CashbackInfo
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.debug.ExtractionDebugRepository
+import com.example.coupontracker.debug.ExtractionDebugScorer
+import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.universal.UniversalExtractionService
 import com.example.coupontracker.universal.ExtractionContext
 import com.example.coupontracker.util.ExtractionPerformanceMonitor
@@ -20,7 +23,25 @@ import com.example.coupontracker.util.FeedbackType
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
-import com.example.coupontracker.util.*
+import com.example.coupontracker.util.AnalyticsTracker
+import com.example.coupontracker.util.BitmapManager
+import com.example.coupontracker.util.CouponFixContext
+import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.util.CouponPostProcessor
+import com.example.coupontracker.util.ExtractResult
+import com.example.coupontracker.util.ExtractionConfig
+import com.example.coupontracker.util.ExtractionLogBuffer
+import com.example.coupontracker.util.ExtractionStage
+import com.example.coupontracker.util.ExtractionTelemetryService
+import com.example.coupontracker.feedback.ValidatorFeedbackRecorder
+import com.example.coupontracker.util.GenericFieldHeuristics
+import com.example.coupontracker.util.IndianCurrencyParser
+import com.example.coupontracker.util.LocalLlmOcrService
+import com.example.coupontracker.util.MultiEngineOCR
+import com.example.coupontracker.util.RunPath
+import com.example.coupontracker.util.UriPersistenceManager
+import com.example.coupontracker.util.LlmProgressUpdate
+import com.example.coupontracker.util.normalizeExpiryDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -47,7 +68,10 @@ class ScannerViewModel @Inject constructor(
     private val telemetryService: ExtractionTelemetryService,
     private val universalExtractionService: UniversalExtractionService,
     private val performanceMonitor: ExtractionPerformanceMonitor,
-    private val bitmapManager: com.example.coupontracker.util.BitmapManager  // V2: Injected bitmap memory management
+    private val analyticsTracker: AnalyticsTracker,
+    private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Injected bitmap memory management
+    private val debugRepository: ExtractionDebugRepository,
+    private val validatorFeedbackRecorder: ValidatorFeedbackRecorder
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -61,12 +85,13 @@ class ScannerViewModel @Inject constructor(
     private val fieldHeuristics: GenericFieldHeuristics = GenericFieldHeuristics
     private val manualOverrides = mutableMapOf<String, CouponInstance>()
     private var pendingPreview: PendingPreview? = null
-    
+
     // Store extraction results for feedback learning
     private var lastExtractionResult: Pair<com.example.coupontracker.universal.UniversalExtractionResult, String>? = null
 
     companion object {
         private const val TAG = "ScannerViewModel"
+        private const val STRATEGY_SURFACE_SINGLE = "single_capture"
 
         @VisibleForTesting
         internal fun parseExpiryDate(
@@ -137,11 +162,39 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    private suspend fun logStrategyExecution(
+        requested: com.example.coupontracker.util.ExtractionStrategy,
+        executed: String,
+        surface: String,
+        reason: String? = null
+    ) {
+        val normalizedExecuted = executed.lowercase(Locale.getDefault())
+        val baseMessage = "Strategy[$surface]: requested=${requested.name}, executed=$normalizedExecuted"
+        val fullMessage = if (!reason.isNullOrBlank()) {
+            "$baseMessage, reason=$reason"
+        } else {
+            baseMessage
+        }
+
+        Log.i(TAG, fullMessage)
+        analyticsTracker.trackStrategyExecution(surface, requested, normalizedExecuted, reason)
+
+        if (!requested.name.equals(normalizedExecuted, ignoreCase = true) && !reason.isNullOrBlank()) {
+            analyticsTracker.trackStrategyFallback(surface, requested, normalizedExecuted, reason)
+        }
+    }
+
     private data class DetectorInitializationResult(
         val detector: TwoStageDetector?,
         val errorMessage: String?,
         val exception: Throwable?
     )
+
+    private fun emitLlmProgress(update: LlmProgressUpdate) {
+        viewModelScope.launch {
+            _uiState.value = ScannerUiState.Scanning(update)
+        }
+    }
 
     private fun initializeTwoStageDetector(): DetectorInitializationResult {
         return try {
@@ -201,11 +254,19 @@ class ScannerViewModel @Inject constructor(
         viewModelScope.launch {
             var bitmap: Bitmap? = null
             try {
-                _uiState.value = ScannerUiState.Scanning
+                _uiState.value = ScannerUiState.Scanning()
                 
                 // V2: Get current extraction strategy
                 val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
                 Log.d(TAG, "Starting scan with strategy: ${strategy.name} for: $imageUri")
+
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_STARTED,
+                    mapOf(
+                        "strategy" to strategy.name.lowercase(Locale.getDefault()),
+                        "persist_mode" to if (persistImmediately) "immediate" else "review"
+                    )
+                )
 
                 // Load bitmap from URI
                 bitmap = loadBitmapFromUri(imageUri) ?: run {
@@ -216,18 +277,38 @@ class ScannerViewModel @Inject constructor(
                 // V2: Route based on extraction strategy
                 when (strategy) {
                     com.example.coupontracker.util.ExtractionStrategy.LEGACY -> {
+                        logStrategyExecution(
+                            requested = strategy,
+                            executed = strategy.name.lowercase(Locale.getDefault()),
+                            surface = STRATEGY_SURFACE_SINGLE
+                        )
                         // LEGACY: Two-stage detection → LLM → OCR fallback
                         scanWithLegacyPath(imageUri, bitmap, persistImmediately)
                     }
                     com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST -> {
+                        logStrategyExecution(
+                            requested = strategy,
+                            executed = strategy.name.lowercase(Locale.getDefault()),
+                            surface = STRATEGY_SURFACE_SINGLE
+                        )
                         // LLM_FIRST: LLM locates ROIs → OCR extracts → Fusion
                         scanWithLlmFirstPath(imageUri, bitmap, persistImmediately)
                     }
                     com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST -> {
+                        logStrategyExecution(
+                            requested = strategy,
+                            executed = strategy.name.lowercase(Locale.getDefault()),
+                            surface = STRATEGY_SURFACE_SINGLE
+                        )
                         // OCR_FIRST: OCR finds text → LLM validates → Fusion
                         scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
                     }
                     com.example.coupontracker.util.ExtractionStrategy.HYBRID -> {
+                        logStrategyExecution(
+                            requested = strategy,
+                            executed = strategy.name.lowercase(Locale.getDefault()),
+                            surface = STRATEGY_SURFACE_SINGLE
+                        )
                         // HYBRID: Parallel LLM + OCR → Fusion arbitrates
                         scanWithHybridPath(imageUri, bitmap, persistImmediately)
                     }
@@ -236,6 +317,11 @@ class ScannerViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "Error in enhanced scanning", e)
                 _uiState.value = ScannerUiState.Error("Error processing image: ${e.message}")
+
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                    mapOf("reason" to (e.message ?: "unknown_error"))
+                )
             } finally {
                 // V2: Release bitmap after processing completes
                 bitmap?.let { bm ->
@@ -260,10 +346,14 @@ class ScannerViewModel @Inject constructor(
             return
         }
 
+        val detectionStart = System.currentTimeMillis()
         // Run two-stage detection
         val couponInstances = withContext(Dispatchers.IO) {
             detector.detectMultiCoupons(bitmap)
         }
+
+        val detectionTime = System.currentTimeMillis() - detectionStart
+        analyticsTracker.trackProcessingTime(detectionTime, "two_stage_detection")
 
         Log.d(TAG, "Two-stage detection completed: ${couponInstances.size} coupons detected")
 
@@ -281,6 +371,13 @@ class ScannerViewModel @Inject constructor(
                 )
             }
             else -> {
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_MULTIPLE_COUPONS_DETECTED,
+                    mapOf(
+                        "count" to couponInstances.size,
+                        "source" to "two_stage"
+                    )
+                )
                 _uiState.value = ScannerUiState.MultiCouponDetected(couponInstances, bitmap, imageUri.toString())
             }
         }
@@ -296,7 +393,9 @@ class ScannerViewModel @Inject constructor(
         
         try {
             // Step 1: Call LLM service to extract fields directly
-            val llmResult = localLlmOcrService.processCouponImageTyped(bitmap)
+            val llmResult = localLlmOcrService.processCouponImageTyped(bitmap) { update ->
+                emitLlmProgress(update)
+            }
             val processingTime = System.currentTimeMillis() - startTime
             
             when (llmResult) {
@@ -305,16 +404,36 @@ class ScannerViewModel @Inject constructor(
                     Log.d(TAG, "LLM_FIRST: LLM extraction successful (confidence: $avgConfidence)")
                     
                     // Step 2: Build coupon from LLM result
-                    val llmCoupon = buildCouponFromLlmResult(
-                        llmResult.info,
-                        imageUri,
-                        llmResult.signals.fieldConfidences
-                    )
-                    
+                    val llmCoupon = buildCouponFromLlmResult(llmResult.info, imageUri)
+
                     // Step 3: Persist URI
                     val persistedUri = uriPersistenceManager.persistUri(imageUri)
-                    val finalCoupon = llmCoupon.copy(imageUri = persistedUri?.toString())
-                    
+                    val finalCoupon = finalizeCoupon(
+                        base = llmCoupon.copy(imageUri = persistedUri?.toString()),
+                        ocrText = null,
+                        captureTimestamp = null
+                    )
+
+                    val debugSnapshot = ExtractionDebugScorer.fromLlmResult(llmResult, source = "llm_first")
+                    val normalizedDescription = CouponDedupUtils.normalizeDescription(finalCoupon.description)
+
+                    if (persistImmediately) {
+                        persistCoupon(
+                            coupon = finalCoupon,
+                            normalizedDescription = normalizedDescription,
+                            miniCpmStatus = MiniCpmProgress.SUCCESS,
+                            debugSnapshot = debugSnapshot
+                        )
+                    } else {
+                        pendingPreview = PendingPreview(
+                            coupon = finalCoupon,
+                            normalizedDescription = normalizedDescription,
+                            miniCpmStatus = MiniCpmProgress.SUCCESS,
+                            debugSnapshot = debugSnapshot
+                        )
+                        _uiState.value = ScannerUiState.Success(finalCoupon, MiniCpmProgress.SUCCESS)
+                    }
+
                     // Step 4: Learn patterns (store extraction result for learning)
                     lastExtractionResult = com.example.coupontracker.universal.UniversalExtractionResult(
                         coupon = finalCoupon,
@@ -339,8 +458,6 @@ class ScannerViewModel @Inject constructor(
                         fieldsExtracted = fieldsExtracted
                     )
                     
-                    // Step 6: Update UI
-                    _uiState.value = ScannerUiState.Success(finalCoupon, MiniCpmProgress.SUCCESS)
                     Log.d(TAG, "LLM_FIRST: Completed successfully in ${processingTime}ms")
                 }
                 
@@ -430,8 +547,9 @@ class ScannerViewModel @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = null,
-            extractionConfidenceBreakdown = fieldConfidences.ifEmpty { emptyMap() }
+            needsAttention = couponInfo.needsAttention,
+            storeNameSource = couponInfo.storeNameSource,
+            storeNameEvidence = couponInfo.storeNameEvidence
         )
     }
     
@@ -475,7 +593,11 @@ class ScannerViewModel @Inject constructor(
                         
                         // Step 3: Persist URI and save coupon
                         val persistedUri = uriPersistenceManager.persistUri(imageUri)
-                        val finalCoupon = extractionResult.coupon.copy(imageUri = persistedUri?.toString())
+                        val finalCoupon = finalizeCoupon(
+                            base = extractionResult.coupon.copy(imageUri = persistedUri?.toString()),
+                            ocrText = ocrText,
+                            captureTimestamp = null
+                        )
                         
                         // Step 4: Store for potential learning
                         lastExtractionResult = extractionResult to ocrText
@@ -563,7 +685,9 @@ class ScannerViewModel @Inject constructor(
                 val llmDeferred = async(Dispatchers.Default) {
                     try {
                         Log.d(TAG, "HYBRID: Starting LLM extraction...")
-                        localLlmOcrService.processCouponImageTyped(bitmap)
+                        localLlmOcrService.processCouponImageTyped(bitmap) { update ->
+                            emitLlmProgress(update)
+                        }
                     } catch (e: Exception) {
                         Log.w(TAG, "HYBRID: LLM extraction failed", e)
                         null
@@ -629,7 +753,11 @@ class ScannerViewModel @Inject constructor(
             if (fusedCoupon != null) {
                 // Persist URI
                 val persistedUri = uriPersistenceManager.persistUri(imageUri)
-                val finalCoupon = fusedCoupon.copy(imageUri = persistedUri?.toString())
+                val finalCoupon = finalizeCoupon(
+                    base = fusedCoupon.copy(imageUri = persistedUri?.toString()),
+                    ocrText = null,
+                    captureTimestamp = null
+                )
                 
                 // Store for potential learning
                 lastExtractionResult = com.example.coupontracker.universal.UniversalExtractionResult(
@@ -661,7 +789,13 @@ class ScannerViewModel @Inject constructor(
                 
             } else {
                 Log.w(TAG, "HYBRID: Both methods failed, falling back to LEGACY")
-                
+                logStrategyExecution(
+                    requested = com.example.coupontracker.util.ExtractionStrategy.HYBRID,
+                    executed = "legacy",
+                    surface = STRATEGY_SURFACE_SINGLE,
+                    reason = "hybrid_no_success"
+                )
+
                 performanceMonitor.recordExtractionAttempt(
                     method = ExtractionMethod.HYBRID_FUSION,
                     success = false,
@@ -676,8 +810,14 @@ class ScannerViewModel @Inject constructor(
             
         } catch (e: Exception) {
             Log.e(TAG, "HYBRID: Exception during hybrid extraction", e)
+            logStrategyExecution(
+                requested = com.example.coupontracker.util.ExtractionStrategy.HYBRID,
+                executed = "legacy",
+                surface = STRATEGY_SURFACE_SINGLE,
+                reason = "hybrid_exception_${e.javaClass.simpleName}"
+            )
             val processingTime = System.currentTimeMillis() - startTime
-            
+
             performanceMonitor.recordExtractionAttempt(
                 method = ExtractionMethod.HYBRID_FUSION,
                 success = false,
@@ -743,17 +883,12 @@ class ScannerViewModel @Inject constructor(
             Pair(0.0, CashbackInfo(com.example.coupontracker.data.model.CashbackType.TEXT, 0.0))
         }
         
-        // Description: combine both sources
-        val description = when {
-            llmInfo.description.isNotBlank() && ocrCoupon.description.isNotBlank() ->
-                "${llmInfo.description} (Hybrid: LLM + OCR)"
-            llmInfo.description.isNotBlank() -> llmInfo.description
-            ocrCoupon.description.isNotBlank() -> ocrCoupon.description
-            else -> "Extracted via Hybrid method"
-        }
-
-        val confidenceBreakdown = mergeConfidenceBreakdown(llmConf, ocrResult)
-
+        // Description: prefer raw LLM text, otherwise fall back to OCR text
+        val description = listOf(llmInfo.description, ocrCoupon.description)
+            .map { it.trim() }
+            .firstOrNull { it.isNotBlank() }
+            ?: "Coupon offer"
+        
         return Coupon(
             id = 0,
             storeName = storeName,
@@ -768,9 +903,7 @@ class ScannerViewModel @Inject constructor(
             updatedAt = Date(),
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
-            cashbackCurrency = cashbackInfo.currency,
-            offerText = null,
-            extractionConfidenceBreakdown = confidenceBreakdown
+            cashbackCurrency = cashbackInfo.currency
         )
     }
 
@@ -784,7 +917,7 @@ class ScannerViewModel @Inject constructor(
     ) {
         viewModelScope.launch {
             try {
-                _uiState.value = ScannerUiState.Scanning
+                _uiState.value = ScannerUiState.Scanning()
                 Log.d(TAG, "Processing captured bitmap with two-stage detection")
 
                 val detector = twoStageDetector ?: run {
@@ -848,9 +981,28 @@ class ScannerViewModel @Inject constructor(
 
             // Extract text from detected fields using OCR
             val extractionResult = extractTextFromFields(couponInstance)
+            val debugSnapshot = extractionResult.debugSnapshot
 
             // Create coupon from extracted information
-            val coupon = createCouponFromInstance(couponInstance, extractionResult.fields, imageUri)
+            val coupon = finalizeCoupon(
+                base = createCouponFromInstance(
+                    couponInstance = couponInstance,
+                    extractionResult = extractionResult,
+                    imageUri = imageUri
+                ),
+                ocrText = extractionResult.fields.values.joinToString("\n"),
+                captureTimestamp = null
+            )
+
+            analyticsTracker.trackEvent(
+                AnalyticsTracker.EVENT_COUPON_DETECTED,
+                mapOf(
+                    "source" to "two_stage",
+                    "confidence" to String.format(Locale.US, "%.2f", couponInstance.confidence),
+                    "mini_cpm" to extractionResult.miniCpmStatus.name,
+                    "fields" to extractionResult.fields.size
+                )
+            )
 
             val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
             pendingPreview = null
@@ -859,16 +1011,27 @@ class ScannerViewModel @Inject constructor(
                 persistCoupon(
                     coupon = coupon,
                     normalizedDescription = normalizedDescription,
-                    miniCpmStatus = extractionResult.miniCpmStatus
+                    miniCpmStatus = extractionResult.miniCpmStatus,
+                    debugSnapshot = debugSnapshot
                 )
             } else {
                 pendingPreview = PendingPreview(
                     coupon = coupon,
                     normalizedDescription = normalizedDescription,
-                    miniCpmStatus = extractionResult.miniCpmStatus
+                    miniCpmStatus = extractionResult.miniCpmStatus,
+                    debugSnapshot = debugSnapshot
                 )
                 _uiState.value = ScannerUiState.Success(coupon, extractionResult.miniCpmStatus)
                 Log.d(TAG, "Preview ready for review without immediate persistence")
+
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+                    mapOf(
+                        "persisted" to false,
+                        "result" to "pending_review",
+                        "mini_cpm" to extractionResult.miniCpmStatus.name
+                    )
+                )
             }
 
         } catch (e: Exception) {
@@ -882,7 +1045,8 @@ class ScannerViewModel @Inject constructor(
     private suspend fun persistCoupon(
         coupon: Coupon,
         normalizedDescription: String,
-        miniCpmStatus: MiniCpmProgress
+        miniCpmStatus: MiniCpmProgress,
+        debugSnapshot: ExtractionDebugSnapshot?
     ) {
         // First check if a duplicate already exists using the saveOrMerge helper
         val savedCouponId = couponRepository.saveOrMergeCoupon(
@@ -894,6 +1058,13 @@ class ScannerViewModel @Inject constructor(
 
         val savedCoupon = couponRepository.getCouponById(savedCouponId)
 
+        debugSnapshot?.let { snapshot ->
+            debugRepository.updateSnapshot(savedCouponId, snapshot)
+        }
+
+        var analyticsResult = "created"
+        var persistedFlag = true
+
         if (savedCoupon != null) {
             val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt ?: savedCoupon.createdAt)
 
@@ -903,15 +1074,27 @@ class ScannerViewModel @Inject constructor(
                     TAG,
                     "Duplicate coupon detected, existing ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}"
                 )
+                analyticsResult = "duplicate"
+                persistedFlag = false
             } else {
                 _uiState.value = ScannerUiState.Saved(savedCoupon)
                 Log.d(TAG, "New coupon saved with ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}")
+                analyticsResult = "created"
             }
         } else {
             val fallbackCoupon = coupon.copy(id = savedCouponId)
             _uiState.value = ScannerUiState.Saved(fallbackCoupon)
             Log.d(TAG, "Coupon saved (fallback) with ID: $savedCouponId")
         }
+
+        analyticsTracker.trackEvent(
+            AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+            mapOf(
+                "persisted" to persistedFlag,
+                "result" to analyticsResult,
+                "mini_cpm" to miniCpmStatus.name
+            )
+        )
     }
 
     fun confirmPreviewSave(updatedCoupon: Coupon? = null) {
@@ -924,7 +1107,8 @@ class ScannerViewModel @Inject constructor(
                 persistCoupon(
                     coupon = couponToPersist,
                     normalizedDescription = normalizedDescription,
-                    miniCpmStatus = preview.miniCpmStatus
+                    miniCpmStatus = preview.miniCpmStatus,
+                    debugSnapshot = preview.debugSnapshot
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving preview coupon", e)
@@ -944,7 +1128,8 @@ class ScannerViewModel @Inject constructor(
         pendingPreview = PendingPreview(
             coupon = coupon,
             normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description),
-            miniCpmStatus = miniCpmStatus
+            miniCpmStatus = miniCpmStatus,
+            debugSnapshot = null
         )
     }
 
@@ -954,7 +1139,7 @@ class ScannerViewModel @Inject constructor(
     fun selectCoupon(selectedInstance: CouponInstance, originalImageUri: String?) {
         viewModelScope.launch {
             try {
-                _uiState.value = ScannerUiState.Scanning
+                _uiState.value = ScannerUiState.Scanning()
                 Log.d(TAG, "Processing selected coupon: ${selectedInstance.id}")
 
                 // Process the selected coupon
@@ -977,7 +1162,7 @@ class ScannerViewModel @Inject constructor(
     fun processAllCoupons(couponInstances: List<CouponInstance>, originalImageUri: String?) {
         viewModelScope.launch {
             try {
-                _uiState.value = ScannerUiState.Scanning
+                _uiState.value = ScannerUiState.Scanning()
                 val adjustedInstances = getManualAdjustedInstances(couponInstances, includeManualExtras = true)
                 Log.d(
                     TAG,
@@ -996,7 +1181,7 @@ class ScannerViewModel @Inject constructor(
     fun processSelectedCoupons(couponInstances: List<CouponInstance>, originalImageUri: String?) {
         viewModelScope.launch {
             try {
-                _uiState.value = ScannerUiState.Scanning
+                _uiState.value = ScannerUiState.Scanning()
                 val adjustedInstances = getManualAdjustedInstances(couponInstances, includeManualExtras = false)
                 Log.d(
                     TAG,
@@ -1053,7 +1238,7 @@ class ScannerViewModel @Inject constructor(
         for ((index, instance) in couponInstances.withIndex()) {
             try {
                 val extractionResult = extractTextFromFields(instance)
-                val coupon = createCouponFromInstance(instance, extractionResult.fields, originalImageUri)
+                val coupon = createCouponFromInstance(instance, extractionResult, originalImageUri)
 
                 couponRepository.insertCoupon(coupon)
                 processedResults.add(CouponProcessingSummary(coupon, extractionResult.miniCpmStatus))
@@ -1063,9 +1248,33 @@ class ScannerViewModel @Inject constructor(
                     "Saved coupon ${processedResults.size}/${couponInstances.size}: ${coupon.redeemCode}"
                 )
 
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_COUPON_DETECTED,
+                    mapOf(
+                        "source" to "multi_coupon_batch",
+                        "mini_cpm" to extractionResult.miniCpmStatus.name,
+                        "fields" to extractionResult.fields.size
+                    )
+                )
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+                    mapOf(
+                        "persisted" to true,
+                        "result" to "batch",
+                        "mini_cpm" to extractionResult.miniCpmStatus.name
+                    )
+                )
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon $index", e)
                 // Continue with other coupons
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                    mapOf(
+                        "reason" to (e.message ?: "batch_error"),
+                        "stage" to "multi_coupon"
+                    )
+                )
             } finally {
                 twoStageDetector?.releaseInstances(listOf(instance))
             }
@@ -1075,6 +1284,13 @@ class ScannerViewModel @Inject constructor(
             _uiState.value = ScannerUiState.AllCouponsSaved(processedResults)
         } else {
             _uiState.value = ScannerUiState.Error("Failed to save any coupons")
+            analyticsTracker.trackEvent(
+                AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                mapOf(
+                    "reason" to "batch_no_results",
+                    "stage" to "multi_coupon"
+                )
+            )
         }
     }
 
@@ -1088,6 +1304,9 @@ class ScannerViewModel @Inject constructor(
             var progress = MiniCpmProgress.SUCCESS
             val triedStages = mutableListOf<String>()
             var finalStage = "UNKNOWN"
+            var qualityScore: Int? = null
+            var fieldConfidences: Map<String, Float> = emptyMap()
+            var sourceStage: ExtractionStage? = null
 
             extractedInfo["minicpmConfidence"] = couponInstance.confidence.toString()
             extractedInfo["minicpmDetectionStatus"] = couponInstance.status.name
@@ -1097,19 +1316,27 @@ class ScannerViewModel @Inject constructor(
                 triedStages.add("LLM")
                 finalStage = "LLM"
                 
-                val result = localLlmOcrService.processCouponImageTyped(couponInstance.cropBitmap)
+                val result = localLlmOcrService.processCouponImageTyped(couponInstance.cropBitmap) { update ->
+                    emitLlmProgress(update)
+                }
                 
                 when (result) {
                     is ExtractResult.Good -> {
                         extractedInfo.putAll(mapCouponInfoToFields(result.info))
                         progress = MiniCpmProgress.SUCCESS
+                        qualityScore = result.signals.qualityScore
+                        fieldConfidences = result.signals.fieldConfidences
+                        sourceStage = result.signals.stage
                         Log.d(TAG, "✅ LLM extraction successful (quality: ${result.signals.qualityScore})")
                     }
-                    
+
                     is ExtractResult.LowQuality -> {
                         extractedInfo.putAll(mapCouponInfoToFields(result.info))
                         progress = MiniCpmProgress.NEEDS_REVIEW
-                        
+                        qualityScore = result.signals.qualityScore
+                        fieldConfidences = result.signals.fieldConfidences
+                        sourceStage = result.signals.stage
+
                         // Try fallback for low quality
                         triedStages.add("FALLBACK_OCR")
                         finalStage = "FALLBACK_OCR"
@@ -1124,9 +1351,12 @@ class ScannerViewModel @Inject constructor(
                         triedStages.add("FALLBACK_OCR")
                         finalStage = "FALLBACK_OCR"
                         progress = MiniCpmProgress.FALLBACK
+                        qualityScore = result.signals?.qualityScore
+                        fieldConfidences = result.signals?.fieldConfidences ?: emptyMap()
+                        sourceStage = result.signals?.stage ?: result.stage
                         val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
                         extractedInfo.putAll(fallbackFields)
-                        
+
                         Log.e(TAG, "❌ LLM extraction failed: ${result.error.message}")
                     }
                 }
@@ -1136,6 +1366,8 @@ class ScannerViewModel @Inject constructor(
                 triedStages.add("FALLBACK_OCR")
                 finalStage = "FALLBACK_OCR"
                 progress = MiniCpmProgress.FALLBACK
+                qualityScore = qualityScore ?: 0
+                sourceStage = sourceStage ?: ExtractionStage.LLM
                 val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
                 extractedInfo.putAll(fallbackFields)
             }
@@ -1149,14 +1381,30 @@ class ScannerViewModel @Inject constructor(
                 nativeAvailable = localLlmOcrService.isServiceAvailable(),
                 totalTimeMs = totalTime
             )
-            
+
             telemetryService.trackRunPath(runPath)
-            
+
             extractedInfo["minicpmProcessing"] = progress.name
             extractedInfo["runPath"] = "${runPath.strategy} → ${runPath.final}"
             extractedInfo["processingTimeMs"] = totalTime.toString()
+            qualityScore?.let { extractedInfo["qualityScore"] = it.toString() }
 
-            FieldExtractionResult(extractedInfo, progress)
+            if (sourceStage == null && finalStage == "FALLBACK_OCR") {
+                sourceStage = ExtractionStage.MLKIT
+            }
+
+            val baseResult = FieldExtractionResult(
+                fields = extractedInfo.toMap(),
+                miniCpmStatus = progress,
+                runPath = runPath,
+                qualityScore = qualityScore,
+                fieldConfidences = fieldConfidences,
+                sourceStage = sourceStage
+            )
+
+            val snapshot = ExtractionDebugScorer.fromFieldExtraction(baseResult, runPath)
+
+            baseResult.copy(debugSnapshot = snapshot)
         }
     }
 
@@ -1315,9 +1563,11 @@ class ScannerViewModel @Inject constructor(
 
     private fun createCouponFromInstance(
         couponInstance: CouponInstance,
-        extractedInfo: Map<String, String>,
+        extractionResult: FieldExtractionResult,
         imageUri: String?
     ): Coupon {
+        val extractedInfo = extractionResult.fields
+
         // Parse expiry date string to Date if available
         val expiryDate = parseExpiryDate(extractedInfo["expiryDate"])
 
@@ -1331,7 +1581,15 @@ class ScannerViewModel @Inject constructor(
             CashbackInfo.fromText(amountText)
         } ?: CashbackInfo.fromLegacyAmount(amount, extractedInfo["description"])
 
-        val detectionConfidence = buildDetectionConfidenceBreakdown(couponInstance)
+        val runPathSummary = extractionResult.runPath?.let { path ->
+            buildString {
+                append(path.strategy.ifBlank { "LLM" })
+                if (path.final.isNotBlank()) {
+                    append(" → ")
+                    append(path.final)
+                }
+            }.ifBlank { null }
+        }
 
         return Coupon(
             id = 0, // Auto-generated by Room
@@ -1346,7 +1604,6 @@ class ScannerViewModel @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = null,
             category = determineCategory(extractedInfo),
             rating = null,
             status = when (couponInstance.status) {
@@ -1354,7 +1611,11 @@ class ScannerViewModel @Inject constructor(
                 com.example.coupontracker.ml.CouponStatus.PARTIAL_TOP -> "PARTIAL"
                 com.example.coupontracker.ml.CouponStatus.PARTIAL_BOTTOM -> "PARTIAL"
             },
-            extractionConfidenceBreakdown = detectionConfidence,
+            extractionQualityScore = extractionResult.qualityScore,
+            extractionConfidenceBreakdown = extractionResult.fieldConfidences,
+            extractionStage = extractionResult.sourceStage?.name,
+            extractionRunPath = runPathSummary,
+            extractionTimestamp = Date(),
             createdAt = Date(),
             updatedAt = Date()
         )
@@ -1406,18 +1667,24 @@ class ScannerViewModel @Inject constructor(
                 ocrText = ocrText,
                 context = context
             )
-            
+
             val processingTime = System.currentTimeMillis() - startTime
-            
+            analyticsTracker.trackProcessingTime(processingTime, "universal_extraction")
+
             if (extractionResult.success && extractionResult.confidence > 0.3f) {
                 Log.d(TAG, "Universal extraction successful with confidence: ${extractionResult.confidence}")
-                
+
                 // Use the universally extracted coupon
                 val persistedUri = uriPersistenceManager.persistUri(imageUri)
                 val coupon = extractionResult.coupon.copy(
                     imageUri = persistedUri?.toString()
                 )
-                
+                val debugSnapshot = ExtractionDebugScorer.fromUniversalResult(
+                    extractionResult,
+                    ocrText.isBlank()
+                )
+                val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
+
                 // Record successful extraction
                 val fieldsExtracted = mutableSetOf<String>()
                 if (coupon.storeName != "Unknown Store") fieldsExtracted.add("storeName")
@@ -1435,16 +1702,34 @@ class ScannerViewModel @Inject constructor(
                 
                 // Store extraction result for potential feedback learning
                 lastExtractionResult = extractionResult to ocrText
-                
-                val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
+
                 pendingPreview = PendingPreview(
                     coupon = coupon,
                     normalizedDescription = normalizedDescription,
-                    miniCpmStatus = MiniCpmProgress.SUCCESS
+                    miniCpmStatus = MiniCpmProgress.SUCCESS,
+                    debugSnapshot = debugSnapshot
                 )
-                
+
                 _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.SUCCESS)
-                
+
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_COUPON_DETECTED,
+                    mapOf(
+                        "source" to "universal",
+                        "confidence" to String.format(Locale.US, "%.2f", extractionResult.confidence),
+                        "mini_cpm" to MiniCpmProgress.SUCCESS.name,
+                        "fields" to extractionResult.extractedFields.size
+                    )
+                )
+                analyticsTracker.trackEvent(
+                    AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+                    mapOf(
+                        "persisted" to false,
+                        "result" to "pending_review",
+                        "mini_cpm" to MiniCpmProgress.SUCCESS.name
+                    )
+                )
+
             } else {
                 Log.d(TAG, "Universal extraction failed or low confidence: ${extractionResult.confidence}")
                 
@@ -1495,18 +1780,64 @@ class ScannerViewModel @Inject constructor(
 
                     if (extractedInfo.isEmpty()) {
                         _uiState.value = ScannerUiState.Error("Could not extract any coupon information from the image")
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                            mapOf(
+                                "reason" to "ocr_no_fields",
+                                "stage" to "traditional_uri"
+                            )
+                        )
                     } else {
                         val coupon = createCouponFromExtractedInfo(extractedInfo, finalUri.toString())
+                        val debugSnapshot = ExtractionDebugScorer.fromTraditionalOcr(extractedInfo)
+                        val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
+                        pendingPreview = PendingPreview(
+                            coupon = coupon,
+                            normalizedDescription = normalizedDescription,
+                            miniCpmStatus = MiniCpmProgress.FALLBACK,
+                            debugSnapshot = debugSnapshot
+                        )
                         _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.FALLBACK)
+
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_COUPON_DETECTED,
+                            mapOf(
+                                "source" to "traditional_ocr",
+                                "fields" to extractedInfo.size,
+                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                            )
+                        )
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+                            mapOf(
+                                "persisted" to false,
+                                "result" to "pending_review",
+                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                            )
+                        )
                     }
                 }
                 is MultiEngineOCR.OCRResult.Error -> {
                     _uiState.value = ScannerUiState.Error(result.message)
+                    analyticsTracker.trackEvent(
+                        AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                        mapOf(
+                            "reason" to "ocr_error",
+                            "stage" to "traditional_uri"
+                        )
+                    )
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in traditional OCR fallback", e)
             _uiState.value = ScannerUiState.Error("Error processing image: ${e.message}")
+            analyticsTracker.trackEvent(
+                AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                mapOf(
+                    "reason" to (e.message ?: "ocr_exception"),
+                    "stage" to "traditional_uri"
+                )
+            )
         }
     }
 
@@ -1524,18 +1855,64 @@ class ScannerViewModel @Inject constructor(
 
                     if (extractedInfo.isEmpty()) {
                         _uiState.value = ScannerUiState.Error("Could not extract any coupon information from the image")
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                            mapOf(
+                                "reason" to "ocr_no_fields",
+                                "stage" to "traditional_bitmap"
+                            )
+                        )
                     } else {
                         val coupon = createCouponFromExtractedInfo(extractedInfo, imageUri?.toString())
+                        val debugSnapshot = ExtractionDebugScorer.fromTraditionalOcr(extractedInfo)
+                        val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
+                        pendingPreview = PendingPreview(
+                            coupon = coupon,
+                            normalizedDescription = normalizedDescription,
+                            miniCpmStatus = MiniCpmProgress.FALLBACK,
+                            debugSnapshot = debugSnapshot
+                        )
                         _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.FALLBACK)
+
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_COUPON_DETECTED,
+                            mapOf(
+                                "source" to "traditional_ocr",
+                                "fields" to extractedInfo.size,
+                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                            )
+                        )
+                        analyticsTracker.trackEvent(
+                            AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
+                            mapOf(
+                                "persisted" to false,
+                                "result" to "pending_review",
+                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                            )
+                        )
                     }
                 }
                 is MultiEngineOCR.OCRResult.Error -> {
                     _uiState.value = ScannerUiState.Error(result.message)
+                    analyticsTracker.trackEvent(
+                        AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                        mapOf(
+                            "reason" to "ocr_error",
+                            "stage" to "traditional_bitmap"
+                        )
+                    )
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in traditional OCR fallback for bitmap", e)
             _uiState.value = ScannerUiState.Error("Error processing image: ${e.message}")
+            analyticsTracker.trackEvent(
+                AnalyticsTracker.EVENT_CAPTURE_FAILED,
+                mapOf(
+                    "reason" to (e.message ?: "ocr_exception"),
+                    "stage" to "traditional_bitmap"
+                )
+            )
         }
     }
 
@@ -1596,7 +1973,6 @@ class ScannerViewModel @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = null,
             category = determineCategory(extractedInfo),
             rating = null,
             status = "ACTIVE",
@@ -1683,6 +2059,16 @@ class ScannerViewModel @Inject constructor(
                         correctedCoupon = correctedCoupon,
                         originalText = ocrText,
                         context = context
+                    )
+
+                    validatorFeedbackRecorder.recordUserCorrection(
+                        rawOcrText = ocrText,
+                        extractionResult = extractionResult,
+                        correctedCoupon = correctedCoupon,
+                        metadata = mapOf(
+                            "source" to TAG,
+                            "strategy" to ExtractionMethod.UNIVERSAL_EXTRACTION.name
+                        )
                     )
                     
                     // Update the current coupon with corrections if it's still in preview
@@ -1773,6 +2159,22 @@ class ScannerViewModel @Inject constructor(
             Log.e(TAG, "Error cleaning up TwoStageDetector", e)
         }
     }
+
+    private fun finalizeCoupon(
+        base: Coupon,
+        ocrText: String?,
+        captureTimestamp: Date?
+    ): Coupon {
+        val refined = CouponPostProcessor.refine(
+            coupon = base,
+            context = CouponFixContext(
+                ocrText = ocrText,
+                captureTimestamp = captureTimestamp
+            )
+        )
+        val normalizedExpiry = normalizeExpiryDate(refined.expiryDate, captureTimestamp)
+        return refined.copy(expiryDate = normalizedExpiry)
+    }
 }
 
 /**
@@ -1780,7 +2182,7 @@ class ScannerViewModel @Inject constructor(
  */
 sealed class ScannerUiState {
     object Initial : ScannerUiState()
-    object Scanning : ScannerUiState()
+    data class Scanning(val progress: LlmProgressUpdate? = null) : ScannerUiState()
     data class Success(val coupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
     data class Saved(val coupon: Coupon) : ScannerUiState()
     data class AlreadySaved(val existingCoupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
@@ -1804,7 +2206,8 @@ data class CouponProcessingSummary(
 private data class PendingPreview(
     val coupon: Coupon,
     val normalizedDescription: String,
-    val miniCpmStatus: MiniCpmProgress
+    val miniCpmStatus: MiniCpmProgress,
+    val debugSnapshot: ExtractionDebugSnapshot?
 )
 
 enum class MiniCpmProgress {
@@ -1822,5 +2225,10 @@ enum class MiniCpmProgress {
 
 data class FieldExtractionResult(
     val fields: Map<String, String>,
-    val miniCpmStatus: MiniCpmProgress
+    val miniCpmStatus: MiniCpmProgress,
+    val runPath: RunPath? = null,
+    val debugSnapshot: ExtractionDebugSnapshot? = null,
+    val qualityScore: Int? = null,
+    val fieldConfidences: Map<String, Float> = emptyMap(),
+    val sourceStage: ExtractionStage? = null
 )

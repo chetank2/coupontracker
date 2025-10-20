@@ -1,6 +1,8 @@
 package com.example.coupontracker.ui.fragment
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ContentValues
 import android.content.Context
 import android.content.SharedPreferences
@@ -30,7 +32,8 @@ import com.example.coupontracker.R
 import com.example.coupontracker.databinding.FragmentAddBinding
 import com.example.coupontracker.ui.viewmodel.AddCouponViewModel
 import com.example.coupontracker.util.CouponInfo
-import com.example.coupontracker.util.ImageProcessor
+import com.example.coupontracker.util.CouponInputManager
+import com.example.coupontracker.util.ExtractionLogBuffer
 import com.example.coupontracker.util.SecurePreferencesManager
 import com.example.coupontracker.util.ApiType
 import com.example.coupontracker.llm.ModelDownloadManager
@@ -59,8 +62,8 @@ class AddFragment : Fragment() {
     private lateinit var cameraExecutor: ExecutorService
     private var imageUri: Uri? = null
     private var imageCapture: ImageCapture? = null
-    @Inject
-    lateinit var imageProcessor: com.example.coupontracker.util.ImageProcessor
+    @Inject lateinit var imageProcessor: com.example.coupontracker.util.ImageProcessor
+    @Inject lateinit var couponInputManager: CouponInputManager
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var securePreferencesManager: SecurePreferencesManager
     @Inject lateinit var modelDownloadManager: ModelDownloadManager
@@ -79,6 +82,7 @@ class AddFragment : Fragment() {
         if (isGranted) {
             startCamera()
         } else {
+            ExtractionLogBuffer.appendWarning(TAG, "Camera permission denied")
             Toast.makeText(requireContext(), "Camera permission is required", Toast.LENGTH_SHORT).show()
         }
     }
@@ -88,6 +92,7 @@ class AddFragment : Fragment() {
     ) { uri ->
         uri?.let {
             imageUri = it
+            ExtractionLogBuffer.appendInfo(TAG, "Gallery image selected: $it")
             viewModel.setImageUri(it)
             displaySelectedImage(it)
             processImageForCouponInfo(it)
@@ -226,14 +231,17 @@ class AddFragment : Fragment() {
 
     private fun setupClickListeners() {
         binding.toolbar.setNavigationOnClickListener {
+            ExtractionLogBuffer.appendInfo(TAG, "Navigation back pressed")
             findNavController().navigateUp()
         }
 
         binding.captureButton.setOnClickListener {
+            ExtractionLogBuffer.appendInfo(TAG, "Capture button tapped")
             captureImage()
         }
 
         binding.galleryButton.setOnClickListener {
+            ExtractionLogBuffer.appendInfo(TAG, "Gallery button tapped")
             galleryLauncher.launch("image/*")
         }
 
@@ -242,7 +250,12 @@ class AddFragment : Fragment() {
         }
 
         binding.saveButton.setOnClickListener {
+            ExtractionLogBuffer.appendInfo(TAG, "Save button tapped")
             saveCoupon()
+        }
+
+        binding.copyLogButton.setOnClickListener {
+            copyExtractionLog()
         }
 
         binding.mistralInfoButton.setOnClickListener {
@@ -286,6 +299,7 @@ class AddFragment : Fragment() {
                 val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
                 binding.reminderDateText.text = "Reminder set for: ${dateFormat.format(calendar.time)}"
                 binding.reminderDateText.visibility = View.VISIBLE
+                ExtractionLogBuffer.appendInfo(TAG, "Reminder set for ${dateFormat.format(calendar.time)}")
             },
             calendar.get(Calendar.HOUR_OF_DAY),
             calendar.get(Calendar.MINUTE),
@@ -324,6 +338,7 @@ class AddFragment : Fragment() {
             securePreferencesManager.setSelectedApiType(apiType)
             updateLlmControlsVisibility(isChecked)
             Log.d(TAG, "Local LLM OCR switch set to: $isChecked, ApiType: $apiType")
+            ExtractionLogBuffer.appendInfo(TAG, "Local LLM OCR switch set to $isChecked (apiType=$apiType)")
         }
         
         // Setup info button
@@ -333,11 +348,13 @@ class AddFragment : Fragment() {
         
         // Setup download button
         binding.llmDownloadButton.setOnClickListener {
+            ExtractionLogBuffer.appendInfo(TAG, "LLM download initiated")
             startModelDownload()
         }
         
         // Setup delete button
         binding.llmDeleteButton.setOnClickListener {
+            ExtractionLogBuffer.appendInfo(TAG, "LLM delete requested")
             deleteModel()
         }
         
@@ -345,6 +362,7 @@ class AddFragment : Fragment() {
         binding.llmWifiOnlySwitch.setOnCheckedChangeListener { _, isChecked ->
             securePreferencesManager.setLlmDownloadWifiOnly(isChecked)
             Log.d(TAG, "LLM WiFi-only download set to: $isChecked")
+            ExtractionLogBuffer.appendInfo(TAG, "LLM WiFi-only download set to $isChecked")
         }
     }
     
@@ -488,6 +506,7 @@ class AddFragment : Fragment() {
         binding.llmProgressText.visibility = View.VISIBLE
         binding.llmDownloadButton.isEnabled = false
         binding.llmDownloadButton.text = "Downloading..."
+        ExtractionLogBuffer.appendInfo(TAG, "LLM download started")
         
         lifecycleScope.launch {
             try {
@@ -496,6 +515,7 @@ class AddFragment : Fragment() {
                     if (isAdded) {
                         binding.llmDownloadProgress.setProgressCompat(progress.progressPercent, true)
                         binding.llmProgressText.text = progress.statusMessage
+                        ExtractionLogBuffer.appendInfo(TAG, "LLM download progress: ${progress.progressPercent}% - ${progress.statusMessage}")
                     }
                 }
                 
@@ -505,6 +525,7 @@ class AddFragment : Fragment() {
                             binding.llmDownloadProgress.visibility = View.GONE
                             binding.llmProgressText.visibility = View.GONE
                             updateLlmUiState()
+                            ExtractionLogBuffer.appendInfo(TAG, "LLM model download succeeded (${String.format("%.1f", result.modelSizeMB)} MB)")
                             
                             Snackbar.make(
                                 binding.root,
@@ -519,6 +540,7 @@ class AddFragment : Fragment() {
                             binding.llmProgressText.visibility = View.GONE
                             binding.llmDownloadButton.isEnabled = true
                             binding.llmDownloadButton.text = "Download Model"
+                            ExtractionLogBuffer.appendError(TAG, "LLM model download failed: ${result.message}")
                             
                             MaterialAlertDialogBuilder(requireContext())
                                 .setTitle("Download Failed")
@@ -536,6 +558,7 @@ class AddFragment : Fragment() {
                     binding.llmProgressText.visibility = View.GONE
                     binding.llmDownloadButton.isEnabled = true
                     binding.llmDownloadButton.text = "Download Model"
+                    ExtractionLogBuffer.appendError(TAG, "LLM model download error", e)
                     
                     Snackbar.make(
                         binding.root,
@@ -559,12 +582,14 @@ class AddFragment : Fragment() {
                 val success = modelDownloadManager.deleteModel()
                 if (success) {
                     updateLlmUiState()
+                    ExtractionLogBuffer.appendInfo(TAG, "LLM model deleted successfully")
                     Snackbar.make(
                         binding.root,
                         "Model deleted successfully",
                         Snackbar.LENGTH_SHORT
                     ).show()
                 } else {
+                    ExtractionLogBuffer.appendWarning(TAG, "Failed to delete LLM model")
                     Snackbar.make(
                         binding.root,
                         "Failed to delete model",
@@ -581,9 +606,12 @@ class AddFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.couponSaved.collect { saved ->
                     if (saved) {
+                        ExtractionLogBuffer.appendInfo(TAG, "Coupon saved successfully: ${viewModel.couponId}")
                         findNavController().navigate(
                             AddFragmentDirections.actionAddToDetail(viewModel.couponId)
                         )
+                    ExtractionLogBuffer.appendInfo(TAG, "Clearing logs after navigation")
+                    ExtractionLogBuffer.clear()
                     }
                 }
             }
@@ -593,6 +621,7 @@ class AddFragment : Fragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 viewModel.error.collect { error ->
                     error?.let {
+                        ExtractionLogBuffer.appendError(TAG, "Error from view model: $it")
                         Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
                         viewModel.clearError()
                     }
@@ -655,6 +684,7 @@ class AddFragment : Fragment() {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     output.savedUri?.let { uri ->
                         imageUri = uri
+                        ExtractionLogBuffer.appendInfo(TAG, "Captured image saved: $uri")
                         viewModel.setImageUri(uri)
                         displaySelectedImage(uri)
                         processImageForCouponInfo(uri)
@@ -662,6 +692,7 @@ class AddFragment : Fragment() {
                 }
 
                 override fun onError(exc: ImageCaptureException) {
+                    ExtractionLogBuffer.appendError(TAG, "Failed to capture image", exc)
                     Toast.makeText(requireContext(), "Failed to capture image", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -682,6 +713,7 @@ class AddFragment : Fragment() {
             .into(binding.selectedImageView)
 
         // Show a message to confirm image selection
+        ExtractionLogBuffer.appendInfo(TAG, "Displaying selected image")
         Toast.makeText(requireContext(), "Image selected successfully", Toast.LENGTH_SHORT).show()
     }
 
@@ -693,6 +725,7 @@ class AddFragment : Fragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             try {
+                ExtractionLogBuffer.appendInfo(TAG, "Processing image for coupon info: $uri")
                 Log.d(TAG, "Processing image for coupon info: $uri")
                 // Check if Mistral API is enabled and we have a key
                 val useMistralApi = sharedPreferences.getBoolean(KEY_USE_MISTRAL_API, false)
@@ -700,6 +733,7 @@ class AddFragment : Fragment() {
 
                 if (useMistralApi && apiKey.isNullOrBlank()) {
                     Log.w(TAG, "Mistral API is enabled but no API key is set")
+                    ExtractionLogBuffer.appendWarning(TAG, "Mistral API enabled but key missing")
                     binding.errorText.text = "Please set a Mistral API key"
                     binding.errorText.visibility = View.VISIBLE
                     Toast.makeText(requireContext(), "Please set a Mistral API key", Toast.LENGTH_SHORT).show()
@@ -715,12 +749,33 @@ class AddFragment : Fragment() {
                 }
                 // ImageProcessor is now injected via Hilt, no manual instantiation needed
 
-                val couponInfo = imageProcessor.processImage(uri) // URI-based processing includes metadata extraction
+                val coupon = couponInputManager.processCouponFromImageUriWithPersistence(uri)
+                ExtractionLogBuffer.appendInfo(TAG, "Coupon processing completed: store='${coupon.storeName}', description='${coupon.description}'")
+                val couponInfo = CouponInfo(
+                    storeName = coupon.storeName,
+                    description = coupon.description,
+                    cashbackAmount = coupon.getCashbackNumericValue().takeIf { it > 0.0 },
+                    redeemCode = coupon.redeemCode,
+                    expiryDate = coupon.expiryDate,
+                    category = coupon.category,
+                    status = coupon.status,
+                    discountType = when (coupon.cashbackType) {
+                        "percent" -> "PERCENTAGE"
+                        "amount" -> "AMOUNT"
+                        else -> null
+                    },
+                    minimumPurchase = coupon.minimumPurchase,
+                    maximumDiscount = coupon.maximumDiscount,
+                    paymentMethod = coupon.paymentMethod,
+                    platformType = coupon.platformType,
+                    usageLimit = coupon.usageLimit
+                )
                 Log.d(TAG, "Extracted coupon info: $couponInfo")
 
                 if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&
                     couponInfo.cashbackAmount == null && couponInfo.redeemCode.isNullOrBlank()) {
                     Log.w(TAG, "No coupon information was extracted")
+                    ExtractionLogBuffer.appendWarning(TAG, "No coupon information extracted from image")
                     binding.errorText.text = "Could not extract coupon information from image. Try adjusting the image or entering details manually."
                     binding.errorText.visibility = View.VISIBLE
                     Toast.makeText(requireContext(), "Could not extract coupon information from image", Toast.LENGTH_SHORT).show()
@@ -730,6 +785,7 @@ class AddFragment : Fragment() {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing image", e)
+                ExtractionLogBuffer.appendError(TAG, "Error processing image", e)
                 binding.errorText.text = "Error: ${e.message}"
                 binding.errorText.visibility = View.VISIBLE
                 Toast.makeText(requireContext(), "Failed to extract coupon information: ${e.message}", Toast.LENGTH_SHORT).show()
@@ -835,6 +891,7 @@ class AddFragment : Fragment() {
 
         // Set priority in view model
         viewModel.setPriority(isPriority)
+        ExtractionLogBuffer.appendInfo(TAG, "Saving coupon: store='$storeName', description='$description', amount=$cashbackAmount")
 
         viewModel.saveCoupon(
             storeName = storeName,
@@ -850,6 +907,15 @@ class AddFragment : Fragment() {
             platformType = platformType.takeIf { it.isNotBlank() },
             usageLimit = usageLimit
         )
+    }
+
+    private fun copyExtractionLog() {
+        val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val logText = ExtractionLogBuffer.getLogText().ifBlank { "No log data recorded yet." }
+        val clip = ClipData.newPlainText("Coupon Extraction Log", logText)
+        clipboard.setPrimaryClip(clip)
+        Toast.makeText(requireContext(), "Logcat data copied", Toast.LENGTH_SHORT).show()
+        ExtractionLogBuffer.appendInfo(TAG, "Log data copied to clipboard (${logText.length} chars)")
     }
 
     private fun allPermissionsGranted() = ContextCompat.checkSelfPermission(

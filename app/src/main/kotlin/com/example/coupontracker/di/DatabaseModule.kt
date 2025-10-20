@@ -32,7 +32,10 @@ object DatabaseModule {
                 CouponDatabase.MIGRATION_4_5,
                 CouponDatabase.MIGRATION_5_6,
                 CouponDatabase.MIGRATION_6_7,  // V2: Pattern learning and feedback tables
-                CouponDatabase.MIGRATION_7_8
+                CouponDatabase.MIGRATION_7_8,  // Drop deprecated offerText column
+                CouponDatabase.MIGRATION_8_9,
+                CouponDatabase.MIGRATION_9_10,
+                CouponDatabase.MIGRATION_10_11
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -51,8 +54,13 @@ object DatabaseModule {
     // V2: Provide feedback DAO
     @Provides
     @Singleton
-    fun provideExtractionFeedbackDao(database: CouponDatabase): ExtractionFeedbackDao = 
+    fun provideExtractionFeedbackDao(database: CouponDatabase): ExtractionFeedbackDao =
         database.extractionFeedbackDao()
+
+    @Provides
+    @Singleton
+    fun provideValidatorFeedbackDao(database: CouponDatabase): ValidatorFeedbackDao =
+        database.validatorFeedbackDao()
 
     @Provides
     @Singleton

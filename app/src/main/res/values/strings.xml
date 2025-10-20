@@ -28,6 +28,7 @@
     <string name="export_data">Export Data</string>
     <string name="import_data">Import Data</string>
     <string name="clear_data">Clear All Data</string>
+    <string name="scanner_progress_default">Preparing on-device AI…</string>
     <string name="llm_verifying_model">Verifying model integrity…</string>
     <string name="llm_download_error_network">Check your internet connection or update the model URL in Advanced Settings</string>
     <string name="multi_coupon_missing_data">Unable to open detected coupons. Please try scanning again.</string>

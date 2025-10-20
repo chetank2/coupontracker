@@ -86,9 +86,20 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         // Check Qwen2.5 first (it's the new default)
         val qwen25File = File(qwen25Dir, com.example.coupontracker.model.ModelPaths.QWEN25_MODEL_FILE)
         val qwen25Verified = File(qwen25Dir, ".verified")
-        
-        if (qwen25File.exists() && qwen25Verified.exists()) {
-            Log.d(TAG, "✅ Detected Qwen2.5-1.5B model")
+
+        if (qwen25File.exists() &&
+            qwen25File.length() >= com.example.coupontracker.model.ModelPaths.getMinFileSize(
+                com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN25,
+                com.example.coupontracker.model.ModelPaths.QWEN25_MODEL_FILE
+            )
+        ) {
+            if (!qwen25Verified.exists()) {
+                Log.w(TAG, "⚠️ Qwen2.5 model detected but .verified sentinel missing – treating as installed")
+            } else if (qwen25Verified.length() == 0L) {
+                Log.w(TAG, "⚠️ Qwen2.5 .verified sentinel is empty – continuing to treat model as installed")
+            } else {
+                Log.d(TAG, "✅ Detected Qwen2.5-1.5B model")
+            }
             return com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN25
         }
         
@@ -96,8 +107,19 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         val qwen2File = File(qwen2Dir, com.example.coupontracker.model.ModelPaths.QWEN2_MODEL_FILE)
         val qwen2Verified = File(qwen2Dir, ".verified")
         
-        if (qwen2File.exists() && qwen2Verified.exists()) {
-            Log.d(TAG, "✅ Detected Qwen2-1.5B model (legacy)")
+        if (qwen2File.exists() &&
+            qwen2File.length() >= com.example.coupontracker.model.ModelPaths.getMinFileSize(
+                com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN2,
+                com.example.coupontracker.model.ModelPaths.QWEN2_MODEL_FILE
+            )
+        ) {
+            if (!qwen2Verified.exists()) {
+                Log.w(TAG, "⚠️ Qwen2 model detected but .verified sentinel missing – treating as installed")
+            } else if (qwen2Verified.length() == 0L) {
+                Log.w(TAG, "⚠️ Qwen2 .verified sentinel is empty – continuing to treat model as installed")
+            } else {
+                Log.d(TAG, "✅ Detected Qwen2-1.5B model (legacy)")
+            }
             return com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN2
         }
         
@@ -105,8 +127,19 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         val minicpmFile = File(minicpmDir, com.example.coupontracker.model.ModelPaths.MINICPM_MODEL_FILE)
         val minicpmVerified = File(minicpmDir, ".verified")
         
-        if (minicpmFile.exists() && minicpmVerified.exists()) {
-            Log.d(TAG, "✅ Detected MiniCPM-Llama3-V2.5 model")
+        if (minicpmFile.exists() &&
+            minicpmFile.length() >= com.example.coupontracker.model.ModelPaths.getMinFileSize(
+                com.example.coupontracker.model.ModelPaths.MODEL_ID_MINICPM,
+                com.example.coupontracker.model.ModelPaths.MINICPM_MODEL_FILE
+            )
+        ) {
+            if (!minicpmVerified.exists()) {
+                Log.w(TAG, "⚠️ MiniCPM model detected but .verified sentinel missing – treating as installed")
+            } else if (minicpmVerified.length() == 0L) {
+                Log.w(TAG, "⚠️ MiniCPM .verified sentinel is empty – continuing to treat model as installed")
+            } else {
+                Log.d(TAG, "✅ Detected MiniCPM-Llama3-V2.5 model")
+            }
             return com.example.coupontracker.model.ModelPaths.MODEL_ID_MINICPM
         }
         
@@ -132,18 +165,41 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         Log.d(TAG, "Model directory: ${modelDir.absolutePath}")
         
         val missingFiles = mutableListOf<String>()
+        var missingSentinel = false
         for (requiredFile in requiredFiles) {
             val file = File(modelDir, requiredFile)
-            if (!file.exists() || file.length() == 0L) {
+            val minSize = com.example.coupontracker.model.ModelPaths.getMinFileSize(detectedModelId, requiredFile)
+
+            if (!file.exists()) {
+                if (requiredFile == ".verified") {
+                    missingSentinel = true
+                    continue
+                }
+                missingFiles.add(requiredFile)
+                continue
+            }
+
+            if (requiredFile == ".verified") {
+                if (file.length() == 0L) {
+                    missingSentinel = true
+                }
+                continue
+            }
+
+            if (file.length() < minSize) {
                 missingFiles.add(requiredFile)
             }
         }
-        
+
         if (missingFiles.isNotEmpty()) {
             Log.d(TAG, "Missing or empty model files: ${missingFiles.joinToString(", ")}")
             return false
         }
-        
+
+        if (missingSentinel) {
+            Log.w(TAG, "⚠️ Model sentinel (.verified) missing or empty – continuing but telemetry will note unverified install")
+        }
+
         Log.d(TAG, "✅ All required model files are present and valid ($modelName)")
         return true
     }
@@ -406,7 +462,27 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             return@withContext null
         }
     }
-    
+
+    fun cancelOngoingInference() {
+        val handle = modelHandle ?: return
+        runCatching {
+            nativeInterface.cancelInference(handle)
+        }.onFailure { error ->
+            Log.w(TAG, "Failed to cancel inference", error)
+        }
+    }
+
+    suspend fun resetAfterTimeout() {
+        lifecycleMutex.withLock {
+            autoUnloadJob?.cancel()
+            autoUnloadJob = null
+            unloadModelInternal(modelHandle)
+            modelHandle = null
+            referenceCount.set(0)
+            Log.d(TAG, "Model state reset after timeout")
+        }
+    }
+
     /**
      * Internal method to unload model (called under mutex)
      */

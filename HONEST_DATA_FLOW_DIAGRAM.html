@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CouponTracker - Honest Data Flow Diagram</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-bottom: 2px solid #ddd;
+        }
+        
+        .tab {
+            flex: 1;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1.1em;
+            transition: all 0.3s;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .tab:hover {
+            background: #e0e0e0;
+        }
+        
+        .tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+        
+        .content {
+            padding: 30px;
+            display: none;
+        }
+        
+        .content.active {
+            display: block;
+        }
+        
+        .flow-diagram {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .flow-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .flow-step {
+            flex: 1;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .flow-step:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        }
+        
+        .entry-point {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+        
+        .service {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+        
+        .ocr {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+        }
+        
+        .detector {
+            background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+            color: white;
+        }
+        
+        .extractor {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            color: #333;
+        }
+        
+        .llm {
+            background: linear-gradient(135deg, #ff9a56 0%, #ff6a88 100%);
+            color: white;
+        }
+        
+        .output {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .fallback {
+            background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            color: #333;
+            border: 2px dashed #ff6b6b;
+        }
+        
+        .step-title {
+            font-weight: 700;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+        
+        .step-class {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+        
+        .step-desc {
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+        
+        .arrow {
+            font-size: 2em;
+            color: #667eea;
+            text-align: center;
+        }
+        
+        .vertical-arrow {
+            padding: 10px 0;
+        }
+        
+        .horizontal-arrow {
+            flex: 0 0 auto;
+        }
+        
+        .branch-container {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .branch {
+            flex: 1;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 20px;
+            background: #f8f9ff;
+        }
+        
+        .branch-title {
+            font-weight: 700;
+            font-size: 1.1em;
+            color: #667eea;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .note {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .note-title {
+            font-weight: 700;
+            color: #856404;
+            margin-bottom: 8px;
+        }
+        
+        .note-content {
+            color: #856404;
+            font-size: 0.95em;
+            line-height: 1.6;
+        }
+        
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .legend-box {
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+        }
+        
+        .legend-text {
+            font-size: 0.9em;
+            font-weight: 600;
+        }
+        
+        ul {
+            margin: 10px 0 10px 20px;
+        }
+        
+        li {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎫 CouponTracker Data Flow</h1>
+            <p class="subtitle">Honest Implementation - How Data Actually Flows</p>
+        </header>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="showTab(0)">
+                📸 Single Coupon Upload
+            </div>
+            <div class="tab" onclick="showTab(1)">
+                🔢 Multiple Coupons (One Image)
+            </div>
+            <div class="tab" onclick="showTab(2)">
+                📤 Batch Upload (Multiple Images)
+            </div>
+        </div>
+        
+        <div id="tab-0" class="content active">
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-box entry-point"></div>
+                    <span class="legend-text">Entry Point</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box service"></div>
+                    <span class="legend-text">Service Layer</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box ocr"></div>
+                    <span class="legend-text">OCR Engine</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box llm"></div>
+                    <span class="legend-text">LLM Processing</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box output"></div>
+                    <span class="legend-text">Output</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box fallback"></div>
+                    <span class="legend-text">Fallback/Error Path</span>
+                </div>
+            </div>
+            
+            <h2 style="margin-bottom: 20px;">Single Coupon Screenshot Upload Flow</h2>
+            
+            <div class="flow-diagram">
+                <!-- Entry Point -->
+                <div class="flow-step entry-point">
+                    <div class="step-title">📱 User Action</div>
+                    <div class="step-class">HomeScreen → SimplifiedCaptureBottomSheet</div>
+                    <div class="step-desc">User clicks "Upload" button and selects single image from gallery</div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step entry-point">
+                    <div class="step-title">🎬 ViewModel Entry</div>
+                    <div class="step-class">CouponFormViewModel.processImageUri()</div>
+                    <div class="step-desc">
+                        • Receives image URI<br>
+                        • Calls <code>couponInputManager.processCouponFromImageUriWithPersistence()</code>
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step service">
+                    <div class="step-title">🔧 Input Manager</div>
+                    <div class="step-class">CouponInputManager.processCouponFromImageUri()</div>
+                    <div class="step-desc">
+                        • Persists URI to app storage<br>
+                        • Extracts capture timestamp from image metadata<br>
+                        • Loads bitmap from URI<br>
+                        • Calls <code>processCouponFromBitmap()</code>
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <!-- Multi-coupon detection branch -->
+                <div class="flow-step detector">
+                    <div class="step-title">🔍 Classification Step</div>
+                    <div class="step-class">ScreenshotClassifier.classify()</div>
+                    <div class="step-desc">
+                        • Runs quick OCR (QuickOCREngine)<br>
+                        • Analyzes text for multi-coupon patterns<br>
+                        • Detects if image contains multiple coupons
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="branch-container">
+                    <!-- Multi-coupon branch -->
+                    <div class="branch">
+                        <div class="branch-title">🎯 If Multi-Coupon Detected</div>
+                        
+                        <div class="flow-step detector">
+                            <div class="step-title">Multi-Coupon Extraction</div>
+                            <div class="step-class">MultiCouponExtractionService</div>
+                            <div class="step-desc">
+                                1. Full OCR (MultiEngineOCR)<br>
+                                2. Detect coupon regions (HybridCouponDetector)<br>
+                                3. Extract each region separately<br>
+                                4. Returns list of coupons
+                            </div>
+                        </div>
+                        
+                        <div class="arrow vertical-arrow">↓</div>
+                        
+                        <div class="flow-step fallback">
+                            <div class="step-title">⚠️ Combine Results</div>
+                            <div class="step-class">handleMultiCouponResult()</div>
+                            <div class="step-desc">
+                                Returns FIRST coupon only to user<br>
+                                (Others are lost - not saved to database)
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Single coupon branch -->
+                    <div class="branch">
+                        <div class="branch-title">📄 If Single Coupon</div>
+                        
+                        <div class="flow-step ocr">
+                            <div class="step-title">1️⃣ Barcode Scan</div>
+                            <div class="step-class">BarcodeScanner</div>
+                            <div class="step-desc">
+                                Scans for QR codes/barcodes<br>
+                                If URL found → process URL<br>
+                                If text found → use as coupon code
+                            </div>
+                        </div>
+                        
+                        <div class="arrow vertical-arrow">↓</div>
+                        
+                        <div class="flow-step ocr">
+                            <div class="step-title">2️⃣ OCR Extraction</div>
+                            <div class="step-class">LocalLlmOcrService</div>
+                            <div class="step-desc">
+                                • Runs ML Kit Text Recognition<br>
+                                • Extracts all text from image<br>
+                                • Timeout: 30 seconds
+                            </div>
+                        </div>
+                        
+                        <div class="arrow vertical-arrow">↓</div>
+                        
+                        <div class="flow-step llm">
+                            <div class="step-title">3️⃣ LLM Field Extraction</div>
+                            <div class="step-class">StructuredFieldExtractor (MiniCPM)</div>
+                            <div class="step-desc">
+                                • Sends OCR text to on-device LLM (llama.cpp)<br>
+                                • Model: MiniCPM-2.5B-Q4<br>
+                                • Extracts: store, code, amount, expiry<br>
+                                • First run: ~60s (model warmup)<br>
+                                • Subsequent: ~10s<br>
+                                • Timeout: 90 seconds
+                            </div>
+                        </div>
+                        
+                        <div class="arrow vertical-arrow">↓</div>
+                        
+                        <div class="flow-step fallback">
+                            <div class="step-title">⚠️ On Timeout/Failure</div>
+                            <div class="step-class">Fallback Logic</div>
+                            <div class="step-desc">
+                                Falls back to pattern matching:<br>
+                                • Regex for dates<br>
+                                • Regex for discount amounts<br>
+                                • Heuristics for store names<br>
+                                ❌ Can produce incorrect results
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step output">
+                    <div class="step-title">✅ Final Output</div>
+                    <div class="step-class">Coupon object returned to ViewModel</div>
+                    <div class="step-desc">
+                        Coupon fields populated:<br>
+                        • storeName, redeemCode, discountAmount, expiryDate<br>
+                        • imageUri (persisted path)<br>
+                        • captureTimestamp, createdAt<br>
+                        • Displayed in CouponFormScreen for user review
+                    </div>
+                </div>
+            </div>
+            
+            <div class="note">
+                <div class="note-title">🔍 Critical Issues in Single Coupon Flow:</div>
+                <div class="note-content">
+                    <ul>
+                        <li><strong>Multi-coupon data loss:</strong> If multiple coupons detected, only first one is returned. Others are discarded.</li>
+                        <li><strong>Timeout fallback:</strong> 90s timeout on LLM can still trigger fallback to pattern matching if LLM is slow.</li>
+                        <li><strong>No retry mechanism:</strong> If LLM fails, immediately falls back to pattern matching instead of retrying.</li>
+                        <li><strong>Pattern matching contradicts goal:</strong> Goal was "use LLM for accurate extraction", but timeout defeats this.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div id="tab-1" class="content">
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-box entry-point"></div>
+                    <span class="legend-text">Entry Point</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box detector"></div>
+                    <span class="legend-text">Detection/Classification</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box ocr"></div>
+                    <span class="legend-text">OCR Engine</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box extractor"></div>
+                    <span class="legend-text">Extraction Service</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box output"></div>
+                    <span class="legend-text">Output</span>
+                </div>
+            </div>
+            
+            <h2 style="margin-bottom: 20px;">Multiple Coupons in One Image Flow</h2>
+            
+            <div class="flow-diagram">
+                <div class="flow-step entry-point">
+                    <div class="step-title">📱 User Action</div>
+                    <div class="step-class">HomeScreen → Upload single screenshot with multiple coupons</div>
+                    <div class="step-desc">User uploads image containing multiple coupon cards (e.g., from coupon aggregator app)</div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step entry-point">
+                    <div class="step-title">🎬 Entry Point</div>
+                    <div class="step-class">CouponInputManager.processCouponFromBitmap()</div>
+                    <div class="step-desc">Same as single coupon flow</div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step detector">
+                    <div class="step-title">🔍 Step 1: Quick OCR</div>
+                    <div class="step-class">QuickOCREngine.recognize()</div>
+                    <div class="step-desc">
+                        Fast text extraction for classification:<br>
+                        • Uses ML Kit Text Recognition<br>
+                        • Extracts all visible text
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step detector">
+                    <div class="step-title">🎯 Step 2: Classification</div>
+                    <div class="step-class">ScreenshotClassifier.classify()</div>
+                    <div class="step-desc">
+                        Analyzes text patterns to detect:<br>
+                        • MULTI_COUPON_APP (coupon aggregator)<br>
+                        • E_COMMERCE_CART (checkout page)<br>
+                        • EMAIL_SCREENSHOT (promotional email)<br>
+                        • CAMERA_CAPTURE (single coupon)<br>
+                        <br>
+                        Returns confidence score + coupon count estimate
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step service">
+                    <div class="step-title">🚀 Step 3: Multi-Coupon Pipeline</div>
+                    <div class="step-class">MultiCouponExtractionService.extractMultipleCoupons()</div>
+                    <div class="step-desc">Main orchestrator for multi-coupon extraction</div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step ocr">
+                    <div class="step-title">📝 Step 3a: Full OCR</div>
+                    <div class="step-class">MultiEngineOCR.processImage()</div>
+                    <div class="step-desc">
+                        Comprehensive text extraction:<br>
+                        • ML Kit Text Recognition<br>
+                        • Returns structured OCR result with text blocks<br>
+                        • Preserves spatial layout information
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step detector">
+                    <div class="step-title">🎯 Step 3b: Region Detection</div>
+                    <div class="step-class">HybridCouponDetector.detectCoupons()</div>
+                    <div class="step-desc">
+                        Detects individual coupon regions:<br>
+                        • Uses OCR text block clustering<br>
+                        • Spatial analysis of coupon patterns<br>
+                        • Returns bounding boxes for each coupon<br>
+                        • Max: 10 coupons per image
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step extractor">
+                    <div class="step-title">✂️ Step 3c: Crop & Extract Each Region</div>
+                    <div class="step-class">Loop through detected regions</div>
+                    <div class="step-desc">
+                        For each detected coupon region:<br>
+                        1. Crop bitmap to bounding box<br>
+                        2. Run OCR on cropped region<br>
+                        3. Extract fields using StructuredFieldExtractor<br>
+                        4. Create Coupon object<br>
+                        5. Add to results list
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step extractor">
+                    <div class="step-title">🧹 Step 3d: Filter & Deduplicate</div>
+                    <div class="step-class">QualityFilter & CouponDedupUtils</div>
+                    <div class="step-desc">
+                        • Remove low-quality extractions<br>
+                        • Filter out "Unknown Store" results<br>
+                        • Deduplicate based on code similarity<br>
+                        • Keep only valid coupons
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step output">
+                    <div class="step-title">📦 Step 4: Return Results</div>
+                    <div class="step-class">MultiCouponResult</div>
+                    <div class="step-desc">
+                        Returns:<br>
+                        • List of extracted coupons (0-10)<br>
+                        • Screenshot type classification<br>
+                        • Statistics: detected, extracted, filtered counts
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step fallback">
+                    <div class="step-title">⚠️ Step 5: Combine/Select</div>
+                    <div class="step-class">handleMultiCouponResult()</div>
+                    <div class="step-desc">
+                        <strong>CRITICAL ISSUE:</strong><br>
+                        Only returns FIRST coupon to user!<br>
+                        Remaining coupons are discarded.<br>
+                        <br>
+                        User sees form with 1 coupon, not all extracted coupons.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="note">
+                <div class="note-title">🚨 Critical Issues in Multi-Coupon Flow:</div>
+                <div class="note-content">
+                    <ul>
+                        <li><strong>Data Loss:</strong> System successfully extracts N coupons but only shows user 1 coupon. This defeats the entire purpose of multi-coupon detection!</li>
+                        <li><strong>No batch save UI:</strong> UI (CouponFormScreen) is designed for single coupon entry, not batch review.</li>
+                        <li><strong>Wasted processing:</strong> All the work to detect, crop, and extract multiple regions is thrown away.</li>
+                        <li><strong>User confusion:</strong> User uploads image with 5 coupons, sees only 1 extracted. No indication that others were detected.</li>
+                        <li><strong>Missing integration:</strong> MultiCouponExtractionService works correctly but isn't properly integrated into UI layer.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div id="tab-2" class="content">
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-box entry-point"></div>
+                    <span class="legend-text">Entry Point</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box service"></div>
+                    <span class="legend-text">Service Layer</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box detector"></div>
+                    <span class="legend-text">Detection</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box extractor"></div>
+                    <span class="legend-text">Extraction</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-box output"></div>
+                    <span class="legend-text">Output</span>
+                </div>
+            </div>
+            
+            <h2 style="margin-bottom: 20px;">Multiple Screenshots Batch Upload Flow</h2>
+            
+            <div class="flow-diagram">
+                <div class="flow-step entry-point">
+                    <div class="step-title">📱 User Action</div>
+                    <div class="step-class">HomeScreen → "Screenshot Upload" (Batch Mode)</div>
+                    <div class="step-desc">
+                        User selects multiple images (2-50) from gallery<br>
+                        Intent: Bulk import screenshots of coupons
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step entry-point">
+                    <div class="step-title">🎬 Batch Entry Point</div>
+                    <div class="step-class">BatchScannerViewModel.processImages()</div>
+                    <div class="step-desc">
+                        • Receives list of image URIs<br>
+                        • Checks if TwoStageDetector is available<br>
+                        • Starts batch processing loop
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step service">
+                    <div class="step-title">🔄 For Each Image</div>
+                    <div class="step-class">Loop: images.forEach { processImage(it) }</div>
+                    <div class="step-desc">
+                        Processes images sequentially (not in parallel)<br>
+                        Updates progress UI after each image
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step service">
+                    <div class="step-title">🖼️ Load Image</div>
+                    <div class="step-class">BitmapFactory.decodeStream()</div>
+                    <div class="step-desc">
+                        • Loads bitmap from URI<br>
+                        • Tracks bitmap in BitmapManager<br>
+                        • Validates mime type
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step detector">
+                    <div class="step-title">🔍 Detect & Extract Multiple Coupons</div>
+                    <div class="step-class">detectAndExtractMultipleCoupons()</div>
+                    <div class="step-desc">
+                        Same multi-coupon pipeline as Tab 2:<br>
+                        1. Run full OCR<br>
+                        2. Detect coupon regions<br>
+                        3. Extract each region<br>
+                        4. Returns list of coupons per image
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step extractor">
+                    <div class="step-title">📝 OCR Each Image</div>
+                    <div class="step-class">MultiEngineOCR.processImage()</div>
+                    <div class="step-desc">
+                        Runs ML Kit OCR on full image
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step detector">
+                    <div class="step-title">🎯 Detect Regions</div>
+                    <div class="step-class">HybridCouponDetector.detectCoupons()</div>
+                    <div class="step-desc">
+                        Finds coupon regions within each image<br>
+                        (Each image may contain 1 or more coupons)
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step extractor">
+                    <div class="step-title">✂️ Extract Each Region</div>
+                    <div class="step-class">extractCouponFromRegion()</div>
+                    <div class="step-desc">
+                        For each detected region:<br>
+                        • Crop to bounding box<br>
+                        • Run OCR on region<br>
+                        • Extract fields using StructuredFieldExtractor<br>
+                        • Create Coupon object
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step service">
+                    <div class="step-title">📊 Accumulate Results</div>
+                    <div class="step-class">processedCoupons.addAll(imageCoupons)</div>
+                    <div class="step-desc">
+                        • Adds all extracted coupons to results list<br>
+                        • Tracks success/failure per image<br>
+                        • Updates progress counter
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step extractor">
+                    <div class="step-title">🧹 Cleanup Bitmap</div>
+                    <div class="step-class">bitmapManager.releaseBitmap()</div>
+                    <div class="step-desc">
+                        Releases bitmap memory after processing
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step output">
+                    <div class="step-title">✅ Batch Results</div>
+                    <div class="step-class">Navigate to BatchResultsScreen</div>
+                    <div class="step-desc">
+                        • Shows list of ALL extracted coupons<br>
+                        • User can review, edit, and select which to save<br>
+                        • Statistics: X images → Y coupons extracted<br>
+                        • Failed images shown with error messages
+                    </div>
+                </div>
+                
+                <div class="arrow vertical-arrow">↓</div>
+                
+                <div class="flow-step output">
+                    <div class="step-title">💾 Bulk Save</div>
+                    <div class="step-class">User confirms → saveCoupons()</div>
+                    <div class="step-desc">
+                        • User reviews list and selects coupons to keep<br>
+                        • Selected coupons saved to database<br>
+                        • Deduplication applied<br>
+                        • Success confirmation shown
+                    </div>
+                </div>
+            </div>
+            
+            <div class="note">
+                <div class="note-title">✅ What Works Well in Batch Flow:</div>
+                <div class="note-content">
+                    <ul>
+                        <li><strong>Complete extraction:</strong> All coupons from all images are extracted and shown to user.</li>
+                        <li><strong>Batch review UI:</strong> BatchResultsScreen properly displays all extracted coupons.</li>
+                        <li><strong>User control:</strong> User can review, edit, or discard individual coupons before saving.</li>
+                        <li><strong>Multi-coupon support:</strong> Each image can contain multiple coupons, all are extracted.</li>
+                        <li><strong>Progress tracking:</strong> Real-time progress updates during batch processing.</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="note">
+                <div class="note-title">⚠️ Issues in Batch Flow:</div>
+                <div class="note-content">
+                    <ul>
+                        <li><strong>Sequential processing:</strong> Images processed one-by-one, not in parallel. Can be slow for large batches.</li>
+                        <li><strong>No pause/resume:</strong> If user exits during processing, progress is lost.</li>
+                        <li><strong>Memory pressure:</strong> Processing many large images can cause memory issues on low-end devices.</li>
+                        <li><strong>No retry on failure:</strong> If one image fails, it's skipped with no retry option.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function showTab(index) {
+            // Hide all content
+            const contents = document.querySelectorAll('.content');
+            contents.forEach(content => content.classList.remove('active'));
+            
+            // Deactivate all tabs
+            const tabs = document.querySelectorAll('.tab');
+            tabs.forEach(tab => tab.classList.remove('active'));
+            
+            // Show selected content
+            document.getElementById(`tab-${index}`).classList.add('active');
+            
+            // Activate selected tab
+            tabs[index].classList.add('active');
+        }
+    </script>
+</body>
+</html>
+

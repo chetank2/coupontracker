@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.camera.CaptureReadiness
@@ -102,7 +103,7 @@ class SmartCameraViewModel @Inject constructor(
         
         imageCapture.takePicture(
             outputOptions,
-            context.mainExecutor,
+            ContextCompat.getMainExecutor(context),
             object : ImageCapture.OnImageSavedCallback {
                 override fun onImageSaved(output: ImageCapture.OutputFileResults) {
                     val uri = Uri.fromFile(photoFile)

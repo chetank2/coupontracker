@@ -9,11 +9,15 @@ import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.universal.PatternLearningEngine
+import com.example.coupontracker.util.CouponFixContext
+import com.example.coupontracker.util.CouponPostProcessor
 import com.example.coupontracker.util.ImageMetadataExtractor
 import com.example.coupontracker.util.IndianCurrencyParser
+import com.example.coupontracker.util.IndianDateParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
+import java.time.ZoneId
 import java.util.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,6 +47,10 @@ class ProgressiveExtractionService @Inject constructor(
     private val llmService: com.example.coupontracker.util.LocalLlmOcrService? = null,
     private val extractionLearningIntegration: com.example.coupontracker.learning.ExtractionLearningIntegration? = null
 ) {
+    // V2: Validation components for multi-coupon extraction
+    private val confidenceScorer = ConfidenceScorer()
+    private val extractionValidator = ExtractionValidator(confidenceScorer)
+    
     companion object {
         private const val TAG = "ProgressiveExtractionService"
 
@@ -361,8 +369,16 @@ class ProgressiveExtractionService @Inject constructor(
         
         Log.d(TAG, "Built coupon: store='${coupon.storeName}', desc='${coupon.description.take(50)}...', amount=${coupon.cashbackAmount}")
         
-        return ProgressiveExtractionResult(
+        val refined = CouponPostProcessor.refine(
             coupon = coupon,
+            context = CouponFixContext(
+                ocrText = context.ocrText,
+                captureTimestamp = context.captureTimestamp
+            )
+        )
+
+        return ProgressiveExtractionResult(
+            coupon = refined,
             confidence = overallConfidence,
             extractedFields = extractedFields,
             success = true,
@@ -411,7 +427,6 @@ class ProgressiveExtractionService @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = null,
             category = null,
             rating = null,
             status = "ACTIVE",
@@ -465,32 +480,48 @@ class ProgressiveExtractionService @Inject constructor(
     /**
      * Parse date string to Date object
      */
-    private fun parseDate(dateString: String): Date? {
+    internal fun parseDate(dateString: String): Date? {
+        val sanitized = dateString.trim()
+            .replace(Regex("(?i)(\\d{1,2})(st|nd|rd|th)"), "\\1")
+            .replace(",", "")
+            .replace(Regex("\\s+"), " ")
+
         // Try ISO format first (from relative date conversion)
         val isoFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         try {
-            return isoFormat.parse(dateString)
-        } catch (e: Exception) {
+            return isoFormat.parse(sanitized)
+        } catch (ignored: Exception) {
             // Not ISO format
         }
-        
-        // Try common Indian date formats
+
+        // Try common Indian date formats with both single and double digit days
         val formats = listOf(
             "dd/MM/yyyy",
+            "d/M/yyyy",
             "dd-MM-yyyy",
+            "d-M-yyyy",
             "dd MMM yyyy",
-            "dd MMMM yyyy"
+            "d MMM yyyy",
+            "dd MMMM yyyy",
+            "d MMMM yyyy"
         )
-        
+
         for (formatStr in formats) {
             try {
                 val format = SimpleDateFormat(formatStr, Locale.US)
-                return format.parse(dateString)
-            } catch (e: Exception) {
+                return format.parse(sanitized)
+            } catch (ignored: Exception) {
                 // Try next format
             }
         }
-        
+
+        // Fallback to the shared Indian date parser for harder cases
+        val fallback = IndianDateParser.parseExpiryIST(dateString).date
+        if (fallback != null) {
+            val zone = ZoneId.systemDefault()
+            return Date.from(fallback.atStartOfDay(zone).toInstant())
+        }
+
         Log.w(TAG, "Could not parse date: $dateString")
         return null
     }
@@ -534,7 +565,8 @@ class ProgressiveExtractionService @Inject constructor(
     }
     
     /**
-     * Finish extraction: build result + ALWAYS trigger learning
+     * Finish extraction: build result + validate + ALWAYS trigger learning
+     * V2: Enhanced with confidence scoring and validation
      * This ensures learning runs regardless of which pass succeeded
      */
     private suspend fun finishExtraction(
@@ -566,6 +598,38 @@ class ProgressiveExtractionService @Inject constructor(
         """.trimIndent())
         
         val result = buildFinalResult(context, extractedFields, image, imageUri)
+        
+        // V2: Validate extracted coupon with confidence scoring
+        try {
+            val validationResult = extractionValidator.validate(result.coupon)
+            
+            Log.d(TAG, """
+                ┌─────────────────────────────────────────────────────────
+                │ VALIDATION RESULT
+                ├─────────────────────────────────────────────────────────
+                │ Quality: ${validationResult.extractionQuality}
+                │ Confidence: ${validationResult.validationResult.overallConfidence}
+                │ Action: ${validationResult.validationResult.suggestedAction}
+                │ 
+                │ Recommendations:
+                ${validationResult.actionableRecommendations.joinToString("\n") { "│   - $it" }}
+                └─────────────────────────────────────────────────────────
+            """.trimIndent())
+            
+            // Log warnings if validation suggests issues
+            if (validationResult.validationResult.warnings.isNotEmpty()) {
+                Log.w(TAG, "Validation warnings: ${validationResult.validationResult.warnings.joinToString("; ")}")
+            }
+            
+            // If extraction quality is too poor, log recommendation but still return result
+            // (Let caller decide whether to use it or retry)
+            if (validationResult.extractionQuality == ExtractionValidator.ExtractionQuality.FAILED) {
+                Log.e(TAG, "Extraction quality FAILED - consider retrying with different strategy")
+            }
+            
+        } catch (e: Exception) {
+            Log.w(TAG, "Error during validation (non-critical): ${e.message}", e)
+        }
         
         // CRITICAL: ALWAYS trigger learning (no matter which pass succeeded)
         extractionLearningIntegration?.let { learning ->

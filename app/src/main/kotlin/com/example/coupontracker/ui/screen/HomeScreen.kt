@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -45,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -146,7 +146,7 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
+            TopAppBar(
                 title = {
                     if (!isSearchActive) {
                         Text(
@@ -162,6 +162,7 @@ fun HomeScreen(
                             },
                             placeholder = { Text("Search coupons") },
                             singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
                             colors = TextFieldDefaults.colors(
                                 focusedIndicatorColor = MaterialTheme.colorScheme.primary,
                                 unfocusedIndicatorColor = MaterialTheme.colorScheme.outline,
@@ -196,7 +197,7 @@ fun HomeScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
@@ -266,6 +267,11 @@ fun HomeScreen(
                     },
                     onManualEntry = {
                         navController.navigate(Screen.ManualEntry.route)
+                    },
+                    onScreenshotUpload = {
+                        // Phase 3: Multi-coupon screenshot upload
+                        // Navigate to batch scanner for multi-coupon extraction
+                        navController.navigate(Screen.BatchScanner.route)
                     }
                 )
             }
@@ -315,11 +321,6 @@ fun HomeScreen(
         }
 
         SearchAndFilterBar(
-            searchQuery = searchQuery,
-            onSearchChange = {
-                searchQuery = it
-                viewModel.updateSearchQuery(it)
-            },
             onFiltersClick = { showFilterSortBottomSheet = true },
             sortOrderLabel = filters.sortOrder.displayName,
             hasActiveFilters = filters.filterState.hasActiveFilters(includeSearchQuery = true, searchQuery = searchQuery)
@@ -430,6 +431,7 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
                 ) {
                     items(coupons) { coupon ->
+                        val debugSnapshot = homeUiState.extractionDebug[coupon.id]
                         EnhancedCouponCard(
                             storeName = coupon.storeName,
                             description = coupon.description,
@@ -443,7 +445,8 @@ fun HomeScreen(
                             onCopyCode = { code ->
                                 clipboardManager.setText(AnnotatedString(code))
                             },
-                            cashbackDisplayText = coupon.getCashbackDisplayText()
+                            cashbackDisplayText = coupon.getCashbackDisplayText(),
+                            debugSnapshot = debugSnapshot
                         )
                     }
                 }
@@ -454,8 +457,6 @@ fun HomeScreen(
 
 @Composable
 private fun SearchAndFilterBar(
-    searchQuery: String,
-    onSearchChange: (String) -> Unit,
     onFiltersClick: () -> Unit,
     sortOrderLabel: String,
     hasActiveFilters: Boolean
@@ -465,23 +466,6 @@ private fun SearchAndFilterBar(
             .fillMaxWidth()
             .padding(horizontal = BrandSpacing.Medium, vertical = BrandSpacing.Small)
     ) {
-        TextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
-            placeholder = { Text("Search coupons") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                unfocusedIndicatorColor = MaterialTheme.colorScheme.outline
-            )
-        )
-
-        Spacer(modifier = Modifier.height(BrandSpacing.Small))
-
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Small)

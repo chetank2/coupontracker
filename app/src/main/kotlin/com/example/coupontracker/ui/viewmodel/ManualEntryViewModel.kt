@@ -1,15 +1,13 @@
 package com.example.coupontracker.ui.viewmodel
 
 import android.app.Application
-import android.content.Context
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.util.CouponInputManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,15 +21,12 @@ import javax.inject.Inject
 @HiltViewModel
 class ManualEntryViewModel @Inject constructor(
     application: Application,
-    @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository,
-    private val imageProcessor: com.example.coupontracker.util.ImageProcessor
+    private val couponInputManager: CouponInputManager
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(ManualEntryUiState())
     val uiState: StateFlow<ManualEntryUiState> = _uiState.asStateFlow()
-
-    private val couponInputManager = CouponInputManager(context, imageProcessor)
 
     companion object {
         private const val TAG = "ManualEntryViewModel"
@@ -46,7 +41,7 @@ class ManualEntryViewModel @Inject constructor(
      * Check for shared URL from intent and auto-process it
      */
     private fun checkForSharedUrl() {
-        val sharedPrefs = context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
+        val sharedPrefs = getApplication<Application>().getSharedPreferences("coupon_tracker_prefs", android.content.Context.MODE_PRIVATE)
         val sharedUrl = sharedPrefs.getString("shared_url", null)
         
         if (sharedUrl != null) {

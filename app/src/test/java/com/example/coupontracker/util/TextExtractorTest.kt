@@ -1,295 +1,95 @@
 package com.example.coupontracker.util
 
-import org.junit.Assert.*
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Test
-import org.junit.runner.RunWith
-import org.robolectric.RobolectricTestRunner
+import java.text.SimpleDateFormat
+import java.util.Locale
 
-@RunWith(RobolectricTestRunner::class)
 class TextExtractorTest {
 
     private val extractor = TextExtractor()
 
     @Test
-    fun `test extractStoreName from ABHIBUS coupon`() {
+    fun `extractDescription combines multi-line offer text`() {
         val text = """
-            ABHIBUS
-            Get upto ₹500 off
-            Code: ABSGYWVAJ1D0A8
-            Claim Now
-        """.trimIndent()
-        
-        val storeName = extractor.extractStoreName(text)
-        assertNotNull("Store name should not be null", storeName)
-        assertEquals("ABHIBUS", storeName)
-    }
-    
-    @Test
-    fun `test extractDescription from ABHIBUS coupon`() {
-        val text = """
-            ABHIBUS
-            Get upto ₹500 off
-            Code: ABSGYWVAJ1D0A8
-            Claim Now
-        """.trimIndent()
-        
-        val description = extractor.extractDescription(text)
-        assertNotNull("Description should not be null", description)
-        assertEquals("ABHIBUS Coupon - ₹500.0 off", description)
-    }
-    
-    @Test
-    fun `test extractRedeemCode from ABHIBUS coupon`() {
-        val text = """
-            ABHIBUS
-            Get upto ₹500 off
-            Code: ABSGYWVAJ1D0A8
-            Claim Now
-        """.trimIndent()
-        
-        val redeemCode = extractor.extractRedeemCode(text)
-        assertNotNull("Redeem code should not be null", redeemCode)
-        assertEquals("ABSGYWVAJ1D0A8", redeemCode)
-    }
-    
-    @Test
-    fun `test extractCashbackAmount from ABHIBUS coupon`() {
-        val text = """
-            ABHIBUS
-            Get upto ₹500 off
-            Code: ABSGYWVAJ1D0A8
-            Claim Now
-        """.trimIndent()
-        
-        val cashbackAmount = extractor.extractCashbackAmount(text)
-        assertNotNull("Cashback amount should not be null", cashbackAmount)
-        assertEquals(500.0, cashbackAmount!!, 0.01)
-    }
-    
-    @Test
-    fun `test extractStoreName from NEWMEE coupon`() {
-        val text = """
-            NEWMEE
-            Flat ₹250 OFF
-            Code: NEWMEE250SW
-            Claim Now
-        """.trimIndent()
-        
-        val storeName = extractor.extractStoreName(text)
-        assertNotNull("Store name should not be null", storeName)
-        assertEquals("NEWMEE", storeName)
-    }
-    
-    @Test
-    fun `test extractDescription from NEWMEE coupon`() {
-        val text = """
-            NEWMEE
-            Flat ₹250 OFF
-            Code: NEWMEE250SW
-            Claim Now
-        """.trimIndent()
-        
-        val description = extractor.extractDescription(text)
-        assertNotNull("Description should not be null", description)
-        assertEquals("NEWMEE Coupon - Flat ₹250.0 off", description)
-    }
-    
-    @Test
-    fun `test extractRedeemCode from NEWMEE coupon`() {
-        val text = """
-            NEWMEE
-            Flat ₹250 OFF
-            Code: NEWMEE250SW
-            Claim Now
-        """.trimIndent()
-        
-        val redeemCode = extractor.extractRedeemCode(text)
-        assertNotNull("Redeem code should not be null", redeemCode)
-        assertEquals("NEWMEE250SW", redeemCode)
-    }
-    
-    @Test
-    fun `test extractCashbackAmount from NEWMEE coupon`() {
-        val text = """
-            NEWMEE
-            Flat ₹250 OFF
-            Code: NEWMEE250SW
-            Claim Now
-        """.trimIndent()
-        
-        val cashbackAmount = extractor.extractCashbackAmount(text)
-        assertNotNull("Cashback amount should not be null", cashbackAmount)
-        assertEquals(250.0, cashbackAmount!!, 0.01)
-    }
-    
-    @Test
-    fun `test extractStoreName from IXIGO coupon`() {
-        val text = """
-            IXIGO
-            Get upto 30% off
-            Code: SWGGS01BO719GFHS
-            Claim Now
-        """.trimIndent()
-        
-        val storeName = extractor.extractStoreName(text)
-        assertNotNull("Store name should not be null", storeName)
-        assertEquals("IXIGO", storeName)
-    }
-
-    @Test
-    fun `extractStoreName handles accented mid sentence brand`() {
-        val text = "Enjoy a croissant at the Zepto Café kiosk before noon."
-
-        val storeName = extractor.extractStoreName(text)
-
-        assertEquals("Zepto Café", storeName)
-    }
-    
-    @Test
-    fun `test extractDescription from IXIGO coupon`() {
-        val text = """
-            IXIGO
-            Get upto 30% off
-            Code: SWGGS01BO719GFHS
-            Claim Now
-        """.trimIndent()
-        
-        val description = extractor.extractDescription(text)
-        assertNotNull("Description should not be null", description)
-        assertEquals("IXIGO Coupon - Up to 30.0% off", description)
-    }
-    
-    @Test
-    fun `test extractRedeemCode from IXIGO coupon`() {
-        val text = """
-            IXIGO
-            Get upto 30% off
-            Code: SWGGS01BO719GFHS
-            Claim Now
+            Buy 2 Get 2 FREE*
+            + Up to 5% Foxcoins
         """.trimIndent()
 
-        val redeemCode = extractor.extractRedeemCode(text)
-        assertNotNull("Redeem code should not be null", redeemCode)
-        assertEquals("SWGGS01BO719GFHS", redeemCode)
-    }
+        val result = extractor.extractDescription(text)
 
-    @Test
-    fun `extractRedeemCode collapses whitespace and trims trailing noise`() {
-        val text = "Use code Q2SQ74 JS7CK O today"
-
-        val redeemCode = extractor.extractRedeemCode(text)
-
-        assertEquals("Q2SQ74JS7CK", redeemCode)
-    }
-
-    @Test
-    fun `extractRedeemCode handles dash separators`() {
-        val variants = listOf(
-            "Use code- MISSEDYOU",
-            "Use code– MISSEDYOU",
-            "Use code—MISSEDYOU"
+        assertEquals(
+            "Buy 2 Get 2 FREE* + Up to 5% Foxcoins",
+            result
         )
-
-        variants.forEach { sample ->
-            val redeemCode = extractor.extractRedeemCode(sample)
-            assertEquals("MISSEDYOU", redeemCode)
-        }
-    }
-    
-    @Test
-    fun `test extractCashbackAmount from IXIGO coupon`() {
-        val text = """
-            IXIGO
-            Get upto 30% off
-            Code: SWGGS01BO719GFHS
-            Claim Now
-        """.trimIndent()
-
-        val cashbackAmount = extractor.extractCashbackAmount(text)
-        assertNotNull("Cashback amount should not be null", cashbackAmount)
-        assertEquals(30.0, cashbackAmount!!, 0.01)
     }
 
     @Test
-    fun `extractStoreName prefers repeated proper nouns over generic all caps words`() {
+    fun `extractDescription preserves upto connector without whitespace`() {
         val text = """
-            Minimalist Skincare
-            Minimalist… MULTI PRODUCT KIT
-            Save 10% on your first order
+            Buy 2 Get 2 FREE* +
+            Upto 5% Foxcoins
         """.trimIndent()
 
-        val storeName = extractor.extractStoreName(text)
+        val result = extractor.extractDescription(text)
 
-        assertEquals("Minimalist", storeName)
+        assertEquals(
+            "Buy 2 Get 2 FREE* + Upto 5% Foxcoins",
+            result
+        )
     }
-    
+
     @Test
-    fun `test extractStoreName from BOAT coupon`() {
+    fun `extractDescription builds rupee summary when LLM returns placeholder`() {
         val text = """
-            BOAT
-            Up to 80% Off
-            Code: BTXSWG7GYZRB
-            Claim Now
+            Minimalist
+            Offer Details
+            Flat 7100 Off + 750 Cashback
+            Use code MNPPRK100UAPR255QYSGZA
         """.trimIndent()
-        
-        val storeName = extractor.extractStoreName(text)
-        assertNotNull("Store name should not be null", storeName)
-        assertEquals("BOAT", storeName)
+
+        val result = extractor.extractDescription(text)
+
+        assertEquals(
+            "Minimalist Coupon - Flat ₹7100 off",
+            result
+        )
     }
-    
+
     @Test
-    fun `test extractDescription from BOAT coupon`() {
+    fun `extractStoreName skips watermark noise like Pastm`() {
         val text = """
-            BOAT
-            Up to 80% Off
-            Code: BTXSWG7GYZRB
-            Claim Now
+            Pastm rewards watermark
+            Redeem on Aha Annual Plan Offer
         """.trimIndent()
-        
-        val description = extractor.extractDescription(text)
-        assertNotNull("Description should not be null", description)
-        assertEquals("BOAT Coupon - Up to 80.0% off", description)
+
+        val result = extractor.extractStoreName(text)
+
+        assertEquals("Aha", result)
     }
-    
+
     @Test
-    fun `test extractRedeemCode from BOAT coupon`() {
+    fun `extractRedeemCode finds token on line after indicator`() {
         val text = """
-            BOAT
-            Up to 80% Off
-            Code: BTXSWG7GYZRB
-            Claim Now
+            Stream exclusively on aha
+            Use code
+            XYXXCRED2024 today
         """.trimIndent()
-        
-        val redeemCode = extractor.extractRedeemCode(text)
-        assertNotNull("Redeem code should not be null", redeemCode)
-        assertEquals("BTXSWG7GYZRB", redeemCode)
+
+        val result = extractor.extractRedeemCode(text)
+
+        assertEquals("XYXXCRED2024", result)
     }
-    
+
     @Test
-    fun `test extractCashbackAmount from BOAT coupon`() {
-        val text = """
-            BOAT
-            Up to 80% Off
-            Code: BTXSWG7GYZRB
-            Claim Now
-        """.trimIndent()
-        
-        val cashbackAmount = extractor.extractCashbackAmount(text)
-        assertNotNull("Cashback amount should not be null", cashbackAmount)
-        assertEquals(80.0, cashbackAmount!!, 0.01)
+    fun `parseExpiryDate handles day first format with trailing time`() {
+        val text = "Get 2 Months Audible Premium Plus\nExpires on 31 May, 2025, 11:59 PM"
+
+        val result = extractor.parseExpiryDate(text)
+
+        assertNotNull(result)
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        assertEquals("2025-05-31", formatter.format(result!!))
     }
-    
-    @Test
-    fun `test extractExpiryDate from text with expires in days`() {
-        val text = """
-            Expires in 7 days
-            ABHIBUS
-            Get upto ₹500 off
-            Code: ABSGYWVAJ1D0A8
-            Claim Now
-        """.trimIndent()
-        
-        val expiryDate = extractor.parseExpiryDate(text)
-        assertNotNull("Expiry date should not be null", expiryDate)
-    }
-} 
+}

@@ -1,11 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Exclude model weights from backup (too large) -->
-    <exclude domain="file" path="models/"/>
-    
-    <!-- Exclude cache -->
-    <exclude domain="cache" path="."/>
-    
     <!-- Include database and preferences -->
     <include domain="database" path="."/>
     <include domain="sharedpref" path="."/>

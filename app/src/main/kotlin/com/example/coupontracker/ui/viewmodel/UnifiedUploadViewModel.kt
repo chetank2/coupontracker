@@ -1,7 +1,6 @@
 package com.example.coupontracker.ui.viewmodel
 
 import android.app.Application
-import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -11,7 +10,7 @@ import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.util.CouponInputManager
 import com.google.gson.Gson
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,15 +23,12 @@ import javax.inject.Inject
 @HiltViewModel
 class UnifiedUploadViewModel @Inject constructor(
     application: Application,
-    @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository,
-    private val imageProcessor: com.example.coupontracker.util.ImageProcessor
+    private val couponInputManager: CouponInputManager
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(UnifiedUploadUiState())
     val uiState: StateFlow<UnifiedUploadUiState> = _uiState.asStateFlow()
-
-    private val couponInputManager = CouponInputManager(context, imageProcessor)
 
     companion object {
         private const val TAG = "UnifiedUploadViewModel"
@@ -58,7 +54,7 @@ class UnifiedUploadViewModel @Inject constructor(
                     error = null
                 )
 
-                val sharedPrefs = context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
+                val sharedPrefs = getApplication<Application>().getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
                 val gson = Gson()
                 val uriStrings = uris.map { it.toString() }
                 sharedPrefs.edit()

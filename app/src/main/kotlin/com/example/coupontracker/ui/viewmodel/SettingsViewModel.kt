@@ -127,20 +127,12 @@ class SettingsViewModel @Inject constructor(
                     return@launch
                 }
                 
-                // Import coupons (replace existing data)
-                var successCount = 0
-                coupons.forEach { coupon ->
-                    try {
-                        couponRepository.insertCoupon(coupon)
-                        successCount++
-                    } catch (e: Exception) {
-                        // Continue with other coupons even if one fails
-                    }
-                }
-                
+                // Import coupons atomically (replace existing data)
+                val insertedCount = couponRepository.replaceAllCoupons(coupons)
+
                 _backupState.value = BackupState.Success(
                     "Imported successfully",
-                    successCount
+                    insertedCount
                 )
             } catch (e: Exception) {
                 _backupState.value = BackupState.Error("Import failed: ${e.message}")

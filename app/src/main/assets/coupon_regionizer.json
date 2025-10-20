@@ -1,0 +1,7 @@
+{
+  "globalCrop": { "topPct": 0.14, "bottomPct": 0.14 },
+  "poster": { "focusTopPct": 0.35, "focusHeightPct": 0.55 },
+  "reward": { "dropPhrases": ["you won", "jackpot", "congratulations", "spin again", "scratch"] },
+  "grid": { "minCardWidthPx": 280, "minGapPx": 16, "maxCols": 3 },
+  "mapOverlay": { "brightnessThresh": 0.88, "overlayMinAreaPct": 0.18 }
+}

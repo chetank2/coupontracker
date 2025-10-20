@@ -7,18 +7,28 @@ import com.example.coupontracker.data.model.CashbackInfo
 import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.extraction.FieldCandidate
+import com.example.coupontracker.extraction.ProgressiveExtractionResult
+import com.example.coupontracker.extraction.ProgressiveExtractionService
 import com.example.coupontracker.util.IndianCurrencyParser
 import com.example.coupontracker.util.IndianDateParser
+import com.example.coupontracker.util.OcrTextCleaner
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.util.*
+import java.time.ZoneId
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.max
+import kotlin.math.min
 
 /**
- * Universal extraction service that orchestrates the universal extraction pipeline
- * without brand-specific hardcoding, using learned patterns and adaptive scoring.
+ * Universal extraction orchestrator that blends deterministic patterns,
+ * LLM-driven semantics, learned patterns, heuristics, and contextual defaults.
+ * The cleaned OCR transcript is preserved end-to-end so every fallback stage
+ * has access to the same canonical text.
  */
 @Singleton
 class UniversalExtractionService @Inject constructor(
@@ -26,157 +36,659 @@ class UniversalExtractionService @Inject constructor(
     private val fieldDetector: UniversalFieldDetector,
     private val patternLearner: PatternLearningEngine,
     private val confidenceScorer: AdaptiveConfidenceScorer,
-    private val progressiveExtractionService: com.example.coupontracker.extraction.ProgressiveExtractionService
+    private val progressiveExtractionService: ProgressiveExtractionService
 ) {
     companion object {
         private const val TAG = "UniversalExtractionService"
-        private const val MIN_EXTRACTION_CONFIDENCE = 0.4f
-        private const val USE_PROGRESSIVE_PIPELINE = true  // Feature flag for new pipeline
+        private const val DEFAULT_THRESHOLD = 0.35f
+        private val FIELD_THRESHOLDS = mapOf(
+            FieldType.STORE_NAME to 0.45f,
+            FieldType.DESCRIPTION to 0.40f,
+            FieldType.COUPON_CODE to 0.55f,
+            FieldType.EXPIRY_DATE to 0.50f,
+            FieldType.AMOUNT to 0.42f
+        )
+        private val SUPPORTED_FIELDS = setOf(
+            FieldType.STORE_NAME,
+            FieldType.DESCRIPTION,
+            FieldType.COUPON_CODE,
+            FieldType.EXPIRY_DATE,
+            FieldType.AMOUNT
+        )
+        private val GENERIC_STORE_NAMES = setOf("store", "shop", "brand", "seller")
+        private val GENERIC_DESCRIPTION_PHRASES = setOf(
+            "coupon offer",
+            "coupon extracted",
+            "no description",
+            "error processing coupon"
+        )
     }
 
-    /**
-     * Extract coupon information using universal patterns
-     * Now delegates to progressive extraction pipeline for better results
-     */
     suspend fun extractCoupon(
         image: Bitmap,
         ocrText: String,
         context: ExtractionContext = ExtractionContext()
     ): UniversalExtractionResult = withContext(Dispatchers.Default) {
-        
-        if (USE_PROGRESSIVE_PIPELINE) {
-            Log.d(TAG, "✨ Using NEW progressive extraction pipeline")
-            return@withContext extractWithProgressivePipeline(image, ocrText, context)
-        }
-        
-        // Legacy extraction (kept for comparison/fallback)
-        Log.d(TAG, "Starting legacy universal extraction")
-        
-        try {
-            // Detect all fields using universal patterns
-            val detectedFields = fieldDetector.detectFields(image, ocrText, context)
-            
-            // Extract best candidates for each field
-            val extractedFields = mutableMapOf<FieldType, ExtractionCandidate>()
-            
-            for ((fieldType, candidates) in detectedFields) {
-                val bestCandidate = candidates
-                    .filter { it.confidence >= MIN_EXTRACTION_CONFIDENCE }
-                    .maxByOrNull { it.confidence }
-                
-                if (bestCandidate != null) {
-                    extractedFields[fieldType] = bestCandidate
-                    Log.d(TAG, "Best $fieldType: '${bestCandidate.text}' (confidence: ${bestCandidate.confidence})")
-                }
-            }
-            
-            // Convert to Coupon object
-            val coupon = buildCouponFromFields(extractedFields, image.toString())
-            
-            // Calculate overall confidence
-            val overallConfidence = calculateOverallConfidence(extractedFields)
-            
+        val cleanedOcr = OcrTextCleaner.cleanOcrText(ocrText).trim().ifBlank { ocrText }
+        val contextWithText = context.copy(
+            cleanedOcrText = cleanedOcr,
+            originalOcrText = ocrText
+        )
+
+        val candidateBuckets = mutableMapOf<FieldType, MutableList<ExtractionCandidate>>()
+        val imageUri = image.toString()
+
+        return@withContext try {
+            Log.d(TAG, "Starting universal extraction with cleaned OCR length=${cleanedOcr.length}")
+            runDeterministicPass(image, cleanedOcr, contextWithText, candidateBuckets)
+            runProgressivePass(image, cleanedOcr, imageUri, contextWithText, candidateBuckets)
+            runLearnedPatternPass(cleanedOcr, contextWithText, candidateBuckets)
+            runHeuristicPass(cleanedOcr, contextWithText, candidateBuckets)
+            runDefaultPass(cleanedOcr, contextWithText, candidateBuckets)
+
+            val allCandidates = candidateBuckets.mapValues { it.value.toList() }
+            val blendedFields = blendCandidates(allCandidates, cleanedOcr)
+            val coupon = buildCouponFromFields(blendedFields, imageUri, cleanedOcr)
+            val confidence = calculateOverallConfidence(blendedFields, candidateBuckets)
+
             UniversalExtractionResult(
                 coupon = coupon,
-                confidence = overallConfidence,
-                extractedFields = extractedFields,
-                allCandidates = detectedFields,
-                success = extractedFields.isNotEmpty()
+                confidence = confidence,
+                extractedFields = blendedFields,
+                allCandidates = allCandidates,
+                success = blendedFields.isNotEmpty()
             )
-            
         } catch (e: Exception) {
             Log.e(TAG, "Universal extraction failed", e)
+            val fallbackCoupon = createFallbackCoupon(cleanedOcr, contextWithText)
             UniversalExtractionResult(
-                coupon = createFallbackCoupon(),
+                coupon = fallbackCoupon,
                 confidence = 0.0f,
                 extractedFields = emptyMap(),
-                allCandidates = emptyMap(),
+                allCandidates = candidateBuckets.mapValues { it.value.toList() },
                 success = false,
                 error = e.message
             )
         }
     }
-    
-    /**
-     * Extract using new progressive pipeline and convert result to UniversalExtractionResult
-     */
-    private suspend fun extractWithProgressivePipeline(
+
+    private suspend fun runDeterministicPass(
         image: Bitmap,
-        ocrText: String,
-        context: ExtractionContext
-    ): UniversalExtractionResult {
-        try {
-            val progressiveResult = progressiveExtractionService.extractCoupon(
+        cleanedOcr: String,
+        context: ExtractionContext,
+        accumulator: MutableMap<FieldType, MutableList<ExtractionCandidate>>
+    ) {
+        val deterministic = fieldDetector.detectFields(image, cleanedOcr, context)
+        appendCandidates(accumulator, deterministic, "deterministic_patterns")
+    }
+
+    private suspend fun runProgressivePass(
+        image: Bitmap,
+        cleanedOcr: String,
+        imageUri: String,
+        context: ExtractionContext,
+        accumulator: MutableMap<FieldType, MutableList<ExtractionCandidate>>
+    ) {
+        val progressiveResult = try {
+            progressiveExtractionService.extractCoupon(
                 androidContext = androidContext,
                 image = image,
-                ocrText = ocrText,
+                ocrText = cleanedOcr,
                 ocrBlocks = emptyList(),
-                imageUri = image.toString()
+                imageUri = imageUri
             )
-            
-            // Convert ProgressiveExtractionResult to UniversalExtractionResult
-            val extractedFields = progressiveResult.extractedFields.mapValues { (_, fieldCandidate) ->
-                ExtractionCandidate(
-                    text = fieldCandidate.value,
-                    confidence = fieldCandidate.confidence,
-                    source = when (fieldCandidate.source) {
-                        "explicit_pattern", "all_caps", "title_case_early", "repeated_word" -> ExtractionSource.PATTERN_MATCHING
-                        "compound_cashback", "simple_amount", "percentage", "upto_amount" -> ExtractionSource.PATTERN_MATCHING
-                        "relative_date", "absolute_date", "valid_until" -> ExtractionSource.PATTERN_MATCHING
-                        "context_code", "generic_code", "no_code_indicator" -> ExtractionSource.CONTEXT_CLUES
-                        "semantic_from", "semantic_cashback", "semantic_via" -> ExtractionSource.CONTEXT_CLUES
-                        "semantic_cashback_amount", "semantic_discount_percent", "semantic_discount_amount" -> ExtractionSource.CONTEXT_CLUES
-                        "semantic_last_amount", "semantic_offer_sentence", "semantic_substantial_sentence" -> ExtractionSource.CONTEXT_CLUES
-                        "heuristic_capital", "heuristic_number", "heuristic_first_sentence" -> ExtractionSource.PATTERN_MATCHING
-                        "default_first_line", "default_ocr_text", "default_zero", "default_no_code" -> ExtractionSource.PATTERN_MATCHING
-                        "learned_pattern" -> ExtractionSource.LEARNED_PATTERN
-                        else -> ExtractionSource.PATTERN_MATCHING
-                    },
+        } catch (e: Exception) {
+            Log.w(TAG, "Progressive pipeline failed: ${e.message}")
+            return
+        }
+
+        val progressiveCandidates = convertProgressiveCandidates(progressiveResult)
+        val rescored = progressiveCandidates.mapValues { (field, candidates) ->
+            candidates.map { scoreCandidate(field, it) }
+        }
+        appendCandidates(accumulator, rescored, "progressive_pipeline")
+    }
+
+    private suspend fun runLearnedPatternPass(
+        cleanedOcr: String,
+        context: ExtractionContext,
+        accumulator: MutableMap<FieldType, MutableList<ExtractionCandidate>>
+    ) {
+        val missingFields = SUPPORTED_FIELDS.filter { accumulator[it].isNullOrEmpty() }
+        if (missingFields.isEmpty()) return
+
+        val learned = mutableMapOf<FieldType, List<ExtractionCandidate>>()
+        for (field in missingFields) {
+            val patterns = patternLearner.getRelevantPatterns(field, context)
+            if (patterns.isEmpty()) continue
+
+            val candidates = patterns.mapNotNull { learnedPattern ->
+                val extracted = applyLearnedPattern(learnedPattern.pattern, cleanedOcr)
+                if (extracted.isBlank()) {
+                    null
+                } else {
+                    ExtractionCandidate(
+                        text = extracted,
+                        confidence = learnedPattern.confidence,
+                        source = ExtractionSource.LEARNED_PATTERN,
+                        context = mapOf(
+                            "pattern" to learnedPattern.pattern,
+                            "pass" to "learned_pattern"
+                        )
+                    )
+                }
+            }
+
+            if (candidates.isNotEmpty()) {
+                learned[field] = candidates.map { scoreCandidate(field, it) }
+            }
+        }
+
+        appendCandidates(accumulator, learned, "learned_patterns")
+    }
+
+    private suspend fun runHeuristicPass(
+        cleanedOcr: String,
+        context: ExtractionContext,
+        accumulator: MutableMap<FieldType, MutableList<ExtractionCandidate>>
+    ) {
+        val missingFields = SUPPORTED_FIELDS.filter { accumulator[it].isNullOrEmpty() }.toSet()
+        if (missingFields.isEmpty()) return
+
+        val heuristics = mutableMapOf<FieldType, List<ExtractionCandidate>>()
+
+        if (FieldType.EXPIRY_DATE in missingFields) {
+            val parseResult = IndianDateParser.extractExpiryFromText(cleanedOcr)
+            if (parseResult.date != null) {
+                val isoDate = parseResult.date.toString()
+                val candidate = ExtractionCandidate(
+                    text = isoDate,
+                    confidence = parseResult.confidence,
+                    source = ExtractionSource.CONTEXT_CLUES,
                     context = mapOf(
-                        "source" to fieldCandidate.source,
-                        "context" to (fieldCandidate.context ?: ""),
-                        "passes_used" to progressiveResult.passesUsed.toString()
+                        "reason" to parseResult.reason,
+                        "pass" to "heuristic_expiry"
                     )
                 )
+                heuristics[FieldType.EXPIRY_DATE] = listOf(scoreCandidate(FieldType.EXPIRY_DATE, candidate))
             }
-            
-            Log.d(TAG, "✅ Progressive pipeline: ${extractedFields.size} fields, confidence: ${progressiveResult.confidence}, passes: ${progressiveResult.passesUsed}")
-            
-            return UniversalExtractionResult(
-                coupon = progressiveResult.coupon,
-                confidence = progressiveResult.confidence,
-                extractedFields = extractedFields,
-                allCandidates = emptyMap(),
-                success = progressiveResult.success,
-                error = progressiveResult.error
-            )
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Progressive extraction failed, falling back to legacy", e)
-            // Fallback to legacy by disabling flag temporarily
-            val legacyContext = context
-            return withContext(Dispatchers.Default) {
-                val detectedFields = fieldDetector.detectFields(image, ocrText, legacyContext)
-                val extractedFields = mutableMapOf<FieldType, ExtractionCandidate>()
-                for ((fieldType, candidates) in detectedFields) {
-                    val bestCandidate = candidates.filter { it.confidence >= MIN_EXTRACTION_CONFIDENCE }.maxByOrNull { it.confidence }
-                    if (bestCandidate != null) extractedFields[fieldType] = bestCandidate
-                }
-                val coupon = buildCouponFromFields(extractedFields, image.toString())
-                UniversalExtractionResult(
-                    coupon = coupon,
-                    confidence = calculateOverallConfidence(extractedFields),
-                    extractedFields = extractedFields,
-                    allCandidates = detectedFields,
-                    success = extractedFields.isNotEmpty()
+        }
+
+        if (FieldType.AMOUNT in missingFields) {
+            detectCompoundAmount(cleanedOcr)?.let { amountText ->
+                val candidate = ExtractionCandidate(
+                    text = amountText,
+                    confidence = 0.52f,
+                    source = ExtractionSource.CONTEXT_CLUES,
+                    context = mapOf("pass" to "heuristic_amount", "compound" to "true")
                 )
+                heuristics[FieldType.AMOUNT] = listOf(scoreCandidate(FieldType.AMOUNT, candidate))
+            }
+        }
+
+        if (FieldType.COUPON_CODE in missingFields) {
+            detectCouponCode(cleanedOcr)?.let { code ->
+                val candidate = ExtractionCandidate(
+                    text = code,
+                    confidence = 0.55f,
+                    source = ExtractionSource.CONTEXT_CLUES,
+                    context = mapOf("pass" to "heuristic_code")
+                )
+                heuristics[FieldType.COUPON_CODE] = listOf(scoreCandidate(FieldType.COUPON_CODE, candidate))
+            }
+        }
+
+        if (FieldType.STORE_NAME in missingFields) {
+            extractStoreFromContext(cleanedOcr, context)?.let { store ->
+                val candidate = ExtractionCandidate(
+                    text = store,
+                    confidence = 0.48f,
+                    source = ExtractionSource.CONTEXT_CLUES,
+                    context = mapOf("pass" to "heuristic_store")
+                )
+                heuristics[FieldType.STORE_NAME] = listOf(scoreCandidate(FieldType.STORE_NAME, candidate))
+            }
+        }
+
+        if (FieldType.DESCRIPTION in missingFields) {
+            extractMeaningfulSnippet(cleanedOcr)?.let { snippet ->
+                val candidate = ExtractionCandidate(
+                    text = snippet,
+                    confidence = 0.45f,
+                    source = ExtractionSource.CONTEXT_CLUES,
+                    context = mapOf("pass" to "heuristic_description")
+                )
+                heuristics[FieldType.DESCRIPTION] = listOf(scoreCandidate(FieldType.DESCRIPTION, candidate))
+            }
+        }
+
+        appendCandidates(accumulator, heuristics, "heuristic_fallbacks")
+    }
+
+    private suspend fun runDefaultPass(
+        cleanedOcr: String,
+        context: ExtractionContext,
+        accumulator: MutableMap<FieldType, MutableList<ExtractionCandidate>>
+    ) {
+        val defaults = mutableMapOf<FieldType, List<ExtractionCandidate>>()
+
+        if (accumulator[FieldType.DESCRIPTION].isNullOrEmpty()) {
+            extractMeaningfulSnippet(cleanedOcr)?.let { snippet ->
+                val candidate = ExtractionCandidate(
+                    text = snippet,
+                    confidence = 0.38f,
+                    source = ExtractionSource.CONTEXT_CLUES,
+                    context = mapOf("pass" to "context_default")
+                )
+                defaults[FieldType.DESCRIPTION] = listOf(scoreCandidate(FieldType.DESCRIPTION, candidate))
+            }
+        }
+
+        if (accumulator[FieldType.STORE_NAME].isNullOrEmpty()) {
+            val fallbackStore = extractStoreFromContext(cleanedOcr, context)
+                ?: context.brandHint
+                ?: cleanedOcr.lines().firstOrNull()?.takeIf { it.isNotBlank() }?.take(40)
+            fallbackStore?.let { store ->
+                val candidate = ExtractionCandidate(
+                    text = store.trim(),
+                    confidence = 0.36f,
+                    source = ExtractionSource.CONTEXT_CLUES,
+                    context = mapOf("pass" to "context_default_store")
+                )
+                defaults[FieldType.STORE_NAME] = listOf(scoreCandidate(FieldType.STORE_NAME, candidate))
+            }
+        }
+
+        if (accumulator[FieldType.COUPON_CODE].isNullOrEmpty()) {
+            if (cleanedOcr.contains("no code", ignoreCase = true)) {
+                val candidate = ExtractionCandidate(
+                    text = "NO_CODE_NEEDED",
+                    confidence = 0.4f,
+                    source = ExtractionSource.CONTEXT_CLUES,
+                    context = mapOf("pass" to "context_default_code")
+                )
+                defaults[FieldType.COUPON_CODE] = listOf(scoreCandidate(FieldType.COUPON_CODE, candidate))
+            }
+        }
+
+        appendCandidates(accumulator, defaults, "context_defaults")
+    }
+
+    private fun appendCandidates(
+        accumulator: MutableMap<FieldType, MutableList<ExtractionCandidate>>,
+        newCandidates: Map<FieldType, List<ExtractionCandidate>>,
+        passName: String
+    ) {
+        for ((field, candidates) in newCandidates) {
+            if (candidates.isEmpty()) continue
+            val bucket = accumulator.getOrPut(field) { mutableListOf() }
+            bucket.addAll(candidates)
+            for (candidate in candidates) {
+                Log.d(TAG, "Pass $passName produced $field='${candidate.text}' (conf=${candidate.confidence})")
             }
         }
     }
 
-    /**
-     * Learn from successful extraction
-     */
+    private suspend fun scoreCandidate(
+        fieldType: FieldType,
+        candidate: ExtractionCandidate
+    ): ExtractionCandidate {
+        return try {
+            val calibrated = confidenceScorer.scoreCandidate(candidate, fieldType)
+            candidate.copy(confidence = calibrated)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to score candidate for $fieldType", e)
+            candidate
+        }
+    }
+
+    private fun blendCandidates(
+        candidateBuckets: Map<FieldType, List<ExtractionCandidate>>,
+        cleanedOcr: String
+    ): Map<FieldType, ExtractionCandidate> {
+        val blended = mutableMapOf<FieldType, ExtractionCandidate>()
+        for ((fieldType, candidates) in candidateBuckets) {
+            if (candidates.isEmpty()) continue
+            val normalizedCounts = candidates.groupingBy { normalizeForField(fieldType, it.text) }.eachCount()
+            var bestCandidate: ExtractionCandidate? = null
+            var bestScore = 0f
+
+            for (candidate in candidates.sortedByDescending { it.confidence }) {
+                val normalized = normalizeForField(fieldType, candidate.text)
+                val consensusBoost = ((normalizedCounts[normalized] ?: 1) - 1) * 0.08f
+                val validated = applyFieldValidation(fieldType, candidate.text, candidate.confidence + consensusBoost, cleanedOcr)
+                val threshold = FIELD_THRESHOLDS[fieldType] ?: DEFAULT_THRESHOLD
+
+                if (validated >= threshold && validated >= bestScore) {
+                    bestCandidate = candidate.copy(confidence = validated.coerceAtMost(1f))
+                    bestScore = validated
+                } else if (bestCandidate == null && candidate.text.isNotBlank()) {
+                    bestCandidate = candidate.copy(confidence = validated.coerceAtMost(1f))
+                    bestScore = validated
+                }
+            }
+
+            bestCandidate?.let { blended[fieldType] = it }
+        }
+        return blended
+    }
+
+    private fun calculateOverallConfidence(
+        blendedFields: Map<FieldType, ExtractionCandidate>,
+        accumulator: Map<FieldType, MutableList<ExtractionCandidate>>
+    ): Float {
+        if (blendedFields.isEmpty()) return 0f
+
+        var weightedSum = 0f
+        var totalWeight = 0f
+
+        for ((field, candidate) in blendedFields) {
+            val baseWeight = when (field) {
+                FieldType.STORE_NAME -> 1.3f
+                FieldType.DESCRIPTION -> 1.4f
+                FieldType.COUPON_CODE -> 1.2f
+                FieldType.EXPIRY_DATE -> 1.1f
+                FieldType.AMOUNT -> 1.0f
+                else -> 0.8f
+            }
+            val normalized = normalizeForField(field, candidate.text)
+            val consensus = accumulator[field]
+                ?.count { normalizeForField(field, it.text) == normalized }
+                ?.coerceAtLeast(1) ?: 1
+            val consensusBoost = (consensus - 1) * 0.05f
+            val adjusted = (candidate.confidence + consensusBoost).coerceAtMost(1f)
+            weightedSum += adjusted * baseWeight
+            totalWeight += baseWeight
+        }
+
+        return (weightedSum / totalWeight).coerceIn(0f, 1f)
+    }
+
+    private fun applyFieldValidation(
+        fieldType: FieldType,
+        text: String,
+        baseConfidence: Float,
+        cleanedOcr: String
+    ): Float {
+        var confidence = baseConfidence
+        when (fieldType) {
+            FieldType.COUPON_CODE -> {
+                val normalized = text.trim().uppercase(Locale.ROOT)
+                if (normalized.contains("NO_CODE")) {
+                    confidence = min(confidence, 0.45f)
+                } else if (!normalized.matches(Regex("[A-Z0-9-]{4,}"))) {
+                    confidence *= 0.6f
+                }
+            }
+            FieldType.AMOUNT -> {
+                val value = parseCompoundAmountValue(text)
+                if (value == null || value <= 0.0) {
+                    confidence *= 0.5f
+                } else if (text.contains("+")) {
+                    confidence = max(confidence, 0.55f)
+                }
+            }
+            FieldType.EXPIRY_DATE -> {
+                val parseResult = IndianDateParser.extractExpiryFromText(text)
+                if (parseResult.date != null) {
+                    confidence = max(confidence, parseResult.confidence)
+                } else {
+                    val fallback = IndianDateParser.extractExpiryFromText(cleanedOcr)
+                    if (fallback.date == null) {
+                        confidence *= 0.6f
+                    }
+                }
+            }
+            FieldType.STORE_NAME -> {
+                if (isGenericStoreName(text)) {
+                    confidence *= 0.5f
+                }
+            }
+            FieldType.DESCRIPTION -> {
+                if (isGenericDescription(text)) {
+                    confidence *= 0.5f
+                }
+            }
+            else -> {}
+        }
+        return confidence.coerceIn(0f, 1f)
+    }
+
+    private fun normalizeForField(fieldType: FieldType, text: String): String {
+        return when (fieldType) {
+            FieldType.COUPON_CODE -> text.trim().uppercase(Locale.ROOT)
+            FieldType.AMOUNT -> text.replace("\\s".toRegex(), "").lowercase(Locale.ROOT)
+            FieldType.STORE_NAME -> text.trim().lowercase(Locale.ROOT)
+            FieldType.EXPIRY_DATE -> text.trim().lowercase(Locale.ROOT)
+            else -> text.trim().lowercase(Locale.ROOT)
+        }
+    }
+
+    private fun buildCouponFromFields(
+        extractedFields: Map<FieldType, ExtractionCandidate>,
+        imageUri: String,
+        cleanedOcr: String
+    ): Coupon {
+        val storeNameCandidate = extractedFields[FieldType.STORE_NAME]
+        val storeName = storeNameCandidate?.text?.takeIf { it.isNotBlank() }
+            ?: extractStoreFromContext(cleanedOcr, ExtractionContext())
+            ?: "Needs review"
+
+        val redeemCode = extractedFields[FieldType.COUPON_CODE]
+            ?.text
+            ?.takeIf { !it.equals("NO_CODE_NEEDED", ignoreCase = true) }
+
+        val expiryDate = extractedFields[FieldType.EXPIRY_DATE]?.text?.let { parseExpiryDate(it) }
+
+        val amountCandidate = extractedFields[FieldType.AMOUNT]
+        val (cashbackAmount, cashbackInfo) = if (amountCandidate != null) {
+            parseCashbackAmount(amountCandidate.text)
+        } else {
+            Pair(0.0, CashbackInfo(CashbackType.TEXT, 0.0))
+        }
+
+        val description = buildDescription(extractedFields, cleanedOcr, storeName)
+
+        return Coupon(
+            storeName = storeName,
+            description = description,
+            cashbackAmount = cashbackAmount,
+            redeemCode = redeemCode,
+            cashbackType = cashbackInfo.type.name.lowercase(Locale.ROOT),
+            cashbackValueNum = cashbackInfo.valueNum,
+            cashbackCurrency = cashbackInfo.currency,
+            imageUri = imageUri,
+            expiryDate = expiryDate,
+            storeNameSource = storeNameCandidate?.source?.name,
+            storeNameEvidence = if (storeNameCandidate != null) listOf(storeNameCandidate.text) else emptyList()
+        )
+    }
+
+    private fun buildDescription(
+        extractedFields: Map<FieldType, ExtractionCandidate>,
+        cleanedOcr: String,
+        storeName: String
+    ): String {
+        val descriptionCandidate = extractedFields[FieldType.DESCRIPTION]
+            ?.text
+            ?.takeIf { !isGenericDescription(it) }
+        if (descriptionCandidate != null) {
+            return descriptionCandidate
+        }
+
+        extractMeaningfulSnippet(cleanedOcr)?.let { return it }
+
+        val amount = extractedFields[FieldType.AMOUNT]?.text
+        return buildString {
+            append("Offer from $storeName")
+            if (!amount.isNullOrBlank()) {
+                append(": ")
+                append(amount)
+            }
+        }
+    }
+
+    private fun parseExpiryDate(dateText: String): Date? {
+        return try {
+            val parseResult = IndianDateParser.extractExpiryFromText(dateText)
+            val localDate = parseResult.date ?: IndianDateParser.parseExpiryIST(dateText).date
+            localDate?.let { Date.from(it.atStartOfDay(ZoneId.of("Asia/Kolkata")).toInstant()) }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse expiry date: $dateText", e)
+            null
+        }
+    }
+
+    private fun parseCashbackAmount(amountText: String): Pair<Double, CashbackInfo> {
+        return try {
+            val compoundValue = parseCompoundAmountValue(amountText)
+            if (compoundValue != null && amountText.contains("+")) {
+                Pair(
+                    compoundValue,
+                    CashbackInfo(CashbackType.AMOUNT, compoundValue, "INR")
+                )
+            } else {
+                val numericValue = compoundValue ?: IndianCurrencyParser.parseAmount(amountText) ?: 0.0
+                val cashbackInfo = when {
+                    amountText.contains("%") -> CashbackInfo(CashbackType.PERCENT, numericValue)
+                    amountText.contains("₹") || amountText.contains("Rs", ignoreCase = true) ->
+                        CashbackInfo(CashbackType.AMOUNT, numericValue, "INR")
+                    numericValue <= 100 && amountText.contains("off", ignoreCase = true) ->
+                        CashbackInfo(CashbackType.PERCENT, numericValue)
+                    else -> CashbackInfo(CashbackType.AMOUNT, numericValue, "INR")
+                }
+                Pair(numericValue, cashbackInfo)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to parse cashback amount: $amountText", e)
+            Pair(0.0, CashbackInfo(CashbackType.TEXT, 0.0))
+        }
+    }
+
+    private fun parseCompoundAmountValue(text: String): Double? {
+        if (!text.contains("+")) {
+            return IndianCurrencyParser.parseAmount(text)
+        }
+        val parts = text.split("+")
+        val values = parts.mapNotNull { IndianCurrencyParser.parseAmount(it) }
+        return if (values.isNotEmpty()) values.sum() else null
+    }
+
+    private fun convertProgressiveCandidates(
+        result: ProgressiveExtractionResult
+    ): Map<FieldType, List<ExtractionCandidate>> {
+        return result.extractedFields.mapValues { (field, candidate) ->
+            val source = when (candidate.source) {
+                "explicit_pattern", "all_caps", "title_case_early", "repeated_word" -> ExtractionSource.PATTERN_MATCHING
+                "compound_cashback", "simple_amount", "percentage", "upto_amount" -> ExtractionSource.PATTERN_MATCHING
+                "relative_date", "absolute_date", "valid_until" -> ExtractionSource.PATTERN_MATCHING
+                "context_code", "generic_code", "no_code_indicator" -> ExtractionSource.CONTEXT_CLUES
+                "semantic_from", "semantic_cashback", "semantic_via" -> ExtractionSource.CONTEXT_CLUES
+                "semantic_cashback_amount", "semantic_discount_percent", "semantic_discount_amount" -> ExtractionSource.CONTEXT_CLUES
+                "semantic_last_amount", "semantic_offer_sentence", "semantic_substantial_sentence" -> ExtractionSource.CONTEXT_CLUES
+                "heuristic_capital", "heuristic_number", "heuristic_first_sentence" -> ExtractionSource.PATTERN_MATCHING
+                "default_first_line", "default_ocr_text", "default_zero", "default_no_code" -> ExtractionSource.PATTERN_MATCHING
+                "learned_pattern" -> ExtractionSource.LEARNED_PATTERN
+                else -> ExtractionSource.PATTERN_MATCHING
+            }
+            val extractionCandidate = ExtractionCandidate(
+                text = candidate.value,
+                confidence = candidate.confidence,
+                source = source,
+                context = buildMap {
+                    put("source", candidate.source)
+                    candidate.context?.let { put("context", it) }
+                    put("pass", "progressive")
+                }
+            )
+            listOf(extractionCandidate)
+        }
+    }
+
+    private fun applyLearnedPattern(pattern: String, text: String): String {
+        return try {
+            val regex = Regex(pattern, RegexOption.IGNORE_CASE)
+            regex.find(text)?.value ?: ""
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to apply learned pattern $pattern", e)
+            ""
+        }
+    }
+
+    private fun detectCompoundAmount(text: String): String? {
+        val regex = Regex("""₹\s*\d[\d,]*(?:\s*\+\s*₹?\s*\d[\d,]*\s*(?:cashback|back)?)""", RegexOption.IGNORE_CASE)
+        return regex.find(text)?.value?.trim()
+    }
+
+    private fun detectCouponCode(text: String): String? {
+        val regex = Regex("""(?i)(?:code|apply|use)[:\s-]*([A-Z0-9]{4,})""")
+        val match = regex.find(text) ?: return null
+        return match.groupValues.getOrNull(1)?.uppercase(Locale.ROOT)
+    }
+
+    private fun extractStoreFromContext(text: String, context: ExtractionContext): String? {
+        val prioritized = context.brandHint?.takeIf { it.isNotBlank() }
+        if (prioritized != null && !isGenericStoreName(prioritized)) return prioritized
+
+        val pattern = Regex("""(?i)(?:from|at|by)\s+([A-Za-z0-9&' ]{3,30})""")
+        val match = pattern.find(text)
+        val candidate = match?.groupValues?.getOrNull(1)?.trim()
+        if (candidate != null && !isGenericStoreName(candidate)) {
+            return candidate.split(" ").joinToString(" ") { token ->
+                token.lowercase(Locale.ROOT).replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() }
+            }
+        }
+
+        val firstLine = text.lines().map { it.trim() }.firstOrNull { it.isNotBlank() && it.any { ch -> ch.isLetter() } }
+        return firstLine?.takeIf { !isGenericStoreName(it) }
+    }
+
+    private fun extractMeaningfulSnippet(text: String): String? {
+        val candidates = text.lines()
+            .map { it.trim() }
+            .filter { it.length >= 6 && !it.startsWith("http", ignoreCase = true) }
+            .filterNot { line ->
+                val lower = line.lowercase(Locale.ROOT)
+                lower.contains("terms and conditions") ||
+                    lower.contains("valid on all platforms") ||
+                    lower.startsWith("tnc", ignoreCase = true)
+            }
+        val snippet = candidates.firstOrNull()
+        return snippet?.take(180)
+    }
+
+    private fun isGenericStoreName(name: String?): Boolean {
+        if (name.isNullOrBlank()) return true
+        val normalized = name.trim().lowercase(Locale.ROOT)
+        return normalized in GENERIC_STORE_NAMES || normalized.matches(Regex("store\\d*"))
+    }
+
+    private fun isGenericDescription(description: String?): Boolean {
+        if (description.isNullOrBlank()) return true
+        val normalized = description.trim().lowercase(Locale.ROOT)
+        return GENERIC_DESCRIPTION_PHRASES.any { normalized.contains(it) }
+    }
+
+    private fun createFallbackCoupon(cleanedOcr: String, context: ExtractionContext): Coupon {
+        val description = extractMeaningfulSnippet(cleanedOcr)
+            ?: cleanedOcr.take(160).ifBlank { "Review required" }
+        val store = extractStoreFromContext(cleanedOcr, context)
+            ?: context.brandHint
+            ?: "Needs review"
+
+        return Coupon(
+            storeName = store,
+            description = description,
+            cashbackAmount = 0.0,
+            redeemCode = null,
+            cashbackType = CashbackType.TEXT.name.lowercase(Locale.ROOT),
+            cashbackValueNum = 0.0,
+            cashbackCurrency = "INR",
+            imageUri = null,
+            status = "NEEDS_REVIEW"
+        )
+    }
+
     suspend fun learnFromSuccess(
         extractionResult: UniversalExtractionResult,
         originalText: String,
@@ -189,7 +701,7 @@ class UniversalExtractionService @Inject constructor(
                 originalText = originalText,
                 context = context
             )
-            
+
             confidenceScorer.updateFromFeedback(
                 candidate = candidate,
                 fieldType = fieldType,
@@ -198,16 +710,12 @@ class UniversalExtractionService @Inject constructor(
         }
     }
 
-    /**
-     * Learn from user correction
-     */
     suspend fun learnFromCorrection(
         extractionResult: UniversalExtractionResult,
         correctedCoupon: Coupon,
         originalText: String,
         context: ExtractionContext
     ) {
-        // Learn from corrections for each field
         correctedCoupon.redeemCode?.let { correctCode ->
             val extractedCandidate = extractionResult.extractedFields[FieldType.COUPON_CODE]
             if (extractedCandidate != null && extractedCandidate.text != correctCode) {
@@ -218,7 +726,7 @@ class UniversalExtractionService @Inject constructor(
                     originalText = originalText,
                     context = context
                 )
-                
+
                 confidenceScorer.updateFromFeedback(
                     candidate = extractedCandidate,
                     fieldType = FieldType.COUPON_CODE,
@@ -226,8 +734,7 @@ class UniversalExtractionService @Inject constructor(
                 )
             }
         }
-        
-        // Similar learning for other fields...
+
         correctedCoupon.expiryDate?.let { correctDate ->
             val extractedCandidate = extractionResult.extractedFields[FieldType.EXPIRY_DATE]
             if (extractedCandidate != null) {
@@ -245,169 +752,19 @@ class UniversalExtractionService @Inject constructor(
         }
     }
 
-    /**
-     * Get extraction statistics for monitoring
-     * V2: Now suspend because patternLearner queries Room
-     */
     suspend fun getExtractionStats(): ExtractionStats {
         val patternStats = patternLearner.getPatternStats()
         val featureImportance = confidenceScorer.getFeatureImportance()
-        
         return ExtractionStats(
             patternStats = patternStats,
             featureImportance = featureImportance,
             totalPatternsLearned = patternStats.values.sumOf { it.totalPatterns }
         )
     }
-
-    // Private helper methods
-
-    private fun buildCouponFromFields(
-        extractedFields: Map<FieldType, ExtractionCandidate>,
-        imageUri: String
-    ): Coupon {
-        
-        // Extract store name
-        val storeName = extractedFields[FieldType.STORE_NAME]?.text ?: "Unknown Store"
-        
-        // Extract coupon code
-        val redeemCode = extractedFields[FieldType.COUPON_CODE]?.text
-        
-        // Extract and parse expiry date
-        val expiryDate = extractedFields[FieldType.EXPIRY_DATE]?.let { candidate ->
-            parseExpiryDate(candidate.text)
-        }
-        
-        // Extract and parse amount
-        val amountCandidate = extractedFields[FieldType.AMOUNT]
-        val (cashbackAmount, cashbackInfo) = if (amountCandidate != null) {
-            parseCashbackAmount(amountCandidate.text)
-        } else {
-            Pair(0.0, CashbackInfo(CashbackType.AMOUNT, 0.0))
-        }
-        
-        // Build description from available information
-        val description = buildDescription(extractedFields)
-        
-        return Coupon(
-            id = 0, // Auto-generated by Room
-            storeName = storeName,
-            description = description,
-            expiryDate = expiryDate,
-            cashbackAmount = cashbackAmount, // Legacy field
-            redeemCode = redeemCode,
-            imageUri = imageUri,
-            
-            // New typed cashback fields
-            cashbackType = cashbackInfo.type.name.lowercase(),
-            cashbackValueNum = cashbackInfo.valueNum,
-            cashbackCurrency = cashbackInfo.currency,
-            offerText = null,
-            
-            category = null,
-            rating = null,
-            status = "ACTIVE",
-            createdAt = Date(),
-            updatedAt = Date()
-        )
-    }
-
-    private fun parseExpiryDate(dateText: String): Date? {
-        return try {
-            val parseResult = IndianDateParser.extractExpiryFromText(dateText)
-            if (parseResult.date != null && parseResult.confidence > 0.5f) {
-                // Convert LocalDate to Date
-                Date.from(parseResult.date.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
-            } else {
-                // Fallback to simple date parsing
-                IndianDateParser.parseExpiryIST(dateText).date?.let { localDate ->
-                    Date.from(localDate.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
-                }
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse expiry date: $dateText", e)
-            null
-        }
-    }
-
-    private fun parseCashbackAmount(amountText: String): Pair<Double, CashbackInfo> {
-        return try {
-            // Use Indian currency parser for robust parsing
-            val numericValue = IndianCurrencyParser.parseAmount(amountText) ?: 0.0
-            
-            // Determine cashback type
-            val cashbackInfo = when {
-                amountText.contains("%") -> CashbackInfo(CashbackType.PERCENT, numericValue)
-                amountText.contains("₹") || amountText.contains("Rs") -> CashbackInfo(CashbackType.AMOUNT, numericValue, "INR")
-                numericValue <= 100 && (amountText.contains("off", ignoreCase = true) || amountText.contains("discount", ignoreCase = true)) -> {
-                    // Likely a percentage without % symbol
-                    CashbackInfo(CashbackType.PERCENT, numericValue)
-                }
-                else -> CashbackInfo(CashbackType.AMOUNT, numericValue, "INR")
-            }
-            
-            Pair(numericValue, cashbackInfo)
-            
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse cashback amount: $amountText", e)
-            Pair(0.0, CashbackInfo(CashbackType.AMOUNT, 0.0))
-        }
-    }
-
-    private fun buildDescription(extractedFields: Map<FieldType, ExtractionCandidate>): String {
-        val parts = mutableListOf<String>()
-        
-        extractedFields[FieldType.AMOUNT]?.text?.let { parts.add(it) }
-        extractedFields[FieldType.STORE_NAME]?.text?.let { store ->
-            if (parts.isEmpty()) {
-                parts.add("Coupon for $store")
-            }
-        }
-        
-        return if (parts.isNotEmpty()) {
-            parts.joinToString(" ")
-        } else {
-            "Coupon extracted using universal patterns"
-        }
-    }
-
-    private fun calculateOverallConfidence(extractedFields: Map<FieldType, ExtractionCandidate>): Float {
-        if (extractedFields.isEmpty()) return 0.0f
-        
-        val confidences = extractedFields.values.map { it.confidence }
-        val averageConfidence = confidences.average().toFloat()
-        
-        // Boost confidence based on number of fields extracted
-        val fieldBonus = when (extractedFields.size) {
-            1 -> 0.0f
-            2 -> 0.1f
-            3 -> 0.2f
-            else -> 0.3f
-        }
-        
-        return (averageConfidence + fieldBonus).coerceAtMost(1.0f)
-    }
-
-    private fun createFallbackCoupon(): Coupon {
-        return Coupon(
-            id = 0,
-            storeName = "Extraction Failed",
-            description = "Universal extraction could not process this coupon",
-            expiryDate = null,
-            cashbackAmount = 0.0,
-            redeemCode = null,
-            imageUri = null,
-            category = null,
-            rating = null,
-            status = "NEEDS_REVIEW",
-            createdAt = Date(),
-            updatedAt = Date()
-        )
-    }
 }
 
 /**
- * Result of universal extraction
+ * Result of universal extraction.
  */
 data class UniversalExtractionResult(
     val coupon: Coupon,
@@ -419,7 +776,7 @@ data class UniversalExtractionResult(
 )
 
 /**
- * Statistics about extraction patterns and performance
+ * Aggregated statistics for monitoring.
  */
 data class ExtractionStats(
     val patternStats: Map<FieldType, PatternFieldStats>,

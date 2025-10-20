@@ -1,0 +1,39 @@
+name: CI Guardrails
+
+on:
+  pull_request:
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "**/*.mdx"
+  push:
+    branches: [main]
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run AI invariant validator
+        run: python scripts/check_ai_invariants.py --allow-empty
+
+      - name: Run validator tests
+        run: pytest tests/test_store_detection.py
+
+      - name: Run fuzz regression tests
+        run: pytest tests/fuzz -q
+
+      - name: Run golden corpus tests
+        run: pytest tests/golden -q

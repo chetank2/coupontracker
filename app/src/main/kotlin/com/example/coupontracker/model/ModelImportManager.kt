@@ -69,15 +69,16 @@ class ModelImportManager @Inject constructor(
             val modelRoot = ModelPaths.root(context)
             val modelDir = ModelPaths.modelDir(context)
             val stagingDir = File(modelRoot, "${ModelPaths.DEFAULT_MODEL_ID}$STAGING_SUFFIX")
-            
-            // Check available space (need ~7.5 GB for GGUF, 2.5 GB for legacy)
-            // Use larger requirement to support both formats
-            val requiredSpace = 7_500_000_000L
+
+            val modelId = ModelPaths.DEFAULT_MODEL_ID
+            val expectedModelSize = ModelPaths.getExpectedSize(modelId)
+            val safetyMargin = if (ModelPaths.isGgufModel(modelId)) 350_000_000L else 600_000_000L
+            val requiredSpace = expectedModelSize + safetyMargin
             val availableSpace = modelRoot.usableSpace
             if (availableSpace < requiredSpace) {
                 return@withContext ImportResult.Failed(
-                    "Insufficient storage: need ${requiredSpace / 1_000_000_000} GB, " +
-                    "have ${availableSpace / 1_000_000_000} GB"
+                    "Insufficient storage: need ${formatStorage(requiredSpace)}, " +
+                    "have ${formatStorage(availableSpace)}"
                 )
             }
             
@@ -113,7 +114,6 @@ class ModelImportManager @Inject constructor(
             onProgress(ImportResult.Progress(75, "Verifying required files..."))
             
             // Detect format and get appropriate required files
-            val modelId = ModelPaths.DEFAULT_MODEL_ID
             val requiredFiles = ModelPaths.getRequiredFiles(modelId)
             val isGguf = ModelPaths.isGgufModel(modelId)
             
@@ -452,6 +452,17 @@ class ModelImportManager @Inject constructor(
             // If we can't determine, assume it's not a symlink (fail open)
             Log.w(TAG, "Could not check for symlink: ${file.path}", e)
             false
+        }
+    }
+
+    private fun formatStorage(bytes: Long): String {
+        if (bytes <= 0) return "0 B"
+        val gb = bytes / 1_000_000_000.0
+        return if (gb >= 1) {
+            String.format("%.1f GB", gb)
+        } else {
+            val mb = bytes / 1_000_000.0
+            String.format("%.0f MB", mb)
         }
     }
 }

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Description
@@ -32,6 +33,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDatePickerState
@@ -72,6 +74,7 @@ fun UnifiedCouponForm(
     onCategoryChange: (String) -> Unit,
     imageUri: Uri?,
     onSave: () -> Unit,
+    onCopyLogs: () -> Unit,
     isSaving: Boolean = false,
     error: String? = null,
     modifier: Modifier = Modifier
@@ -201,6 +204,17 @@ fun UnifiedCouponForm(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Save Coupon")
             }
+        }
+
+        OutlinedButton(
+            onClick = onCopyLogs,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp)
+        ) {
+            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Copy Logcat Data")
         }
         
         // Error message

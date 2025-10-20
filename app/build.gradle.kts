@@ -103,10 +103,18 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    sourceSets {
+        getByName("test") {
+            java.srcDir("tests")
+            resources.srcDir("tests/fixtures")
+        }
     }
 
     kapt {
@@ -201,6 +209,7 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("androidx.hilt:hilt-work:1.1.0")
     kapt("androidx.hilt:hilt-compiler:1.1.0")
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 
     // Glide
     implementation("com.github.bumptech.glide:glide:4.16.0")
@@ -242,6 +251,7 @@ dependencies {
     testImplementation("app.cash.turbine:turbine:1.0.0")
     testImplementation("org.robolectric:robolectric:4.11.1")
     testImplementation("androidx.test:core:1.5.0")
+    testImplementation("androidx.test:core-ktx:1.5.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 
     // Android Testing
@@ -254,6 +264,8 @@ dependencies {
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     androidTestImplementation("io.mockk:mockk-android:1.13.9")
     androidTestImplementation("app.cash.turbine:turbine:1.0.0")
+    androidTestImplementation("com.google.dagger:hilt-android-testing:2.50")
+    kaptAndroidTest("com.google.dagger:hilt-android-compiler:2.50")
 
     // Compose
     implementation("androidx.compose.ui:ui:1.6.2")

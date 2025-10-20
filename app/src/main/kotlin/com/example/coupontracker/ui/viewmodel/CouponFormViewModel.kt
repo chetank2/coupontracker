@@ -1,7 +1,6 @@
 package com.example.coupontracker.ui.viewmodel
 
 import android.app.Application
-import android.content.Context
 import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
@@ -14,7 +13,6 @@ import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.util.CouponInputManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,16 +27,13 @@ import javax.inject.Inject
 @HiltViewModel
 class CouponFormViewModel @Inject constructor(
     application: Application,
-    @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository,
-    private val imageProcessor: com.example.coupontracker.util.ImageProcessor,
+    private val couponInputManager: CouponInputManager,
     savedStateHandle: SavedStateHandle
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(CouponFormUiState())
     val uiState: StateFlow<CouponFormUiState> = _uiState.asStateFlow()
-
-    private val couponInputManager = CouponInputManager(context, imageProcessor)
 
     companion object {
         private const val TAG = "CouponFormViewModel"
@@ -55,20 +50,38 @@ class CouponFormViewModel @Inject constructor(
     }
 
     /**
+     * Track the currently running image processing request to avoid duplicate work.
+     */
+    private var currentlyProcessingImageUri: String? = null
+
+    /**
      * Process an image URI to extract coupon information
      * @param uri URI of the image to process
+     * @param force When true, bypasses duplicate detection and re-processes the URI
      */
-    fun processImageUri(uri: Uri) {
+    fun processImageUri(uri: Uri, force: Boolean = false) {
+        val uriString = uri.toString()
+
+        if (!force && uriString == currentlyProcessingImageUri) {
+            Log.d(TAG, "Skipping duplicate processing request for URI already in progress: $uriString")
+            return
+        }
+
+        currentlyProcessingImageUri = uriString
+
+        updateState {
+            it.copy(
+                isProcessing = true,
+                error = null,
+                saveResult = null
+            )
+        }
+
         viewModelScope.launch {
             try {
-                updateState { it.copy(isProcessing = true, error = null, saveResult = null) }
-
-                // Process the image with URI persistence
                 val coupon = couponInputManager.processCouponFromImageUriWithPersistence(uri)
 
-                // Convert to coupon info
                 val couponInfo = mapCouponToCouponInfo(coupon)
-
                 updateState {
                     it.copy(
                         isProcessing = false,
@@ -78,6 +91,10 @@ class CouponFormViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 handleError(e, "Error processing image")
+            } finally {
+                if (currentlyProcessingImageUri == uriString) {
+                    currentlyProcessingImageUri = null
+                }
             }
         }
     }

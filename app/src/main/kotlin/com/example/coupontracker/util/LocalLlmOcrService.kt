@@ -3,19 +3,38 @@ package com.example.coupontracker.util
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.extraction.ExtractionContext
+import com.example.coupontracker.extraction.FieldCandidate
+import com.example.coupontracker.extraction.StructuredFieldExtractor
+import com.example.coupontracker.extraction.validation.BrandLexicon
+import com.example.coupontracker.extraction.validation.FieldValidationCoordinator
+import com.example.coupontracker.extraction.validation.FieldValidationIssue
+import com.example.coupontracker.extraction.validation.FieldValueBundle
+import com.example.coupontracker.extraction.validation.StoreNameResolver
+import com.example.coupontracker.extraction.validation.StoreNameValidator
+import com.example.coupontracker.extraction.validation.ValidationEventLogger
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.LlmTelemetryService
 import com.example.coupontracker.ocr.OcrEngine
+import com.example.coupontracker.feedback.ValidatorFeedbackRecorder
 import com.example.coupontracker.schema.CouponSchema
 import com.example.coupontracker.schema.PromptGenerator
 import com.example.coupontracker.schema.SchemaValidator
 import com.example.coupontracker.schema.ValidationResult
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONException
 import org.json.JSONObject
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -28,16 +47,17 @@ class LocalLlmOcrService(
     private val ocrEngine: OcrEngine,
     private val injectedLlmRuntimeManager: LlmRuntimeManager? = null,
     private val injectedTelemetryService: LlmTelemetryService? = null,
-    private val customOcrTextProvider: (suspend (Bitmap) -> String?)? = null
+    private val customOcrTextProvider: (suspend (Bitmap) -> String?)? = null,
+    private val validatorFeedbackRecorder: ValidatorFeedbackRecorder? = null
 ) {
     
     companion object {
         private const val TAG = "LocalLlmOcrService"
 
-        // Inference timeout (180 seconds - accommodates warmup + generation)
-        // First run: ~68s (model warmup), subsequent runs: ~10-20s
-        // Increased from 120s after observing 138s timeouts on device
-        private const val INFERENCE_TIMEOUT_MS = 180_000L
+        // Inference timeout (90 seconds - matches production SLA with warmup)
+        // First run: ~60s (model warmup), subsequent runs: ~10-20s
+        // Increased from 60s after observing 68s warmups; stays aligned with docs
+        private const val INFERENCE_TIMEOUT_MS = 90_000L
 
         // Model version tracking
         private const val SERVICE_VERSION = "1.4.0"  // Qwen2.5 migration
@@ -49,283 +69,125 @@ class LocalLlmOcrService(
         // Set to true to enable schema-driven prompts/validation, false to use manual/legacy
         private const val USE_SCHEMA_PROMPTS = true
         private const val USE_SCHEMA_VALIDATION = true
-        
+
         // Prompt optimization: Use compact prompts to reduce token count (920 → ~350 tokens)
         // Compact prompts rely on grammar enforcement for structure, reducing verbosity
         private const val USE_COMPACT_PROMPTS = true
 
-        private val RUPEE_VARIANT_PATTERN = Regex(
-            pattern = """(^|\s+|[^\w₹])((?:₹|₨|૱|रु|रू|rs\.?))[\s:=-]*([+-]?\d[\d,]*(?:\.\d+)?)""",
-            options = setOf(RegexOption.IGNORE_CASE)
+        private const val MAX_LLM_ATTEMPTS = 2
+
+        private val STORE_CONTEXT_ANCHORS = listOf(
+            "Claim Now",
+            "Use Code",
+            "Use coupon",
+            "Apply Code",
+            "Apply coupon",
+            "I'll use it later",
+            "Get ",
+            "Exclusive",
+            "Limited time",
+            "Reward"
         )
 
-        private val STORE_PREFIX_EXTRACTION_PATTERN = Regex(
-            pattern = """(?i)^([A-Za-z][\w'&@.]*?(?:\s+[A-Za-z][\w'&@.]*){0,3})\s*[:\-\|–—]+\s*(.+)$"""
+        private val STORE_FALLBACK_STOPWORDS = setOf(
+            "ORDER",
+            "RECEIVED",
+            "ITEMS",
+            "CLAIM",
+            "NOW",
+            "SAVE",
+            "DISCOUNT",
+            "OFF",
+            "GET",
+            "ADD",
+            "DEL",
+            "EXPLORE",
+            "WHILE",
+            "SCRATCH",
+            "CARD",
+            "GOOGLE",
+            "ORDERED",
+            "MINUTES"
         )
 
         fun cleanDescription(raw: String?): String {
-            if (raw.isNullOrBlank()) {
+            if (raw == null) {
                 return ""
             }
-            
-            // Handle JSON null serialized as literal "null" string
+
             if (raw.equals("null", ignoreCase = true)) {
                 return ""
             }
 
-            val timestampPattern = Regex("^\\d{1,2}:\\d{2}")
-            val singleLetterPattern = Regex("""^[A-Za-z]$""")
-
-            val cleanedLines = raw.lines().mapNotNull { line ->
-                val trimmed = line.trim()
-                if (trimmed.isBlank()) {
-                    return@mapNotNull null
-                }
-
-                if (timestampPattern.containsMatchIn(trimmed)) {
-                    return@mapNotNull null
-                }
-
-                if (singleLetterPattern.matches(trimmed)) {
-                    return@mapNotNull null
-                }
-
-                if (trimmed.equals("x", ignoreCase = true)) {
-                    return@mapNotNull null
-                }
-
-                if (isNoisyLine(trimmed)) {
-                    return@mapNotNull null
-                }
-
-                val uppercaseLetters = trimmed.count { it.isLetter() && it.isUpperCase() }
-                val lowercaseLetters = trimmed.count { it.isLetter() && it.isLowerCase() }
-
-                val normalized = if (uppercaseLetters > 0 && uppercaseLetters >= lowercaseLetters && trimmed.contains(' ')) {
-                    trimmed.lowercase(Locale.getDefault()).replaceFirstChar { char ->
-                        if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
-                    }
-                } else {
-                    trimmed
-                }
-
-                normalized
-            }
-
-            val tokens = mutableListOf<String>()
-            var previousTokenKey: String? = null
-
-            cleanedLines.forEach { cleanedLine ->
-                cleanedLine.split(Regex("\\s+")).forEach { rawToken ->
-                    val candidate = normalizeTokenForOutput(rawToken)
-                    if (candidate.isEmpty() || !shouldKeepToken(candidate)) {
-                        return@forEach
-                    }
-
-                    val key = buildTokenKey(candidate)
-                    if (key.isEmpty() || key == previousTokenKey) {
-                        return@forEach
-                    }
-
-                    previousTokenKey = key
-                    tokens.add(candidate)
-                }
-            }
-
-            val joined = tokens.joinToString(" ")
-                .replace(Regex("\\s+"), " ")
-                .trim()
-
-            val withoutStorePrefix = stripLikelyStorePrefix(joined)
-            val normalizedRupees = normalizeRupeeVariants(withoutStorePrefix)
-            return ensureLeadingCapital(normalizedRupees)
+            // Preserve the verbatim coupon copy while normalizing line endings
+            return raw
+                .replace("\r\n", "\n")
+                .replace('\r', '\n')
         }
 
-        private fun shouldKeepToken(token: String): Boolean {
-            val letters = token.count { it.isLetter() }
-            val digits = token.count { it.isDigit() }
-            val effectiveLength = token.count { !it.isWhitespace() }
-
-            if (letters + digits == 0) {
-                return false
-            }
-
-            if (letters > 0) {
-                val nonLetter = effectiveLength - letters - digits
-                if (nonLetter >= letters) {
-                    return false
-                }
-            }
-
-            return true
-        }
-
-        private fun buildTokenKey(token: String): String {
-            val alphanumeric = token.filter { it.isLetterOrDigit() }
-            if (alphanumeric.isNotEmpty()) {
-                return alphanumeric.lowercase(Locale.getDefault())
-            }
-            return token.lowercase(Locale.getDefault())
-        }
-
-        private fun normalizeTokenForOutput(token: String): String {
-            val trimmed = token.trim()
-            if (trimmed.isEmpty()) {
-                return ""
-            }
-
-            val sanitized = trimmed.trim(*TRIMMABLE_TOKEN_CHARS)
-            return if (sanitized.isNotEmpty()) sanitized else trimmed
-        }
-
-        private fun isNoisyLine(line: String): Boolean {
-            val compact = line.filterNot { it.isWhitespace() }
-            if (compact.isEmpty()) {
-                return true
-            }
-
-            val letters = compact.count { it.isLetter() }
-            val digits = compact.count { it.isDigit() }
-            val symbols = compact.length - letters - digits
-
-            if (letters == 0 && digits == 0) {
-                return true
-            }
-
-            if (symbols.toDouble() > compact.length * 0.45) {
-                return true
-            }
-
-            if (letters == 0 && digits > 0) {
-                return false
-            }
-
-            val vowels = line.count { it.lowercaseChar() in VOWELS }
-            if (letters >= 6 && vowels == 0) {
-                return true
-            }
-
-            val tokens = line.split(Regex("\\s+")).filter { it.isNotEmpty() }
-            if (tokens.isEmpty()) {
-                return true
-            }
-
-            val gibberishTokens = tokens.count { token ->
-                val tokenLetters = token.count { it.isLetter() }
-                if (tokenLetters == 0) {
-                    return@count token.count { it.isDigit() } == 0
-                }
-
-                val tokenVowels = token.count { it.lowercaseChar() in VOWELS }
-                val alphaNumeric = token.count { it.isLetterOrDigit() }
-
-                tokenLetters < alphaNumeric / 2 || (tokenVowels == 0 && tokenLetters >= 4)
-            }
-
-            if (gibberishTokens == tokens.size) {
-                return true
-            }
-
-            val letterRatio = letters.toDouble() / compact.length
-            if (letterRatio < 0.3 && digits.toDouble() / compact.length < 0.2) {
-                return true
-            }
-
-            return false
-        }
-
-        private val TRIMMABLE_TOKEN_CHARS = charArrayOf(
-            '.', ',', ';', ':', '!', '?', '\'', '"', '-', '_', '•', '·', '–', '—', '…', '*', '#', '|', '/', '\\'
-        )
-
-        private val VOWELS = setOf('a', 'e', 'i', 'o', 'u')
-
-        private fun normalizeRupeeVariants(text: String): String {
-            if (text.isEmpty()) {
-                return text
-            }
-
-            return RUPEE_VARIANT_PATTERN.replace(text) { matchResult ->
-                val leading = matchResult.groupValues[1]
-                val marker = matchResult.groupValues[2]
-                val amount = matchResult.groupValues[3]
-
-                val markerStart = matchResult.range.first + leading.length
-                val markerEnd = markerStart + marker.length
-                val precedingChar = text.getOrNull(markerStart - 1)
-                val followingChar = text.getOrNull(markerEnd)
-
-                if (marker.any { it.isLetter() }) {
-                    val precedingIsLetter = precedingChar?.isLetter() == true
-                    val followingIsLetter = followingChar?.isLetter() == true
-                    if (precedingIsLetter || followingIsLetter) {
-                        return@replace matchResult.value
-                    }
-                }
-
-                val cleanedAmount = amount.replaceFirst(Regex("^([+-]?)0+(?=\\d)"), "$1")
-                leading + "₹" + cleanedAmount
-            }
-        }
-
-        private fun stripLikelyStorePrefix(text: String): String {
-            if (text.isBlank()) {
-                return text
-            }
-
-            val match = STORE_PREFIX_EXTRACTION_PATTERN.find(text) ?: return text
-            val remainder = match.groupValues[2].trim()
-            if (remainder.isEmpty()) {
-                return text
-            }
-
-            val lowerRemainder = remainder.lowercase(Locale.getDefault())
-            val indicatorKeywords = listOf(
-                "coupon", "coupons", "cashback", "discount", "discounts", "offer", "offers",
-                "deal", "deals", "sale", "save", "savings", "reward", "rewards", "code", "promo",
-                "%", "₹"
-            )
-
-            val hasKeyword = indicatorKeywords.any { keyword ->
-                when (keyword) {
-                    "%" -> remainder.contains('%')
-                    "₹" -> remainder.contains('₹')
-                    else -> lowerRemainder.contains(keyword)
-                }
-            }
-
-            val hasDigits = remainder.any { it.isDigit() }
-
-            return if (hasKeyword || hasDigits) remainder else text
-        }
-
-        private fun ensureLeadingCapital(text: String): String {
-            if (text.isBlank()) {
-                return text
-            }
-
-            val firstLetterIndex = text.indexOfFirst { it.isLetter() }
-            if (firstLetterIndex == -1) {
-                return text
-            }
-
-            val firstLetter = text[firstLetterIndex]
-            return if (firstLetter.isLowerCase()) {
-                val builder = StringBuilder(text)
-                builder.replace(firstLetterIndex, firstLetterIndex + 1, firstLetter.titlecase(Locale.getDefault()))
-                builder.toString()
-            } else {
-                text
-            }
-        }
     }
-    
+
+    private data class LlmInferenceOutcome(
+        val response: String?,
+        val memoryUsageMb: Long
+    )
+
+    private fun CouponInfo.toCanonicalContract(): CouponInfo {
+        return copy(
+            cashbackAmount = null,
+            category = null,
+            rating = null,
+            status = null,
+            discountType = null,
+            minimumPurchase = null,
+            maximumDiscount = null,
+            paymentMethod = null,
+            platformType = null,
+            usageLimit = null
+        )
+    }
+
     // Dependencies
     private val llmRuntime = injectedLlmRuntimeManager ?: LlmRuntimeManager.getInstance(context)
     private val telemetryService = injectedTelemetryService ?: LlmTelemetryService.getInstance(context)
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor() // Fallback
+    private val structuredFieldExtractor = StructuredFieldExtractor()
+    private val brandLexicon = BrandLexicon.load(context)
+    private val storeNameResolver = StoreNameResolver(
+        StoreNameValidator(brandLexicon) { log ->
+            runCatching {
+                Log.d(
+                    TAG,
+                    "store-source=${log.source} candidate='${log.candidate}' issues=${log.issues}"
+                )
+            }
+        }
+    )
+    private val validationEventLogger = ValidationEventLogger { event ->
+        if (event.summary.issues.isEmpty()) {
+            return@ValidationEventLogger
+        }
+        validatorFeedbackRecorder?.recordValidatorOverride(
+            rawOcrText = event.rawOcrText,
+            initialBundle = event.initial,
+            summary = event.summary,
+            structuredCandidates = event.structuredCandidates,
+            metadata = mapOf(
+                "serviceVersion" to SERVICE_VERSION,
+                "validator" to "FieldValidationCoordinator",
+                "modelVersion" to SUPPORTED_MODEL_VERSION
+            )
+        )
+    }
+    private val fieldValidationCoordinator = FieldValidationCoordinator(
+        textExtractor,
+        storeNameResolver,
+        validationEventLogger = validationEventLogger
+    )
     private var modelPinned = false
+    private val warmupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val warmupMutex = Mutex()
     
     init {
         Log.d(TAG, "🔍 LocalLlmOcrService initialization started")
@@ -337,6 +199,17 @@ class LocalLlmOcrService(
             Log.d(TAG, "   Version: ${modelInfo.version}")
             Log.d(TAG, "   Size: ${modelInfo.sizeMB}MB")
             Log.d(TAG, "   Loaded: ${modelInfo.isLoaded}")
+            if (modelInfo.isLoaded) {
+                modelPinned = true
+            } else {
+                warmupScope.launch {
+                    runCatching {
+                        ensureModelWarm("service_init", null)
+                    }.onFailure { warmupError ->
+                        Log.w(TAG, "Deferred model warmup failed: ${warmupError.message}", warmupError)
+                    }
+                }
+            }
         } else {
             Log.w(TAG, "⚠️  MiniCPM model NOT available - extraction will use pattern fallbacks")
             Log.w(TAG, "   Download the model from Settings to enable AI-powered extraction")
@@ -356,7 +229,7 @@ class LocalLlmOcrService(
     fun getServiceStatus(): LlmServiceStatus {
         val modelInfo = llmRuntime.getModelInfo()
         val memoryStats = llmRuntime.getMemoryStats()
-        
+
         return LlmServiceStatus(
             isAvailable = modelInfo.isAvailable,
             isModelLoaded = modelInfo.isLoaded,
@@ -367,21 +240,149 @@ class LocalLlmOcrService(
             referenceCount = modelInfo.referenceCount
         )
     }
+
+    private suspend fun ensureModelWarm(
+        reason: String,
+        progressCallback: ((LlmProgressUpdate) -> Unit)?
+    ) {
+        if (modelPinned || llmRuntime.getModelInfo().isLoaded) {
+            return
+        }
+
+        warmupMutex.withLock {
+            if (modelPinned || llmRuntime.getModelInfo().isLoaded) {
+                return
+            }
+
+            notifyProgress(
+                stage = LlmProgressStage.WARMING_UP,
+                percent = 20,
+                message = "Loading AI model…",
+                progressCallback = progressCallback
+            )
+
+            val warmupStart = System.currentTimeMillis()
+            val warmed = warmUpModel()
+            val warmupDuration = System.currentTimeMillis() - warmupStart
+
+            if (!warmed) {
+                notifyProgress(
+                    stage = LlmProgressStage.FAILED,
+                    percent = 100,
+                    message = "AI model warmup failed",
+                    progressCallback = progressCallback
+                )
+                throw IllegalStateException("Failed to warm up LLM model ($reason)")
+            }
+
+            notifyProgress(
+                stage = LlmProgressStage.WARMING_UP,
+                percent = 25,
+                message = "AI model ready in ${(warmupDuration / 1000).coerceAtLeast(1)}s",
+                progressCallback = progressCallback
+            )
+        }
+    }
+
+    private suspend fun runLlmInferenceWithRetry(
+        rawOcrText: String,
+        prompt: String,
+        progressCallback: ((LlmProgressUpdate) -> Unit)?
+    ): LlmInferenceOutcome {
+        var attempt = 0
+        var lastMemoryUsage = 0L
+        var response: String? = null
+
+        while (attempt < MAX_LLM_ATTEMPTS && response == null) {
+            lastMemoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
+            val attemptStart = System.currentTimeMillis()
+            response = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
+                llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned)
+            }
+
+            if (response != null) {
+                break
+            }
+
+            val elapsed = System.currentTimeMillis() - attemptStart
+            telemetryService.recordTimeout(elapsed, lastMemoryUsage)
+            Log.w(
+                TAG,
+                "LLM inference timed out after ${elapsed}ms (attempt ${attempt + 1}/$MAX_LLM_ATTEMPTS)"
+            )
+
+            llmRuntime.cancelOngoingInference()
+            runCatching { llmRuntime.resetAfterTimeout() }
+                .onFailure { error -> Log.w(TAG, "Failed to reset LLM after timeout", error) }
+            modelPinned = false
+
+            if (attempt + 1 < MAX_LLM_ATTEMPTS) {
+                notifyProgress(
+                    stage = LlmProgressStage.WARMING_UP,
+                    percent = 30,
+                    message = "AI timeout – retrying…",
+                    progressCallback = progressCallback
+                )
+                ensureModelWarm("timeout_retry", progressCallback)
+            }
+
+            attempt++
+        }
+
+        return LlmInferenceOutcome(response, lastMemoryUsage)
+    }
+
+    private fun notifyProgress(
+        stage: LlmProgressStage,
+        percent: Int?,
+        message: String,
+        progressCallback: ((LlmProgressUpdate) -> Unit)?
+    ) {
+        val update = LlmProgressUpdate(stage, percent?.coerceIn(0, 100), message)
+        progressCallback?.invoke(update)
+        telemetryService.recordProgress(update)
+    }
+
+    private fun shouldFallbackToLegacy(error: Throwable): Boolean {
+        if (error is JSONException) {
+            return true
+        }
+
+        val message = error.message?.lowercase(Locale.getDefault()) ?: return false
+        return when (error) {
+            is IllegalArgumentException -> message.contains("json") || message.contains("schema")
+            is IllegalStateException -> message.contains("mock") ||
+                message.contains("response") ||
+                message.contains("json") ||
+                message.contains("schema")
+            else -> false
+        }
+    }
     
     /**
      * Process coupon image using local LLM with typed results
      * New entry point that returns ExtractResult for better error handling
      */
-    suspend fun processCouponImageTyped(bitmap: Bitmap, captureTimestamp: Date? = null): ExtractResult = coroutineScope {
+    suspend fun processCouponImageTyped(
+        bitmap: Bitmap,
+        captureTimestamp: Date? = null,
+        progressCallback: ((LlmProgressUpdate) -> Unit)? = null
+    ): ExtractResult = coroutineScope {
         val startTime = System.currentTimeMillis()
         var memoryUsage = 0L
         var extractedFieldCount = 0
         val triedStages = mutableListOf<String>()
         
         try {
+            notifyProgress(
+                stage = LlmProgressStage.PREPARING,
+                percent = 5,
+                message = "Preparing on-device AI extraction…",
+                progressCallback = progressCallback
+            )
             Log.d(TAG, "Processing coupon with Qwen2-1.5B (text-only, typed)")
             triedStages.add("LLM")
-            
+
             // Step 1: Validate input
             if (bitmap.isRecycled) {
                 return@coroutineScope ExtractResult.Failed(
@@ -392,47 +393,117 @@ class LocalLlmOcrService(
             
             // Step 2: Check service availability
             if (!isServiceAvailable()) {
+                notifyProgress(
+                    stage = LlmProgressStage.FAILED,
+                    percent = 100,
+                    message = "AI model missing – download required",
+                    progressCallback = progressCallback
+                )
                 return@coroutineScope ExtractResult.Failed(
                     stage = ExtractionStage.LLM,
                     error = IllegalStateException("LLM model not available on device")
                 )
             }
-            
+
+            ensureModelWarm("typed_inference", progressCallback)
+
             // Step 3: Capture OCR text (used for prompt and post-processing)
-            val rawOcrText = captureRawOcrText(bitmap)
-                ?: return@coroutineScope ExtractResult.Failed(
-                    stage = ExtractionStage.LLM,
-                    error = IllegalStateException("OCR returned blank text; cannot build prompt")
-                )
+            notifyProgress(
+                stage = LlmProgressStage.OCR,
+                percent = 30,
+                message = "Reading coupon text…",
+                progressCallback = progressCallback
+            )
+            val rawOcrText = captureRawOcrText(bitmap)?.takeIf { it.isNotBlank() }
+                ?: run {
+                    notifyProgress(
+                        stage = LlmProgressStage.FAILED,
+                        percent = 100,
+                        message = "OCR returned blank text",
+                        progressCallback = progressCallback
+                    )
+                    return@coroutineScope ExtractResult.Failed(
+                        stage = ExtractionStage.LLM,
+                        error = IllegalStateException("OCR returned blank text; cannot build prompt")
+                    )
+                }
+            notifyProgress(
+                stage = LlmProgressStage.PROMPTING,
+                percent = 45,
+                message = "Asking the AI to structure the coupon…",
+                progressCallback = progressCallback
+            )
             val prompt = createCouponExtractionPrompt(rawOcrText)
-            
-            // Step 4: Run LLM inference with timeout and memory tracking
-            memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
-            val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
-                llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned)
+            val extractionContext = ExtractionContext(
+                imageUri = "inline://llm",
+                ocrText = rawOcrText,
+                captureTimestamp = captureTimestamp
+            )
+            val structuredCandidatesDeferred = async(Dispatchers.Default) {
+                structuredFieldExtractor.detectFieldsStructured(extractionContext)
             }
+
+            // Step 4: Run LLM inference with timeout and memory tracking
+            notifyProgress(
+                stage = LlmProgressStage.INFERENCE,
+                percent = 65,
+                message = "Running on-device AI…",
+                progressCallback = progressCallback
+            )
+            val llmOutcome = runLlmInferenceWithRetry(rawOcrText, prompt, progressCallback)
+            memoryUsage = llmOutcome.memoryUsageMb
+            val llmResponse = llmOutcome.response
 
             // Step 5: Parse and validate response
             if (llmResponse != null) {
+                notifyProgress(
+                    stage = LlmProgressStage.PARSING,
+                    percent = 80,
+                    message = "Interpreting AI response…",
+                    progressCallback = progressCallback
+                )
                 val trimmedResponse = llmResponse.trimStart()
                 if (!trimmedResponse.startsWith("{")) {
                     Log.e(TAG, "LLM response did not start with '{': ${trimmedResponse.take(200)}")
                     throw IllegalStateException("LLM response not JSON (missing opening brace)")
                 }
-                val couponInfo = parseLlmResponseToCouponInfo(llmResponse, rawOcrText)
+                val structuredCandidates = runCatching { structuredCandidatesDeferred.await() }
+                    .onFailure { error ->
+                        Log.w(TAG, "Structured extraction failed: ${error.message}", error)
+                    }
+                    .getOrElse { emptyMap() }
+                val couponInfo = parseLlmResponseToCouponInfo(
+                    llmResponse,
+                    rawOcrText,
+                    captureTimestamp,
+                    structuredCandidates
+                )
                 
                 // CRITICAL: Detect mock responses and reject them
-                if (isMockLlmResponse(couponInfo)) {
+                if (MockLlmResponseDetector.isMockResponse(couponInfo)) {
+                    Log.w(TAG, "Mock response signature: store='${couponInfo.storeName}', code='${couponInfo.redeemCode}', desc='${couponInfo.description}'")
                     Log.w(TAG, "⚠️ MOCK LLM RESPONSE DETECTED - Falling back to OCR")
+                    notifyProgress(
+                        stage = LlmProgressStage.FAILED,
+                        percent = 100,
+                        message = "Detected placeholder AI response",
+                        progressCallback = progressCallback
+                    )
                     return@coroutineScope ExtractResult.Failed(
                         stage = ExtractionStage.LLM,
-                        error = IllegalStateException("Mock LLM response detected (Example Store / MOCK123)")
+                        error = IllegalStateException("Mock LLM response detected (placeholder runtime output)")
                     )
                 }
                 
                 extractedFieldCount = countExtractedFields(couponInfo)
-                
+
                 // Step 7: Quality validation
+                notifyProgress(
+                    stage = LlmProgressStage.VALIDATING,
+                    percent = 90,
+                    message = "Validating coupon fields…",
+                    progressCallback = progressCallback
+                )
                 val qualityScore = calculateQualityScore(couponInfo)
                 val signals = ExtractionSignals(
                     qualityScore = qualityScore,
@@ -458,15 +529,27 @@ class LocalLlmOcrService(
                 }
             } else {
                 // Timeout occurred
+                notifyProgress(
+                    stage = LlmProgressStage.FAILED,
+                    percent = 100,
+                    message = "AI inference exceeded 90s timeout",
+                    progressCallback = progressCallback
+                )
                 return@coroutineScope ExtractResult.Failed(
                     stage = ExtractionStage.LLM,
                     error = Exception("LLM inference timeout after ${INFERENCE_TIMEOUT_MS}ms")
                 )
             }
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "LLM processing failed: ${e.message}", e)
-            
+            notifyProgress(
+                stage = LlmProgressStage.FAILED,
+                percent = 100,
+                message = "AI extraction failed – please retry",
+                progressCallback = progressCallback
+            )
+
             val signals = ExtractionSignals(
                 qualityScore = 0,
                 fieldConfidences = emptyMap(),
@@ -480,6 +563,15 @@ class LocalLlmOcrService(
                 stage = ExtractionStage.LLM,
                 error = e,
                 signals = signals
+            )
+        }
+    }.also { result ->
+        if (result is ExtractResult.Good || result is ExtractResult.LowQuality) {
+            notifyProgress(
+                stage = LlmProgressStage.COMPLETE,
+                percent = 100,
+                message = "Coupon extracted successfully",
+                progressCallback = progressCallback
             )
         }
     }
@@ -506,7 +598,9 @@ class LocalLlmOcrService(
             if (!isServiceAvailable()) {
                 throw IllegalStateException("LLM model not available on device")
             }
-            
+
+            ensureModelWarm("legacy_entry", null)
+
             // Step 3: Extract OCR text from image
             Log.d(TAG, "Extracting OCR text from image...")
             val ocrText = captureRawOcrText(bitmap)
@@ -517,6 +611,14 @@ class LocalLlmOcrService(
             
             // Step 4: Create structured extraction prompt
             val prompt = createCouponExtractionPrompt(ocrText)
+            val extractionContext = ExtractionContext(
+                imageUri = "inline://llm",
+                ocrText = ocrText,
+                captureTimestamp = captureTimestamp
+            )
+            val structuredCandidatesDeferred = async(Dispatchers.Default) {
+                structuredFieldExtractor.detectFieldsStructured(extractionContext)
+            }
             
             // Step 5: Run TEXT-ONLY LLM inference with OCR text
             Log.d(TAG, "========================================")
@@ -525,23 +627,33 @@ class LocalLlmOcrService(
             Log.d(TAG, "⏱️  Subsequent runs: ~10s")
             Log.d(TAG, "⏳ Please wait... (max ${INFERENCE_TIMEOUT_MS / 1000}s)")
             Log.d(TAG, "========================================")
-            memoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
             val inferenceStartTime = System.currentTimeMillis()
-            val llmResponse = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
-                llmRuntime.runTextInference(ocrText, prompt, keepLoaded = modelPinned)
-            }
+            val llmOutcome = runLlmInferenceWithRetry(ocrText, prompt, progressCallback = null)
             val inferenceElapsed = System.currentTimeMillis() - inferenceStartTime
+            memoryUsage = llmOutcome.memoryUsageMb
+            val llmResponse = llmOutcome.response
             Log.d(TAG, "⏱️  Inference completed in ${inferenceElapsed / 1000}s")
 
             // Step 6: Parse and validate response
             val couponInfo = if (llmResponse != null) {
                 // We already have OCR text from Step 3, no need to extract again
-                val parsedInfo = parseLlmResponseToCouponInfo(llmResponse, ocrText)
+                val structuredCandidates = runCatching { structuredCandidatesDeferred.await() }
+                    .onFailure { error ->
+                        Log.w(TAG, "Structured extraction failed: ${error.message}", error)
+                    }
+                    .getOrElse { emptyMap() }
+                val parsedInfo = parseLlmResponseToCouponInfo(
+                    llmResponse,
+                    ocrText,
+                    captureTimestamp,
+                    structuredCandidates
+                )
                 
                 // CRITICAL: Detect mock responses and fall back to OCR
-                if (isMockLlmResponse(parsedInfo)) {
+                if (MockLlmResponseDetector.isMockResponse(parsedInfo)) {
+                    Log.w(TAG, "Mock response signature: store='${parsedInfo.storeName}', code='${parsedInfo.redeemCode}', desc='${parsedInfo.description}'")
                     Log.w(TAG, "⚠️ MOCK LLM RESPONSE DETECTED - Falling back to OCR")
-                    throw IllegalStateException("Mock LLM response detected (Example Store / MOCK123)")
+                    throw IllegalStateException("Mock LLM response detected (placeholder runtime output)")
                 }
                 
                 parsedInfo
@@ -570,7 +682,7 @@ class LocalLlmOcrService(
             
         } catch (e: Exception) {
             Log.e(TAG, "LLM processing failed: ${e.message}", e)
-            
+
             // Record failure
             val duration = System.currentTimeMillis() - startTime
             val errorType = when {
@@ -580,21 +692,32 @@ class LocalLlmOcrService(
                 e.message?.contains("model", ignoreCase = true) == true -> "MODEL_ERROR"
                 else -> "PROCESSING_ERROR"
             }
-            
-            // Fallback to traditional OCR
-            Log.d(TAG, "Falling back to traditional OCR")
+            val allowFallback = shouldFallbackToLegacy(e)
+
+            if (!allowFallback) {
+                telemetryService.recordInference(
+                    durationMs = duration,
+                    success = false,
+                    errorType = errorType,
+                    extractedFieldCount = extractedFieldCount,
+                    memoryUsageMB = memoryUsage
+                )
+                throw e
+            }
+
+            Log.d(TAG, "Falling back to traditional OCR after invalid LLM response")
             val fallbackResult = fallbackToTraditionalOCR(bitmap, captureTimestamp)
-            
+
             // Determine which fallback was used based on result quality
-            fallbackUsed = if (fallbackResult.storeName != "Unknown Store" || 
+            fallbackUsed = if (fallbackResult.storeName != "Unknown Store" ||
                              !fallbackResult.redeemCode.isNullOrBlank()) {
                 "ML_KIT"
             } else {
                 "MODEL_BASED"
             }
-            
+
             extractedFieldCount = countExtractedFields(fallbackResult)
-            
+
             telemetryService.recordInference(
                 durationMs = duration,
                 success = false,
@@ -603,7 +726,7 @@ class LocalLlmOcrService(
                 extractedFieldCount = extractedFieldCount,
                 memoryUsageMB = memoryUsage
             )
-            
+
             fallbackResult
         }
     }
@@ -612,10 +735,8 @@ class LocalLlmOcrService(
         var count = 0
         if (couponInfo.storeName != "Unknown Store") count++
         if (!couponInfo.redeemCode.isNullOrBlank()) count++
-        if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) count++
         if (couponInfo.expiryDate != null) count++
-        if (couponInfo.description != "Coupon offer") count++
-        if (couponInfo.minimumPurchase != null && couponInfo.minimumPurchase > 0) count++
+        if (couponInfo.description.isNotBlank()) count++
         return count
     }
     
@@ -623,33 +744,6 @@ class LocalLlmOcrService(
      * Detect mock/placeholder responses from stub JNI
      * Returns true if the response matches known mock patterns
      */
-    private fun isMockLlmResponse(couponInfo: CouponInfo): Boolean {
-        // Check for exact mock patterns from mlc_llm_jni.cpp
-        val isMockStore = couponInfo.storeName.equals("Example Store", ignoreCase = true)
-        val isMockCode = couponInfo.redeemCode?.let {
-            it.equals("MOCK123", ignoreCase = true) ||
-            it.equals("EXAMPLE123", ignoreCase = true) ||
-            it.startsWith("MOCK", ignoreCase = true)
-        } ?: false
-        
-        // Check for generic placeholder patterns
-        val isPlaceholderDescription = couponInfo.description.let {
-            it.equals("Sample coupon offer", ignoreCase = true) ||
-            it.equals("Placeholder offer", ignoreCase = true) ||
-            it.contains("example", ignoreCase = true) && it.contains("offer", ignoreCase = true)
-        }
-        
-        // Detect if it's a mock response (any two indicators match)
-        val mockIndicators = listOf(isMockStore, isMockCode, isPlaceholderDescription).count { it }
-        
-        if (mockIndicators >= 2) {
-            Log.w(TAG, "Mock response detected: store='${couponInfo.storeName}', code='${couponInfo.redeemCode}', desc='${couponInfo.description}'")
-            return true
-        }
-        
-        return false
-    }
-    
     /**
      * Create optimized structured prompt for coupon extraction with strict schema and typed cashback
      */
@@ -684,124 +778,54 @@ class LocalLlmOcrService(
      * NOTE: This is the manual/legacy prompt. When USE_SCHEMA_PROMPTS=true,
      * the prompt is generated from CouponSchema instead.
      */
-    private fun buildQwenPromptManual(sanitizedOcr: String): String = """<|im_start|>system
+    private fun buildQwenPromptManual(sanitizedOcr: String): String = """
+<|im_start|>system
 You are a JSON extractor. Extract coupon data and output ONLY valid JSON.
 
-🚨 MANDATORY FIELDS (MUST ALWAYS INCLUDE):
-1. "redeemCode" - THE coupon code (search for "Code:" in OCR)
-2. "expiryDate" - THE expiry date (search for "Expires on" in OCR)
-3. "storeName" - Store/brand name
-4. "description" - Offer description
-
-⚠️ CRITICAL: All 7 JSON keys MUST be present! Never skip redeemCode or expiryDate!
+🚨 REQUIRED JSON KEYS (always include these four keys):
+1. "storeName" - Store/brand name exactly from the coupon
+2. "redeemCode" - Coupon/promo code. Use null if no code is present
+3. "expiryDate" - Expiry date text exactly as written (no reformatting)
+4. "description" - Offer description verbatim, no extra math or commentary
 
 CRITICAL RULES:
-1. ONLY extract data that EXISTS in the OCR text
-2. DO NOT invent, generate, or hallucinate ANY data
-3. COPY dates EXACTLY as written - do NOT change format or create timestamps
-4. If data is missing, use null (NOT -1, NOT 0, NOT empty object)
-5. NEVER use negative numbers or placeholder values like -1
-6. Output ONLY the JSON object, NO explanations, NO extra text after JSON
+1. Output ONLY these four keys. No additional fields are allowed.
+2. If data is missing, output null (never invent values or placeholders).
+3. Preserve the coupon wording: do NOT add numbers together or rewrite text.
+4. Do not change date formats. Copy the characters exactly as seen.
+5. Output ONLY the JSON object. No explanations before or after the JSON.
 
-Schema (all 6 keys MUST be present):
-{"storeName":str|null,"description":str|null,"cashback":obj|null,"redeemCode":str|null,"expiryDate":str|null,"minOrderAmount":str|null}
+Schema:
+{"storeName":str|null,"redeemCode":str|null,"expiryDate":str|null,"description":str|null}
 
 EXTRACTION GUIDE:
 
 storeName:
-- Brand name ONLY (e.g., "PUMA", "Amazon", "Flipkart")
-- Must appear in OCR text
+- Brand name only (e.g., "PUMA", "Amazon", "Flipkart")
+- Ignore partner logos or watermarks.
 
 redeemCode:
-🚨 CRITICAL - MUST ALWAYS INCLUDE THIS KEY!
-- Search for: "Code:", "Coupon:", or standalone alphanumeric codes
-- Strip prefixes: "Code: KAPW1M3LAfAhSe" → "KAPW1M3LAfAhSe"
-- Examples: "SAVE50", "BTXS5T13LI9V5", "KAPW1M3LAfAhSe"
-- If NO code in OCR, use null (BUT key must be present!)
-- DO NOT invent codes
-- NEVER output "NULL" as a string - use null instead
+- Search for "Code:", "Coupon:", or standalone alphanumeric codes.
+- Strip prefixes and whitespace. Example: "Code: SAVE50" → "SAVE50".
+- Use null when no code is visible.
 
 expiryDate:
-🚨 CRITICAL - MOST IMPORTANT FOR APP REMINDERS! MUST ALWAYS INCLUDE THIS KEY!
-⚠️ Extract EXACTLY what you see in OCR. DO NOT change the date!
-
-STEP 1: Find expiry text in OCR
-- Look for: "Expires on", "Valid till", "Expires:", "Expiry:", "EXPIRES IN"
-
-STEP 2: Extract ONLY day, month, year (remove time)
-- Input: "Expires on 31 May, 2025, 11:59 PM"
-- Output: "31 May 2025"
-  
-- Input: "Expires on 05 May, 2025, 11:59 PM"
-- Output: "05 May 2025"
-
-- Input: "Valid till 15 Dec 2025"
-- Output: "15 Dec 2025"
-
-STEP 3: Remove ALL extra text
-- ❌ WRONG: "May,25|31" (mangled format!)
-- ❌ WRONG: "May/16th @ 11.59 PM IST / End of the OFFER."
-- ❌ WRONG: "May-31-2025T23:59Z"
-- ❌ WRONG: Put it in the WRONG field
-- ✅ CORRECT: "31 May 2025" in "expiryDate" field
-- ✅ CORRECT: "05 May 2025" in "expiryDate" field
-
-🚨 CRITICAL RULES:
-1. MUST include "expiryDate" key (even if null)!
-2. DO NOT change the date numbers (31 May → May,25|31 is WRONG!)
-3. DO NOT add "@", "PM", "IST", "|", weird symbols
-4. DO NOT put expiry in other fields - it goes in "expiryDate"!
-5. ONLY output: day month year (e.g., "31 May 2025")
-
-If NO date in OCR → use null (BUT key must be present!)
-
-cashback:
-⚠️ IMPORTANT: If you cannot CLEARLY identify the discount amount, set cashback to null
-- Only extract if discount is EXPLICIT: "50% off", "₹200 off", "Flat 11% Off"
-- If amount is unclear, misprinted, or ambiguous → use null
-- If multiple amounts are confusing → use null
-- The description field is more important than getting amount wrong
-
-- Convert clear discounts to object:
-  * Percentage: {"type":"percent","valueNum":50,"currency":null}
-  * Amount: {"type":"amount","valueNum":200,"currency":"INR"}
-- CRITICAL: valueNum must be a POSITIVE number (1 or greater)
-- NEVER use: -1, 0, negative numbers, or placeholder values
-- If NO discount exists in OCR → cashback must be null (NOT an object)
-
-⚠️ SKIP CASHBACK IF:
-- OCR text is garbled/unclear around numbers
-- Multiple discount amounts are present (confusing)
-- Numbers don't have clear "off"/"discount" keywords nearby
-- Small numbers (< 5) near "Details", "Redeem Now" = APP RATINGS
-- Numbers with stars (⭐) or near store names = RATINGS
+- Copy the date text exactly (e.g., "31 May 2025", "2025-12-31").
+- If the coupon only says "Expires in 5 days", return null (the app will compute it).
+- Never invent months or days.
 
 description:
-⭐ MOST IMPORTANT FIELD - Focus on getting this right!
-- ❗ NEVER leave this empty if any offer text exists in OCR.
-- ❗ Include the main discount sentence even if extra details exist.
-- DO NOT return an empty string. If no offer text exists, use null (NOT "").
-- Extract the FULL offer text from the coupon
-- Combine multi-line text to form complete sentences
-- Examples:
-  * "Flat 50% off\non orders" → "Flat 50% off on orders"
-  * "you won flat ₹100 off + ₹50 cashback\non your next order" → "Flat ₹100 Off + ₹50 Cashback on your next order"
-  * "Flat 75% Off on Radiance Kit from beminimalist.co" → "Flat 75% Off on Radiance Kit from beminimalist.co"
-- Include ALL key details: discount, product, conditions
-- Clean up OCR noise but keep the offer intact
-- DO NOT leave empty - if there's ANY offer text, extract it
-- Only use null if absolutely no offer information exists
+- Use the main offer sentence exactly as printed.
+- Keep symbols like "₹", "+", "%".
+- Do NOT append helper text like "(Hybrid)" or perform arithmetic.
 
-minOrderAmount:
-- Minimum order value (e.g., "₹999", "₹500")
-- If missing, use null
-
-REMEMBER: ONLY extract data that you can SEE in the OCR text. DO NOT make up data.<|im_end|>
+Provide the JSON object now.
+<|im_end|>
 <|im_start|>user
-Extract coupon from OCR:
-$sanitizedOcr<|im_end|>
-<|im_start|>assistant
-{""".trimIndent()
+OCR_TEXT:
+$sanitizedOcr
+<|im_end|>
+""".trimIndent()
 
     private suspend fun captureRawOcrText(bitmap: Bitmap): String? {
         customOcrTextProvider?.let { provider ->
@@ -847,16 +871,39 @@ $sanitizedOcr<|im_end|>
         return if (start >= 0 && end > start) text.substring(start, end + 1) else null
     }
 
-    private fun removeDeprecatedKeys(jsonString: String): String {
+    private fun enforceCanonicalFields(jsonString: String): String {
         return try {
             val jsonObject = JSONObject(jsonString)
-            jsonObject.remove("offerText")
+            val allowedKeys = setOf("storeName", "description", "redeemCode", "couponCode", "expiryDate")
+            val keysToRemove = jsonObject.keys().asSequence()
+                .filter { it !in allowedKeys }
+                .toList()
+            keysToRemove.forEach { jsonObject.remove(it) }
+
+            if (jsonObject.has("couponCode") && !jsonObject.has("redeemCode")) {
+                jsonObject.put("redeemCode", jsonObject.get("couponCode"))
+            }
+            jsonObject.remove("couponCode")
+
             jsonObject.toString()
         } catch (parseError: JSONException) {
-            var sanitized = jsonString.replace(Regex("\"offerText\"\\s*:\\s*\".*?\"\\s*,?"), "")
-            sanitized = sanitized.replace(Regex(",\\s*,"), ",")
+            var sanitized = jsonString
+            val removalPatterns = listOf(
+                "\"offerText\"\\s*:\\s*\".*?\"\\s*,?",
+                "\"cashback\"\\s*:\\s*\\{.*?\\}\\s*,?",
+                "\"cashbackAmount\"\\s*:\\s*[^,{}]+,?",
+                "\"minOrderAmount\"\\s*:\\s*[^,{}]+,?",
+                "\"minimumPurchase\"\\s*:\\s*[^,{}]+,?",
+                "\"maximumDiscount\"\\s*:\\s*[^,{}]+,?"
+            )
+            removalPatterns.forEach { pattern ->
+                sanitized = sanitized.replace(Regex(pattern, RegexOption.DOT_MATCHES_ALL), "")
+            }
+
+            sanitized = sanitized.replace(Regex(",\\s*,+"), ",")
             sanitized = sanitized.replace(Regex("\\{\\s*,"), "{")
             sanitized = sanitized.replace(Regex(",\\s*\\}"), "}")
+            sanitized = sanitized.replace(Regex("\"couponCode\""), "\"redeemCode\"")
             sanitized
         }
     }
@@ -864,7 +911,12 @@ $sanitizedOcr<|im_end|>
     /**
      * Parse LLM JSON response to CouponInfo object with strict validation
      */
-    private fun parseLlmResponseToCouponInfo(response: String, rawOcrText: String?): CouponInfo {
+    private fun parseLlmResponseToCouponInfo(
+        response: String,
+        rawOcrText: String?,
+        captureTimestamp: Date?,
+        structuredCandidates: Map<FieldType, List<FieldCandidate>>
+    ): CouponInfo {
         return try {
             // Clean response (remove any markdown formatting)
             var cleanResponse = response.trim()
@@ -873,10 +925,27 @@ $sanitizedOcr<|im_end|>
                 .removeSuffix("```")
                 .trim()
             
-            // Prepend the assistant primer if response doesn't start with {
-            // (we prime with `{"storeName":` in the prompt)
-            if (!cleanResponse.startsWith("{")) {
-                cleanResponse = """{"storeName":$cleanResponse"""
+            // Fix common JSON malformations from LLM
+            // Step 1: Normalize mixed quotes to double quotes
+            cleanResponse = cleanResponse
+                .replace("'storeName'", "\"storeName\"")
+                .replace("'description'", "\"description\"")
+                .replace("'redeemCode'", "\"redeemCode\"")
+                .replace("'expiryDate'", "\"expiryDate\"")
+            
+            // Step 2: Fix duplicate key like `{"storeName":"storeName": null`
+            if (cleanResponse.contains("\"storeName\":\"storeName\":")) {
+                cleanResponse = cleanResponse.replace("\"storeName\":\"storeName\":", "\"storeName\":")
+            }
+            
+            // Step 3: Ensure opening brace exists
+            if (!cleanResponse.trim().startsWith("{")) {
+                cleanResponse = "{" + cleanResponse.trim()
+            }
+            
+            // Step 4: Ensure closing brace exists
+            if (!cleanResponse.trim().endsWith("}")) {
+                cleanResponse = cleanResponse.trim() + "}"
             }
             
             if (cleanResponse.length < 20) {
@@ -885,22 +954,22 @@ $sanitizedOcr<|im_end|>
             
             val jsonCandidate = extractJsonSlice(cleanResponse)
                 ?: throw IllegalStateException("No JSON object found in LLM output")
-            val sanitizedJsonCandidate = removeDeprecatedKeys(jsonCandidate)
+            val sanitizedJsonCandidate = enforceCanonicalFields(jsonCandidate)
+            val baseJson = try {
+                JSONObject(sanitizedJsonCandidate)
+            } catch (jsonException: JSONException) {
+                Log.w(TAG, "Unable to parse LLM JSON payload", jsonException)
+                throw IllegalArgumentException("Invalid JSON schema: ${jsonException.message}")
+            }
             
             // JSON validation: use schema-driven or legacy validator
             val json = if (USE_SCHEMA_VALIDATION) {
-                // Schema-driven validation
-                val validationResult = SchemaValidator.validate(sanitizedJsonCandidate, CouponSchema.SCHEMA)
-                when (validationResult) {
-                    is ValidationResult.Valid -> {
-                        Log.d(TAG, "Schema validation passed")
-                        JSONObject(sanitizedJsonCandidate)
-                    }
-                    is ValidationResult.Invalid -> {
-                        Log.w(TAG, "Schema validation failed: ${validationResult.issues}")
-                        throw IllegalArgumentException("Invalid JSON schema: ${validationResult.issues.joinToString(", ")}")
-                    }
-                }
+                enforceSchemaWithFallback(
+                    jsonObject = baseJson,
+                    rawOcrText = rawOcrText,
+                    captureTimestamp = captureTimestamp,
+                    structuredCandidates = structuredCandidates
+                )
             } else {
                 // Legacy validation
                 val parsedJson = CouponJsonValidator.parseStrict(sanitizedJsonCandidate)
@@ -919,73 +988,80 @@ $sanitizedOcr<|im_end|>
                 parsedJson
             }
             
-            // Extract fields with fallbacks and generic filtering
-            val storeName = json.optString("storeName", "Unknown Store").let {
-                when {
-                    it.isBlank() || it == "Unknown" -> "Unknown Store"
-                    GenericFieldHeuristics.isGenericOrMissing(it) -> "Unknown Store"
-                    else -> it
-                }
-            }
-            
-            val rawDescription = json.optString("description", "")
-            val cleanedDescription = cleanDescription(rawDescription)
-            val description = when {
-                cleanedDescription.isBlank() -> selectDescriptionFallback(rawOcrText)
-                cleanedDescription.equals("Unknown", ignoreCase = true) -> selectDescriptionFallback(rawOcrText)
-                GenericFieldHeuristics.isGenericOrMissing(cleanedDescription) -> selectDescriptionFallback(rawOcrText)
-                else -> cleanedDescription.trim().replace(Regex("\\s+"), " ")
-            }
-            
-        // Use universal code validation instead of brand-specific patterns
-            val code = (json.optString("redeemCode").takeIf { it.isNotBlank() && it != "Unknown" }
+            sanitizeSentinelValues(json)
+
+            val rawStoreName = json.optString("storeName").takeIf { it.isNotBlank() }
+            val cleanedDescription = cleanDescription(json.optString("description", "")).takeIf { it.isNotBlank() }
+            val codeCandidate = (json.optString("redeemCode").takeIf { it.isNotBlank() && it != "Unknown" }
                 ?: json.optString("code").takeIf { it.isNotBlank() && it != "Unknown" })
                 ?.let { rawCode ->
-                    // Basic sanitization and universal validation
                     val sanitized = RedeemCodeSanitizer.sanitizePreserve(rawCode)
                     val repaired = sanitized ?: RedeemCodeRepair.repair(rawCode)
-                    repaired?.takeIf { isValidUniversalCode(it) }?.also {
-                        Log.d(TAG, "Validated universal code: $it")
-                    }
+                    repaired?.takeIf { isValidUniversalCode(it) }
                 }
-                ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
-            
-            val expiryDate = json.optString("expiryDate").let {
-                if (it.isBlank() || it == "Unknown") null else it
+            val sanitizedCodeCandidate = codeCandidate?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+            val expiryCandidate = json.optString("expiryDate").takeIf { it.isNotBlank() && it != "Unknown" }
+
+            val validationSummary = fieldValidationCoordinator.refine(
+                initial = FieldValueBundle(
+                    storeName = rawStoreName,
+                    description = cleanedDescription,
+                    redeemCode = sanitizedCodeCandidate,
+                    expiryDateText = expiryCandidate
+                ),
+                rawOcrText = rawOcrText,
+                captureTimestamp = captureTimestamp,
+                structuredCandidates = structuredCandidates
+            )
+
+            validationSummary.issues.forEach { issue: FieldValidationIssue ->
+                val sourceInfo = issue.replacementSource?.let { source -> " via $source" } ?: ""
+                Log.w(TAG, "Field validation ${issue.severity} for ${issue.field}: ${issue.message}$sourceInfo")
             }
-            
-        val cashbackData = json.optJSONObject("cashback")
-        val cashbackTriple = cashbackData?.let {
-            val type = it.optString("type", "text")
-            val valueNum = it.optDouble("valueNum", 0.0)
-            val currency = it.optString("currency", "").takeIf { c -> c.isNotBlank() }
-            Triple(type, valueNum, currency)
-        }
-        val validatedCashback = cashbackTriple?.takeIf { (type, valueNum, _) ->
-            when (type) {
-                "percent" -> valueNum > 0 && hasSupportingDigits("${valueNum}", rawOcrText, cleanedDescription)
-                "amount" -> valueNum > 0 && hasSupportingDigits("${valueNum}", rawOcrText, cleanedDescription)
-                else -> true
+
+            val storeResolution = validationSummary.storeResolution
+            val candidateStoreName = storeResolution.value?.trim()
+            val candidateDescription = validationSummary.fields.description
+            val candidateCode = validationSummary.fields.redeemCode
+            val candidateExpiry = validationSummary.fields.expiryDateText
+
+            val cleanedCandidateDescription = cleanDescription(candidateDescription)
+            val description = when {
+                cleanedCandidateDescription.isBlank() -> selectDescriptionFallback(rawOcrText)
+                cleanedCandidateDescription.equals("Unknown", ignoreCase = true) -> selectDescriptionFallback(rawOcrText)
+                GenericFieldHeuristics.isGenericOrMissing(cleanedCandidateDescription) -> selectDescriptionFallback(rawOcrText)
+                else -> cleanedCandidateDescription
             }
-        }
-            
-            val minOrderAmount = json.optString("minOrderAmount").let {
-                if (it.isBlank() || it == "Unknown") null else it
+
+            val normalizedCode = candidateCode?.takeIf { isValidUniversalCode(it) }?.takeIf {
+                !GenericFieldHeuristics.isGenericOrMissingCode(it)
             }
-            
-            // Check for duplicate values between fields (common LLM issue)
-            val finalStoreName = if (GenericFieldHeuristics.areDuplicateFields(storeName, code)) {
-                Log.w(TAG, "Detected duplicate store name and redeem code: '$storeName' - downgrading store name")
-                "Unknown Store"
-            } else storeName
-            
-            val finalCode = if (GenericFieldHeuristics.areDuplicateFields(storeName, code) || GenericFieldHeuristics.isGenericOrMissingCode(code)) {
-                Log.w(TAG, "Detected duplicate store name and redeem code: '$code' - clearing redeem code")
+
+            val finalStoreCandidate = if (GenericFieldHeuristics.areDuplicateFields(candidateStoreName, normalizedCode)) {
+                Log.w(TAG, "Detected duplicate store name and redeem code: '${candidateStoreName.orEmpty()}' - downgrading store name")
                 null
-            } else code
-            
+            } else candidateStoreName
+
+            val finalCode = if (
+                GenericFieldHeuristics.areDuplicateFields(candidateStoreName, normalizedCode) ||
+                GenericFieldHeuristics.isGenericOrMissingCode(normalizedCode)
+            ) {
+                if (!normalizedCode.isNullOrBlank()) {
+                    Log.w(TAG, "Detected invalid or duplicate redeem code: '$normalizedCode' - clearing redeem code")
+                }
+                null
+            } else normalizedCode
+
+            val finalStoreName = finalStoreCandidate?.takeIf {
+                it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it)
+            } ?: "Unknown Store"
+
+            val storeNeedsAttention = storeResolution.needsAttention || finalStoreName == "Unknown Store"
+            val storeEvidence = storeResolution.evidence
+            val storeSource = storeResolution.source
+
             // Parse expiry date with enhanced pattern matching
-            val parsedExpiryDate = expiryDate?.let { dateStr ->
+            val parsedExpiryDate = candidateExpiry?.let { dateStr ->
                 try {
                     // First try extracting from the full text (in case LLM gave us a sentence)
                     var parseResult = IndianDateParser.extractExpiryFromText(dateStr)
@@ -1025,89 +1101,198 @@ $sanitizedOcr<|im_end|>
                     null
                 }
             }
-            
-            val (cashbackType, cashbackValue, _) = validatedCashback ?: Triple("text", 0.0, null)
-            val normalizedCashback = when (cashbackType) {
-                "percent" -> cashbackValue
-                "amount" -> cashbackValue
-                else -> null
-            }
+
+            val resolvedExpiry = parsedExpiryDate
+                ?: resolveRelativeExpiry(rawOcrText, description, captureTimestamp)
 
             return CouponInfo(
                 storeName = finalStoreName,
                 description = description,
-                expiryDate = parsedExpiryDate,
-                cashbackAmount = normalizedCashback,
+                expiryDate = resolvedExpiry,
+                cashbackAmount = null,
                 redeemCode = finalCode,
-                minimumPurchase = parseNumericValue(minOrderAmount),
-                discountType = when (cashbackType) {
-                    "percent" -> "PERCENTAGE"
-                    "amount" -> "AMOUNT"
-                    else -> null
-                }
+                needsAttention = storeNeedsAttention,
+                storeNameSource = storeSource,
+                storeNameEvidence = storeEvidence,
+                minimumPurchase = null,
+                discountType = null
             )
-            
+
         } catch (e: JSONException) {
             Log.e(TAG, "Failed to parse LLM JSON response: $response", e)
             throw IllegalStateException("Invalid JSON response from LLM: ${e.message}")
         }
     }
 
-    private fun hasSupportingDigits(amountText: String, rawOcrText: String?, cleanedDescription: String): Boolean {
-        val numericTokens = Regex("""\d[\d,]*(?:\.\d+)?""").findAll(amountText)
-            .map { it.value }
-            .filter { it.isNotBlank() }
-            .toList()
-
-        if (numericTokens.isEmpty()) {
-            Log.w(TAG, "No digit sequences found in cashback amount '$amountText'")
-            return false
+    private fun enforceSchemaWithFallback(
+        jsonObject: JSONObject,
+        rawOcrText: String?,
+        captureTimestamp: Date?,
+        structuredCandidates: Map<FieldType, List<FieldCandidate>>
+    ): JSONObject {
+        var validationResult = SchemaValidator.validateObject(jsonObject, CouponSchema.SCHEMA)
+        if (validationResult is ValidationResult.Valid) {
+            Log.d(TAG, "Schema validation passed")
+            return jsonObject
         }
 
-        val searchSpaces = mutableListOf<String>()
-        rawOcrText?.let { searchSpaces.add(it) }
-        if (cleanedDescription.isNotBlank()) {
-            searchSpaces.add(cleanedDescription)
+        val issues = (validationResult as ValidationResult.Invalid).issues
+        Log.w(TAG, "Schema validation failed: $issues")
+
+        val recoverable = issues.filter { it.contains("storeName", ignoreCase = true) }
+        val unrecoverable = issues - recoverable.toSet()
+        if (unrecoverable.isNotEmpty()) {
+            throw IllegalArgumentException("Invalid JSON schema: ${issues.joinToString(", ")}")
         }
 
-        if (searchSpaces.isEmpty()) {
-            Log.w(TAG, "No OCR text available to validate cashback amount '$amountText'")
-            return false
+        val fallbackStore = resolveStoreNameFallback(structuredCandidates, rawOcrText, captureTimestamp)
+        if (fallbackStore != null) {
+            Log.w(TAG, "Schema self-heal: injecting fallback store name '$fallbackStore'")
+            jsonObject.put("storeName", fallbackStore)
+            validationResult = SchemaValidator.validateObject(jsonObject, CouponSchema.SCHEMA)
+            if (validationResult is ValidationResult.Valid) {
+                Log.d(TAG, "Schema validation passed after storeName repair")
+                return jsonObject
+            }
+            Log.w(TAG, "Fallback store name '$fallbackStore' still failed schema validation: ${(validationResult as ValidationResult.Invalid).issues}")
+        } else {
+            Log.w(TAG, "No fallback store candidate available to repair schema")
         }
 
-        val missingTokens = numericTokens.filterNot { token ->
-            searchSpaces.any { text -> containsDigitSequence(text, token) }
+        throw IllegalArgumentException("Invalid JSON schema: ${issues.joinToString(", ")}")
+    }
+
+    private fun resolveStoreNameFallback(
+        structuredCandidates: Map<FieldType, List<FieldCandidate>>,
+        rawOcrText: String?,
+        captureTimestamp: Date?
+    ): String? {
+        val contextual = guessStoreFromOfferContext(rawOcrText)
+        if (contextual != null) {
+            return contextual
         }
 
-        if (missingTokens.isNotEmpty()) {
-            Log.w(TAG, "Missing numeric support for tokens $missingTokens in amount '$amountText'")
-            return false
+        val structured = structuredCandidates[FieldType.STORE_NAME]
+            .orEmpty()
+            .sortedByDescending { it.confidence }
+            .firstOrNull { isStoreCandidateAcceptable(it.value, rawOcrText) }
+            ?.value
+        if (structured != null) {
+            return normalizeStoreCandidate(structured)
+        }
+
+        val fallbackFromText = runCatching {
+            rawOcrText?.let { textExtractor.extractCouponInfoSync(it, captureTimestamp).storeName }
+        }.getOrNull()
+
+        return fallbackFromText?.takeIf { isStoreCandidateAcceptable(it, rawOcrText) }?.let(::normalizeStoreCandidate)
+    }
+
+    private fun guessStoreFromOfferContext(rawText: String?): String? {
+        if (rawText.isNullOrBlank()) return null
+
+        val uppercasePattern = Regex("""\b([A-Z][A-Z&']{2,})\b""")
+        val candidates = mutableListOf<String>()
+
+        STORE_CONTEXT_ANCHORS.forEach { anchor ->
+            var searchIndex = rawText.indexOf(anchor, ignoreCase = true)
+            while (searchIndex >= 0) {
+                val windowStart = (searchIndex - 160).coerceAtLeast(0)
+                val windowEnd = (searchIndex + anchor.length + 160).coerceAtMost(rawText.length)
+                val window = rawText.substring(windowStart, windowEnd)
+                uppercasePattern.findAll(window).forEach { match ->
+                    val rawCandidate = match.value.trim()
+                    if (isStoreCandidateAcceptable(rawCandidate, rawText)) {
+                        candidates += rawCandidate
+                    }
+                }
+                searchIndex = rawText.indexOf(anchor, searchIndex + anchor.length, ignoreCase = true)
+            }
+        }
+
+        if (candidates.isEmpty()) {
+            return null
+        }
+
+        val ranked = candidates
+            .groupingBy { it }
+            .eachCount()
+            .entries
+            .sortedWith(
+                compareByDescending<Map.Entry<String, Int>> { it.value }
+                    .thenBy { it.key.length }
+            )
+
+        return ranked.firstOrNull()?.key?.let(::normalizeStoreCandidate)
+    }
+
+    private fun isStoreCandidateAcceptable(candidate: String?, fullText: String?): Boolean {
+        if (candidate.isNullOrBlank()) return false
+        val trimmed = candidate.trim()
+        if (trimmed.length < 3 || trimmed.length > 40) return false
+        if (!trimmed.any { it.isLetter() }) return false
+        if (GenericFieldHeuristics.isGenericOrMissing(trimmed)) return false
+        val upper = trimmed.uppercase(Locale.US)
+        if (STORE_FALLBACK_STOPWORDS.contains(upper)) return false
+        if (upper.any { it.isDigit() }) return false
+
+        if (!trimmed.any { it.lowercaseChar() in "aeiouy" }) return false
+
+        if (!fullText.isNullOrBlank()) {
+            val occurrences = countOccurrences(fullText, trimmed)
+            if (occurrences >= 3) {
+                return false
+            }
         }
 
         return true
     }
 
-    private fun containsDigitSequence(text: String?, token: String): Boolean {
-        if (text.isNullOrBlank() || token.isBlank()) {
-            return false
+    private fun normalizeStoreCandidate(raw: String): String {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) return trimmed
+        val upper = trimmed.uppercase(Locale.US)
+        if (upper == trimmed) {
+            return trimmed
+                .lowercase(Locale.US)
+                .split(Regex("\\s+"))
+                .filter { it.isNotBlank() }
+                .joinToString(" ") { segment ->
+                    segment.replaceFirstChar { char ->
+                        if (char.isLowerCase()) char.titlecase(Locale.US) else char.toString()
+                    }
+                }
         }
+        return trimmed
+    }
 
-        if (text.contains(token)) {
-            return true
+    private fun countOccurrences(text: String, needle: String): Int {
+        if (needle.isBlank()) return 0
+        val pattern = Regex("\\b${Regex.escape(needle)}\\b", RegexOption.IGNORE_CASE)
+        return pattern.findAll(text).count()
+    }
+
+    private fun resolveRelativeExpiry(
+        rawOcrText: String?,
+        description: String,
+        captureTimestamp: Date?
+    ): Date? {
+        if (captureTimestamp == null) return null
+
+        val combinedText = listOfNotNull(rawOcrText, description)
+            .joinToString("\n")
+        if (combinedText.isBlank()) return null
+
+        val relativePattern = Regex("(?i)(?:expire|expiring|valid)\\s+(?:in|within)\\s+(\\d+)\\s+days?")
+        val match = relativePattern.find(combinedText) ?: return null
+        val dayCount = match.groupValues.getOrNull(1)?.toIntOrNull() ?: return null
+
+        return Calendar.getInstance().apply {
+            time = captureTimestamp
+            add(Calendar.DAY_OF_YEAR, dayCount)
+        }.time.also {
+            Log.d(TAG, "Resolved relative expiry using capture timestamp +$dayCount days → $it")
         }
-
-        val normalizedToken = token.replace(Regex("[^0-9]"), "")
-        if (normalizedToken.isBlank()) {
-            return false
-        }
-
-        val normalizedText = text.replace(Regex("[^0-9]"), "")
-        if (normalizedText.contains(normalizedToken)) {
-            return true
-        }
-
-        val trimmedToken = normalizedToken.trimStart('0')
-        return trimmedToken.isNotBlank() && normalizedText.contains(trimmedToken)
     }
 
     /**
@@ -1150,34 +1335,6 @@ $sanitizedOcr<|im_end|>
         return true
     }
 
-    /**
-     * Parse numeric value from currency/percentage strings
-     * Handles formats like: ₹150, $25, 25%, 150.50, etc.
-     */
-     private fun parseNumericValue(value: String?): Double? {
-        if (value.isNullOrBlank() || value == "Unknown") return null
-        
-        return try {
-            // Remove currency symbols and extract numeric value
-            val numericString = value
-                .replace(Regex("[₹$£€¥%,\\s]"), "") // Remove common currency symbols, %, commas, spaces
-                .replace(Regex("[^0-9.]"), "") // Keep only digits and decimal points
-                .trim()
-            
-            if (numericString.isBlank()) {
-                Log.w(TAG, "No numeric value found in: '$value'")
-                null
-            } else {
-                val parsed = numericString.toDoubleOrNull()
-                Log.d(TAG, "Parsed '$value' → $parsed")
-                parsed
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse numeric value: '$value'", e)
-            null
-        }
-    }
-    
     /**
      * Preprocess bitmap specifically for MiniCPM-Llama3-V2.5 vision model
      * Ensures optimal input format: 768px long side, RGB format, proper aspect ratio
@@ -1310,11 +1467,11 @@ $sanitizedOcr<|im_end|>
         if (!couponInfo.redeemCode.isNullOrBlank()) qualityScore += 25
         if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) qualityScore += 25
         if (couponInfo.expiryDate != null) qualityScore += 10
-        if (couponInfo.description != "Coupon offer") qualityScore += 10
+        if (GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)) qualityScore += 10
         
         // Additional quality checks for boilerplate/generic content
         val hasGenericStoreName = GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)
-        val hasGenericDescription = GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)
+        val hasGenericDescription = !GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)
         val hasGenericCode = GenericFieldHeuristics.isGenericOrMissing(couponInfo.redeemCode)
         val hasMeaninglessAmount = GenericFieldHeuristics.isZeroOrMeaningless(couponInfo.cashbackAmount)
         
@@ -1383,6 +1540,7 @@ $sanitizedOcr<|im_end|>
             val extractedInfo = textExtractor.extractCouponInfoSync(ocrText, captureTimestamp)
                 .let { info ->
                     info.copy(description = cleanDescription(info.description))
+                        .toCanonicalContract()
                 }
             
             // Validate that we got meaningful extraction results
@@ -1403,6 +1561,7 @@ $sanitizedOcr<|im_end|>
                 val modelBasedService = ModelBasedOCRService(context, ocrEngine)
                 val result = modelBasedService.processCouponImage(bitmap)
                 val cleanedResult = result.copy(description = cleanDescription(result.description))
+                    .toCanonicalContract()
                 Log.d(TAG, "Model-based OCR fallback result: $cleanedResult")
                 return@withContext cleanedResult
             } catch (e2: Exception) {
@@ -1431,15 +1590,20 @@ $sanitizedOcr<|im_end|>
      * Warm up the model (preload for faster inference)
      */
     suspend fun warmUpModel(): Boolean {
+        val warmupStart = System.currentTimeMillis()
         return try {
             Log.d(TAG, "Warming up LLM model...")
             val loaded = llmRuntime.loadModel()
+            val warmupDuration = System.currentTimeMillis() - warmupStart
+            telemetryService.recordModelLoad(loaded, warmupDuration)
             if (loaded) {
                 modelPinned = true
-                Log.d(TAG, "LLM model pinned in memory for reuse")
+                Log.d(TAG, "LLM model pinned in memory for reuse (warmup ${warmupDuration}ms)")
             }
             loaded
         } catch (e: Exception) {
+            val warmupDuration = System.currentTimeMillis() - warmupStart
+            telemetryService.recordModelLoad(false, warmupDuration)
             Log.e(TAG, "Failed to warm up model", e)
             false
         }
@@ -1454,6 +1618,7 @@ $sanitizedOcr<|im_end|>
             llmRuntime.releaseModel()
             modelPinned = false
             Log.d(TAG, "LLM model reference released")
+            telemetryService.recordModelUnload()
         }
     }
     
@@ -1484,7 +1649,7 @@ $sanitizedOcr<|im_end|>
         if (!couponInfo.redeemCode.isNullOrBlank()) qualityScore += 30
         if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) qualityScore += 20
         if (couponInfo.expiryDate != null) qualityScore += 15
-        if (!GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)) qualityScore += 10
+        if (GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)) qualityScore += 10
         
         return qualityScore
     }
@@ -1495,7 +1660,7 @@ $sanitizedOcr<|im_end|>
     private fun calculateFieldConfidences(couponInfo: CouponInfo): Map<String, Float> {
         return mapOf(
             "storeName" to if (GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)) 0.3f else 0.9f,
-            "description" to if (GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)) 0.3f else 0.8f,
+            "description" to if (GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)) 0.8f else 0.3f,
             "redeemCode" to if (couponInfo.redeemCode.isNullOrBlank()) 0.0f else 0.9f,
             "cashbackAmount" to if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) 0.8f else 0.2f,
             "expiryDate" to if (couponInfo.expiryDate != null) 0.7f else 0.1f
@@ -1507,7 +1672,7 @@ $sanitizedOcr<|im_end|>
      */
     private fun determineQualityReason(couponInfo: CouponInfo): QualityReason {
         val hasGenericStoreName = GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)
-        val hasGenericDescription = GenericFieldHeuristics.isGenericOrMissing(couponInfo.description)
+        val hasGenericDescription = !GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)
         val hasGenericCode = GenericFieldHeuristics.isGenericOrMissing(couponInfo.redeemCode)
         val hasMeaninglessAmount = GenericFieldHeuristics.isZeroOrMeaningless(couponInfo.cashbackAmount)
         val hasDuplicateFields = GenericFieldHeuristics.areDuplicateFields(
@@ -1534,13 +1699,15 @@ $sanitizedOcr<|im_end|>
     private fun selectDescriptionFallback(rawOcrText: String?): String {
         if (rawOcrText.isNullOrBlank()) {
             Log.w(TAG, "No OCR text available for description fallback")
-            return "Coupon offer"
+            return ""
         }
 
-        val lines = rawOcrText.lineSequence()
-            .map { it.trim() }
-            .filter { it.length in 12..220 }
-            .filter { !GenericFieldHeuristics.isGenericOrMissing(it) }
+        val normalized = rawOcrText.replace("\r\n", "\n").replace('\r', '\n')
+
+        val lines = normalized.lineSequence()
+            .map { it.trimEnd() }
+            .filter { it.isNotBlank() }
+            .filter { GenericFieldHeuristics.isMeaningfulDescription(it) }
             .toList()
 
         val scoredLines = lines.map { line ->
@@ -1549,13 +1716,14 @@ $sanitizedOcr<|im_end|>
             if (Regex("%|₹|Rs|OFF|Flat|Buy|Cashback|Free|Code", RegexOption.IGNORE_CASE).containsMatchIn(line)) score += 3
             if (line.length > 60) score += 1
             if (line.contains("http", ignoreCase = true)) score -= 2
-            score to line.replace(Regex("\\s+"), " ")
+            score to line
         }.sortedByDescending { it.first }
 
         val primary = scoredLines.firstOrNull { it.first > 0 }?.second
-            ?: lines.firstOrNull()?.replace(Regex("\\s+"), " ")
+            ?: lines.firstOrNull()
+            ?: normalized.trim()
 
-        val description = primary ?: "Coupon offer"
+        val description = primary ?: ""
         Log.d(TAG, "Using fallback description: '$description'")
         return description
     }

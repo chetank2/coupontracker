@@ -23,12 +23,29 @@ class StructuredFieldExtractor {
             "THAT", "YOUR", "USE", "APPLY", "SAVE", "DISCOUNT", "VIA", "PAY", "ONLY",
             "WON", "WIN", "NEXT", "ORDER", "PURCHASE", "BUY", "DETAILS", "NOW", "NEW"
         )
-        
+
         // Payment methods - NOT store names
         private val PAYMENT_METHODS = setOf(
             "CRED", "UPI", "CARD", "WALLET", "PAYTM", "GPAY", "PHONEPE", "BHIM",
             "CASH", "COD", "NET", "BANKING", "DEBIT", "CREDIT"
         )
+
+        private val WATERMARK_WORDS = setOf(
+            "PASTM", "PAYTM", "PAYTIN", "PAITM", "PAYMM", "PAYTMM", "PAYIN",
+            "SHARE", "DETAILS", "TERMS", "NOW", "TODAY"
+        )
+
+        private val WATERMARK_CANONICAL = setOf(
+            "paytm", "gpay", "phonepe"
+        )
+
+        private inline fun safeLogDebug(tag: String, message: () -> String) {
+            try {
+                Log.d(tag, message())
+            } catch (_: Throwable) {
+                // Ignore logging failures in unit tests where android.util.Log is a stub.
+            }
+        }
     }
     
     /**
@@ -65,7 +82,7 @@ class StructuredFieldExtractor {
             reason = "Structured pattern matching"
         ))
         
-        Log.d(TAG, "Structured extraction found ${results.values.sumOf { it.size }} candidates across ${results.size} field types")
+        safeLogDebug(TAG) { "Structured extraction found ${results.values.sumOf { it.size }} candidates across ${results.size} field types" }
         
         results
     }
@@ -98,7 +115,13 @@ class StructuredFieldExtractor {
         val allCapsPattern = Regex("""\b([A-Z]{2,})\b""")
         allCapsPattern.findAll(context.ocrText).forEachIndexed { index, match ->
             val word = match.value
-            if (word !in COMMON_WORDS && word.uppercase() !in PAYMENT_METHODS && word.length in 3..15 && isValidBrandName(word)) {
+            if (
+                word !in COMMON_WORDS &&
+                word.uppercase() !in PAYMENT_METHODS &&
+                !isLikelyWatermark(word) &&
+                word.length in 3..15 &&
+                isValidBrandName(word)
+            ) {
                 // Higher confidence for words in first 30% of text
                 val position = match.range.first.toFloat() / context.ocrText.length
                 val confidence = if (position < 0.3f) 0.70f else 0.5f  // Increased from 0.65
@@ -125,7 +148,7 @@ class StructuredFieldExtractor {
             if (isAllCommon) return@forEach
             
             // Validate brand name quality (reject OCR garbage like "Pastm Patm")
-            if (!isValidBrandName(storeName)) return@forEach
+            if (!isValidBrandName(storeName) || isLikelyWatermark(storeName)) return@forEach
             
             // Calculate position-based confidence
             val position = match.range.first.toFloat() / context.ocrText.length
@@ -341,7 +364,9 @@ class StructuredFieldExtractor {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
             val calculatedDate = dateFormat.format(calendar.time)
             
-            android.util.Log.d(TAG, "📅 Expiry: OCR='${match.value}' → Base=${dateFormat.format(baseDate.time)} + $count $unit = $calculatedDate (capture timestamp: ${context.captureTimestamp != null})")
+            safeLogDebug(TAG) {
+                "📅 Expiry: OCR='${match.value}' → Base=${dateFormat.format(baseDate.time)} + $count $unit = $calculatedDate (capture timestamp: ${context.captureTimestamp != null})"
+            }
             
             candidates.add(FieldCandidate(
                 value = calculatedDate,
@@ -354,34 +379,43 @@ class StructuredFieldExtractor {
         // Pattern 2: Absolute dates (DD/MM/YYYY, DD-MM-YYYY, etc.)
         val absolutePatterns = listOf(
             Regex("""(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})"""),
-            Regex("""(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})""", RegexOption.IGNORE_CASE)
+            Regex(
+                """(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\s*,?\s*\d{2,4})""",
+                RegexOption.IGNORE_CASE
+            )
         )
         
         for (pattern in absolutePatterns) {
             pattern.findAll(context.ocrText).forEach { match ->
-                candidates.add(FieldCandidate(
-                    value = match.value,
-                    confidence = 0.8f,
-                    source = "absolute_date",
-                    context = getWordContext(context.ocrText, match.range)
-                ))
+                val normalized = normalizeAbsoluteDate(match.value)
+                if (normalized != null) {
+                    candidates.add(FieldCandidate(
+                        value = normalized,
+                        confidence = 0.8f,
+                        source = "absolute_date",
+                        context = getWordContext(context.ocrText, match.range)
+                    ))
+                }
             }
         }
-        
+
         // Pattern 3: "Valid until/till DD/MM/YYYY"
         val validUntilPattern = Regex(
             """(?:valid|expires?)\s+(?:until|till|by)\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})""",
             RegexOption.IGNORE_CASE
         )
         validUntilPattern.findAll(context.ocrText).forEach { match ->
-            candidates.add(FieldCandidate(
-                value = match.groupValues[1],
-                confidence = 0.85f,
-                source = "valid_until",
-                context = match.value
-            ))
+            val normalized = normalizeAbsoluteDate(match.groupValues[1])
+            if (normalized != null) {
+                candidates.add(FieldCandidate(
+                    value = normalized,
+                    confidence = 0.85f,
+                    source = "valid_until",
+                    context = match.value
+                ))
+            }
         }
-        
+
         return candidates.filter { it.confidence >= minConfidence }
             .sortedByDescending { it.confidence }
     }
@@ -475,30 +509,44 @@ class StructuredFieldExtractor {
      */
     private fun isValidBrandName(name: String): Boolean {
         val cleanName = name.trim()
-        
+
         // Too short or too long
         if (cleanName.length < 3 || cleanName.length > 25) return false
-        
-        // Must have at least one vowel (brands need to be pronounceable)
-        val hasVowel = cleanName.any { it.lowercaseChar() in "aeiou" }
+
+        // Disallow names that look like overlays/watermarks (e.g., distorted Paytm text)
+        if (isLikelyWatermark(cleanName)) return false
+
+        // Should include at least one alphabetic character
+        if (!cleanName.any { it.isLetter() }) return false
+
+        // Must have at least one vowel (treat 'y' as vowel for brands like XYXX)
+        val hasVowel = cleanName.any { it.lowercaseChar() in "aeiouy" }
         if (!hasVowel) return false
-        
+
         // Reject if it has too many consonants in a row (like "Pastm")
         val maxConsecutiveConsonants = cleanName.windowed(4, 1, partialWindows = false)
-            .count { window -> window.all { char -> char.isLetter() && char.lowercaseChar() !in "aeiou" } }
+            .count { window -> window.all { char -> char.isLetter() && char.lowercaseChar() !in "aeiouy" } }
         if (maxConsecutiveConsonants > 0) return false
-        
+
         // Reject if contains too many special characters
         val specialCharCount = cleanName.count { !it.isLetterOrDigit() && it != ' ' }
         if (specialCharCount > 2) return false
-        
-        // Reject OCR-like garbage: repeated character patterns like "aa", "mm", "tt"
-        val hasRepeatedChars = cleanName.lowercase().zipWithNext().any { (a, b) -> a == b && a.isLetter() }
-        if (hasRepeatedChars && cleanName.length < 6) return false  // Allow in longer names like "Mississippi"
-        
+
+        // Reject numeric-heavy tokens (like "428")
+        val digitCount = cleanName.count { it.isDigit() }
+        val letterCount = cleanName.count { it.isLetter() }
+        if (digitCount > 0 && letterCount < 2) return false
+
+        // Reject OCR-like garbage: repeated character patterns, but allow valid brands like XYXX, TATA, NOON
+        // Only reject if the name is very short (< 4) or if it has excessive repetition
+        if (cleanName.length < 4) {
+            val hasRepeatedChars = cleanName.lowercase().zipWithNext().any { (a, b) -> a == b && a.isLetter() }
+            if (hasRepeatedChars) return false
+        }
+
         return true
     }
-    
+
     /**
      * Get surrounding context for a word
      */
@@ -506,6 +554,80 @@ class StructuredFieldExtractor {
         val start = (range.first - 20).coerceAtLeast(0)
         val end = (range.last + 20).coerceAtMost(text.length)
         return text.substring(start, end).trim()
+    }
+
+    private fun isLikelyWatermark(name: String): Boolean {
+        val upper = name.uppercase(Locale.US)
+        if (upper in WATERMARK_WORDS) return true
+
+        val normalized = name.lowercase(Locale.US)
+        WATERMARK_CANONICAL.forEach { canonical ->
+            if (editDistance(normalized, canonical) <= 1) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private fun editDistance(a: String, b: String): Int {
+        if (a == b) return 0
+        if (a.isEmpty()) return b.length
+        if (b.isEmpty()) return a.length
+
+        val dp = Array(a.length + 1) { IntArray(b.length + 1) }
+        for (i in 0..a.length) dp[i][0] = i
+        for (j in 0..b.length) dp[0][j] = j
+
+        for (i in 1..a.length) {
+            for (j in 1..b.length) {
+                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+                dp[i][j] = minOf(
+                    dp[i - 1][j] + 1,
+                    dp[i][j - 1] + 1,
+                    dp[i - 1][j - 1] + cost
+                )
+            }
+        }
+
+        return dp[a.length][b.length]
+    }
+
+    private fun normalizeAbsoluteDate(raw: String): String? {
+        val cleaned = raw.trim().replace("\n", " ").replace(",", " ").replace(Regex("\\s+"), " ").trimEnd('.', ',', ';')
+        val patterns = listOf(
+            "dd/MM/yyyy",
+            "MM/dd/yyyy",
+            "yyyy-MM-dd",
+            "dd-MM-yyyy",
+            "d MMM yyyy",
+            "dd MMM yyyy",
+            "d MMMM yyyy",
+            "dd MMMM yyyy",
+            "MMM dd yyyy",
+            "MMM dd yyyy"
+        )
+
+        val isoFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+
+        for (pattern in patterns) {
+            try {
+                val parser = SimpleDateFormat(pattern, Locale.US).apply {
+                    isLenient = false
+                    timeZone = TimeZone.getTimeZone("UTC")  // Use same timezone as formatter
+                }
+                val date = parser.parse(cleaned)
+                if (date != null) {
+                    return isoFormat.format(date)
+                }
+            } catch (_: Exception) {
+                // Try next pattern
+            }
+        }
+
+        return null
     }
 }
 

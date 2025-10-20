@@ -182,10 +182,11 @@ object ModelPaths {
      */
     fun getMinFileSize(modelId: String, filename: String): Long {
         return when {
+            filename == QWEN25_MODEL_FILE -> 900_000_000L  // >= 900 MB
             filename == QWEN2_MODEL_FILE -> 900_000_000L  // >= 900 MB
             filename == MINICPM_MODEL_FILE -> 4_500_000_000L  // >= 4.5 GB
             filename == MINICPM_MMPROJ_FILE -> 800_000_000L  // >= 800 MB
-            filename == ".verified" -> 1L
+            filename == ".verified" -> 0L
             else -> 1L
         }
     }

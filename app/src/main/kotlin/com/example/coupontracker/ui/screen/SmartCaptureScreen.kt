@@ -5,6 +5,8 @@ import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import androidx.camera.core.CameraSelector
+import android.annotation.SuppressLint
+import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
@@ -410,6 +412,8 @@ fun SmartCaptureScreen(
     }
 }
 
+@SuppressLint("UnsafeOptInUsageError")
+@OptIn(ExperimentalGetImage::class)
 @Composable
 private fun CameraPreview(
     imageCapture: ImageCapture,
@@ -442,11 +446,15 @@ private fun CameraPreview(
                 val imageAnalysis = ImageAnalysis.Builder()
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
-                    .also {
-                        it.setAnalyzer(cameraExecutor) { imageProxy ->
-                            // Process the image for smart detection
-                            viewModel.processImage(imageProxy, ContextCompat.getMainExecutor(ctx))
+                    .also { analysis ->
+                        @OptIn(ExperimentalGetImage::class)
+                        val analyzer = ImageAnalysis.Analyzer { imageProxy ->
+                            viewModel.processImage(
+                                imageProxy,
+                                ContextCompat.getMainExecutor(ctx)
+                            )
                         }
+                        analysis.setAnalyzer(cameraExecutor, analyzer)
                     }
 
                 try {

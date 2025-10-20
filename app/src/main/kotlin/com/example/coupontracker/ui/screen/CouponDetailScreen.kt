@@ -4,8 +4,11 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -18,29 +21,34 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.vector.ImageVector
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.coupontracker.ui.components.ImagePreviewDialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.R
+import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.ui.components.DateFormatter
+import com.example.coupontracker.ui.components.ExtractionDebugPanel
 import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.ui.components.StatusType
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.DetailViewModel
+import com.example.coupontracker.util.GenericFieldHeuristics
+import java.util.Date
+import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,8 +60,11 @@ fun CouponDetailScreen(
     // State for image preview
     var showImagePreview by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
+    val isDebugBuild = remember {
+        (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    }
     val coupon by viewModel.coupon.collectAsState()
+    val debugSnapshot by viewModel.debugSnapshot.collectAsState()
 
     // Load the coupon when the screen is first displayed
     LaunchedEffect(couponId) {
@@ -98,7 +109,8 @@ fun CouponDetailScreen(
                     onToggleImagePreview = { showImagePreview = it },
                     onTrackUsage = { viewModel.trackUsage(coupon.cashbackAmount) },
                     context = context,
-                    clipboardManager = clipboardManager
+                    debugSnapshot = debugSnapshot,
+                    isDebugBuild = isDebugBuild
                 )
             } ?: run {
                 Box(
@@ -119,7 +131,8 @@ private fun CouponDetailContent(
     onToggleImagePreview: (Boolean) -> Unit,
     onTrackUsage: () -> Unit,
     context: Context,
-    clipboardManager: androidx.compose.ui.platform.ClipboardManager
+    debugSnapshot: ExtractionDebugSnapshot?,
+    isDebugBuild: Boolean
 ) {
     Column(
         modifier = Modifier
@@ -204,6 +217,26 @@ private fun CouponDetailContent(
             style = MaterialTheme.typography.bodyLarge
         )
 
+        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+        CouponActionButtons(
+            onTrackUsageClick = {
+                onTrackUsage()
+                Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
+            },
+            onSetReminderClick = {
+                Toast.makeText(
+                    context,
+                    "Reminder functionality would be implemented here",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        )
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+        ExtractionQualityCard(coupon = coupon)
+
         Spacer(modifier = Modifier.height(BrandSpacing.Large))
 
         // Coupon code
@@ -230,7 +263,9 @@ private fun CouponDetailContent(
                     )
 
                     IconButton(onClick = {
-                        clipboardManager.setText(AnnotatedString(coupon.redeemCode))
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("Coupon code", coupon.redeemCode)
+                        clipboard.setPrimaryClip(clip)
                         Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
                     }) {
                         Icon(Icons.Default.ContentCopy, contentDescription = "Copy code")
@@ -238,6 +273,11 @@ private fun CouponDetailContent(
                 }
             }
 
+            Spacer(modifier = Modifier.height(BrandSpacing.Large))
+        }
+
+        if (isDebugBuild && debugSnapshot != null) {
+            ExtractionDebugPanel(snapshot = debugSnapshot)
             Spacer(modifier = Modifier.height(BrandSpacing.Large))
         }
 
@@ -333,38 +373,461 @@ private fun CouponDetailContent(
             Spacer(modifier = Modifier.height(BrandSpacing.Medium))
         }
 
-        // Action buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+        Spacer(modifier = Modifier.height(BrandSpacing.Large))
+    }
+}
+
+@Composable
+private fun CouponActionButtons(
+    onTrackUsageClick: () -> Unit,
+    onSetReminderClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
+    ) {
+        Button(
+            onClick = onTrackUsageClick,
+            modifier = Modifier.weight(1f)
         ) {
-            Button(
-                onClick = {
-                    onTrackUsage()
-                    Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.weight(1f)
+            Icon(Icons.Default.CheckCircle, contentDescription = null)
+            Spacer(modifier = Modifier.width(BrandSpacing.Small))
+            Text("Track Usage")
+        }
+
+        Button(
+            onClick = onSetReminderClick,
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(Icons.Default.Notifications, contentDescription = null)
+            Spacer(modifier = Modifier.width(BrandSpacing.Small))
+            Text("Set Reminder")
+        }
+    }
+}
+
+@Composable
+private fun ExtractionQualityCard(coupon: com.example.coupontracker.data.model.Coupon) {
+    val insights = remember(coupon) { deriveQualityInsights(coupon) }
+    val statusColor = when (insights.status) {
+        QualityStatus.EXCELLENT -> MaterialTheme.colorScheme.primary
+        QualityStatus.GOOD -> MaterialTheme.colorScheme.tertiary
+        QualityStatus.REVIEW -> Color(0xFFFFA000)
+        QualityStatus.POOR -> MaterialTheme.colorScheme.error
+    }
+    val statusIcon = insights.status.icon
+    val score = insights.score.coerceIn(0, 100)
+    val progress = (score / 100f).coerceIn(0f, 1f)
+    var expanded by rememberSaveable { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = BrandSpacing.Medium, vertical = BrandSpacing.Small),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null)
-                Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                Text("Track Usage")
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Quality score",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(modifier = Modifier.height(BrandSpacing.Tiny))
+                    Text(
+                        text = if (expanded) {
+                            "Hide quality score details"
+                        } else {
+                            "Tap to view quality score details"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = statusColor.copy(alpha = 0.16f)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = statusIcon,
+                                contentDescription = null,
+                                tint = statusColor,
+                                modifier = Modifier.size(18.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(BrandSpacing.Tiny))
+
+                            Text(
+                                text = insights.status.label,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = statusColor,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.width(BrandSpacing.Medium))
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
 
-            Button(
-                onClick = {
-                    // Set reminder
-                    Toast.makeText(context, "Reminder functionality would be implemented here", Toast.LENGTH_SHORT).show()
-                },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Notifications, contentDescription = null)
-                Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                Text("Set Reminder")
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(BrandSpacing.Medium)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
+                        ) {
+                            Text(
+                                text = score.toString(),
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = statusColor
+                            )
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                LinearProgressIndicator(
+                                    progress = progress,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    color = statusColor,
+                                    trackColor = statusColor.copy(alpha = 0.16f)
+                                )
+
+                                Spacer(modifier = Modifier.height(BrandSpacing.Tiny))
+
+                                Text(
+                                    text = insights.scoreLabel,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                insights.secondaryLabel?.let { secondary ->
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = secondary,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(BrandSpacing.Small))
+
+                        if (!insights.telemetryAvailable) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+                            ) {
+                                Text(
+                                    text = "Telemetry hasn't been reported yet. Showing an estimated score based on the captured fields.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(BrandSpacing.Small)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(BrandSpacing.Small))
+                        }
+
+                        Text(
+                            text = insights.statusMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+                        insights.metrics.forEach { metric ->
+                            val metricColor = if (metric.isAchieved) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = if (metric.isAchieved) {
+                                        metricColor.copy(alpha = 0.15f)
+                                    } else {
+                                        MaterialTheme.colorScheme.surface
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = metric.icon,
+                                        contentDescription = null,
+                                        tint = metricColor,
+                                        modifier = Modifier.padding(8.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(BrandSpacing.Small))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = metric.label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = if (metric.isAchieved) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                    Text(
+                                        text = metric.description,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                Text(
+                                    text = "${metric.earnedPoints}/${metric.maxPoints}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = metricColor,
+                                    fontWeight = if (metric.isAchieved) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+private data class QualityInsights(
+    val score: Int,
+    val metrics: List<QualityMetric>,
+    val status: QualityStatus,
+    val scoreLabel: String,
+    val secondaryLabel: String?,
+    val statusMessage: String,
+    val telemetryAvailable: Boolean
+)
+
+private data class QualityMetric(
+    val label: String,
+    val description: String,
+    val icon: ImageVector,
+    val earnedPoints: Int,
+    val maxPoints: Int,
+    val achieved: Boolean,
+    val confidence: Float?
+) {
+    val isAchieved: Boolean get() = achieved
+}
+
+private enum class QualityStatus(val label: String, val message: String, val icon: ImageVector) {
+    EXCELLENT("Excellent", "All critical fields look reliable.", Icons.Default.Verified),
+    GOOD("Good", "Most key details look solid.", Icons.Default.ThumbUp),
+    REVIEW("Needs review", "Some important fields are missing or generic.", Icons.Default.Warning),
+    POOR("Incomplete", "Critical details are missing. Consider rescanning or editing.", Icons.Default.Error)
+}
+
+private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.Coupon): QualityInsights {
+    val confidences = coupon.extractionConfidenceBreakdown
+    val storeValid = !GenericFieldHeuristics.isGenericOrMissing(coupon.storeName)
+    val codeValid = !GenericFieldHeuristics.isGenericOrMissingCode(coupon.redeemCode)
+    val numericValue = coupon.getCashbackNumericValue()
+    val amountValid = !GenericFieldHeuristics.isZeroOrMeaningless(numericValue)
+    val expiryDate = coupon.expiryDate
+    val descriptionValid = GenericFieldHeuristics.isMeaningfulDescription(coupon.description)
+
+    fun formatConfidence(confidence: Float?): Float? = confidence?.coerceIn(0f, 1f)
+
+    fun confidencePercent(confidence: Float?): Int? = confidence?.let { (it.coerceIn(0f, 1f) * 100).roundToInt() }
+
+    fun buildMetric(
+        label: String,
+        confidence: Float?,
+        fallbackAchieved: Boolean,
+        successDescription: String,
+        failureDescription: String,
+        icon: ImageVector,
+        maxPoints: Int
+    ): QualityMetric {
+        val normalized = formatConfidence(confidence)
+        return if (normalized != null) {
+            val points = (normalized * maxPoints).roundToInt()
+            val achieved = normalized >= 0.6f
+            val description = if (achieved) {
+                val percent = confidencePercent(normalized)
+                if (percent != null) "$successDescription • $percent% confidence" else successDescription
+            } else {
+                val percent = confidencePercent(normalized) ?: 0
+                "Weak signal ($percent%) – $failureDescription"
+            }
+            QualityMetric(
+                label = label,
+                description = description,
+                icon = icon,
+                earnedPoints = points,
+                maxPoints = maxPoints,
+                achieved = achieved,
+                confidence = normalized
+            )
+        } else {
+            QualityMetric(
+                label = label,
+                description = if (fallbackAchieved) successDescription else failureDescription,
+                icon = icon,
+                earnedPoints = if (fallbackAchieved) maxPoints else 0,
+                maxPoints = maxPoints,
+                achieved = fallbackAchieved,
+                confidence = null
+            )
+        }
+    }
+
+    val expirySuccess = when {
+        expiryDate == null -> "Expiry date missing"
+        expiryDate.before(Date()) -> "Expiry date captured (already past)"
+        else -> "Expiry date captured"
+    }
+    val expiryFailure = "Add an expiry date to get reminders"
+
+    val metrics = listOf(
+        buildMetric(
+            label = "Store recognition",
+            confidence = confidences["storeName"],
+            fallbackAchieved = storeValid,
+            successDescription = "Recognized a specific store name",
+            failureDescription = "Store name looks generic",
+            icon = Icons.Default.Store,
+            maxPoints = 25
+        ),
+        buildMetric(
+            label = "Code readiness",
+            confidence = confidences["redeemCode"],
+            fallbackAchieved = codeValid,
+            successDescription = "Coupon code looks redeemable",
+            failureDescription = "Code missing or placeholder",
+            icon = Icons.Default.Key,
+            maxPoints = 30
+        ),
+        buildMetric(
+            label = "Savings detected",
+            confidence = confidences["cashbackAmount"],
+            fallbackAchieved = amountValid,
+            successDescription = "Cashback or discount captured",
+            failureDescription = "Savings not detected",
+            icon = Icons.Default.CurrencyRupee,
+            maxPoints = 20
+        ),
+        buildMetric(
+            label = "Expiry tracking",
+            confidence = confidences["expiryDate"],
+            fallbackAchieved = expiryDate != null,
+            successDescription = expirySuccess,
+            failureDescription = expiryFailure,
+            icon = Icons.Default.Event,
+            maxPoints = 15
+        ),
+        buildMetric(
+            label = "Offer clarity",
+            confidence = confidences["description"],
+            fallbackAchieved = descriptionValid,
+            successDescription = "Offer description looks specific",
+            failureDescription = "Description looks incomplete",
+            icon = Icons.Default.Article,
+            maxPoints = 10
+        )
+    )
+
+    val rawScore = coupon.extractionQualityScore ?: metrics.sumOf { it.earnedPoints }
+    val score = rawScore.coerceIn(0, 100)
+    val status = when {
+        score >= 85 -> QualityStatus.EXCELLENT
+        score >= 70 -> QualityStatus.GOOD
+        score >= 50 -> QualityStatus.REVIEW
+        else -> QualityStatus.POOR
+    }
+
+    val weakestMetric = metrics
+        .filterNot { it.achieved }
+        .minByOrNull { metric -> metric.confidence ?: (metric.earnedPoints.toFloat() / metric.maxPoints).coerceIn(0f, 1f) }
+
+    val statusMessage = weakestMetric?.let { metric ->
+        val percent = metric.confidence?.let { (it * 100).roundToInt() }
+        if (percent != null) {
+            "${metric.label} needs attention ($percent% confidence)"
+        } else {
+            "${metric.label} needs attention"
+        }
+    } ?: status.message
+
+    val stageLabel = coupon.extractionStage
+        ?.takeIf { it.isNotBlank() }
+        ?.lowercase(Locale.getDefault())
+        ?.replace('_', ' ')
+        ?.replaceFirstChar { char ->
+            if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
+        }
+
+    val telemetryAvailable = coupon.extractionQualityScore != null || confidences.isNotEmpty()
+
+    val secondaryLabel = if (telemetryAvailable) {
+        listOfNotNull(
+            stageLabel?.let { "Stage: $it" },
+            coupon.extractionRunPath?.takeIf { it.isNotBlank() }?.let { "Path: $it" },
+            coupon.extractionTimestamp?.let { "Captured ${DateFormatter.formatShort(it)}" }
+        ).joinToString(" • ").ifBlank { null }
+    } else {
+        null
+    }
+
+    val scoreLabel = if (telemetryAvailable) {
+        "$score / 100 confidence"
+    } else {
+        "$score / 100 confidence (heuristic)"
+    }
+
+    return QualityInsights(
+        score = score,
+        metrics = metrics,
+        status = status,
+        scoreLabel = scoreLabel,
+        secondaryLabel = secondaryLabel,
+        statusMessage = statusMessage,
+        telemetryAvailable = telemetryAvailable
+    )
 }
 
 private fun shareCoupon(context: Context, coupon: com.example.coupontracker.data.model.Coupon) {

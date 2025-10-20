@@ -2,6 +2,7 @@ package com.example.coupontracker.ui.screen
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
@@ -14,6 +15,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -24,7 +26,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -35,10 +36,11 @@ import coil.compose.rememberAsyncImagePainter
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.viewmodel.BatchScannerViewModel
+import com.example.coupontracker.ui.viewmodel.ImageProcessingStatus
+import com.example.coupontracker.ui.viewmodel.SelectedImage
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import kotlinx.coroutines.launch
 
 /**
  * Screen for batch scanning of multiple coupons
@@ -58,9 +60,19 @@ fun BatchScannerScreen(
 
     // Image picker launcher for multiple images
     val multipleImagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetMultipleContents()
+        contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
         if (uris.isNotEmpty()) {
+            uris.forEach { uri ->
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (e: SecurityException) {
+                    Log.w("BatchScannerScreen", "Unable to persist permission for uri=$uri", e)
+                }
+            }
             viewModel.addImages(uris)
         }
     }
@@ -136,26 +148,40 @@ fun BatchScannerScreen(
             }
         }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Check if TwoStageDetector is available
-            val detectorAvailable = viewModel.isTwoStageDetectorAvailable()
-            
-            if (!detectorAvailable && uiState.selectedImages.isNotEmpty() && !uiState.isProcessing) {
-                // Show warning about batch scanning unavailability
-                BatchScanningUnavailableWarning(
-                    onUseSingleScan = {
-                        Toast.makeText(context, "Please use single scan mode", Toast.LENGTH_SHORT).show()
-                        navController.popBackStack()
-                    },
-                    onClearImages = {
-                        viewModel.clearImages()
-                    }
+            val usingFallback = viewModel.isOcrFallbackActive()
+
+            if (usingFallback) {
+                BatchScanningFallbackBanner(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 )
-            } else when {
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f, fill = true)
+            ) {
+                val batchScanningSupported = viewModel.isBatchScanningSupported()
+
+                if (!batchScanningSupported && uiState.selectedImages.isNotEmpty() && !uiState.isProcessing) {
+                    // Show warning about batch scanning unavailability
+                    BatchScanningUnavailableWarning(
+                        onUseSingleScan = {
+                            Toast.makeText(context, "Please use single scan mode", Toast.LENGTH_SHORT).show()
+                            navController.popBackStack()
+                        },
+                        onClearImages = {
+                            viewModel.clearImages()
+                        }
+                    )
+                } else when {
                 uiState.isProcessing -> {
                     // Show loading indicator
                     Box(
@@ -168,9 +194,17 @@ fun BatchScannerScreen(
                         ) {
                             CircularProgressIndicator()
                             Spacer(modifier = Modifier.height(16.dp))
+                            val currentLabel = uiState.currentlyProcessingImage?.displayName
                             Text(
-                                text = "Processing ${uiState.processedCount}/${uiState.selectedImages.size} images...",
-                                style = MaterialTheme.typography.bodyLarge
+                                text = buildString {
+                                    append("Processing ${uiState.processedCount}/${uiState.selectedImages.size} images")
+                                    if (!currentLabel.isNullOrBlank()) {
+                                        append("\n")
+                                        append(currentLabel)
+                                    }
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -179,6 +213,7 @@ fun BatchScannerScreen(
                     // Show processed coupons
                     ProcessedCouponsView(
                         coupons = uiState.processedCoupons,
+                        imageStatuses = uiState.imageProcessingStatuses,
                         onSaveAll = {
                             viewModel.saveAllCoupons()
                             Toast.makeText(context, "All coupons saved", Toast.LENGTH_SHORT).show()
@@ -208,7 +243,7 @@ fun BatchScannerScreen(
                     // Show empty state with options to add images
                     EmptyBatchScannerView(
                         onAddFromGallery = {
-                            multipleImagePickerLauncher.launch("image/*")
+                            multipleImagePickerLauncher.launch(arrayOf("image/*"))
                         },
                         onAddFromCamera = {
                             if (cameraPermissionState.status.isGranted) {
@@ -230,10 +265,59 @@ fun BatchScannerScreen(
                             viewModel.removeImage(index)
                         },
                         onAddMore = {
-                            multipleImagePickerLauncher.launch("image/*")
+                            multipleImagePickerLauncher.launch(arrayOf("image/*"))
                         }
                     )
                 }
+            }
+        }
+    }
+}
+}
+
+
+
+
+@Composable
+fun BatchScanningFallbackBanner(modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary
+            )
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "OCR Fallback Active",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "YOLO multi-coupon models are unavailable in this build. We're using OCR anchor segmentation instead.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Results may need a quick review before saving.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
             }
         }
     }
@@ -406,7 +490,7 @@ fun EmptyBatchScannerView(
 
 @Composable
 fun SelectedImagesView(
-    images: List<Uri>,
+    images: List<SelectedImage>,
     onRemoveImage: (Int) -> Unit,
     onAddMore: () -> Unit
 ) {
@@ -421,7 +505,7 @@ fun SelectedImagesView(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "${images.size} Images Selected",
+                text = "${images.size} Files Selected",
                 style = MaterialTheme.typography.titleMedium
             )
 
@@ -444,9 +528,12 @@ fun SelectedImagesView(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(images.size) { index ->
+            itemsIndexed(
+                items = images,
+                key = { _, image -> image.uri.toString() }
+            ) { index, image ->
                 ImageItem(
-                    uri = images[index],
+                    image = image,
                     onRemove = { onRemoveImage(index) }
                 )
             }
@@ -456,7 +543,7 @@ fun SelectedImagesView(
 
 @Composable
 fun ImageItem(
-    uri: Uri,
+    image: SelectedImage,
     onRemove: () -> Unit
 ) {
     Card(
@@ -468,12 +555,34 @@ fun ImageItem(
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
-            Image(
-                painter = rememberAsyncImagePainter(uri),
-                contentDescription = "Selected Image",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+            if (image.isImage()) {
+                Image(
+                    painter = rememberAsyncImagePainter(image.uri),
+                    contentDescription = "Selected Image",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PictureAsPdf,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = image.displayName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
 
             // Remove button
             IconButton(
@@ -494,6 +603,23 @@ fun ImageItem(
                     modifier = Modifier.size(16.dp)
                 )
             }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                        shape = RoundedCornerShape(topEnd = 8.dp)
+                    )
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = image.displayName,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 }
@@ -501,6 +627,7 @@ fun ImageItem(
 @Composable
 fun ProcessedCouponsView(
     coupons: List<Coupon>,
+    imageStatuses: List<ImageProcessingStatus>,
     onSaveAll: () -> Unit,
     onEditCoupon: (Int) -> Unit,
     onRemoveCoupon: (Int) -> Unit,
@@ -535,6 +662,11 @@ fun ProcessedCouponsView(
         }
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (imageStatuses.isNotEmpty()) {
+            ProcessingSummary(statuses = imageStatuses)
+            Spacer(modifier = Modifier.height(12.dp))
+        }
 
         LazyColumn(
             modifier = Modifier
@@ -576,73 +708,181 @@ fun CouponItem(
             .padding(vertical = 4.dp),
         shape = RoundedCornerShape(8.dp)
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
+                coupon.imageUri?.let { imageUri ->
+                    Image(
+                        painter = rememberAsyncImagePainter(imageUri),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } ?: run {
+                    Icon(
+                        imageVector = Icons.Default.LocalOffer,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(32.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = coupon.storeName,
+                        style = MaterialTheme.typography.titleMedium
+                    )
+
+                    Row {
+                        IconButton(
+                            onClick = onEdit,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onRemove,
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Remove",
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 Text(
-                    text = coupon.storeName,
-                    style = MaterialTheme.typography.titleMedium
+                    text = coupon.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Row {
-                    IconButton(
-                        onClick = onEdit,
-                        modifier = Modifier.size(32.dp)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val expiryText = remember(coupon.expiryDate) {
+                    coupon.expiryDate?.let {
+                        java.text.DateFormat.getDateInstance().format(it)
+                    }
+                }
+
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                        Text(
+                            text = "Amount: ₹${coupon.cashbackAmount}",
+                            style = MaterialTheme.typography.bodySmall
                         )
+
+                        coupon.redeemCode?.let {
+                            Text(
+                                text = "Code: $it",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
 
-                    IconButton(
-                        onClick = onRemove,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Remove",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
+                    expiryText?.let { formattedDate ->
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Expiry: $formattedDate",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
+        }
+    }
+}
 
-            Spacer(modifier = Modifier.height(4.dp))
-
+@Composable
+fun ProcessingSummary(statuses: List<ImageProcessingStatus>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Text(
-                text = coupon.description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = "Processing Summary",
+                style = MaterialTheme.typography.titleSmall
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
+            statuses.forEach { status ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    val icon = if (status.success) Icons.Default.Check else Icons.Default.Error
+                    val iconTint = if (status.success) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Amount: ₹${coupon.cashbackAmount}",
-                    style = MaterialTheme.typography.bodySmall
-                )
-
-                coupon.redeemCode?.let {
-                    Text(
-                        text = "Code: $it",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconTint
                     )
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = status.image.displayName,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+
+                        Text(
+                            text = if (status.success) {
+                                "${status.couponsFound} coupon(s) extracted"
+                            } else {
+                                status.message ?: "Extraction failed"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
