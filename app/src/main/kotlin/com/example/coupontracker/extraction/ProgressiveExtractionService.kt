@@ -45,10 +45,38 @@ class ProgressiveExtractionService @Inject constructor(
 ) {
     companion object {
         private const val TAG = "ProgressiveExtractionService"
-        
+
         // Define critical fields that should be extracted
         private val CRITICAL_FIELDS = setOf(FieldType.STORE_NAME, FieldType.DESCRIPTION)
         private val IMPORTANT_FIELDS = setOf(FieldType.AMOUNT, FieldType.COUPON_CODE)
+        private val STORE_FALLBACK_STOPWORDS = setOf(
+            "NOW",
+            "SAVE",
+            "DISCOUNT",
+            "OFFER",
+            "REDEEM",
+            "SALE",
+            "SUBSCRIBE",
+            "COPY",
+            "APPLY",
+            "AVAIL",
+            "CLICK",
+            "BUY",
+            "GET",
+            "ORDER",
+            "COUPON",
+            "CODE",
+            "PLAN",
+            "PRICE",
+            "FREE",
+            "BONUS",
+            "CASHBACK",
+            "REWARD",
+            "VALID",
+            "TERMS",
+            "CONDITIONS",
+            "JUST"
+        )
     }
     
     /**
@@ -353,7 +381,7 @@ class ProgressiveExtractionService @Inject constructor(
     ): Coupon {
         
         // Store Name
-        val storeName = extractedFields[FieldType.STORE_NAME]?.value ?: "Unknown Store"
+        val storeName = resolveStoreName(context, extractedFields)
         
         // Description: ALWAYS use OCR text as fallback (never "Error processing coupon")
         val description = extractedFields[FieldType.DESCRIPTION]?.value 
@@ -370,6 +398,8 @@ class ProgressiveExtractionService @Inject constructor(
         val cashbackAmount = 0.0
         val cashbackInfo = CashbackInfo(CashbackType.AMOUNT, 0.0)
         
+        val confidenceBreakdown = buildConfidenceBreakdown(extractedFields)
+
         return Coupon(
             id = 0,
             storeName = storeName,
@@ -385,9 +415,51 @@ class ProgressiveExtractionService @Inject constructor(
             category = null,
             rating = null,
             status = "ACTIVE",
+            extractionConfidenceBreakdown = confidenceBreakdown,
             createdAt = Date(),
             updatedAt = Date()
         )
+    }
+
+    private fun resolveStoreName(
+        context: ExtractionContext,
+        extractedFields: Map<FieldType, FieldCandidate>
+    ): String {
+        val primary = extractedFields[FieldType.STORE_NAME]?.value.orEmpty()
+        if (isValidStoreName(primary)) {
+            return primary.trim()
+        }
+
+        val fallback = context.attempts.asReversed()
+            .mapNotNull { attempt -> attempt.fieldsExtracted[FieldType.STORE_NAME]?.value }
+            .firstOrNull { candidate -> isValidStoreName(candidate) }
+
+        if (!fallback.isNullOrBlank()) {
+            Log.d(TAG, "Using heuristic store fallback: '$fallback' (primary='$primary')")
+            return fallback.trim()
+        }
+
+        return primary.trim().ifBlank { "Unknown Store" }
+    }
+
+    private fun isValidStoreName(value: String?): Boolean {
+        if (value.isNullOrBlank()) return false
+        val normalized = value.trim().uppercase(Locale.ROOT)
+        if (STORE_FALLBACK_STOPWORDS.contains(normalized)) {
+            return false
+        }
+        return true
+    }
+
+    private fun buildConfidenceBreakdown(
+        extractedFields: Map<FieldType, FieldCandidate>
+    ): Map<String, Float> {
+        if (extractedFields.isEmpty()) {
+            return emptyMap()
+        }
+        return extractedFields.entries.associate { (type, candidate) ->
+            type.name.lowercase(Locale.ROOT) to candidate.confidence
+        }
     }
     
     /**

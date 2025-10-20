@@ -127,6 +127,11 @@ class CouponRepositoryImpl @Inject constructor(
             usageCount = max(incoming.usageCount, existing.usageCount),
             reminderDate = incoming.reminderDate ?: existing.reminderDate,
             platformType = incoming.platformType ?: existing.platformType,
+            extractionConfidenceBreakdown = if (incoming.extractionConfidenceBreakdown.isNotEmpty()) {
+                incoming.extractionConfidenceBreakdown
+            } else {
+                existing.extractionConfidenceBreakdown
+            },
             rating = incoming.rating ?: existing.rating,
             createdAt = existing.createdAt,
             updatedAt = Date()
