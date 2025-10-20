@@ -1017,7 +1017,7 @@ class TextExtractor {
         private val COMMON_WORDS = setOf(
             "the", "and", "for", "with", "off", "use", "get", "code", "coupon",
             "offer", "valid", "till", "from", "upto", "free", "save", "discount",
-            "multi", "product", "products", "kit", "combo", "pack", "value", "special"
+            "multi", "product", "products", "kit", "combo", "pack", "value", "special", "just"
         )
 
         private val CATEGORIES = listOf(
