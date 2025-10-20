@@ -55,12 +55,8 @@ class TwoStageDetector(
         private const val STAGE1_MODEL_PATH = "models/multi_coupon/stage1_coupon_detector.tflite"
         private const val STAGE2_MODEL_PATH = "models/multi_coupon/stage2_field_detector.tflite"
         private const val MANIFEST_PATH = "models/multi_coupon/manifest.json"
-
-        private const val MIN_STAGE1_MODEL_BYTES = 1_000_000L
-        private const val MIN_STAGE2_MODEL_BYTES = 500_000L
-        private const val INTEGRITY_REMEDIATION_HINT =
-            "Replace the placeholder TensorFlow Lite files with the trained" +
-                " multi-coupon detectors exported from the ML pipeline."
+        private const val MIN_STAGE1_MODEL_BYTES = 5_000_000L
+        private const val MIN_STAGE2_MODEL_BYTES = 5_000_000L
     }
     
     // V2: BitmapManager for memory-safe operations
@@ -124,6 +120,19 @@ class TwoStageDetector(
         // Try to load models, but fallback gracefully if they're placeholders
         var modelsLoaded = false
         try {
+            ModelAssetIntegrity.ensureAssetMinSize(
+                context,
+                STAGE1_MODEL_PATH,
+                MIN_STAGE1_MODEL_BYTES,
+                "stage1"
+            )
+            ModelAssetIntegrity.ensureAssetMinSize(
+                context,
+                STAGE2_MODEL_PATH,
+                MIN_STAGE2_MODEL_BYTES,
+                "stage2"
+            )
+
             // Load Stage 1 Model (Coupon Detection)
             loadStage1Model()
 

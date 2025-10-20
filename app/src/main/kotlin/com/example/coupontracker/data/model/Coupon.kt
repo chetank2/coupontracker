@@ -43,6 +43,7 @@ data class Coupon(
     val extractionTimestamp: Date? = null,
 
     // Existing tracking fields
+    val extractionConfidenceBreakdown: Map<String, Float> = emptyMap(),
     val rating: String? = null,
     val createdAt: Date = Date(),
     val updatedAt: Date = Date(),

@@ -512,7 +512,11 @@ class ScannerViewModel @Inject constructor(
     /**
      * Build coupon from LLM extraction result
      */
-    private fun buildCouponFromLlmResult(couponInfo: CouponInfo, imageUri: Uri): Coupon {
+    private fun buildCouponFromLlmResult(
+        couponInfo: CouponInfo,
+        imageUri: Uri,
+        fieldConfidences: Map<String, Float> = emptyMap()
+    ): Coupon {
         // Parse cashback using typed info
         val cashbackInfo = if (couponInfo.cashbackAmount != null) {
             val amount = couponInfo.cashbackAmount
@@ -725,7 +729,11 @@ class ScannerViewModel @Inject constructor(
                 // Only LLM successful
                 llmResult is ExtractResult.Good -> {
                     Log.d(TAG, "HYBRID: Only LLM successful, using LLM result")
-                    buildCouponFromLlmResult(llmResult.info, imageUri)
+                    buildCouponFromLlmResult(
+                        llmResult.info,
+                        imageUri,
+                        llmResult.signals.fieldConfidences
+                    )
                 }
                 
                 // Only OCR successful
@@ -1528,6 +1536,31 @@ class ScannerViewModel @Inject constructor(
     /**
      * Create a Coupon object from a detected coupon instance
      */
+    private fun mergeConfidenceBreakdown(
+        llmConf: Map<String, Float>,
+        ocrResult: com.example.coupontracker.universal.UniversalExtractionResult?
+    ): Map<String, Float> {
+        if (llmConf.isEmpty() && (ocrResult?.extractedFields?.isEmpty() != false)) {
+            return emptyMap()
+        }
+
+        val merged = mutableMapOf<String, Float>()
+        ocrResult?.extractedFields?.forEach { (type, candidate) ->
+            merged[type.name.lowercase(Locale.ROOT)] = candidate.confidence
+        }
+        merged.putAll(llmConf)
+        return merged
+    }
+
+    private fun buildDetectionConfidenceBreakdown(couponInstance: CouponInstance): Map<String, Float> {
+        if (couponInstance.fields.isEmpty()) {
+            return emptyMap()
+        }
+        return couponInstance.fields.associate { detection ->
+            detection.fieldType.name.lowercase(Locale.ROOT) to detection.confidence
+        }
+    }
+
     private fun createCouponFromInstance(
         couponInstance: CouponInstance,
         extractionResult: FieldExtractionResult,

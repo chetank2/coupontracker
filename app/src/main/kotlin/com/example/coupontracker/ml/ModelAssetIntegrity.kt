@@ -1,29 +1,38 @@
 package com.example.coupontracker.ml
 
+import android.content.Context
+import android.content.res.AssetManager
+import android.util.Log
+
 /**
- * Shared integrity checks for shipped model artifacts.
+ * Utility to ensure that bundled model assets are the expected size before loading.
+ * Prevents placeholder binaries from being silently used in production builds.
  */
 object ModelAssetIntegrity {
+    private const val TAG = "ModelAssetIntegrity"
 
-    /**
-     * Verifies that a bundled model asset meets the minimum expected size.
-     *
-     * @throws IllegalStateException when the asset is suspiciously small, which
-     * usually indicates that a placeholder file was packaged instead of a
-     * trained TensorFlow Lite or GGUF binary.
-     */
-    fun ensureMinSize(
-        assetName: String,
-        actualBytes: Long,
-        minExpectedBytes: Long,
-        remediationHint: String
-    ) {
-        if (actualBytes < minExpectedBytes) {
-            throw IllegalStateException(
-                "Model asset $assetName is $actualBytes bytes; expected at least " +
-                    "$minExpectedBytes bytes. $remediationHint"
-            )
+    fun ensureAssetMinSize(context: Context, assetPath: String, minBytes: Long, name: String) {
+        val assetManager = context.assets
+        val actualSize = runCatching { determineAssetSize(assetManager, assetPath) }
+            .getOrElse { error ->
+                Log.e(TAG, "Failed to inspect asset '$assetPath'", error)
+                throw IllegalStateException("Model '$name' missing. Ship the real artifact.", error)
+            }
+
+        require(actualSize >= minBytes) {
+            "Model '$name' too small ($actualSize B). Ship the real artifact."
+        }
+    }
+
+    private fun determineAssetSize(assetManager: AssetManager, assetPath: String): Long {
+        assetManager.openFd(assetPath).use { descriptor ->
+            if (descriptor.length >= 0) {
+                return descriptor.length
+            }
+        }
+
+        assetManager.open(assetPath).use { inputStream ->
+            return inputStream.available().toLong()
         }
     }
 }
-

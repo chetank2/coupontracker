@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Locale
 import javax.inject.Inject
+import java.util.Locale
 
 /**
  * ViewModel for batch scanning of multiple coupons
@@ -472,7 +473,11 @@ class BatchScannerViewModel @Inject constructor(
                     // Take first coupon for batch processing
                     val instance = couponInstances.first()
                     val extractedInfo = extractFieldsFromInstance(instance)
-                    buildCouponFromFields(extractedInfo, uri)
+                    buildCouponFromFields(
+                        extractedInfo,
+                        uri,
+                        detectionConfidenceMap(instance)
+                    )
                 } else {
                     // TERMINAL: Create placeholder coupon instead of recursing
                     // This prevents LEGACY→OCR→LLM→LEGACY infinite loop
@@ -524,7 +529,11 @@ class BatchScannerViewModel @Inject constructor(
             
             when (llmResult) {
                 is com.example.coupontracker.util.ExtractResult.Good -> {
-                    buildCouponFromLlmResult(llmResult.info, uri)
+                    buildCouponFromLlmResult(
+                        llmResult.info,
+                        uri,
+                        llmResult.signals.fieldConfidences
+                    )
                 }
                 else -> {
                     if (allowOcrFallback) {
@@ -669,7 +678,11 @@ class BatchScannerViewModel @Inject constructor(
                 }
                 llmResult is com.example.coupontracker.util.ExtractResult.Good -> {
                     Log.d(TAG, "HYBRID: Only LLM successful")
-                    buildCouponFromLlmResult(llmResult.info, uri)
+                    buildCouponFromLlmResult(
+                        llmResult.info,
+                        uri,
+                        llmResult.signals.fieldConfidences
+                    )
                 }
                 ocrResult != null && ocrResult.success -> {
                     Log.d(TAG, "HYBRID: Only OCR successful")
@@ -801,12 +814,37 @@ class BatchScannerViewModel @Inject constructor(
             cashbackCurrency = cashbackCurrency
         )
     }
-    
+
     // Helper data class for tuple return
     private data class Tuple4<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
-    
+
+    private fun mergeConfidenceBreakdown(
+        llmConf: Map<String, Float>,
+        ocrResult: com.example.coupontracker.universal.UniversalExtractionResult?
+    ): Map<String, Float> {
+        if (llmConf.isEmpty() && (ocrResult?.extractedFields?.isEmpty() != false)) {
+            return emptyMap()
+        }
+
+        val merged = mutableMapOf<String, Float>()
+        ocrResult?.extractedFields?.forEach { (type, candidate) ->
+            merged[type.name.lowercase(Locale.ROOT)] = candidate.confidence
+        }
+        merged.putAll(llmConf)
+        return merged
+    }
+
+    private fun detectionConfidenceMap(instance: com.example.coupontracker.ml.CouponInstance): Map<String, Float> {
+        if (instance.fields.isEmpty()) {
+            return emptyMap()
+        }
+        return instance.fields.associate { detection ->
+            detection.fieldType.name.lowercase(Locale.ROOT) to detection.confidence
+        }
+    }
+
     // Helper methods
-    
+
     private suspend fun persistUri(uri: Uri): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         uriPersistenceManager.persistUri(uri)?.toString()
     }
@@ -1007,7 +1045,11 @@ class BatchScannerViewModel @Inject constructor(
         }
     }
     
-    private suspend fun buildCouponFromFields(fields: Map<String, String>, uri: Uri): Coupon {
+    private suspend fun buildCouponFromFields(
+        fields: Map<String, String>,
+        uri: Uri,
+        confidenceBreakdown: Map<String, Float> = emptyMap()
+    ): Coupon {
         // Parse expiry date
         val expiryDate = fields["expiryDate"]?.let { dateStr ->
             try {
@@ -1055,7 +1097,11 @@ class BatchScannerViewModel @Inject constructor(
         )
     }
     
-    private suspend fun buildCouponFromLlmResult(couponInfo: com.example.coupontracker.util.CouponInfo, uri: Uri): Coupon {
+    private suspend fun buildCouponFromLlmResult(
+        couponInfo: com.example.coupontracker.util.CouponInfo,
+        uri: Uri,
+        fieldConfidences: Map<String, Float> = emptyMap()
+    ): Coupon {
         // Parse typed cashback from LLM result
         val cashbackAmount = couponInfo.cashbackAmount ?: 0.0
         val (cashbackType, cashbackValueNum, cashbackCurrency) = when {

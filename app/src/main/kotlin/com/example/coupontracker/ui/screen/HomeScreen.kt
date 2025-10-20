@@ -1,12 +1,6 @@
 package com.example.coupontracker.ui.screen
 
 import android.content.Context
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,9 +19,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
@@ -35,12 +29,15 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.InputChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -58,7 +55,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -70,11 +66,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.data.model.Coupon
-import com.example.coupontracker.ui.components.BrandCard
 import com.example.coupontracker.ui.components.EmptyState
 import com.example.coupontracker.ui.components.EnhancedCouponCard
 import com.example.coupontracker.ui.components.FilterSortBottomSheet
-import com.example.coupontracker.ui.components.OutlinedBrandButton
 import com.example.coupontracker.ui.components.PrimaryButton
 import com.example.coupontracker.ui.components.SecondaryButton
 import com.example.coupontracker.ui.components.SectionHeader
@@ -84,12 +78,9 @@ import com.example.coupontracker.ui.model.ExpiryRange
 import com.example.coupontracker.ui.model.FilterState
 import com.example.coupontracker.ui.model.hasActiveFilters
 import com.example.coupontracker.ui.navigation.Screen
-import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.HomeViewModel
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.material3.Button
+import com.example.coupontracker.ui.viewmodel.ModelAvailabilityStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,10 +90,10 @@ fun HomeScreen(
 ) {
     val homeUiState by viewModel.uiState.collectAsState()
     val coupons = homeUiState.coupons
+    val isModelInstalled = homeUiState.modelStatus == ModelAvailabilityStatus.INSTALLED
+    val showModelCard = homeUiState.showModelCard
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
-
-    val hasFiltersApplied: Boolean
 
     val sharedPreferences = remember {
         context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
@@ -138,6 +129,12 @@ fun HomeScreen(
     // Bottom sheet states
     var showCaptureBottomSheet by remember { mutableStateOf(false) }
     var showFilterSortBottomSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isModelInstalled) {
+        if (!isModelInstalled) {
+            showCaptureBottomSheet = false
+        }
+    }
 
     LaunchedEffect(key1 = true) {
         val isFirstLaunchPref = sharedPreferences.getBoolean("is_first_launch", true)
@@ -207,33 +204,58 @@ fun HomeScreen(
             )
         },
         floatingActionButton = {
-            // Main FAB
-            ExtendedFloatingActionButton(
-                onClick = { showCaptureBottomSheet = true },
-                icon = {
-                    Icon(
-                        Icons.Default.Add,
-                        contentDescription = null
-                    )
-                },
-                text = {
-                    Text(
-                        text = "Add Coupon",
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                },
-                expanded = true,
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                elevation = FloatingActionButtonDefaults.elevation(
-                    defaultElevation = 6.dp,
-                    pressedElevation = 8.dp
-                ),
-                modifier = Modifier.padding(vertical = BrandSpacing.Small)
-            )
+            if (isModelInstalled) {
+                ExtendedFloatingActionButton(
+                    onClick = { showCaptureBottomSheet = true },
+                    icon = {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = null
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "Add Coupon",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    },
+                    expanded = true,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = 6.dp,
+                        pressedElevation = 8.dp
+                    ),
+                    modifier = Modifier.padding(vertical = BrandSpacing.Small)
+                )
+            } else {
+                ExtendedFloatingActionButton(
+                    onClick = { navController.navigate(Screen.Settings.route) },
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = null
+                        )
+                    },
+                    text = {
+                        Text(
+                            text = "Download Model",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    },
+                    expanded = true,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    elevation = FloatingActionButtonDefaults.elevation(
+                        defaultElevation = 6.dp,
+                        pressedElevation = 8.dp
+                    ),
+                    modifier = Modifier.padding(vertical = BrandSpacing.Small)
+                )
+            }
 
             // Show the simplified capture bottom sheet when the FAB is clicked
-            if (showCaptureBottomSheet) {
+            if (showCaptureBottomSheet && isModelInstalled) {
                 SimplifiedCaptureBottomSheet(
                     onDismiss = { showCaptureBottomSheet = false },
                     onCameraCapture = {
@@ -280,6 +302,24 @@ fun HomeScreen(
             .fillMaxSize()
             .padding(paddingValues)
     ) {
+        if (showModelCard) {
+            ModelDownloadCard(
+                status = homeUiState.modelStatus,
+                progress = homeUiState.modelProgress,
+                message = homeUiState.modelMessage,
+                onDownloadClick = { navController.navigate(Screen.Settings.route) },
+                onOpenSettings = { navController.navigate(Screen.Settings.route) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = BrandSpacing.Medium,
+                        end = BrandSpacing.Medium,
+                        top = BrandSpacing.Small,
+                        bottom = BrandSpacing.Small
+                    )
+            )
+        }
+
         SearchAndFilterBar(
             onFiltersClick = { showFilterSortBottomSheet = true },
             sortOrderLabel = filters.sortOrder.displayName,
@@ -444,6 +484,124 @@ private fun SearchAndFilterBar(
                 label = { Text(sortOrderLabel) },
                 leadingIcon = { Icon(Icons.Default.Sort, contentDescription = null) }
             )
+        }
+    }
+}
+
+@Composable
+private fun ModelDownloadCard(
+    status: ModelAvailabilityStatus,
+    progress: Int,
+    message: String,
+    onDownloadClick: () -> Unit,
+    onOpenSettings: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val description = remember(status, message) {
+        when (status) {
+            ModelAvailabilityStatus.ERROR -> "We couldn't verify the offline model. Try downloading again to unlock scanning."
+            else -> if (message.isNotBlank()) {
+                message
+            } else {
+                when (status) {
+                    ModelAvailabilityStatus.NOT_INSTALLED -> "Download the on-device Qwen2.5 model to enable private, offline coupon scanning."
+                    ModelAvailabilityStatus.DOWNLOADING -> "Model download in progress. Keep the app open to finish installing the offline reader."
+                    ModelAvailabilityStatus.INSTALLED -> "Model installed."
+                    ModelAvailabilityStatus.ERROR -> ""
+                }
+            }
+        }
+    }
+
+    val errorMessage = remember(status, message) {
+        if (status == ModelAvailabilityStatus.ERROR && message.isNotBlank()) message else null
+    }
+
+    val primaryLabel = when (status) {
+        ModelAvailabilityStatus.NOT_INSTALLED -> "Download Model"
+        ModelAvailabilityStatus.DOWNLOADING -> "View Progress"
+        ModelAvailabilityStatus.ERROR -> "Retry Download"
+        ModelAvailabilityStatus.INSTALLED -> "Manage Model"
+    }
+
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(BrandSpacing.Medium),
+            verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CloudDownload,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(modifier = Modifier.width(BrandSpacing.Small))
+                Column {
+                    Text(
+                        text = "Offline AI required",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = "Download Qwen2.5-1.5B to use instant coupon extraction.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (status == ModelAvailabilityStatus.DOWNLOADING) {
+                val progressFraction = (progress / 100f).coerceIn(0f, 1f)
+                LinearProgressIndicator(
+                    progress = progressFraction,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = "${progress.coerceIn(0, 100)}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            errorMessage?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+            }
+
+            PrimaryButton(
+                text = primaryLabel,
+                onClick = onDownloadClick,
+                leadingIcon = Icons.Default.CloudDownload,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            TextButton(
+                onClick = onOpenSettings,
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text("Open Settings")
+            }
         }
     }
 }
