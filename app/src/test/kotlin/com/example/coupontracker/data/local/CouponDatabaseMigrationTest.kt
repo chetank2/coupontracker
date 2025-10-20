@@ -34,7 +34,11 @@ class CouponDatabaseMigrationTest {
         createVersion8DatabaseWithSampleRow()
 
         val database = Room.databaseBuilder(context, CouponDatabase::class.java, dbName)
-            .addMigrations(CouponDatabase.MIGRATION_8_9)
+            .addMigrations(
+                CouponDatabase.MIGRATION_8_9,
+                CouponDatabase.MIGRATION_9_10,
+                CouponDatabase.MIGRATION_10_11
+            )
             .allowMainThreadQueries()
             .build()
 
@@ -75,16 +79,30 @@ class CouponDatabaseMigrationTest {
         val entities = database.getJSONArray("entities")
         for (index in 0 until entities.length()) {
             val entity = entities.getJSONObject(index)
-            db.execSQL(entity.getString("createSql"))
+            val tableName = entity.getString("tableName")
+            val createSql = entity.getString("createSql").replace("\${TABLE_NAME}", tableName)
+            db.execSQL(createSql)
             val indices = entity.optJSONArray("indices") ?: JSONArray()
             for (i in 0 until indices.length()) {
-                db.execSQL(indices.getJSONObject(i).getString("createSql"))
+                val indexSql = indices.getJSONObject(i)
+                    .getString("createSql")
+                    .replace("\${TABLE_NAME}", tableName)
+                db.execSQL(indexSql)
             }
         }
 
         val setupQueries = database.optJSONArray("setupQueries") ?: JSONArray()
         for (i in 0 until setupQueries.length()) {
-            db.execSQL(setupQueries.getString(i))
+            val rawQuery = setupQueries.getString(i)
+            val resolvedQuery = if (rawQuery.contains("\${TABLE_NAME}")) {
+                val tableName = database.getJSONArray("entities")
+                    .getJSONObject(0)
+                    .getString("tableName")
+                rawQuery.replace("\${TABLE_NAME}", tableName)
+            } else {
+                rawQuery
+            }
+            db.execSQL(resolvedQuery)
         }
     }
 

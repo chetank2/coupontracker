@@ -244,6 +244,7 @@ dependencies {
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // Testing
+    testImplementation(kotlin("test"))
     testImplementation("junit:junit:4.13.2")
     testImplementation("io.mockk:mockk:1.13.9")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
@@ -251,6 +252,7 @@ dependencies {
     testImplementation("androidx.test:core:1.5.0")
     testImplementation("app.cash.turbine:turbine:1.0.0")
     testImplementation("org.robolectric:robolectric:4.11.1")
+    testImplementation("org.json:json:20231013")
     testImplementation("androidx.test:core:1.5.0")
     testImplementation("androidx.test:core-ktx:1.5.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
@@ -323,4 +325,10 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.3.1")
     implementation("androidx.camera:camera-lifecycle:1.3.1")
     implementation("androidx.camera:camera-view:1.3.1")
+}
+
+tasks.register("testClasses") {
+    group = "verification"
+    description = "Alias for CI scripts expecting the JVM Gradle `testClasses` task."
+    dependsOn("testDebugUnitTest")
 }

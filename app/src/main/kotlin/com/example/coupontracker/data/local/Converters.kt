@@ -1,6 +1,7 @@
 package com.example.coupontracker.data.local
 
 import androidx.room.TypeConverter
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Date
 
@@ -42,6 +43,36 @@ class Converters {
             result
         } catch (ignored: Exception) {
             emptyMap()
+        }
+    }
+
+    @TypeConverter
+    fun stringListToJson(values: List<String>?): String {
+        if (values.isNullOrEmpty()) {
+            return "[]"
+        }
+        val jsonArray = JSONArray()
+        values.forEach { value -> jsonArray.put(value) }
+        return jsonArray.toString()
+    }
+
+    @TypeConverter
+    fun jsonToStringList(json: String?): List<String> {
+        if (json.isNullOrBlank()) {
+            return emptyList()
+        }
+        return try {
+            val jsonArray = JSONArray(json)
+            buildList {
+                for (index in 0 until jsonArray.length()) {
+                    val value = jsonArray.optString(index, null)
+                    if (value != null) {
+                        add(value)
+                    }
+                }
+            }
+        } catch (ignored: Exception) {
+            emptyList()
         }
     }
 }

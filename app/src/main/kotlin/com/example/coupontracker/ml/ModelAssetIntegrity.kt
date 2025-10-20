@@ -19,9 +19,19 @@ object ModelAssetIntegrity {
                 throw IllegalStateException("Model '$name' missing. Ship the real artifact.", error)
             }
 
-        require(actualSize >= minBytes) {
-            "Model '$name' too small ($actualSize B). Ship the real artifact."
+        ensureMinSize(name, actualSize, minBytes, "Ship the real artifact.")
+    }
+
+    fun ensureMinSize(
+        assetName: String,
+        actualBytes: Long,
+        minExpectedBytes: Long,
+        remediationHint: String
+    ): Long {
+        require(actualBytes >= minExpectedBytes) {
+            "Model '$assetName' too small ($actualBytes B). $remediationHint"
         }
+        return actualBytes
     }
 
     private fun determineAssetSize(assetManager: AssetManager, assetPath: String): Long {

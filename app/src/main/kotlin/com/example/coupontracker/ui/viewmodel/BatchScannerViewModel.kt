@@ -21,7 +21,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Locale
 import javax.inject.Inject
-import java.util.Locale
 
 /**
  * ViewModel for batch scanning of multiple coupons

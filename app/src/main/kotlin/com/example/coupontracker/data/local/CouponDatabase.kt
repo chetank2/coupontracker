@@ -2,14 +2,11 @@ package com.example.coupontracker.data.local
 
 import androidx.room.Database
 import androidx.room.RoomDatabase
-import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.CouponDedupUtils
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 
 @Database(
     entities = [
@@ -513,50 +510,5 @@ abstract class CouponDatabase : RoomDatabase() {
                 )
             }
         }
-    }
-}
-
-object Converters {
-    private val gson: Gson = Gson()
-    private val floatMapType = object : TypeToken<Map<String, Float>>() {}.type
-    private val stringListType = object : TypeToken<List<String>>() {}.type
-
-    @TypeConverter
-    fun fromTimestamp(value: Long?): java.util.Date? {
-        return value?.let { java.util.Date(it) }
-    }
-
-    @TypeConverter
-    fun dateToTimestamp(date: java.util.Date?): Long? {
-        return date?.time
-    }
-
-    @TypeConverter
-    fun fromConfidenceJson(value: String?): Map<String, Float> {
-        if (value.isNullOrBlank()) {
-            return emptyMap()
-        }
-        return gson.fromJson(value, floatMapType)
-    }
-
-    @TypeConverter
-    fun confidenceMapToJson(map: Map<String, Float>?): String {
-        if (map == null || map.isEmpty()) {
-            return "{}"
-        }
-        return gson.toJson(map, floatMapType)
-    }
-
-    @TypeConverter
-    fun fromStringListJson(value: String?): List<String> {
-        if (value.isNullOrBlank()) {
-            return emptyList()
-        }
-        return gson.fromJson(value, stringListType)
-    }
-
-    @TypeConverter
-    fun stringListToJson(values: List<String>?): String? {
-        return gson.toJson(values ?: emptyList<String>(), stringListType)
     }
 }

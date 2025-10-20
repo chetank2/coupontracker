@@ -8,7 +8,7 @@ import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
-class TextExtractorTest {
+class TextExtractorRobolectricTest {
 
     private val extractor = TextExtractor()
 
