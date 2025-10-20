@@ -305,7 +305,11 @@ class ScannerViewModel @Inject constructor(
                     Log.d(TAG, "LLM_FIRST: LLM extraction successful (confidence: $avgConfidence)")
                     
                     // Step 2: Build coupon from LLM result
-                    val llmCoupon = buildCouponFromLlmResult(llmResult.info, imageUri)
+                    val llmCoupon = buildCouponFromLlmResult(
+                        llmResult.info,
+                        imageUri,
+                        llmResult.signals.fieldConfidences
+                    )
                     
                     // Step 3: Persist URI
                     val persistedUri = uriPersistenceManager.persistUri(imageUri)
@@ -391,7 +395,11 @@ class ScannerViewModel @Inject constructor(
     /**
      * Build coupon from LLM extraction result
      */
-    private fun buildCouponFromLlmResult(couponInfo: CouponInfo, imageUri: Uri): Coupon {
+    private fun buildCouponFromLlmResult(
+        couponInfo: CouponInfo,
+        imageUri: Uri,
+        fieldConfidences: Map<String, Float> = emptyMap()
+    ): Coupon {
         // Parse cashback using typed info
         val cashbackInfo = if (couponInfo.cashbackAmount != null) {
             val amount = couponInfo.cashbackAmount
@@ -422,7 +430,8 @@ class ScannerViewModel @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = null
+            offerText = null,
+            extractionConfidenceBreakdown = fieldConfidences.ifEmpty { emptyMap() }
         )
     }
     
@@ -596,7 +605,11 @@ class ScannerViewModel @Inject constructor(
                 // Only LLM successful
                 llmResult is ExtractResult.Good -> {
                     Log.d(TAG, "HYBRID: Only LLM successful, using LLM result")
-                    buildCouponFromLlmResult(llmResult.info, imageUri)
+                    buildCouponFromLlmResult(
+                        llmResult.info,
+                        imageUri,
+                        llmResult.signals.fieldConfidences
+                    )
                 }
                 
                 // Only OCR successful
@@ -732,13 +745,15 @@ class ScannerViewModel @Inject constructor(
         
         // Description: combine both sources
         val description = when {
-            llmInfo.description.isNotBlank() && ocrCoupon.description.isNotBlank() -> 
+            llmInfo.description.isNotBlank() && ocrCoupon.description.isNotBlank() ->
                 "${llmInfo.description} (Hybrid: LLM + OCR)"
             llmInfo.description.isNotBlank() -> llmInfo.description
             ocrCoupon.description.isNotBlank() -> ocrCoupon.description
             else -> "Extracted via Hybrid method"
         }
-        
+
+        val confidenceBreakdown = mergeConfidenceBreakdown(llmConf, ocrResult)
+
         return Coupon(
             id = 0,
             storeName = storeName,
@@ -754,7 +769,8 @@ class ScannerViewModel @Inject constructor(
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
             cashbackCurrency = cashbackInfo.currency,
-            offerText = null
+            offerText = null,
+            extractionConfidenceBreakdown = confidenceBreakdown
         )
     }
 
@@ -1272,9 +1288,34 @@ class ScannerViewModel @Inject constructor(
     /**
      * Create a Coupon object from a detected coupon instance
      */
+    private fun mergeConfidenceBreakdown(
+        llmConf: Map<String, Float>,
+        ocrResult: com.example.coupontracker.universal.UniversalExtractionResult?
+    ): Map<String, Float> {
+        if (llmConf.isEmpty() && (ocrResult?.extractedFields?.isEmpty() != false)) {
+            return emptyMap()
+        }
+
+        val merged = mutableMapOf<String, Float>()
+        ocrResult?.extractedFields?.forEach { (type, candidate) ->
+            merged[type.name.lowercase(Locale.ROOT)] = candidate.confidence
+        }
+        merged.putAll(llmConf)
+        return merged
+    }
+
+    private fun buildDetectionConfidenceBreakdown(couponInstance: CouponInstance): Map<String, Float> {
+        if (couponInstance.fields.isEmpty()) {
+            return emptyMap()
+        }
+        return couponInstance.fields.associate { detection ->
+            detection.fieldType.name.lowercase(Locale.ROOT) to detection.confidence
+        }
+    }
+
     private fun createCouponFromInstance(
-        couponInstance: CouponInstance, 
-        extractedInfo: Map<String, String>, 
+        couponInstance: CouponInstance,
+        extractedInfo: Map<String, String>,
         imageUri: String?
     ): Coupon {
         // Parse expiry date string to Date if available
@@ -1290,6 +1331,8 @@ class ScannerViewModel @Inject constructor(
             CashbackInfo.fromText(amountText)
         } ?: CashbackInfo.fromLegacyAmount(amount, extractedInfo["description"])
 
+        val detectionConfidence = buildDetectionConfidenceBreakdown(couponInstance)
+
         return Coupon(
             id = 0, // Auto-generated by Room
             storeName = extractedInfo["storeName"] ?: extractedInfo["app"] ?: "Unknown Store",
@@ -1298,7 +1341,7 @@ class ScannerViewModel @Inject constructor(
             cashbackAmount = amount, // Keep for backward compatibility
             redeemCode = extractedInfo["code"], // Don't generate fallback - use null if not extracted
             imageUri = imageUri,
-            
+
             // New typed cashback fields
             cashbackType = cashbackInfo.type.name.lowercase(),
             cashbackValueNum = cashbackInfo.valueNum,
@@ -1311,6 +1354,7 @@ class ScannerViewModel @Inject constructor(
                 com.example.coupontracker.ml.CouponStatus.PARTIAL_TOP -> "PARTIAL"
                 com.example.coupontracker.ml.CouponStatus.PARTIAL_BOTTOM -> "PARTIAL"
             },
+            extractionConfidenceBreakdown = detectionConfidence,
             createdAt = Date(),
             updatedAt = Date()
         )

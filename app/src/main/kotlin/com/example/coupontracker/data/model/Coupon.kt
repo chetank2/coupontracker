@@ -37,6 +37,7 @@ data class Coupon(
     val platformType: String? = null,
 
     // Existing tracking fields
+    val extractionConfidenceBreakdown: Map<String, Float> = emptyMap(),
     val rating: String? = null,
     val createdAt: Date = Date(),
     val updatedAt: Date = Date()
