@@ -9,14 +9,16 @@ import android.util.Log
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.CashbackInfo
+import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugScorer
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
-import com.example.coupontracker.universal.UniversalExtractionService
 import com.example.coupontracker.universal.ExtractionContext
+import com.example.coupontracker.universal.ExtractionCandidate
+import com.example.coupontracker.universal.UniversalExtractionService
 import com.example.coupontracker.util.ExtractionPerformanceMonitor
 import com.example.coupontracker.util.ExtractionMethod
 import com.example.coupontracker.util.FeedbackType
@@ -408,8 +410,9 @@ class ScannerViewModel @Inject constructor(
 
                     // Step 3: Persist URI
                     val persistedUri = uriPersistenceManager.persistUri(imageUri)
+                    val finalImageUri = resolveImageUri(persistedUri, imageUri)
                     val finalCoupon = finalizeCoupon(
-                        base = llmCoupon.copy(imageUri = persistedUri?.toString()),
+                        base = llmCoupon.copy(imageUri = finalImageUri),
                         ocrText = null,
                         captureTimestamp = null
                     )
@@ -569,7 +572,8 @@ class ScannerViewModel @Inject constructor(
             
             when (ocrResult) {
                 is MultiEngineOCR.OCRResult.Success -> {
-                    val ocrText = ocrResult.extractedInfo.values.joinToString(" ")
+                    val ocrHints = ocrResult.extractedInfo
+                    val ocrText = ocrResult.text
                     Log.d(TAG, "OCR_FIRST: Extracted ${ocrText.length} characters from OCR")
                     
                     if (ocrText.isBlank()) {
@@ -579,7 +583,7 @@ class ScannerViewModel @Inject constructor(
                     }
                     
                     // Step 2: Use universal field detector with OCR text
-                    val context = ExtractionContext()
+                    val context = buildUniversalExtractionContext(ocrText, ocrHints)
                     val extractionResult = universalExtractionService.extractCoupon(
                         image = bitmap,
                         ocrText = ocrText,
@@ -593,14 +597,23 @@ class ScannerViewModel @Inject constructor(
                         
                         // Step 3: Persist URI and save coupon
                         val persistedUri = uriPersistenceManager.persistUri(imageUri)
+                        val finalImageUri = resolveImageUri(persistedUri, imageUri)
+                        val confidenceBreakdown = buildConfidenceMap(
+                            extractionResult.coupon.extractionConfidenceBreakdown,
+                            extractionResult.extractedFields
+                        )
+                        val baseCoupon = extractionResult.coupon.copy(
+                            imageUri = finalImageUri,
+                            extractionConfidenceBreakdown = confidenceBreakdown
+                        )
                         val finalCoupon = finalizeCoupon(
-                            base = extractionResult.coupon.copy(imageUri = persistedUri?.toString()),
+                            base = baseCoupon,
                             ocrText = ocrText,
                             captureTimestamp = null
-                        )
+                        ).ensureConfidenceBreakdown(confidenceBreakdown)
                         
                         // Step 4: Store for potential learning
-                        lastExtractionResult = extractionResult to ocrText
+                        lastExtractionResult = extractionResult.copy(coupon = finalCoupon) to ocrText
                         
                         // Step 5: Record metrics
                         val fieldsExtracted = mutableSetOf<String>()
@@ -697,11 +710,10 @@ class ScannerViewModel @Inject constructor(
                 val ocrDeferred = async(Dispatchers.IO) {
                     try {
                         Log.d(TAG, "HYBRID: Starting OCR extraction...")
-                        val ocrResult = multiEngineOCR.processImage(bitmap)
-                        when (ocrResult) {
+                        when (val ocrResult = multiEngineOCR.processImage(bitmap)) {
                             is MultiEngineOCR.OCRResult.Success -> {
-                                val ocrText = ocrResult.extractedInfo.values.joinToString(" ")
-                                universalExtractionService.extractCoupon(bitmap, ocrText, ExtractionContext())
+                                val context = buildUniversalExtractionContext(ocrResult.text, ocrResult.extractedInfo)
+                                universalExtractionService.extractCoupon(bitmap, ocrResult.text, context)
                             }
                             is MultiEngineOCR.OCRResult.Error -> null
                         }
@@ -754,7 +766,7 @@ class ScannerViewModel @Inject constructor(
                 // Persist URI
                 val persistedUri = uriPersistenceManager.persistUri(imageUri)
                 val finalCoupon = finalizeCoupon(
-                    base = fusedCoupon.copy(imageUri = persistedUri?.toString()),
+                    base = fusedCoupon.copy(imageUri = resolveImageUri(persistedUri, imageUri)),
                     ocrText = null,
                     captureTimestamp = null
                 )
@@ -1631,9 +1643,11 @@ class ScannerViewModel @Inject constructor(
             Log.d(TAG, "Attempting universal extraction")
             
             // Extract text using OCR for universal extraction
+            var ocrHints: Map<String, String>? = null
             val ocrText = when (val result = multiEngineOCR.processImage(bitmap)) {
                 is MultiEngineOCR.OCRResult.Success -> {
-                    result.extractedInfo.values.joinToString(" ")
+                    ocrHints = result.extractedInfo
+                    result.text
                 }
                 is MultiEngineOCR.OCRResult.Error -> {
                     Log.w(TAG, "OCR failed for universal extraction: ${result.message}")
@@ -1659,7 +1673,7 @@ class ScannerViewModel @Inject constructor(
             }
             
             // Create extraction context
-            val context = ExtractionContext()
+            val context = buildUniversalExtractionContext(ocrText, ocrHints)
             
             // Run universal extraction
             val extractionResult = universalExtractionService.extractCoupon(
@@ -1676,8 +1690,14 @@ class ScannerViewModel @Inject constructor(
 
                 // Use the universally extracted coupon
                 val persistedUri = uriPersistenceManager.persistUri(imageUri)
+                val finalImageUri = resolveImageUri(persistedUri, imageUri)
+                val confidenceBreakdown = buildConfidenceMap(
+                    extractionResult.coupon.extractionConfidenceBreakdown,
+                    extractionResult.extractedFields
+                )
                 val coupon = extractionResult.coupon.copy(
-                    imageUri = persistedUri?.toString()
+                    imageUri = finalImageUri,
+                    extractionConfidenceBreakdown = confidenceBreakdown
                 )
                 val debugSnapshot = ExtractionDebugScorer.fromUniversalResult(
                     extractionResult,
@@ -1701,7 +1721,7 @@ class ScannerViewModel @Inject constructor(
                 )
                 
                 // Store extraction result for potential feedback learning
-                lastExtractionResult = extractionResult to ocrText
+                lastExtractionResult = extractionResult.copy(coupon = coupon) to ocrText
 
                 pendingPreview = PendingPreview(
                     coupon = coupon,
@@ -2000,7 +2020,7 @@ class ScannerViewModel @Inject constructor(
                         correctedFields = emptySet()
                     )
                     
-                    val context = ExtractionContext()
+                    val context = buildFeedbackContext()
                     universalExtractionService.learnFromSuccess(
                         extractionResult = extractionResult,
                         originalText = ocrText,
@@ -2053,7 +2073,7 @@ class ScannerViewModel @Inject constructor(
                         // For now, we'll just learn from the text patterns
                     )
                     
-                    val context = ExtractionContext()
+                    val context = buildFeedbackContext()
                     universalExtractionService.learnFromCorrection(
                         extractionResult = extractionResult,
                         correctedCoupon = correctedCoupon,
@@ -2158,6 +2178,85 @@ class ScannerViewModel @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Error cleaning up TwoStageDetector", e)
         }
+    }
+
+    private fun buildUniversalExtractionContext(
+        ocrText: String,
+        extractedInfo: Map<String, String>?
+    ): ExtractionContext {
+        val fallbackBrand = ocrText.lineSequence()
+            .map { it.trim() }
+            .firstOrNull { line ->
+                line.isNotBlank() &&
+                    line.length in 3..48 &&
+                    line.any { it.isLetter() } &&
+                    !fieldHeuristics.isGenericOrMissing(line)
+            }
+
+        val brandHint = sequenceOf(
+            extractedInfo?.get("storeName"),
+            extractedInfo?.get("brand"),
+            extractedInfo?.get("app"),
+            extractedInfo?.get("merchant"),
+            fallbackBrand,
+            lastExtractionResult?.first?.coupon?.storeName
+        )
+            .mapNotNull { candidate ->
+                candidate?.takeIf { it.isNotBlank() && !fieldHeuristics.isGenericOrMissing(it) }
+            }
+            .firstOrNull()
+
+        val categoryHint = extractedInfo
+            ?.get("category")
+            ?.takeIf { it.isNotBlank() }
+
+        val previousSuccesses = lastExtractionResult
+            ?.first
+            ?.coupon
+            ?.storeName
+            ?.takeIf { it.isNotBlank() && !fieldHeuristics.isGenericOrMissing(it) }
+            ?.let { listOf(it) }
+            ?: emptyList()
+
+        return ExtractionContext(
+            brandHint = brandHint,
+            categoryHint = categoryHint,
+            previousSuccesses = previousSuccesses
+        )
+    }
+
+    private fun buildFeedbackContext(): ExtractionContext {
+        val priorStore = lastExtractionResult
+            ?.first
+            ?.coupon
+            ?.storeName
+            ?.takeIf { it.isNotBlank() && !fieldHeuristics.isGenericOrMissing(it) }
+
+        return ExtractionContext(
+            brandHint = priorStore,
+            previousSuccesses = priorStore?.let { listOf(it) } ?: emptyList()
+        )
+    }
+
+    private fun resolveImageUri(persisted: Uri?, original: Uri): String {
+        return (persisted ?: original).toString()
+    }
+
+    private fun buildConfidenceMap(
+        existing: Map<String, Float>,
+        extractedFields: Map<FieldType, ExtractionCandidate>
+    ): Map<String, Float> {
+        if (existing.isNotEmpty()) return existing
+        if (extractedFields.isEmpty()) return emptyMap()
+        return extractedFields.entries.associate { (fieldType, candidate) ->
+            fieldType.name.lowercase(Locale.ROOT) to candidate.confidence
+        }
+    }
+
+    private fun Coupon.ensureConfidenceBreakdown(breakdown: Map<String, Float>): Coupon {
+        if (breakdown.isEmpty()) return this
+        if (extractionConfidenceBreakdown.isNotEmpty()) return this
+        return copy(extractionConfidenceBreakdown = breakdown)
     }
 
     private fun finalizeCoupon(

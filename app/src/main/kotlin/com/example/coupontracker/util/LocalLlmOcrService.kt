@@ -1026,10 +1026,18 @@ $sanitizedOcr
             val candidateExpiry = validationSummary.fields.expiryDateText
 
             val cleanedCandidateDescription = cleanDescription(candidateDescription)
+            val descriptionIsMeaningful = GenericFieldHeuristics.isMeaningfulDescription(cleanedCandidateDescription)
             val description = when {
                 cleanedCandidateDescription.isBlank() -> selectDescriptionFallback(rawOcrText)
                 cleanedCandidateDescription.equals("Unknown", ignoreCase = true) -> selectDescriptionFallback(rawOcrText)
                 GenericFieldHeuristics.isGenericOrMissing(cleanedCandidateDescription) -> selectDescriptionFallback(rawOcrText)
+                !descriptionIsMeaningful -> {
+                    Log.w(
+                        TAG,
+                        "LLM description lacked detail; falling back to OCR text: '$cleanedCandidateDescription'"
+                    )
+                    selectDescriptionFallback(rawOcrText)
+                }
                 else -> cleanedCandidateDescription
             }
 

@@ -88,7 +88,7 @@ class UniversalExtractionService @Inject constructor(
 
             val allCandidates = candidateBuckets.mapValues { it.value.toList() }
             val blendedFields = blendCandidates(allCandidates, cleanedOcr)
-            val coupon = buildCouponFromFields(blendedFields, imageUri, cleanedOcr)
+            val coupon = buildCouponFromFields(blendedFields, imageUri, cleanedOcr, contextWithText)
             val confidence = calculateOverallConfidence(blendedFields, candidateBuckets)
 
             UniversalExtractionResult(
@@ -467,11 +467,12 @@ class UniversalExtractionService @Inject constructor(
     private fun buildCouponFromFields(
         extractedFields: Map<FieldType, ExtractionCandidate>,
         imageUri: String,
-        cleanedOcr: String
+        cleanedOcr: String,
+        context: ExtractionContext
     ): Coupon {
         val storeNameCandidate = extractedFields[FieldType.STORE_NAME]
         val storeName = storeNameCandidate?.text?.takeIf { it.isNotBlank() }
-            ?: extractStoreFromContext(cleanedOcr, ExtractionContext())
+            ?: extractStoreFromContext(cleanedOcr, context)
             ?: "Needs review"
 
         val redeemCode = extractedFields[FieldType.COUPON_CODE]
@@ -489,6 +490,20 @@ class UniversalExtractionService @Inject constructor(
 
         val description = buildDescription(extractedFields, cleanedOcr, storeName)
 
+        val confidenceBreakdown = extractedFields.entries.associate { (fieldType, candidate) ->
+            fieldType.name.lowercase(Locale.ROOT) to candidate.confidence
+        }
+
+        val storeSource = storeNameCandidate?.context?.get("source")
+            ?: storeNameCandidate?.source?.name
+        val storeEvidence = storeNameCandidate?.text?.takeIf { it.isNotBlank() }
+            ?.let { listOf(it) }
+            ?: emptyList()
+
+        val needsAttention = storeName == "Needs review" ||
+            storeNameCandidate == null ||
+            storeNameCandidate.confidence < 0.5f
+
         return Coupon(
             storeName = storeName,
             description = description,
@@ -499,8 +514,10 @@ class UniversalExtractionService @Inject constructor(
             cashbackCurrency = cashbackInfo.currency,
             imageUri = imageUri,
             expiryDate = expiryDate,
-            storeNameSource = storeNameCandidate?.source?.name,
-            storeNameEvidence = if (storeNameCandidate != null) listOf(storeNameCandidate.text) else emptyList()
+            storeNameSource = storeSource,
+            storeNameEvidence = storeEvidence,
+            extractionConfidenceBreakdown = confidenceBreakdown,
+            needsAttention = needsAttention
         )
     }
 
@@ -685,7 +702,8 @@ class UniversalExtractionService @Inject constructor(
             cashbackValueNum = 0.0,
             cashbackCurrency = "INR",
             imageUri = null,
-            status = "NEEDS_REVIEW"
+            status = "NEEDS_REVIEW",
+            needsAttention = true
         )
     }
 

@@ -97,7 +97,8 @@ class CouponRepositoryImpl @Inject constructor(
         val normalizedCoupon = coupon.copy(
             normalizedDescription = normalizedDescription,
             imagePhash = imagePhash,
-            imageSignature = imageSignature
+            imageSignature = imageSignature,
+            extractionConfidenceBreakdown = coupon.extractionConfidenceBreakdown
         )
 
         val existing = couponDao.findByStoreAndDescription(
@@ -141,6 +142,7 @@ class CouponRepositoryImpl @Inject constructor(
             extractionRunPath = incoming.extractionRunPath ?: existing.extractionRunPath,
             extractionTimestamp = incoming.extractionTimestamp ?: existing.extractionTimestamp,
             rating = incoming.rating ?: existing.rating,
+            needsAttention = incoming.needsAttention || existing.needsAttention,
             createdAt = existing.createdAt,
             updatedAt = Date()
         )
