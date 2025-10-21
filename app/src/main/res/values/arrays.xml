@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="reminder_lead_time_labels">
+        <item>At expiry</item>
+        <item>1 hour before</item>
+        <item>24 hours before</item>
+        <item>48 hours before</item>
+    </string-array>
+    <integer-array name="reminder_lead_time_minutes">
+        <item>0</item>
+        <item>60</item>
+        <item>1440</item>
+        <item>2880</item>
+    </integer-array>
+</resources>

@@ -15,7 +15,7 @@ import com.example.coupontracker.data.util.CouponDedupUtils
         ExtractionFeedback::class,      // V2: Feedback & telemetry
         ValidatorFeedbackRecord::class  // Validator override & correction dataset
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -508,6 +508,12 @@ abstract class CouponDatabase : RoomDatabase() {
                 database.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_validator_feedback_v1_eventType` ON `validator_feedback_v1` (`eventType`)"
                 )
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE coupons ADD COLUMN reminderLeadTimeMinutes INTEGER")
             }
         }
     }

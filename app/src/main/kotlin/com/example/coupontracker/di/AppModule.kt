@@ -8,6 +8,7 @@ import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.util.CouponInputManager
 import com.example.coupontracker.util.ImageProcessor
 import com.example.coupontracker.util.ThemeManager
+import androidx.work.WorkManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -59,4 +60,10 @@ object AppModule {
             multiCouponExtractionService = multiCouponExtractionService
         )
     }
+
+    @Provides
+    @Singleton
+    fun provideWorkManager(
+        @ApplicationContext context: Context
+    ): WorkManager = WorkManager.getInstance(context)
 }

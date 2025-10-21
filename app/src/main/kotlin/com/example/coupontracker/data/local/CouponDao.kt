@@ -61,7 +61,7 @@ interface CouponDao {
     fun getCouponsWithReminders(): Flow<List<Coupon>>
 
     @Query("SELECT * FROM coupons WHERE expiryDate BETWEEN :startDate AND :endDate ORDER BY (expiryDate IS NULL), expiryDate ASC")
-    fun getCouponsExpiringBetween(startDate: Date, endDate: Date): Flow<List<Coupon>>
+    suspend fun getCouponsExpiringBetween(startDate: Date, endDate: Date): List<Coupon>
 
     @Query(
         """

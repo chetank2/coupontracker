@@ -270,6 +270,7 @@ dependencies {
     androidTestImplementation("app.cash.turbine:turbine:1.0.0")
     androidTestImplementation("com.google.dagger:hilt-android-testing:2.50")
     kaptAndroidTest("com.google.dagger:hilt-android-compiler:2.50")
+    androidTestImplementation("androidx.work:work-testing:2.9.0")
 
     // Compose
     implementation("androidx.compose.ui:ui:1.6.2")

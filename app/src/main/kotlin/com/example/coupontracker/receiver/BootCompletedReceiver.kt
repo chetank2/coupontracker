@@ -4,8 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import com.example.coupontracker.worker.ReminderWorker
+import com.example.coupontracker.work.CouponReminderWorker
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -23,8 +25,13 @@ class BootCompletedReceiver : BroadcastReceiver() {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             Log.d(TAG, "Device boot completed, rescheduling coupon reminders")
             
-            // Reschedule the reminder worker
-            ReminderWorker.scheduleDaily(WorkManager.getInstance(context))
+            val workManager = WorkManager.getInstance(context)
+            val request = OneTimeWorkRequestBuilder<CouponReminderWorker>().build()
+            workManager.enqueueUniqueWork(
+                "coupon-reminder-boot",
+                ExistingWorkPolicy.REPLACE,
+                request
+            )
         }
     }
 }

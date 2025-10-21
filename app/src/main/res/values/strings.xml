@@ -25,6 +25,13 @@
     <string name="appearance">Appearance</string>
     <string name="dark_mode">Dark Mode</string>
     <string name="enable_notifications">Enable Notifications</string>
+    <string name="reminder_lead_time_label">Reminder lead time</string>
+    <string name="priority_checkbox_label">Mark as Priority</string>
+    <string name="reminder_disabled_label">Reminder notifications are off.</string>
+    <string name="reminder_scheduled_label">Reminder scheduled for %1$s.</string>
+    <string name="reminder_pending_label">Select an expiry date to schedule the reminder.</string>
+    <string name="notification_coupon_reminder_title">Reminder: %1$s</string>
+    <string name="notification_coupon_reminder_body">%1$s expires soon.</string>
     <string name="code_copied">Code copied to clipboard</string>
     <string name="export_data">Export Data</string>
     <string name="import_data">Import Data</string>

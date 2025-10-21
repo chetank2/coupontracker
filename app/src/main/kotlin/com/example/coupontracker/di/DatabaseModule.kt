@@ -3,6 +3,7 @@ package com.example.coupontracker.di
 import android.content.Context
 import androidx.room.Room
 import com.example.coupontracker.data.local.*
+import com.example.coupontracker.data.repository.CouponReminderScheduler
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.repository.CouponRepositoryImpl
 import dagger.Module
@@ -35,7 +36,8 @@ object DatabaseModule {
                 CouponDatabase.MIGRATION_7_8,  // Drop deprecated offerText column
                 CouponDatabase.MIGRATION_8_9,
                 CouponDatabase.MIGRATION_9_10,
-                CouponDatabase.MIGRATION_10_11
+                CouponDatabase.MIGRATION_10_11,
+                CouponDatabase.MIGRATION_11_12
             )
             .fallbackToDestructiveMigration()
             .build()
@@ -65,6 +67,7 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideCouponRepository(
-        couponDao: CouponDao
-    ): CouponRepository = CouponRepositoryImpl(couponDao)
+        couponDao: CouponDao,
+        reminderScheduler: CouponReminderScheduler
+    ): CouponRepository = CouponRepositoryImpl(couponDao, reminderScheduler)
 }

@@ -15,6 +15,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
@@ -79,6 +80,7 @@ class AddFragment : Fragment() {
         private const val PREFS_NAME = "CouponTrackerPrefs"
         private const val KEY_USE_MISTRAL_API = "use_mistral_api"
         private const val KEY_MISTRAL_API_KEY = "mistral_api_key"
+        private const val DEFAULT_REMINDER_INDEX = 2
     }
 
     private val requestPermissionLauncher = registerForActivityResult(
@@ -133,6 +135,7 @@ class AddFragment : Fragment() {
         setupClickListeners()
         setupMistralApiSwitch()
         setupLlmOcrControls()
+        setupReminderControls()
         observeViewModel()
 
         // Handle arguments from scanner
@@ -278,51 +281,73 @@ class AddFragment : Fragment() {
             showMistralApiInfo()
         }
 
-        binding.setReminderButton.setOnClickListener {
-            showReminderDatePicker()
-        }
     }
 
-    private fun showReminderDatePicker() {
-        val calendar = Calendar.getInstance()
+    private fun setupReminderControls() {
+        val labels = resources.getStringArray(R.array.reminder_lead_time_labels)
+        val minutes = resources.getIntArray(R.array.reminder_lead_time_minutes)
+        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_list_item_1, labels)
+        binding.reminderLeadTimeInput.setAdapter(adapter)
 
-        val datePicker = MaterialDatePicker.Builder.datePicker()
-            .setTitleText("Select Reminder Date")
-            .setSelection(MaterialDatePicker.todayInUtcMilliseconds())
-            .build()
+        val initialEnabled = viewModel.isReminderEnabled()
+        val initialMinutes = viewModel.getReminderLeadTimeMinutes()
+        val initialIndex = if (initialMinutes != null) minutes.indexOf(initialMinutes) else -1
 
-        datePicker.addOnPositiveButtonClickListener { selection ->
-            calendar.timeInMillis = selection
-
-            // Show time picker after date is selected
-            showReminderTimePicker(calendar)
+        if (initialIndex >= 0) {
+            binding.reminderLeadTimeInput.setText(labels[initialIndex], false)
+            binding.reminderLeadTimeInput.tag = initialIndex
         }
 
-        datePicker.show(parentFragmentManager, "REMINDER_DATE_PICKER")
+        binding.reminderSwitch.isChecked = initialEnabled
+        binding.reminderLeadTimeLayout.isEnabled = initialEnabled
+        binding.reminderLeadTimeInput.isEnabled = initialEnabled
+
+        binding.reminderLeadTimeInput.setOnItemClickListener { _, _, position, _ ->
+            val minutesValue = minutes.getOrNull(position)
+            binding.reminderLeadTimeInput.tag = position
+            viewModel.setReminderLeadTime(minutesValue)
+            updateReminderSummary(minutesValue)
+        }
+
+        binding.reminderSwitch.setOnCheckedChangeListener { _, isChecked ->
+            binding.reminderLeadTimeLayout.isEnabled = isChecked
+            binding.reminderLeadTimeInput.isEnabled = isChecked
+            viewModel.setReminderEnabled(isChecked)
+            if (!isChecked) {
+                binding.reminderLeadTimeInput.setText("", false)
+                binding.reminderLeadTimeInput.tag = null
+            } else {
+                val index = (binding.reminderLeadTimeInput.tag as? Int)
+                    ?: if (initialIndex >= 0) initialIndex else DEFAULT_REMINDER_INDEX
+                val minutesValue = minutes.getOrNull(index)
+                if (minutesValue != null) {
+                    binding.reminderLeadTimeInput.setText(labels[index], false)
+                    binding.reminderLeadTimeInput.tag = index
+                    viewModel.setReminderLeadTime(minutesValue)
+                }
+            }
+            updateReminderSummary(viewModel.getReminderLeadTimeMinutes())
+        }
+
+        updateReminderSummary(viewModel.getReminderLeadTimeMinutes())
     }
 
-    private fun showReminderTimePicker(calendar: Calendar) {
-        val timePickerDialog = android.app.TimePickerDialog(
-            requireContext(),
-            { _, hour, minute ->
-                calendar.set(Calendar.HOUR_OF_DAY, hour)
-                calendar.set(Calendar.MINUTE, minute)
+    private fun updateReminderSummary(leadTimeMinutes: Int?) {
+        if (!viewModel.isReminderEnabled() || leadTimeMinutes == null) {
+            binding.reminderDateText.text = getString(R.string.reminder_disabled_label)
+            binding.reminderDateText.visibility = View.VISIBLE
+            return
+        }
 
-                // Set the reminder date in the view model
-                viewModel.setReminderDate(calendar.time)
-
-                // Update UI to show selected reminder date/time
-                val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
-                binding.reminderDateText.text = "Reminder set for: ${dateFormat.format(calendar.time)}"
-                binding.reminderDateText.visibility = View.VISIBLE
-                ExtractionLogBuffer.appendInfo(TAG, "Reminder set for ${dateFormat.format(calendar.time)}")
-            },
-            calendar.get(Calendar.HOUR_OF_DAY),
-            calendar.get(Calendar.MINUTE),
-            false
-        )
-
-        timePickerDialog.show()
+        val reminderDate = viewModel.getReminderDate()
+        if (reminderDate != null) {
+            val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+            binding.reminderDateText.text =
+                getString(R.string.reminder_scheduled_label, dateFormat.format(reminderDate))
+        } else {
+            binding.reminderDateText.text = getString(R.string.reminder_pending_label)
+        }
+        binding.reminderDateText.visibility = View.VISIBLE
     }
 
     private fun showMistralApiInfo() {
@@ -830,9 +855,11 @@ class AddFragment : Fragment() {
             couponInfo.expiryDate?.let { date ->
                 expiryDateInput.setText(SimpleDateFormat("MM/dd/yyyy", Locale.US).format(date))
                 viewModel.setExpiryDate(date)
+                updateReminderSummary(viewModel.getReminderLeadTimeMinutes())
             } ?: run {
                 expiryDateInput.setText("")
                 viewModel.setExpiryDate(null)
+                updateReminderSummary(viewModel.getReminderLeadTimeMinutes())
             }
 
             couponInfo.cashbackAmount?.let { amount ->
@@ -920,6 +947,7 @@ class AddFragment : Fragment() {
             val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
             binding.expiryDateInput.setText(dateFormat.format(date))
             viewModel.setExpiryDate(date)
+            updateReminderSummary(viewModel.getReminderLeadTimeMinutes())
         }
 
         datePicker.show(parentFragmentManager, "DATE_PICKER")

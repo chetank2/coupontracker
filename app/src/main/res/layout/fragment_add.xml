@@ -558,26 +558,37 @@
 
             </com.google.android.material.textfield.TextInputLayout>
 
-            <LinearLayout
+            <CheckBox
+                android:id="@+id/priorityCheckbox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:text="@string/priority_checkbox_label" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/reminderSwitch"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="16dp">
+                android:layout_marginBottom="8dp"
+                android:text="@string/enable_notifications" />
 
-                <CheckBox
-                    android:id="@+id/priorityCheckbox"
-                    android:layout_width="wrap_content"
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/reminderLeadTimeLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                android:hint="@string/reminder_lead_time_label"
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                    android:id="@+id/reminderLeadTimeInput"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Mark as Priority" />
+                    android:focusable="false"
+                    android:inputType="none"
+                    android:textColor="@color/black" />
 
-                <Button
-                    android:id="@+id/setReminderButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:text="Set Reminder" />
-
-            </LinearLayout>
+            </com.google.android.material.textfield.TextInputLayout>
 
             <TextView
                 android:id="@+id/reminderDateText"

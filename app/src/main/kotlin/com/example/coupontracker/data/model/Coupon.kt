@@ -33,6 +33,7 @@ data class Coupon(
     val usageLimit: Int? = null,
     val usageCount: Int = 0,
     val reminderDate: Date? = null,
+    val reminderLeadTimeMinutes: Int? = null,
     val platformType: String? = null,
 
     // Extraction telemetry

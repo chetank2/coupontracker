@@ -4,13 +4,15 @@ import com.example.coupontracker.data.local.CouponDao
 import com.example.coupontracker.data.model.Coupon
 import kotlinx.coroutines.flow.Flow
 import java.util.Date
+import java.util.concurrent.TimeUnit
 import kotlin.math.max
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class CouponRepositoryImpl @Inject constructor(
-    private val couponDao: CouponDao
+    private val couponDao: CouponDao,
+    private val reminderScheduler: CouponReminderScheduler
 ) : CouponRepository {
     // Existing methods
     override fun getAllCoupons(): Flow<List<Coupon>> = couponDao.getAllCoupons()
@@ -25,11 +27,30 @@ class CouponRepositoryImpl @Inject constructor(
 
     override fun getExpiringCoupons(date: Date): Flow<List<Coupon>> = couponDao.getExpiringCoupons(date)
 
-    override suspend fun insertCoupon(coupon: Coupon): Long = couponDao.insertCoupon(coupon)
+    override suspend fun insertCoupon(coupon: Coupon): Long {
+        val normalized = normalizeReminder(coupon)
+        val id = couponDao.insertCoupon(normalized)
+        if (id > 0) {
+            val persisted = normalized.copy(id = id)
+            reminderScheduler.schedule(persisted, persisted.reminderDate)
+        }
+        return id
+    }
 
-    override suspend fun updateCoupon(coupon: Coupon) = couponDao.updateCoupon(coupon)
+    override suspend fun updateCoupon(coupon: Coupon) {
+        val normalized = normalizeReminder(coupon)
+        couponDao.updateCoupon(normalized)
+        if (normalized.reminderLeadTimeMinutes != null) {
+            reminderScheduler.schedule(normalized, normalized.reminderDate)
+        } else {
+            reminderScheduler.cancel(normalized.id)
+        }
+    }
 
-    override suspend fun deleteCoupon(coupon: Coupon) = couponDao.deleteCoupon(coupon)
+    override suspend fun deleteCoupon(coupon: Coupon) {
+        reminderScheduler.cancel(coupon.id)
+        couponDao.deleteCoupon(coupon)
+    }
 
     override suspend fun deleteAllCoupons() = couponDao.deleteAllCoupons()
 
@@ -38,7 +59,16 @@ class CouponRepositoryImpl @Inject constructor(
             // Force Room to generate fresh IDs so we do not rely on the source database
             coupon.copy(id = 0)
         }
-        return couponDao.replaceAllCoupons(sanitizedCoupons).size
+        val insertedIds = couponDao.replaceAllCoupons(sanitizedCoupons)
+        coupons.zip(insertedIds).forEach { (coupon, id) ->
+            val restored = normalizeReminder(coupon.copy(id = id))
+            if (restored.reminderLeadTimeMinutes != null) {
+                reminderScheduler.schedule(restored, restored.reminderDate)
+            } else {
+                reminderScheduler.cancel(id)
+            }
+        }
+        return insertedIds.size
     }
 
     // New methods
@@ -49,7 +79,7 @@ class CouponRepositoryImpl @Inject constructor(
 
     override fun getCouponsWithReminders(): Flow<List<Coupon>> = couponDao.getCouponsWithReminders()
 
-    override fun getCouponsExpiringBetween(startDate: Date, endDate: Date): Flow<List<Coupon>> =
+    override suspend fun getCouponsExpiringBetween(startDate: Date, endDate: Date): List<Coupon> =
         couponDao.getCouponsExpiringBetween(startDate, endDate)
 
     override suspend fun updateCouponUsageCount(couponId: Long) {
@@ -70,13 +100,25 @@ class CouponRepositoryImpl @Inject constructor(
         couponDao.updateCoupon(updatedCoupon)
     }
 
-    override suspend fun updateCouponReminder(couponId: Long, reminderDate: Date?) {
+    override suspend fun updateCouponReminder(
+        couponId: Long,
+        reminderDate: Date?,
+        reminderLeadTimeMinutes: Int?
+    ) {
         val coupon = couponDao.getCouponById(couponId) ?: return
-        val updatedCoupon = coupon.copy(
-            reminderDate = reminderDate,
-            updatedAt = Date()
+        val updatedCoupon = normalizeReminder(
+            coupon.copy(
+                reminderDate = reminderDate,
+                reminderLeadTimeMinutes = reminderLeadTimeMinutes,
+                updatedAt = Date()
+            )
         )
         couponDao.updateCoupon(updatedCoupon)
+        if (updatedCoupon.reminderLeadTimeMinutes != null) {
+            reminderScheduler.schedule(updatedCoupon, updatedCoupon.reminderDate)
+        } else {
+            reminderScheduler.cancel(couponId)
+        }
     }
 
     override suspend fun updateCouponStatus(couponId: Long, status: String) {
@@ -109,11 +151,16 @@ class CouponRepositoryImpl @Inject constructor(
         )
 
         return if (existing != null) {
-            val merged = mergeCoupons(existing, normalizedCoupon)
+            val merged = normalizeReminder(mergeCoupons(existing, normalizedCoupon))
             couponDao.updateCoupon(merged)
+            if (merged.reminderLeadTimeMinutes != null) {
+                reminderScheduler.schedule(merged, merged.reminderDate)
+            } else {
+                reminderScheduler.cancel(merged.id)
+            }
             existing.id
         } else {
-            couponDao.insertCoupon(normalizedCoupon)
+            insertCoupon(normalizeReminder(normalizedCoupon))
         }
     }
 
@@ -135,6 +182,7 @@ class CouponRepositoryImpl @Inject constructor(
             usageLimit = incoming.usageLimit ?: existing.usageLimit,
             usageCount = max(incoming.usageCount, existing.usageCount),
             reminderDate = incoming.reminderDate ?: existing.reminderDate,
+            reminderLeadTimeMinutes = incoming.reminderLeadTimeMinutes ?: existing.reminderLeadTimeMinutes,
             platformType = incoming.platformType ?: existing.platformType,
             extractionQualityScore = selectBestQualityScore(incoming, existing),
             extractionConfidenceBreakdown = selectConfidenceMap(incoming, existing),
@@ -164,5 +212,26 @@ class CouponRepositoryImpl @Inject constructor(
             existing.extractionConfidenceBreakdown.isNotEmpty() -> existing.extractionConfidenceBreakdown
             else -> emptyMap()
         }
+    }
+
+    private fun normalizeReminder(coupon: Coupon): Coupon {
+        val leadTime = coupon.reminderLeadTimeMinutes
+        val expiry = coupon.expiryDate
+
+        if (leadTime == null) {
+            return coupon.copy(reminderDate = null, reminderLeadTimeMinutes = null)
+        }
+
+        val computedReminder = when {
+            coupon.reminderDate != null -> coupon.reminderDate
+            expiry != null -> Date(expiry.time - TimeUnit.MINUTES.toMillis(leadTime.toLong()))
+            else -> null
+        }
+
+        if (computedReminder == null) {
+            return coupon.copy(reminderDate = null, reminderLeadTimeMinutes = null)
+        }
+
+        return coupon.copy(reminderDate = computedReminder)
     }
 }

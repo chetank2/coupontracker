@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.util.Date
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 @HiltViewModel
@@ -42,6 +43,8 @@ class AddCouponViewModel @Inject constructor(
     private var currentImageUri: Uri? = null
     private var currentExpiryDate: Date? = null
     private var currentReminderDate: Date? = null
+    private var reminderLeadTimeMinutes: Int? = null
+    private var remindersEnabled: Boolean = false
     private var isPriority: Boolean = false
     private var isEditMode: Boolean = false
     private var originalCoupon: Coupon? = null
@@ -52,11 +55,38 @@ class AddCouponViewModel @Inject constructor(
 
     fun setExpiryDate(date: Date?) {
         currentExpiryDate = date
+        if (remindersEnabled && reminderLeadTimeMinutes != null && date != null) {
+            currentReminderDate = computeReminderDate(date, reminderLeadTimeMinutes!!)
+        }
     }
 
     fun setReminderDate(date: Date?) {
         currentReminderDate = date
+        remindersEnabled = date != null
     }
+
+    fun setReminderEnabled(enabled: Boolean) {
+        remindersEnabled = enabled
+        if (!enabled) {
+            reminderLeadTimeMinutes = null
+            currentReminderDate = null
+        } else if (currentExpiryDate != null && reminderLeadTimeMinutes != null) {
+            currentReminderDate = computeReminderDate(currentExpiryDate!!, reminderLeadTimeMinutes!!)
+        }
+    }
+
+    fun setReminderLeadTime(minutes: Int?) {
+        reminderLeadTimeMinutes = minutes
+        if (remindersEnabled && minutes != null && currentExpiryDate != null) {
+            currentReminderDate = computeReminderDate(currentExpiryDate!!, minutes)
+        }
+    }
+
+    fun getReminderLeadTimeMinutes(): Int? = reminderLeadTimeMinutes
+
+    fun isReminderEnabled(): Boolean = remindersEnabled
+
+    fun getReminderDate(): Date? = currentReminderDate
 
     fun setPriority(priority: Boolean) {
         isPriority = priority
@@ -81,6 +111,8 @@ class AddCouponViewModel @Inject constructor(
                 currentImageUri = it.imageUri?.let(Uri::parse)
                 currentExpiryDate = it.expiryDate
                 currentReminderDate = it.reminderDate
+                reminderLeadTimeMinutes = it.reminderLeadTimeMinutes
+                remindersEnabled = it.reminderDate != null
                 isPriority = it.isPriority
             }
             _couponSaved.value = false
@@ -112,6 +144,7 @@ class AddCouponViewModel @Inject constructor(
                 val persistedImageUri = currentImageUri?.let { uri ->
                     uriPersistenceManager.persistUri(uri)?.toString() ?: uri.toString()
                 }
+                val resolvedReminderLeadTime = if (remindersEnabled) reminderLeadTimeMinutes else null
 
                 if (isEditMode) {
                     val existingCoupon = originalCoupon
@@ -133,6 +166,7 @@ class AddCouponViewModel @Inject constructor(
                         isPriority = isPriority,
                         paymentMethod = paymentMethod ?: existingCoupon.paymentMethod,
                         usageLimit = usageLimit ?: existingCoupon.usageLimit,
+                        reminderLeadTimeMinutes = resolvedReminderLeadTime,
                         reminderDate = currentReminderDate,
                         platformType = platformType ?: existingCoupon.platformType,
                         updatedAt = Date()
@@ -160,6 +194,7 @@ class AddCouponViewModel @Inject constructor(
                         usageLimit = usageLimit,
                         usageCount = 0,
                         reminderDate = currentReminderDate,
+                        reminderLeadTimeMinutes = resolvedReminderLeadTime,
                         platformType = platformType
                     )
                     couponId = repository.insertCoupon(coupon)
@@ -172,6 +207,12 @@ class AddCouponViewModel @Inject constructor(
                 _savingState.value = SavingState.Error(e.message ?: "Failed to save coupon")
             }
         }
+    }
+
+    private fun computeReminderDate(expiry: Date, leadTimeMinutes: Int): Date? {
+        val millis = TimeUnit.MINUTES.toMillis(leadTimeMinutes.toLong())
+        val reminderTime = expiry.time - millis
+        return if (reminderTime > 0) Date(reminderTime) else null
     }
 
     sealed class SavingState {

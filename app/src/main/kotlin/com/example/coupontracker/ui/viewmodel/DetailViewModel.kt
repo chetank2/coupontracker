@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.Date
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 @HiltViewModel
@@ -125,7 +126,16 @@ class DetailViewModel @Inject constructor(
             _coupon.value?.let { coupon ->
                 try {
                     // Update the reminder date
-                    repository.updateCouponReminder(coupon.id, date)
+                    val leadMinutes = coupon.expiryDate?.let { expiry ->
+                        val diffMillis = expiry.time - date.time
+                        if (diffMillis > 0) {
+                            TimeUnit.MILLISECONDS.toMinutes(diffMillis).toInt()
+                        } else {
+                            0
+                        }
+                    } ?: 0
+
+                    repository.updateCouponReminder(coupon.id, date, leadMinutes)
 
                     // Schedule notification
                     notificationManager.showReminderNotification(
@@ -152,7 +162,7 @@ class DetailViewModel @Inject constructor(
             _coupon.value?.let { coupon ->
                 try {
                     // Update the reminder date to null
-                    repository.updateCouponReminder(coupon.id, null)
+                    repository.updateCouponReminder(coupon.id, null, null)
 
                     // Cancel notification
                     notificationManager.cancelNotification(coupon.id)

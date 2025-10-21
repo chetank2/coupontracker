@@ -2,10 +2,12 @@ package com.example.coupontracker.data.repository
 
 import com.example.coupontracker.data.local.CouponDao
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.repository.CouponReminderScheduler
 import com.example.coupontracker.data.util.CouponDedupUtils
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
@@ -17,11 +19,13 @@ class CouponRepositoryTest {
     private lateinit var couponDao: CouponDao
     private lateinit var repository: CouponRepository
     private lateinit var repositoryImpl: CouponRepositoryImpl
+    private lateinit var reminderScheduler: CouponReminderScheduler
 
     @Before
     fun setup() {
         couponDao = mockk(relaxed = true)
-        repositoryImpl = CouponRepositoryImpl(couponDao)
+        reminderScheduler = mockk(relaxed = true)
+        repositoryImpl = CouponRepositoryImpl(couponDao, reminderScheduler)
         repository = repositoryImpl
     }
 
@@ -70,6 +74,7 @@ class CouponRepositoryTest {
         // Then
         coVerify { couponDao.insertCoupon(coupon) }
         assert(result == 1L)
+        verify(exactly = 0) { reminderScheduler.schedule(any(), any()) }
     }
 
     @Test
@@ -91,6 +96,7 @@ class CouponRepositoryTest {
 
         // Then
         coVerify { couponDao.deleteCoupon(coupon) }
+        verify { reminderScheduler.cancel(coupon.id) }
     }
 
     @Test
@@ -151,5 +157,50 @@ class CouponRepositoryTest {
                 }
             )
         }
+        verify { reminderScheduler.schedule(any(), any()) }
+    }
+
+    @Test
+    fun `insertCoupon schedules reminder when enabled`() = runBlocking {
+        val expiry = Date(System.currentTimeMillis() + 48 * 60 * 60 * 1000)
+        val coupon = Coupon(
+            id = 0,
+            storeName = "Reminder Store",
+            description = "Reminder Description",
+            expiryDate = expiry,
+            cashbackAmount = 5.0,
+            redeemCode = "REM123",
+            imageUri = null,
+            category = "Test",
+            reminderLeadTimeMinutes = 1440
+        )
+        coEvery { couponDao.insertCoupon(any()) } returns 42L
+
+        repository.insertCoupon(coupon)
+
+        coVerify { couponDao.insertCoupon(any()) }
+        verify { reminderScheduler.schedule(match { it.id == 42L }, any()) }
+    }
+
+    @Test
+    fun `updateCouponReminder cancels when disabled`() = runBlocking {
+        val coupon = Coupon(
+            id = 5,
+            storeName = "Store",
+            description = "Desc",
+            expiryDate = Date(),
+            cashbackAmount = 1.0,
+            redeemCode = null,
+            imageUri = null,
+            category = "Cat",
+            reminderLeadTimeMinutes = 60,
+            reminderDate = Date()
+        )
+        coEvery { couponDao.getCouponById(5) } returns coupon
+        coEvery { couponDao.updateCoupon(any()) } returns Unit
+
+        repository.updateCouponReminder(5, null, null)
+
+        verify { reminderScheduler.cancel(5) }
     }
 }

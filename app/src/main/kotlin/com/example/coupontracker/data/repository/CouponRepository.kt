@@ -22,10 +22,14 @@ interface CouponRepository {
     fun getPriorityCoupons(): Flow<List<Coupon>>
     fun getCouponsByPlatform(platformType: String): Flow<List<Coupon>>
     fun getCouponsWithReminders(): Flow<List<Coupon>>
-    fun getCouponsExpiringBetween(startDate: Date, endDate: Date): Flow<List<Coupon>>
+    suspend fun getCouponsExpiringBetween(startDate: Date, endDate: Date): List<Coupon>
     suspend fun updateCouponUsageCount(couponId: Long)
     suspend fun updateCouponPriority(couponId: Long, isPriority: Boolean)
-    suspend fun updateCouponReminder(couponId: Long, reminderDate: Date?)
+    suspend fun updateCouponReminder(
+        couponId: Long,
+        reminderDate: Date?,
+        reminderLeadTimeMinutes: Int?
+    )
     suspend fun updateCouponStatus(couponId: Long, status: String)
     suspend fun saveOrMergeCoupon(
         coupon: Coupon,
