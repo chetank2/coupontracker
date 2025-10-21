@@ -119,10 +119,39 @@ class LocalLlmOcrService(
                 return ""
             }
 
-            // Preserve the verbatim coupon copy while normalizing line endings
-            return raw
+            val normalized = raw
                 .replace("\r\n", "\n")
                 .replace('\r', '\n')
+
+            val paragraphs = mutableListOf<String>()
+            val currentLine = StringBuilder()
+
+            fun flushCurrent() {
+                if (currentLine.isNotEmpty()) {
+                    paragraphs += currentLine.toString()
+                    currentLine.setLength(0)
+                }
+            }
+
+            normalized.split('\n').forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.isEmpty()) {
+                    flushCurrent()
+                } else {
+                    if (currentLine.isNotEmpty()) {
+                        currentLine.append(' ')
+                    }
+                    currentLine.append(trimmed)
+                }
+            }
+
+            flushCurrent()
+
+            if (paragraphs.isEmpty()) {
+                return ""
+            }
+
+            return paragraphs.joinToString(separator = "\n")
         }
 
     }

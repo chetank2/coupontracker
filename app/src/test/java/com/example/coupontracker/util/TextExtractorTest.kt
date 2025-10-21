@@ -70,6 +70,19 @@ class TextExtractorTest {
     }
 
     @Test
+    fun `extractStoreName removes leading details label`() {
+        val text = """
+            Details
+            Leaf
+            you won 16099 off on Leaf Halo Smart Ring
+        """.trimIndent()
+
+        val result = extractor.extractStoreName(text)
+
+        assertEquals("Leaf", result)
+    }
+
+    @Test
     fun `extractRedeemCode finds token on line after indicator`() {
         val text = """
             Stream exclusively on aha

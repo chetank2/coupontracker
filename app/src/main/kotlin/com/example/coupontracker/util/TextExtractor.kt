@@ -285,7 +285,19 @@ class TextExtractor {
 
     private fun cleanCandidate(raw: String?): String? {
         val initial = raw?.trim()?.takeIf { it.length >= 3 } ?: return null
-        val tokens = initial.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        val tokens = initial.split("\\s+".toRegex())
+            .filter { it.isNotBlank() }
+            .toMutableList()
+        if (tokens.isEmpty()) {
+            return null
+        }
+
+        while (tokens.isNotEmpty() &&
+            GENERIC_LEADING_STORE_TOKENS.contains(tokens.first().lowercase(Locale.ROOT))
+        ) {
+            tokens.removeAt(0)
+        }
+
         if (tokens.isEmpty()) {
             return null
         }
@@ -1305,6 +1317,11 @@ class TextExtractor {
             "multi", "product", "products", "kit", "combo", "pack", "value", "special",
             "now", "today", "details", "redeem", "claim", "activate", "shop", "buy",
             "view", "apply", "tap", "click", "pastm", "patm", "just"
+        )
+
+        private val GENERIC_LEADING_STORE_TOKENS = setOf(
+            "details", "detail", "coupon", "coupons", "voucher", "vouchers",
+            "offer", "offers", "store", "brand", "merchant", "shop"
         )
 
         private val GENERIC_DESCRIPTION_PATTERN = Pattern.compile("(?i)^(coupon\\s*offer|offer\\s*details|coupon\\s*details|details|offer)")
