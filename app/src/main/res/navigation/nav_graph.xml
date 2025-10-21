@@ -41,6 +41,10 @@
             app:argType="string"
             app:nullable="true"
             android:defaultValue="@null" />
+        <argument
+            android:name="couponId"
+            app:argType="long"
+            android:defaultValue="-1" />
     </fragment>
 
     <fragment
@@ -69,23 +73,8 @@
             android:name="couponId"
             app:argType="long" />
         <action
-            android:id="@+id/actionDetailFragmentToEditFragment"
-            app:destination="@id/editFragment" />
-    </fragment>
-
-    <fragment
-        android:id="@+id/editFragment"
-        android:name="com.example.coupontracker.ui.fragment.EditFragment"
-        android:label="Edit Coupon"
-        tools:layout="@layout/fragment_add">
-        <argument
-            android:name="couponId"
-            app:argType="long" />
-        <action
-            android:id="@+id/actionEditToDetail"
-            app:destination="@id/detailFragment"
-            app:popUpTo="@id/detailFragment"
-            app:popUpToInclusive="true" />
+            android:id="@+id/actionDetailFragmentToEdit"
+            app:destination="@id/addFragment" />
     </fragment>
 
 </navigation>

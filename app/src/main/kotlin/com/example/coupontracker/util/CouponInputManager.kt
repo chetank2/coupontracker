@@ -880,6 +880,34 @@ class CouponInputManager(
     }
 
     /**
+     * Convert a stored [Coupon] into a [CouponInfo] snapshot for form prefilling.
+     */
+    fun toCouponInfo(coupon: Coupon): CouponInfo {
+        val numericCashback = coupon.getCashbackNumericValue()
+        val cashbackAmount = when {
+            numericCashback > 0 -> numericCashback
+            coupon.cashbackAmount > 0 -> coupon.cashbackAmount
+            else -> null
+        }
+
+        return CouponInfo(
+            storeName = coupon.storeName,
+            description = coupon.description,
+            expiryDate = coupon.expiryDate,
+            cashbackAmount = cashbackAmount,
+            redeemCode = coupon.redeemCode,
+            category = coupon.category,
+            rating = coupon.rating,
+            status = coupon.status,
+            minimumPurchase = coupon.minimumPurchase,
+            maximumDiscount = coupon.maximumDiscount,
+            paymentMethod = coupon.paymentMethod,
+            platformType = coupon.platformType,
+            usageLimit = coupon.usageLimit
+        )
+    }
+
+    /**
      * Clean up resources
      */
     fun cleanup() {
