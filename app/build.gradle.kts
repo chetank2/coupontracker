@@ -1,3 +1,20 @@
+import com.android.build.gradle.api.ApplicationVariant
+import com.android.build.gradle.api.BaseVariantOutput
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
+import org.gradle.api.Action
+import com.example.build.VersionInfo
+import com.example.build.Versioning
+
+val versionInfo = rootProject.extra["appVersionInfo"] as VersionInfo
+
+fun parseBooleanProperty(value: String?): Boolean = value?.equals("true", ignoreCase = true) == true
+
+val includeGitHash = parseBooleanProperty(project.findProperty("includeGitHash") as? String)
+    || parseBooleanProperty(System.getenv("INCLUDE_GIT_HASH"))
+val gitHash = if (includeGitHash) Versioning.currentGitHash(project) else null
+val resolvedVersionName = versionInfo.formatted(versionInfo.metadata, gitHash)
+val sanitizedVersionName = Versioning.sanitizeForFilename(resolvedVersionName)
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -15,8 +32,9 @@ android {
         applicationId = "com.example.coupontracker"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = versionInfo.versionCode()
+        versionName = resolvedVersionName
+        buildConfigField("String", "APP_VERSION", "\"$resolvedVersionName\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -98,6 +116,7 @@ android {
         viewBinding = true
         compose = true
         dataBinding = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -183,6 +202,21 @@ android {
 
     // Note: Modern Android applications use the renderscript-toolkit library
     // instead of the deprecated renderscript support mode
+    applicationVariants.all(
+        Action<ApplicationVariant> {
+            val buildType = this.buildType.name.lowercase()
+            val versionForFiles = sanitizedVersionName
+            this.outputs.all(
+                Action<BaseVariantOutput> {
+                    val output = this as BaseVariantOutputImpl
+                    val abi = output.filters.firstOrNull()?.identifier ?: "universal"
+                    val extension = output.outputFileName.substringAfterLast('.', "")
+                    val baseName = listOf("app", abi, buildType, "v$versionForFiles").joinToString(separator = "-")
+                    output.outputFileName = if (extension.isNotEmpty()) "$baseName.$extension" else baseName
+                }
+            )
+        }
+    )
 }
 
 dependencies {

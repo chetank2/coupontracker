@@ -57,6 +57,7 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import com.example.coupontracker.R
+import com.example.coupontracker.BuildConfig
 
 // Using keys from SecurePreferencesManager
 
@@ -410,20 +411,33 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    val commitHash = remember(BuildConfig.APP_VERSION) {
+                        BuildConfig.APP_VERSION.split("-").firstOrNull { it.startsWith("g") }?.removePrefix("g")
+                    }
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Version:",
+                            text = stringResource(id = R.string.settings_app_version_label) + ":",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
 
                         Text(
-                            text = "2.0.0",
+                            text = BuildConfig.APP_VERSION,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (commitHash != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(id = R.string.settings_build_commit, commitHash),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 

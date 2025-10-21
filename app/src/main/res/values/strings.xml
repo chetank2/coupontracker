@@ -86,4 +86,6 @@
     <string name="settings_data_safety_title">Private by design</string>
     <string name="settings_data_safety_summary">Screenshots never leave your device. Download the on-device reader for faster, offline extraction.</string>
     <string name="settings_data_safety_button">View data safety details</string>
+    <string name="settings_app_version_label">Version</string>
+    <string name="settings_build_commit">Commit %1$s</string>
 </resources>
