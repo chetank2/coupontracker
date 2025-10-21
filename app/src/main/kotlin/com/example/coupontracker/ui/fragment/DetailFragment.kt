@@ -78,7 +78,9 @@ class DetailFragment : Fragment() {
                 return when (menuItem.itemId) {
                     R.id.action_edit -> {
                         findNavController().navigate(
-                            DetailFragmentDirections.actionDetailFragmentToEdit(args.couponId)
+                            DetailFragmentDirections.actionDetailFragmentToEdit(
+                                couponId = args.couponId
+                            )
                         )
                         true
                     }

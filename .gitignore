@@ -35,6 +35,10 @@ dist/
 build/
 *.egg-info/
 
+# Allow buildSrc build logic sources
+!buildSrc/src/main/kotlin/com/example/build/
+!buildSrc/src/main/kotlin/com/example/build/**
+
 # Logs
 *.log
 logs/

@@ -44,7 +44,7 @@
         <argument
             android:name="couponId"
             app:argType="long"
-            android:defaultValue="-1" />
+            android:defaultValue="0L" />
     </fragment>
 
     <fragment

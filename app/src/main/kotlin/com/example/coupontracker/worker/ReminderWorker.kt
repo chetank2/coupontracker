@@ -8,7 +8,6 @@ import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.util.CouponNotificationManager
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.flow.first
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
@@ -67,10 +66,10 @@ class ReminderWorker @AssistedInject constructor(
             }.time
             
             // Get coupons expiring tomorrow
-            val couponsExpiringTomorrow = repository.getCouponsExpiringBetween(today, tomorrow).first()
+            val couponsExpiringTomorrow = repository.getCouponsExpiringBetween(today, tomorrow)
             
             // Get coupons expiring in 3 days
-            val couponsExpiringIn3Days = repository.getCouponsExpiringBetween(tomorrow, threeDaysFromNow).first()
+            val couponsExpiringIn3Days = repository.getCouponsExpiringBetween(tomorrow, threeDaysFromNow)
             
             // Send notifications for coupons expiring tomorrow
             couponsExpiringTomorrow.forEach { coupon ->
