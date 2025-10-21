@@ -27,8 +27,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.fragment.findNavController
+import androidx.navigation.fragment.navArgs
 import com.bumptech.glide.Glide
 import com.example.coupontracker.R
+import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.databinding.FragmentAddBinding
 import com.example.coupontracker.ui.viewmodel.AddCouponViewModel
 import com.example.coupontracker.util.CouponInfo
@@ -59,7 +61,7 @@ class AddFragment : Fragment() {
     private var _binding: FragmentAddBinding? = null
     private val binding get() = _binding!!
     private val viewModel: AddCouponViewModel by viewModels()
-    private lateinit var cameraExecutor: ExecutorService
+    private var cameraExecutor: ExecutorService? = null
     private var imageUri: Uri? = null
     private var imageCapture: ImageCapture? = null
     @Inject lateinit var imageProcessor: com.example.coupontracker.util.ImageProcessor
@@ -68,6 +70,9 @@ class AddFragment : Fragment() {
     private lateinit var securePreferencesManager: SecurePreferencesManager
     @Inject lateinit var modelDownloadManager: ModelDownloadManager
     private var modelStatusJob: Job? = null
+    private val args: AddFragmentArgs by navArgs()
+    private var isEditMode: Boolean = false
+    private var hasBoundEditCoupon: Boolean = false
 
     companion object {
         private const val TAG = "AddFragment"
@@ -113,26 +118,34 @@ class AddFragment : Fragment() {
         sharedPreferences = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         securePreferencesManager = SecurePreferencesManager(requireContext())
         // modelDownloadManager = ModelDownloadManager(requireContext()) // This line is removed as it's now injected
-        setupCamera()
+        val couponIdArg = args.couponId
+        isEditMode = couponIdArg > 0
+
+        if (isEditMode) {
+            binding.toolbar.title = getString(R.string.edit_coupon)
+            binding.saveButton.text = getString(R.string.update_coupon)
+            binding.viewFinder.visibility = View.GONE
+            binding.selectedImageView.visibility = View.INVISIBLE
+            viewModel.loadCouponForEdit(couponIdArg)
+        } else {
+            setupCamera()
+        }
         setupClickListeners()
         setupMistralApiSwitch()
         setupLlmOcrControls()
         observeViewModel()
 
         // Handle arguments from scanner
-        arguments?.let { args ->
-            val safeArgs = AddFragmentArgs.fromBundle(args)
-            safeArgs.couponInfo?.let { couponInfo ->
-                populateFormWithCouponInfo(couponInfo)
-            }
+        args.couponInfo?.let { couponInfo ->
+            populateFormWithCouponInfo(couponInfo)
+        }
 
-            safeArgs.imageUri?.let { uriString ->
-                if (uriString.isNotEmpty()) {
-                    val uri = Uri.parse(uriString)
-                    imageUri = uri
-                    viewModel.setImageUri(uri)
-                    displaySelectedImage(uri)
-                }
+        args.imageUri?.let { uriString ->
+            if (uriString.isNotEmpty()) {
+                val uri = Uri.parse(uriString)
+                imageUri = uri
+                viewModel.setImageUri(uri)
+                displaySelectedImage(uri)
             }
         }
     }
@@ -235,9 +248,12 @@ class AddFragment : Fragment() {
             findNavController().navigateUp()
         }
 
-        binding.captureButton.setOnClickListener {
-            ExtractionLogBuffer.appendInfo(TAG, "Capture button tapped")
-            captureImage()
+        binding.captureButton.apply {
+            visibility = if (isEditMode) View.GONE else View.VISIBLE
+            setOnClickListener {
+                ExtractionLogBuffer.appendInfo(TAG, "Capture button tapped")
+                captureImage()
+            }
         }
 
         binding.galleryButton.setOnClickListener {
@@ -610,8 +626,8 @@ class AddFragment : Fragment() {
                         findNavController().navigate(
                             AddFragmentDirections.actionAddToDetail(viewModel.couponId)
                         )
-                    ExtractionLogBuffer.appendInfo(TAG, "Clearing logs after navigation")
-                    ExtractionLogBuffer.clear()
+                        ExtractionLogBuffer.appendInfo(TAG, "Clearing logs after navigation")
+                        ExtractionLogBuffer.clear()
                     }
                 }
             }
@@ -624,6 +640,17 @@ class AddFragment : Fragment() {
                         ExtractionLogBuffer.appendError(TAG, "Error from view model: $it")
                         Toast.makeText(requireContext(), it, Toast.LENGTH_SHORT).show()
                         viewModel.clearError()
+                    }
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.couponForEdit.collect { coupon ->
+                    if (coupon != null && !hasBoundEditCoupon) {
+                        populateFormWithCoupon(coupon)
+                        hasBoundEditCoupon = true
                     }
                 }
             }
@@ -851,6 +878,37 @@ class AddFragment : Fragment() {
         }
     }
 
+    private fun populateFormWithCoupon(coupon: Coupon) {
+        val couponInfo = couponInputManager.toCouponInfo(coupon)
+        populateFormWithCouponInfo(couponInfo)
+
+        coupon.expiryDate?.let { date ->
+            val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+            binding.expiryDateInput.setText(dateFormat.format(date))
+            viewModel.setExpiryDate(date)
+        }
+
+        coupon.reminderDate?.let { reminder ->
+            val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+            binding.reminderDateText.text = "Reminder set for: ${dateFormat.format(reminder)}"
+            binding.reminderDateText.visibility = View.VISIBLE
+            viewModel.setReminderDate(reminder)
+        } ?: run {
+            binding.reminderDateText.visibility = View.GONE
+        }
+
+        binding.priorityCheckbox.isChecked = coupon.isPriority
+        viewModel.setPriority(coupon.isPriority)
+
+        coupon.imageUri?.let { storedUri ->
+            runCatching { Uri.parse(storedUri) }.getOrNull()?.let { uri ->
+                imageUri = uri
+                viewModel.setImageUri(uri)
+                displaySelectedImage(uri)
+            }
+        }
+    }
+
     private fun showDatePicker() {
         val datePicker = MaterialDatePicker.Builder.datePicker()
             .setTitleText("Select Expiry Date")
@@ -925,8 +983,9 @@ class AddFragment : Fragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
-        cameraExecutor.shutdown()
+        cameraExecutor?.shutdown()
         modelStatusJob?.cancel()
+        hasBoundEditCoupon = false
         _binding = null
     }
 }

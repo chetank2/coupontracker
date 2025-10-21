@@ -17,6 +17,7 @@
     <string name="redeem_code">Redeem Code</string>
     <string name="category">Category</string>
     <string name="save">Save</string>
+    <string name="update_coupon">Update Coupon</string>
     <string name="cancel">Cancel</string>
     <string name="search_coupons">Search Coupons</string>
     <string name="sort_by">Sort By</string>

@@ -32,6 +32,9 @@ class AddCouponViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
 
+    private val _couponForEdit = MutableStateFlow<Coupon?>(null)
+    val couponForEdit: StateFlow<Coupon?> = _couponForEdit
+
     var couponId: Long = 0
         private set
 
@@ -40,6 +43,8 @@ class AddCouponViewModel @Inject constructor(
     private var currentExpiryDate: Date? = null
     private var currentReminderDate: Date? = null
     private var isPriority: Boolean = false
+    private var isEditMode: Boolean = false
+    private var originalCoupon: Coupon? = null
 
     fun setImageUri(uri: Uri) {
         currentImageUri = uri
@@ -59,6 +64,27 @@ class AddCouponViewModel @Inject constructor(
 
     fun clearError() {
         _error.value = null
+    }
+
+    fun loadCouponForEdit(couponId: Long) {
+        if (couponId <= 0) {
+            return
+        }
+
+        isEditMode = true
+        this.couponId = couponId
+        viewModelScope.launch {
+            val coupon = repository.getCouponById(couponId)
+            originalCoupon = coupon
+            _couponForEdit.value = coupon
+            coupon?.let {
+                currentImageUri = it.imageUri?.let(Uri::parse)
+                currentExpiryDate = it.expiryDate
+                currentReminderDate = it.reminderDate
+                isPriority = it.isPriority
+            }
+            _couponSaved.value = false
+        }
     }
 
     fun saveCoupon(
@@ -83,31 +109,62 @@ class AddCouponViewModel @Inject constructor(
         viewModelScope.launch {
             _savingState.value = SavingState.Saving
             try {
-                // Persist the image URI if available
                 val persistedImageUri = currentImageUri?.let { uri ->
                     uriPersistenceManager.persistUri(uri)?.toString() ?: uri.toString()
                 }
 
-                val coupon = Coupon(
-                    storeName = storeName,
-                    description = description,
-                    expiryDate = currentExpiryDate,
-                    cashbackAmount = cashbackAmount,
-                    redeemCode = redeemCode,
-                    imageUri = persistedImageUri,
-                    category = category,
-                    rating = rating,
-                    status = status ?: "Active",
-                    minimumPurchase = minimumPurchase,
-                    maximumDiscount = maximumDiscount,
-                    isPriority = isPriority,
-                    paymentMethod = paymentMethod,
-                    usageLimit = usageLimit,
-                    usageCount = 0,
-                    reminderDate = currentReminderDate,
-                    platformType = platformType
-                )
-                couponId = repository.insertCoupon(coupon)
+                if (isEditMode) {
+                    val existingCoupon = originalCoupon
+                        ?: repository.getCouponById(couponId)
+                        ?: throw IllegalStateException("Coupon to edit not found")
+
+                    val updatedCoupon = existingCoupon.copy(
+                        storeName = storeName,
+                        description = description,
+                        expiryDate = currentExpiryDate,
+                        cashbackAmount = cashbackAmount,
+                        redeemCode = redeemCode ?: existingCoupon.redeemCode,
+                        imageUri = persistedImageUri ?: existingCoupon.imageUri,
+                        category = category ?: existingCoupon.category,
+                        rating = rating ?: existingCoupon.rating,
+                        status = status ?: existingCoupon.status,
+                        minimumPurchase = minimumPurchase,
+                        maximumDiscount = maximumDiscount,
+                        isPriority = isPriority,
+                        paymentMethod = paymentMethod ?: existingCoupon.paymentMethod,
+                        usageLimit = usageLimit ?: existingCoupon.usageLimit,
+                        reminderDate = currentReminderDate,
+                        platformType = platformType ?: existingCoupon.platformType,
+                        updatedAt = Date()
+                    )
+
+                    repository.updateCoupon(updatedCoupon)
+                    originalCoupon = updatedCoupon
+                    couponId = updatedCoupon.id
+                    _couponForEdit.value = updatedCoupon
+                } else {
+                    val coupon = Coupon(
+                        storeName = storeName,
+                        description = description,
+                        expiryDate = currentExpiryDate,
+                        cashbackAmount = cashbackAmount,
+                        redeemCode = redeemCode,
+                        imageUri = persistedImageUri,
+                        category = category,
+                        rating = rating,
+                        status = status ?: "Active",
+                        minimumPurchase = minimumPurchase,
+                        maximumDiscount = maximumDiscount,
+                        isPriority = isPriority,
+                        paymentMethod = paymentMethod,
+                        usageLimit = usageLimit,
+                        usageCount = 0,
+                        reminderDate = currentReminderDate,
+                        platformType = platformType
+                    )
+                    couponId = repository.insertCoupon(coupon)
+                }
+
                 _couponSaved.value = true
                 _savingState.value = SavingState.Success
             } catch (e: Exception) {
