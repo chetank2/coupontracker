@@ -1,3 +1,6 @@
+import com.example.build.BumpVersionTask
+import com.example.build.Versioning
+
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 buildscript {
     repositories {
@@ -21,3 +24,11 @@ plugins {
 tasks.register("clean", Delete::class) {
     delete(rootProject.buildDir)
 }
+
+val versionInfo = Versioning.load(project)
+
+extra["appVersionInfo"] = versionInfo
+extra["appVersionCode"] = versionInfo.versionCode()
+extra["appVersionName"] = versionInfo.formatted()
+
+tasks.register<BumpVersionTask>("bumpVersion")
