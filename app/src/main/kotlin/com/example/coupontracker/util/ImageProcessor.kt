@@ -10,6 +10,7 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.core.graphics.drawable.toBitmap
 import com.example.coupontracker.ocr.OcrEngine
+import com.example.coupontracker.ocr.TesseractOcrEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
@@ -23,6 +24,7 @@ import java.util.Date
 class ImageProcessor(
     private val context: Context,
     private val ocrEngine: OcrEngine,
+    private val telemetryService: ExtractionTelemetryService,
     private val injectedLocalLlmOcrService: LocalLlmOcrService? = null,
     private val progressiveExtractionService: com.example.coupontracker.extraction.ProgressiveExtractionService? = null
 ) {
@@ -154,20 +156,25 @@ class ImageProcessor(
                             localLlmOcrService.processCouponImage(bitmap, captureTimestamp)
                         } catch (e: Exception) {
                             Log.e(TAG, "Local LLM failed, falling back to Model-based OCR", e)
-                            fallbackToModelBasedOcr(bitmap, captureTimestamp)
+                            fallbackToModelBasedOcr(bitmap, captureTimestamp, reason = "local_llm_exception")
                         }
                     } else {
                         Log.w(TAG, "Local LLM selected but model not downloaded, falling back to Model-based OCR")
-                        fallbackToModelBasedOcr(bitmap, captureTimestamp)
+                        fallbackToModelBasedOcr(bitmap, captureTimestamp, reason = "local_llm_not_downloaded")
                     }
                 }
                 ApiType.MODEL_BASED -> {
                     Log.d(TAG, "Using Model-based OCR service")
-                    fallbackToModelBasedOcr(bitmap, captureTimestamp)
+                    fallbackToModelBasedOcr(bitmap, captureTimestamp, reason = "model_based_selected")
                 }
                 ApiType.ML_KIT_ONLY -> {
                     Log.d(TAG, "Using ML Kit OCR only")
-                    tryMlKit(bitmap, captureTimestamp)
+                    tryMlKit(
+                        bitmap,
+                        captureTimestamp,
+                        reason = "mlkit_only_selection",
+                        attemptedEngines = listOf("MLKIT")
+                    )
                 }
             }
 
@@ -207,7 +214,11 @@ class ImageProcessor(
                 
                 if (ocrText.isBlank()) {
                     Log.w(TAG, "⚠️  OCR text is empty, falling back to legacy")
-                    return@withContext fallbackToModelBasedOcr(bitmap, captureTimestamp)
+                    return@withContext fallbackToModelBasedOcr(
+                        bitmap,
+                        captureTimestamp,
+                        reason = "progressive_empty_text"
+                    )
                 }
                 
                 // Step 2: Call progressive extraction
@@ -247,7 +258,11 @@ class ImageProcessor(
                 Log.e(TAG, "❌ Progressive extraction FAILED with exception: ${e.message}", e)
                 Log.e(TAG, "Stack trace: ${e.stackTraceToString()}")
                 Log.d(TAG, "Falling back to legacy extraction flow")
-                return@withContext fallbackToModelBasedOcr(bitmap, captureTimestamp)
+                return@withContext fallbackToModelBasedOcr(
+                    bitmap,
+                    captureTimestamp,
+                    reason = "progressive_exception"
+                )
             }
         }
     }
@@ -255,7 +270,11 @@ class ImageProcessor(
     /**
      * Fallback to model-based OCR with existing fallback chain
      */
-    private suspend fun fallbackToModelBasedOcr(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo {
+    private suspend fun fallbackToModelBasedOcr(
+        bitmap: Bitmap,
+        captureTimestamp: Date? = null,
+        reason: String = "legacy_flow"
+    ): CouponInfo {
         return try {
             Log.d(TAG, "Using Model-based OCR service")
             modelBasedOCRService.processCouponImage(bitmap, captureTimestamp)
@@ -263,13 +282,23 @@ class ImageProcessor(
             Log.e(TAG, "Error using Model-based OCR service, falling back to Pattern Recognizer", e)
 
             // Try Pattern Recognizer as fallback
+            val attempted = mutableListOf("TESSERACT", "MODEL_BASED")
+            if (reason.startsWith("progressive")) {
+                attempted.add(1, "PROGRESSIVE")
+            }
             val result = tryPatternRecognizer(bitmap)
             if (result != null) {
                 result
             } else {
-                // Fall back to ML Kit if Pattern Recognizer fails
+                attempted.add("PATTERN_RECOGNIZER")
                 Log.d(TAG, "Pattern Recognizer failed, falling back to ML Kit")
-                tryMlKit(bitmap, captureTimestamp)
+                tryMlKit(
+                    bitmap,
+                    captureTimestamp,
+                    reason = "$reason/model_based_exception",
+                    cause = e,
+                    attemptedEngines = attempted
+                )
             }
         }
     }
@@ -280,11 +309,18 @@ class ImageProcessor(
      * @param captureTimestamp The timestamp when the image was captured (for relative date calculations)
      * @return The extracted coupon information
      */
-    private suspend fun tryMlKit(bitmap: Bitmap, captureTimestamp: Date? = null): CouponInfo = withContext(Dispatchers.IO) {
+    private suspend fun tryMlKit(
+        bitmap: Bitmap,
+        captureTimestamp: Date? = null,
+        reason: String,
+        cause: Throwable? = null,
+        attemptedEngines: List<String> = listOf("TESSERACT")
+    ): CouponInfo = withContext(Dispatchers.IO) {
+        recordMlKitFallback(reason, cause, attemptedEngines)
         try {
-            Log.d(TAG, "Trying Tesseract OCR")
+            Log.d(TAG, "Trying ML Kit fallback via ${ocrEngine.javaClass.simpleName}")
 
-            // Process with Tesseract
+            // Process with fallback OCR engine (currently Tesseract)
             val text = ocrEngine.recognize(bitmap)
 
             // Use TextExtractor to extract coupon info
@@ -296,6 +332,24 @@ class ImageProcessor(
             Log.e(TAG, "Error processing with Tesseract", e)
             return@withContext CouponInfo()
         }
+    }
+
+    private fun recordMlKitFallback(
+        reason: String,
+        cause: Throwable? = null,
+        attemptedEngines: List<String> = listOf("TESSERACT")
+    ) {
+        val initStats = (ocrEngine as? TesseractOcrEngine)?.lastInitializationStats()
+        val runPath = buildMlKitFallbackRunPath(
+            MlKitFallbackContext(
+                reason = reason,
+                cause = cause,
+                initStats = initStats,
+                ocrReady = ocrEngine.isReady(),
+                attemptedEngines = attemptedEngines
+            )
+        )
+        telemetryService.trackRunPath(runPath)
     }
 
 
