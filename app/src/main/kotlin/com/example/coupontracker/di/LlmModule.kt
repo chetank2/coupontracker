@@ -5,8 +5,9 @@ import com.example.coupontracker.feedback.ValidatorFeedbackRecorder
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.LlmTelemetryService
 import com.example.coupontracker.llm.ModelDownloadManager
-import com.example.coupontracker.util.LocalLlmOcrService
 import com.example.coupontracker.util.ImageProcessor
+import com.example.coupontracker.util.LocalLlmOcrService
+import com.example.coupontracker.util.ExtractionTelemetryService
 import com.example.coupontracker.util.SecurePreferencesManager
 import dagger.Module
 import dagger.Provides
@@ -65,10 +66,11 @@ object LlmModule {
     fun provideImageProcessor(
         @ApplicationContext context: Context,
         ocrEngine: com.example.coupontracker.ocr.OcrEngine,
+        telemetryService: ExtractionTelemetryService,
         localLlmOcrService: LocalLlmOcrService,
         progressiveExtractionService: com.example.coupontracker.extraction.ProgressiveExtractionService
     ): ImageProcessor {
-        return ImageProcessor(context, ocrEngine, localLlmOcrService, progressiveExtractionService)
+        return ImageProcessor(context, ocrEngine, telemetryService, localLlmOcrService, progressiveExtractionService)
     }
 
     @Provides
