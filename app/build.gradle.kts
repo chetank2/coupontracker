@@ -130,6 +130,9 @@ android {
     }
 
     sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("libs/mlc_llm/lib")
+        }
         getByName("test") {
             java.srcDir("tests")
             resources.srcDir("tests/fixtures")

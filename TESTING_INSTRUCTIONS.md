@@ -45,6 +45,20 @@ adb logcat | grep -E "ImageProcessor|ProgressiveExtraction|CouponInputManager|Co
 3. Select image from gallery (the Leaf Halo screenshot)
 4. **WATCH THE LOGCAT OUTPUT**
 
+### Step 4: Verify JNI Smoke Test
+1. Restart logcat with JNI filters to watch the bridge bootstrap logs:
+   ```bash
+   adb logcat -c
+   adb logcat | grep -E "LocalLlmOcrService|MLC_LLM_JNI"
+   ```
+2. Launch the app and wait ~20s after the home screen appears. The background warmup will trigger automatically.
+3. Confirm the following log lines are emitted:
+   - `LocalLlmOcrService: ✅ Local model detected: ...`
+   - `LocalLlmOcrService: 🧪 Running JNI smoke test ...`
+   - `MLC_LLM_JNI: Initializing MLC runtime` followed by `MLC runtime initialized (handle=...)`
+   - `LocalLlmOcrService: JNI smoke test JSON keys=[...]`
+4. If the smoke test fails you will see `JNI smoke test produced no response within timeout` or `response was not valid JSON`. Capture these logs for triage.
+
 ## What to Look For in Logs
 
 ### ✅ SUCCESS Path (Progressive Extraction Working):

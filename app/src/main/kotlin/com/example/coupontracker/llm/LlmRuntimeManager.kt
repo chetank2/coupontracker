@@ -8,6 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.LazyThreadSafetyMode
 
@@ -577,7 +578,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 Log.w(TAG, "⚠️ MLC-LLM native library not available - using stub implementation")
                 Log.w(TAG, "LLM_FIRST strategy will return mock data until real libraries are integrated")
                 Log.w(TAG, "See MLC_LLM_INTEGRATION_GUIDE.md for integration instructions")
-                
+
                 return MLCEngineStub(
                     modelPath = modelDir.absolutePath,
                     configPath = configPath.absolutePath,
@@ -585,26 +586,16 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                     maxMemoryMB = MAX_MEMORY_MB
                 )
             }
-            
+
             // Real MLC-LLM is available - create native engine
             Log.i(TAG, "✅ MLC-LLM native library available - creating real engine")
-            
-            // In real implementation, this would initialize MLC-LLM with:
-            // - Model path
-            // - Device configuration (Vulkan/NNAPI/CPU)
-            // - Memory limits
-            // - Quantization settings
-            
-            // TODO: Implement MLCEngineReal that wraps MlcLlmNative
-            // For now, fall back to stub even when native is available
-            // This will be fixed when real model binaries are integrated
-            Log.w(TAG, "⚠️ MLCEngineReal not yet implemented - using stub temporarily")
-            
-            MLCEngineStub(
-                modelPath = modelDir.absolutePath,
-                configPath = configPath.absolutePath,
-                tokenizerPath = tokenizerPath.absolutePath,
-                maxMemoryMB = MAX_MEMORY_MB
+
+            MLCEngineReal(
+                nativeInterface = nativeInterface,
+                modelDirectory = modelDir,
+                configFile = configPath,
+                tokenizerFile = tokenizerPath,
+                maxTokens = MAX_TOKENS
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create MLC engine", e)
@@ -671,8 +662,104 @@ interface MLCEngine {
         temperature: Float,
         timeoutMs: Long
     ): String?
-    
+
     fun release()
+}
+
+/**
+ * Real implementation backed by the JNI bridge.
+ */
+private class MLCEngineReal(
+    private val nativeInterface: SafeMlcLlmNative,
+    private val modelDirectory: File,
+    private val configFile: File,
+    private val tokenizerFile: File,
+    private val maxTokens: Int
+) : MLCEngine {
+
+    companion object {
+        private const val TAG = "MLCEngineReal"
+        private const val DEFAULT_TOP_P = 0.9f
+    }
+
+    private val released = AtomicBoolean(false)
+    private val modelHandle: Long
+
+    init {
+        require(configFile.exists()) {
+            "MLC config missing at ${configFile.absolutePath}"
+        }
+        require(tokenizerFile.exists()) {
+            "Tokenizer missing at ${tokenizerFile.absolutePath}"
+        }
+
+        Log.i(TAG, "Initializing MLC runtime from ${modelDirectory.absolutePath}")
+        modelHandle = nativeInterface.initializeModel(
+            modelDirectory.absolutePath,
+            configFile.absolutePath
+        ).also { handle ->
+            require(handle != 0L) { "MLC runtime returned invalid handle" }
+        }
+
+        Log.i(TAG, "Model handle acquired: $modelHandle")
+        nativeInterface.warmupModel(modelHandle)
+        nativeInterface.setInferenceParams(
+            modelHandle,
+            temperature = 0.1f,
+            maxTokens = maxTokens,
+            topP = DEFAULT_TOP_P
+        )
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    override fun generate(
+        prompt: String,
+        image: ProcessedImage,
+        maxTokens: Int,
+        temperature: Float,
+        timeoutMs: Long
+    ): String? {
+        if (released.get()) {
+            Log.w(TAG, "Attempted to generate after release")
+            return null
+        }
+
+        nativeInterface.setInferenceParams(modelHandle, temperature, maxTokens, DEFAULT_TOP_P)
+
+        val imageBytes = image.toRgbByteArray()
+        return try {
+            nativeInterface.runVisionInference(
+                modelHandle,
+                imageBytes,
+                image.width,
+                image.height,
+                prompt
+            )
+        } catch (error: Exception) {
+            Log.e(TAG, "Vision inference failed", error)
+            null
+        }
+    }
+
+    override fun release() {
+        if (released.compareAndSet(false, true)) {
+            runCatching { nativeInterface.releaseModel(modelHandle) }
+                .onFailure { error -> Log.w(TAG, "Failed to release MLC runtime", error) }
+        }
+    }
+
+    private fun ProcessedImage.toRgbByteArray(): ByteArray {
+        val pixels = IntArray(bitmap.width * bitmap.height)
+        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+        val result = ByteArray(pixels.size * 3)
+        var index = 0
+        for (pixel in pixels) {
+            result[index++] = ((pixel shr 16) and 0xFF).toByte()
+            result[index++] = ((pixel shr 8) and 0xFF).toByte()
+            result[index++] = (pixel and 0xFF).toByte()
+        }
+        return result
+    }
 }
 
 /**
