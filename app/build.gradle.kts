@@ -81,7 +81,6 @@ android {
         }
     }
 
-    // Using debug signing config for testing
     signingConfigs {
         getByName("debug") {
             // Using the debug keystore for release builds during testing
@@ -89,6 +88,37 @@ android {
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+
+        val releaseKeystorePath = project.findProperty("RELEASE_KEYSTORE_PATH") as? String
+        val releaseKeystorePassword = project.findProperty("RELEASE_KEYSTORE_PASSWORD") as? String
+        val releaseKeyAlias = project.findProperty("RELEASE_KEY_ALIAS") as? String
+        val releaseKeyPassword = project.findProperty("RELEASE_KEY_PASSWORD") as? String
+
+        val releaseSigningConfigured = listOf(
+            releaseKeystorePath,
+            releaseKeystorePassword,
+            releaseKeyAlias,
+            releaseKeyPassword
+        ).all { !it.isNullOrBlank() }
+
+        if (releaseSigningConfigured) {
+            create("release") {
+                val keystoreFile = file(releaseKeystorePath!!)
+                if (!keystoreFile.exists()) {
+                    project.logger.warn("Release keystore file does not exist at $keystoreFile – release build will fail until corrected.")
+                }
+                storeFile = keystoreFile
+                storePassword = releaseKeystorePassword!!
+                keyAlias = releaseKeyAlias!!
+                keyPassword = releaseKeyPassword!!
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        } else {
+            project.logger.info("Release signing config not provided – release variant will remain unsigned until RELEASE_KEYSTORE_* properties are set.")
         }
     }
 
@@ -100,7 +130,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release")
         }
         debug {
             isMinifyEnabled = false
@@ -219,6 +249,17 @@ android {
                 }
             )
         }
+    )
+}
+
+val releaseTasksRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.contains("Release") &&
+        (taskName.startsWith("assemble", ignoreCase = true) || taskName.startsWith("bundle", ignoreCase = true))
+}
+
+if (releaseTasksRequested && android.signingConfigs.findByName("release") == null) {
+    throw org.gradle.api.GradleException(
+        "Release signing config is not configured. Set RELEASE_KEYSTORE_* properties to build signed release artifacts."
     )
 }
 
@@ -349,10 +390,6 @@ dependencies {
 
     // Security
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
-
-    // Image Processing & ML (TensorFlow Lite for YOLO models)
-    implementation("org.tensorflow:tensorflow-lite:2.12.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
     // Reddit API
     implementation("com.squareup.retrofit2:retrofit:2.9.0")

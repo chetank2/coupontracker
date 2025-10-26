@@ -1,6 +1,7 @@
 package com.example.coupontracker.di
 
 import android.content.Context
+import com.example.coupontracker.data.local.ExtractionFeedbackDao
 import com.example.coupontracker.extraction.*
 import com.example.coupontracker.learning.ExtractionLearningIntegration
 import com.example.coupontracker.learning.ParameterChangeLogger
@@ -55,9 +56,14 @@ object ExtractionModule {
     @Singleton
     fun provideExtractionLearningIntegration(
         patternLearningEngine: PatternLearningEngine,
-        parameterChangeLogger: ParameterChangeLogger
+        parameterChangeLogger: ParameterChangeLogger,
+        extractionFeedbackDao: ExtractionFeedbackDao
     ): ExtractionLearningIntegration {
-        return ExtractionLearningIntegration(patternLearningEngine, parameterChangeLogger)
+        return ExtractionLearningIntegration(
+            patternLearningEngine,
+            parameterChangeLogger,
+            extractionFeedbackDao
+        )
     }
     
     @Provides
@@ -114,4 +120,3 @@ object ExtractionModule {
         )
     }
 }
-

@@ -22,6 +22,7 @@ import com.example.coupontracker.schema.CouponSchema
 import com.example.coupontracker.schema.PromptGenerator
 import com.example.coupontracker.schema.SchemaValidator
 import com.example.coupontracker.schema.ValidationResult
+import com.example.coupontracker.llm.ModelInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -317,7 +318,7 @@ class LocalLlmOcrService(
         }
     }
 
-    private fun maybeScheduleNativeSmokeTest(modelInfo: LlmRuntimeManager.ModelInfo) {
+    private fun maybeScheduleNativeSmokeTest(modelInfo: ModelInfo) {
         if (!modelInfo.isAvailable) {
             return
         }
@@ -333,7 +334,7 @@ class LocalLlmOcrService(
         }
     }
 
-    private suspend fun runNativeSmokeTest(modelInfo: LlmRuntimeManager.ModelInfo) {
+    private suspend fun runNativeSmokeTest(modelInfo: ModelInfo) {
         Log.i(TAG, "🧪 Running JNI smoke test for ${modelInfo.name} (${modelInfo.version})")
         val metadata = llmRuntime.getModelInfo()
         Log.i(
