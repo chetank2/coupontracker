@@ -310,6 +310,16 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             Log.d(TAG, "ℹ️  Text-only model (Qwen2) - optimized for speed")
         }
         
+        if (!configPath.exists() || configPath.length() == 0L) {
+            Log.e(TAG, "mlc-chat-config.json missing or empty at ${configPath.absolutePath}")
+            throw IllegalStateException("Missing mlc-chat-config.json for $modelName")
+        }
+
+        if (!tokenizerPath.exists() || tokenizerPath.length() == 0L) {
+            Log.e(TAG, "tokenizer.json missing or empty at ${tokenizerPath.absolutePath}")
+            throw IllegalStateException("Missing tokenizer.json for $modelName")
+        }
+
         // Load native library
         if (!MlcLlmNative.loadLibrary(context)) {
             throw IllegalStateException("Failed to load MLC-LLM native library")
@@ -319,8 +329,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         
         // Initialize model through native interface
         val handle = nativeInterface.initializeModel(
-            modelFile.absolutePath,  // GGUF file path
-            modelDir.absolutePath    // Model directory (for mmproj if vision model)
+            modelDir.absolutePath,   // Model directory (for tokenizer / auxiliary files)
+            configPath.absolutePath  // Configuration file consumed by the native loader
         )
         
         if (handle == 0L) {

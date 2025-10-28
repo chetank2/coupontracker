@@ -28,6 +28,9 @@ object ModelPaths {
     const val QWEN2_MODEL_FILE = "qwen2-1_5b-instruct-q4_k_m.gguf"
     const val MINICPM_MODEL_FILE = "ggml-model-Q4_K_M.gguf"
     const val MINICPM_MMPROJ_FILE = "mmproj-model-f16.gguf"
+    const val CONFIG_FILE = "mlc-chat-config.json"
+    const val TOKENIZER_JSON = "tokenizer.json"
+    const val TOKENIZER_MODEL = "tokenizer.model"
     
     // ===== MODEL SIZES (bytes) =====
     const val QWEN25_MODEL_SIZE_BYTES = 986_048_768L  // 940 MB (bartowski Q4_K_M)
@@ -66,13 +69,19 @@ object ModelPaths {
     fun getRequiredFiles(modelId: String): List<String> {
         return when (modelId) {
             MODEL_ID_QWEN25 -> {
-                listOf(QWEN25_MODEL_FILE, ".verified")
+                listOf(QWEN25_MODEL_FILE, CONFIG_FILE, TOKENIZER_JSON, ".verified")
             }
             MODEL_ID_QWEN2 -> {
-                listOf(QWEN2_MODEL_FILE, ".verified")
+                listOf(QWEN2_MODEL_FILE, CONFIG_FILE, TOKENIZER_JSON, ".verified")
             }
             MODEL_ID_MINICPM -> {
-                listOf(MINICPM_MODEL_FILE, MINICPM_MMPROJ_FILE, ".verified")
+                listOf(
+                    MINICPM_MODEL_FILE,
+                    MINICPM_MMPROJ_FILE,
+                    CONFIG_FILE,
+                    TOKENIZER_MODEL,
+                    ".verified"
+                )
             }
             else -> {
                 listOf(QWEN25_MODEL_FILE, ".verified")
@@ -108,9 +117,10 @@ object ModelPaths {
      */
     fun getModelName(modelId: String): String {
         return when (modelId) {
+            MODEL_ID_QWEN25 -> "Qwen2.5-1.5B-Instruct"
             MODEL_ID_QWEN2 -> "Qwen2-1.5B-Instruct"
             MODEL_ID_MINICPM -> "MiniCPM-Llama3-V2.5"
-            else -> "Qwen2-1.5B-Instruct"
+            else -> "Qwen2.5-1.5B-Instruct"
         }
     }
     
@@ -157,12 +167,20 @@ object ModelPaths {
     fun getAllModels(): List<ModelInfo> {
         return listOf(
             ModelInfo(
+                id = MODEL_ID_QWEN25,
+                name = "Qwen2.5-1.5B-Instruct",
+                size = "940 MB",
+                hasVision = false,
+                isDefault = true,
+                description = "Fast text-only model optimized for JSON outputs. Inference: 10-15s on recent devices."
+            ),
+            ModelInfo(
                 id = MODEL_ID_QWEN2,
                 name = "Qwen2-1.5B-Instruct",
                 size = "931 MB",
                 hasVision = false,
-                isDefault = true,
-                description = "Fast text-only model optimized for mobile. Best for coupon extraction. Inference: 10-15s."
+                isDefault = false,
+                description = "Legacy fallback model. Use only if Qwen2.5 is unavailable. Inference: 10-15s."
             ),
             ModelInfo(
                 id = MODEL_ID_MINICPM,
@@ -186,6 +204,9 @@ object ModelPaths {
             filename == QWEN2_MODEL_FILE -> 900_000_000L  // >= 900 MB
             filename == MINICPM_MODEL_FILE -> 4_500_000_000L  // >= 4.5 GB
             filename == MINICPM_MMPROJ_FILE -> 800_000_000L  // >= 800 MB
+            filename == CONFIG_FILE -> 1_024L  // treat anything >1KB as valid config
+            filename == TOKENIZER_JSON -> 10_000L  // Qwen tokenizer ~500KB
+            filename == TOKENIZER_MODEL -> 100_000L // MLC tokenizer model ~100KB
             filename == ".verified" -> 0L
             else -> 1L
         }
