@@ -65,7 +65,8 @@ class LocalLlmOcrService(
         private const val SERVICE_VERSION = "1.4.0"  // Qwen2.5 migration
         private const val SUPPORTED_MODEL_VERSION = "qwen25_1.5b_instruct_q4"
 
-        private const val OCR_SNIPPET_MAX_CHARS = 2000
+        // Shorten OCR snippet to keep prompts under ~300 tokens and reduce latency on MiniCPM
+        private const val OCR_SNIPPET_MAX_CHARS = 1200
         
         // Feature flags for schema-driven architecture
         // Set to true to enable schema-driven prompts/validation, false to use manual/legacy

@@ -15,31 +15,21 @@ object CompactPromptGenerator {
      */
     fun generateSystemPrompt(schema: Schema): String {
         val schemaJson = generateCompactSchemaJson(schema)
-        
+        val fieldHints = """
+- storeName: primary merchant/app name from header or logo; never null when brand text exists.
+- redeemCode: coupon/promo code text only; null when absent.
+- expiryDate: copy exact wording for validity or return null if none.
+- description: main offer sentence verbatim with symbols.
+""".trimIndent()
+
         return """<|im_start|>system
-Extract coupon as JSON. Output ONLY valid JSON, no text.
-
+Return strict JSON with keys storeName, redeemCode, expiryDate, description.
 Schema: $schemaJson
-
 Rules:
-- All keys required (null if missing)
-- No text before/after JSON
-- Start with { end with }
-
-Key fields:
-${generateCompactFieldGuide(schema)}
+- Output JSON only (no prose).
+- All keys required; use null only if information is truly absent.
+$fieldHints
 <|im_end|>"""
-    }
-    
-    /**
-     * Generate compact field guide (1 line per field, no verbose examples)
-     */
-    private fun generateCompactFieldGuide(schema: Schema): String {
-        return schema.fields.joinToString("\n") { field ->
-            val hint = field.metadata.hints.firstOrNull() ?: field.metadata.description
-            val example = field.metadata.examples.firstOrNull()?.let { "e.g. \"$it\"" } ?: ""
-            "- ${field.name}: ${hint.take(60)} $example"
-        }
     }
     
     /**
