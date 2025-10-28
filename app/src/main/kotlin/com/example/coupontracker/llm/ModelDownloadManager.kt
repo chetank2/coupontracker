@@ -45,6 +45,8 @@ class ModelDownloadManager(
         private const val QWEN25_CONFIG_FILE = ModelPaths.CONFIG_FILE
         private const val QWEN25_MODEL_SIZE = 986_048_768L  // 940 MB (actual bartowski repo file size)
         private const val QWEN25_VERSION = "2.5-1.5b-q4-instruct"
+        private const val QWEN25_TOKENIZER_FALLBACK_BASE_URL =
+            "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct/resolve/main"
         
         // ===== QWEN2 MODEL (LEGACY) =====
         private const val QWEN2_BASE_URL = "https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF/resolve/main"
@@ -503,18 +505,37 @@ class ModelDownloadManager(
             if (!tokenizerFile.exists() || tokenizerFile.length() < ModelPaths.getMinFileSize(modelId, QWEN25_TOKENIZER_FILE)) {
                 tokenizerFile.delete()
                 progressCallback(DownloadProgress(99, "Downloading tokenizer.json..."))
-                val tokenizerResult = downloadFile(
-                    url = "${resolveQwen25BaseUrl()}/$QWEN25_TOKENIZER_FILE",
-                    outputFile = tokenizerFile,
-                    progressCallback = { progress ->
-                        progressCallback(
-                            DownloadProgress(
-                                progress.progressPercent,
-                                "Tokenizer... ${progress.statusMessage}"
-                            )
+                val tokenizerProgressCallback: (DownloadProgress) -> Unit = { progress ->
+                    progressCallback(
+                        DownloadProgress(
+                            progress.progressPercent,
+                            "Tokenizer... ${progress.statusMessage}"
                         )
-                    }
+                    )
+                }
+
+                val primaryTokenizerUrl = "${resolveQwen25BaseUrl()}/$QWEN25_TOKENIZER_FILE"
+                var tokenizerResult = downloadFile(
+                    url = primaryTokenizerUrl,
+                    outputFile = tokenizerFile,
+                    progressCallback = tokenizerProgressCallback
                 )
+
+                if (tokenizerResult.isFailure && tokenizerResult.exceptionOrNull().isHttpNotFound()) {
+                    Log.w(
+                        TAG,
+                        "Primary tokenizer mirror returned 404 ($primaryTokenizerUrl); attempting fallback mirror"
+                    )
+                    progressCallback(DownloadProgress(99, "Tokenizer mirror fallback..."))
+                    tokenizerFile.delete()
+                    val fallbackTokenizerUrl =
+                        "$QWEN25_TOKENIZER_FALLBACK_BASE_URL/$QWEN25_TOKENIZER_FILE"
+                    tokenizerResult = downloadFile(
+                        url = fallbackTokenizerUrl,
+                        outputFile = tokenizerFile,
+                        progressCallback = tokenizerProgressCallback
+                    )
+                }
 
                 tokenizerResult.getOrElse { error ->
                     tokenizerFile.delete()
@@ -637,6 +658,20 @@ class ModelDownloadManager(
     }
 
     private class ConnectivityException(cause: Throwable) : IOException(cause)
+
+    private fun Throwable?.isHttpNotFound(): Boolean {
+        var current = this
+        while (current != null) {
+            if (current is IOException) {
+                val message = current.message ?: ""
+                if (message.contains("HTTP 404")) {
+                    return true
+                }
+            }
+            current = current.cause
+        }
+        return false
+    }
 
     /**
      * Download a file with progress tracking
