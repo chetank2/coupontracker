@@ -1002,7 +1002,7 @@ class ScannerViewModel @Inject constructor(
                     extractionResult = extractionResult,
                     imageUri = imageUri
                 ),
-                ocrText = extractionResult.fields.values.joinToString("\n"),
+                ocrText = extractionResult.fullOcrText,
                 captureTimestamp = null
             )
 
@@ -1249,8 +1249,8 @@ class ScannerViewModel @Inject constructor(
 
         for ((index, instance) in couponInstances.withIndex()) {
             try {
-                val extractionResult = extractTextFromFields(instance)
-                val coupon = createCouponFromInstance(instance, extractionResult, originalImageUri)
+            val extractionResult = extractTextFromFields(instance)
+            val coupon = createCouponFromInstance(instance, extractionResult, originalImageUri)
 
                 couponRepository.insertCoupon(coupon)
                 processedResults.add(CouponProcessingSummary(coupon, extractionResult.miniCpmStatus))

@@ -76,14 +76,17 @@ object ExtractionConfig {
         nativeReady && modelReady
     }
     
+    private lateinit var telemetry: ExtractionTelemetryService
+
     /**
      * Initialize with application context
      * Call this from Application.onCreate() or before first use
      */
     fun init(context: Context) {
         if (isInitialized) return
-        
+
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        telemetry = ExtractionTelemetryService(context)
 
         val pending = pendingAdvancedFlag
         val persistedAdvanced = prefs?.getBoolean(KEY_ADVANCED_ENABLED, false) ?: false
@@ -102,29 +105,53 @@ object ExtractionConfig {
             pendingAdvancedFlag = null
         }
 
+        val savedStrategy = readSavedStrategy()
+
         if (advancedStrategiesEnabled && !runtimeAdvancedAvailable) {
             Log.i(TAG, "Advanced strategies preference set but runtime unavailable – awaiting model readiness")
+            recordStrategyTelemetry(
+                requested = savedStrategy?.name ?: computeDefaultStrategy().name,
+                active = ExtractionStrategy.OCR_FIRST.name,
+                allowed = false,
+                reason = "runtime_unavailable"
+            )
         }
-
-        val savedStrategy = readSavedStrategy()
         if (savedStrategy != null && !isStrategyAllowed(savedStrategy)) {
             Log.i(
                 TAG,
                 "Saved strategy ${savedStrategy.name} blocked by rollout guard – using OCR_FIRST until enabled"
             )
+            recordStrategyTelemetry(
+                requested = savedStrategy.name,
+                active = computeDefaultStrategy().name,
+                allowed = false,
+                reason = "blocked_by_rollout"
+            )
         }
 
-        val defaultStrategy = if (advancedStrategiesEnabled && runtimeAdvancedAvailable) {
+        val defaultStrategy = computeDefaultStrategy()
+
+        val chosen = savedStrategy?.takeIf { isStrategyAllowed(it) } ?: defaultStrategy
+
+        _strategy = chosen
+
+        Log.d(TAG, "Loaded strategy: ${_strategy.name} (advanced=${advancedStrategiesEnabled})")
+        recordStrategyTelemetry(
+            requested = savedStrategy?.name ?: defaultStrategy.name,
+            active = chosen.name,
+            allowed = true,
+            reason = null
+        )
+
+        isInitialized = true
+    }
+
+    private fun computeDefaultStrategy(): ExtractionStrategy {
+        return if (advancedStrategiesEnabled && runtimeAdvancedAvailable) {
             ExtractionStrategy.LLM_FIRST
         } else {
             ExtractionStrategy.OCR_FIRST
         }
-
-        _strategy = savedStrategy?.takeIf { isStrategyAllowed(it) } ?: defaultStrategy
-
-        Log.d(TAG, "Loaded strategy: ${_strategy.name} (advanced=${advancedStrategiesEnabled})")
-
-        isInitialized = true
     }
     
     /**
@@ -144,12 +171,44 @@ object ExtractionConfig {
     fun setStrategy(strategy: ExtractionStrategy) {
         if (!isStrategyAllowed(strategy)) {
             Log.w(TAG, "Attempted to set blocked strategy ${strategy.name} – ignoring due to rollout guard")
+            prefs?.edit()?.putString(KEY_STRATEGY, strategy.name)?.apply()
+            recordStrategyTelemetry(
+                requested = strategy.name,
+                active = _strategy.name,
+                allowed = false,
+                reason = "blocked_by_rollout"
+            )
             return
         }
 
         if (_strategy != strategy) {
             Log.d(TAG, "Strategy changed: ${_strategy.name} → ${strategy.name}")
             updateStrategyInternal(strategy, persist = true)
+            recordStrategyTelemetry(
+                requested = strategy.name,
+                active = strategy.name,
+                allowed = true,
+                reason = null
+            )
+        }
+    }
+
+    private fun recordStrategyTelemetry(
+        requested: String,
+        active: String,
+        allowed: Boolean,
+        reason: String?
+    ) {
+        runCatching {
+            telemetry.trackStrategySelection(
+                requestedStrategy = requested,
+                activeStrategy = active,
+                allowed = allowed,
+                reason = reason,
+                advancedEnabled = advancedStrategiesEnabled
+            )
+        }.onFailure { error ->
+            Log.w(TAG, "Telemetry recording failed", error)
         }
     }
 

@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -60,6 +61,7 @@ class LocalLlmOcrService(
         // First run: ~60s (model warmup), subsequent runs: ~10-20s
         // Increased from 60s after observing 68s warmups; stays aligned with docs
         private const val INFERENCE_TIMEOUT_MS = 90_000L
+        private const val GRACE_PERIOD_AFTER_TIMEOUT_MS = 2_000L
 
         // Model version tracking
         private const val SERVICE_VERSION = "1.4.0"  // Qwen2.5 migration
@@ -397,25 +399,44 @@ class LocalLlmOcrService(
         while (attempt < MAX_LLM_ATTEMPTS && response == null) {
             lastMemoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
             val attemptStart = System.currentTimeMillis()
-            response = withTimeoutOrNull(INFERENCE_TIMEOUT_MS) {
+
+            val result = runCatching {
                 llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned)
             }
+            val elapsed = System.currentTimeMillis() - attemptStart
+            val timedOut = elapsed > INFERENCE_TIMEOUT_MS
 
-            if (response != null) {
+            if (result.isFailure) {
+                // Native layer surfaced a hard failure; propagate immediately.
+                throw result.exceptionOrNull() ?: IllegalStateException("LLM inference failed")
+            }
+
+            response = result.getOrNull()
+
+            if (response != null && !timedOut) {
                 break
             }
 
-            val elapsed = System.currentTimeMillis() - attemptStart
+            response = null
             telemetryService.recordTimeout(elapsed, lastMemoryUsage)
+            val reason = if (timedOut) {
+                "exceeded ${INFERENCE_TIMEOUT_MS}ms (actual ${elapsed}ms)"
+            } else {
+                "returned empty response (${elapsed}ms)"
+            }
             Log.w(
                 TAG,
-                "LLM inference timed out after ${elapsed}ms (attempt ${attempt + 1}/$MAX_LLM_ATTEMPTS)"
+                "LLM inference ${reason} (attempt ${attempt + 1}/$MAX_LLM_ATTEMPTS)"
             )
 
-            llmRuntime.cancelOngoingInference()
-            runCatching { llmRuntime.resetAfterTimeout() }
-                .onFailure { error -> Log.w(TAG, "Failed to reset LLM after timeout", error) }
             modelPinned = false
+
+            if (timedOut) {
+                if (attempt + 1 < MAX_LLM_ATTEMPTS) {
+                    Log.i(TAG, "Waiting ${GRACE_PERIOD_AFTER_TIMEOUT_MS}ms before retry to allow native threads to settle")
+                    delaySafe(GRACE_PERIOD_AFTER_TIMEOUT_MS)
+                }
+            }
 
             if (attempt + 1 < MAX_LLM_ATTEMPTS) {
                 notifyProgress(
@@ -431,6 +452,11 @@ class LocalLlmOcrService(
         }
 
         return LlmInferenceOutcome(response, lastMemoryUsage)
+    }
+
+    private suspend fun delaySafe(millis: Long) {
+        if (millis <= 0) return
+        runCatching { delay(millis) }
     }
 
     private fun notifyProgress(
@@ -808,6 +834,7 @@ class LocalLlmOcrService(
 
             Log.d(TAG, "Falling back to traditional OCR after invalid LLM response")
             val fallbackResult = fallbackToTraditionalOCR(bitmap, captureTimestamp)
+            // TODO: revisit ML Kit fallback semantics now that LLm path is the primary extractor
 
             // Determine which fallback was used based on result quality
             fallbackUsed = if (fallbackResult.storeName != "Unknown Store" ||

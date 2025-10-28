@@ -235,13 +235,13 @@ class CouponInputManager(
                 ExtractionLogBuffer.appendInfo(TAG, "Processing coupon from bitmap")
                 
                 // Quick OCR scan for multi-coupon detection
-                val quickOcrText = try {
-                    quickOcrEngine.recognize(bitmap)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Quick OCR failed for multi-coupon detection: ${e.message}")
-                    ExtractionLogBuffer.appendWarning(TAG, "Quick OCR failed for multi-coupon detection: ${e.message}")
-                    ""
-                }
+            val quickOcrText = try {
+                quickOcrEngine.recognize(bitmap)
+            } catch (e: Exception) {
+                Log.w(TAG, "Quick OCR failed for multi-coupon detection: ${e.message}")
+                ExtractionLogBuffer.appendWarning(TAG, "Quick OCR failed for multi-coupon detection: ${e.message}")
+                ""
+            }
 
                 val classification = screenshotClassifier.classify(bitmap, quickOcrText)
                 Log.d(TAG, "Screenshot classification: type=${classification.type}, confidence=${classification.confidence}")

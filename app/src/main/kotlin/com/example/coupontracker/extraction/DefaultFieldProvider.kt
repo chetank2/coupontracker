@@ -2,6 +2,7 @@ package com.example.coupontracker.extraction
 
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.util.OcrTextCleaner
+import java.util.Locale
 
 /**
  * Provides conservative default values for missing fields.
@@ -20,23 +21,23 @@ class DefaultFieldProvider {
         
         val defaults = mutableMapOf<FieldType, FieldCandidate>()
         
-        // Store: Use first meaningful line (skip UI chrome) or "Coupon"
         if (FieldType.STORE_NAME in missingFields) {
-            val firstLine = OcrTextCleaner.getFirstMeaningfulLine(context.ocrText, 30) ?: "Coupon"
-            
-            defaults[FieldType.STORE_NAME] = FieldCandidate(
-                value = firstLine,
-                confidence = 0.1f,
-                source = "default_first_line",
-                context = "No store found, using first meaningful line"
-            )
+            val firstLine = OcrTextCleaner.getFirstMeaningfulLine(context.ocrText, 30)
+            if (firstLine != null && !isGenericLine(firstLine)) {
+                defaults[FieldType.STORE_NAME] = FieldCandidate(
+                    value = firstLine,
+                    confidence = 0.1f,
+                    source = "default_first_line",
+                    context = "No store found, using first meaningful line"
+                )
+            }
         }
         
         // Description: Use cleaned OCR text (no UI chrome, truncated to reasonable length)
         // This ensures we NEVER show "Error processing coupon"
         val cleanedOcr = OcrTextCleaner.cleanOcrText(context.ocrText)
         val description = cleanedOcr.take(200).trim()
-        if (description.isNotBlank()) {
+        if (description.isNotBlank() && !isGenericDescription(description)) {
             defaults[FieldType.DESCRIPTION] = FieldCandidate(
                 value = description,
                 confidence = 0.5f,
@@ -46,7 +47,7 @@ class DefaultFieldProvider {
         } else {
             // Fallback to raw OCR if cleaning removed everything
             val rawDescription = context.ocrText.take(200).trim()
-            if (rawDescription.isNotBlank()) {
+            if (rawDescription.isNotBlank() && !isGenericDescription(rawDescription)) {
                 defaults[FieldType.DESCRIPTION] = FieldCandidate(
                     value = rawDescription,
                     confidence = 0.3f,
@@ -78,8 +79,32 @@ class DefaultFieldProvider {
         
         // Expiry: Leave null if not found (no good default for dates)
         // This is intentionally omitted as a wrong date is worse than no date
-        
+
         return defaults
+    }
+
+    private fun isGenericLine(line: String): Boolean {
+        val normalized = line.trim().uppercase(Locale.ROOT)
+        if (normalized.isEmpty()) return true
+        val genericTokens = setOf(
+            "COUPON", "NOW", "TODAY", "SHOP NOW", "BUY NOW", "REDEEM", "CLAIM",
+            "ORDER", "APPLY", "USE", "SAVE", "DISCOUNT", "OFFER", "EXCLUSIVE",
+            "DEAL", "SPECIAL", "FLASH", "LIMITED", "SALE", "CLICK", "TAP"
+        )
+        if (normalized in genericTokens) return true
+        if (normalized.length < 3) return true
+        return normalized.any { it.isDigit() }
+    }
+
+    private fun isGenericDescription(description: String): Boolean {
+        val normalized = description.trim().lowercase(Locale.ROOT)
+        if (normalized.isEmpty()) return true
+        val disqualifiers = listOf(
+            "tap to view", "swipe", "screenshot", "copy code", "details", "scan to pay",
+            "shop now", "click here", "open app", "android", "ios", "claim now", "apply now",
+            "download", "loyalty", "profile", "limited time", "verify"
+        )
+        return disqualifiers.any { normalized.contains(it) }
     }
 }
 

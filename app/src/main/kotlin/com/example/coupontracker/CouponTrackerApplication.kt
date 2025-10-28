@@ -9,6 +9,7 @@ import androidx.work.Configuration
 import androidx.work.WorkManager
 import com.example.coupontracker.R
 import com.example.coupontracker.analytics.StoreNameMetricsTracker
+import com.example.coupontracker.util.ExtractionConfig
 import com.example.coupontracker.feedback.FeedbackFeatureToggle
 import com.example.coupontracker.worker.OfflineRetrainingWorker
 import dagger.hilt.android.HiltAndroidApp
@@ -36,7 +37,7 @@ class CouponTrackerApplication : Application(), Configuration.Provider {
             // V2: Initialize extraction strategy config (loads persisted strategy)
             // Defer to background thread for performance
             androidx.core.os.HandlerCompat.createAsync(android.os.Looper.getMainLooper()).post {
-                com.example.coupontracker.util.ExtractionConfig.init(this)
+                ExtractionConfig.init(this)
             }
 
             // Initialize WorkManager-backed tasks

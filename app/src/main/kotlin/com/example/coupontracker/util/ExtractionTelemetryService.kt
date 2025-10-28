@@ -3,7 +3,6 @@ package com.example.coupontracker.util
 import android.content.Context
 import android.os.Build
 import android.util.Log
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -16,7 +15,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class ExtractionTelemetryService @Inject constructor(
-    @ApplicationContext private val context: Context
+    private val context: Context
 ) {
     
     companion object {
@@ -112,6 +111,38 @@ class ExtractionTelemetryService @Inject constructor(
         }
     }
     
+    fun trackStrategySelection(
+        requestedStrategy: String,
+        activeStrategy: String,
+        allowed: Boolean,
+        reason: String?,
+        advancedEnabled: Boolean
+    ) {
+        telemetryScope.launch {
+            try {
+                val event = JSONObject().apply {
+                    put("event", "strategy_selection")
+                    put("requested", requestedStrategy)
+                    put("active", activeStrategy)
+                    put("allowed", allowed)
+                    put("advanced_enabled", advancedEnabled)
+                    reason?.let { put("reason", it) }
+                    put("device_info", getDeviceInfo())
+                    put("timestamp", System.currentTimeMillis())
+                }
+
+                Log.d(
+                    TAG,
+                    "Strategy selection: requested=$requestedStrategy active=$activeStrategy allowed=$allowed reason=${reason ?: "none"}"
+                )
+
+                // analyticsService.track(event)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error tracking strategy selection", e)
+            }
+        }
+    }
+
     /**
      * Track native library state at boot
      */

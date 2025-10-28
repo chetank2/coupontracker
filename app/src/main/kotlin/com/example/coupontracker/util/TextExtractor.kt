@@ -166,6 +166,7 @@ class TextExtractor {
 
         val candidateScores = mutableMapOf<String, Double>()
         val candidateOriginal = mutableMapOf<String, String>()
+        val lastOccurrence = mutableMapOf<String, Int>()
         val lines = text.lines()
 
         fun addCandidate(raw: String?, isTitleCase: Boolean, lineIndex: Int, line: String) {
@@ -177,11 +178,12 @@ class TextExtractor {
 
             val baseScore = if (isTitleCase) 4.0 else 2.0
             val frequency = wordFrequency[normalized] ?: 1
-            val frequencyScore = if (frequency > 1) frequency * 2.5 else frequency.toDouble()
+            val frequencyScore = if (frequency > 1) frequency * 1.5 else 0.5
             val lineBonus = (lines.size - lineIndex).coerceAtLeast(1)
             val firstIndex = lowerText.indexOf(normalized)
             val positionScore = if (firstIndex >= 0 && text.isNotEmpty()) {
-                (text.length - firstIndex).toDouble() / text.length.toDouble() * 3.0
+                val normalizedPos = firstIndex.toDouble() / text.length.toDouble()
+                (1.0 - normalizedPos) * 2.0
             } else {
                 0.0
             }
@@ -189,20 +191,22 @@ class TextExtractor {
             val lineWordCount = line.split("\\s+".toRegex()).count { it.isNotBlank() }
             val headingBonus = if (lineWordCount <= 3) 3.0 else 0.0
 
-            val contextBonus = when {
-                line.contains("redeem", ignoreCase = true) -> 1.5
-                line.contains("exclusive", ignoreCase = true) -> 1.0
-                line.contains("plan", ignoreCase = true) || line.contains("offer", ignoreCase = true) -> 0.5
+            val contextPenalty = when {
+                line.contains("redeem", ignoreCase = true) -> 3.0
+                line.contains("exclusive", ignoreCase = true) -> 1.5
+                line.contains("plan", ignoreCase = true) || line.contains("offer", ignoreCase = true) -> 1.0
+                line.contains("claim", ignoreCase = true) -> 2.5
                 else -> 0.0
             }
 
-            val shortNameBonus = if (candidate.length <= 4 && isTitleCase) 1.5 else 0.0
+            val shortNamePenalty = if (candidate.length <= 4 && isTitleCase) 2.0 else 0.0
 
-            val totalScore = baseScore + frequencyScore + lineBonus + positionScore + headingBonus + contextBonus + shortNameBonus
+            val totalScore = baseScore + frequencyScore + lineBonus + positionScore + headingBonus - contextPenalty - shortNamePenalty
             val currentScore = candidateScores[normalized]
             if (currentScore == null || totalScore > currentScore) {
                 candidateScores[normalized] = totalScore
                 candidateOriginal[normalized] = candidate
+                lastOccurrence[normalized] = lineIndex
             }
         }
 
@@ -255,7 +259,10 @@ class TextExtractor {
         }
 
         if (candidateScores.isNotEmpty()) {
-            val bestKey = candidateScores.maxByOrNull { it.value }!!.key
+            val bestKey = candidateScores.entries.sortedWith(
+                compareByDescending<Map.Entry<String, Double>> { it.value }
+                    .thenBy { lastOccurrence[it.key] ?: Int.MAX_VALUE }
+            ).first().key
             val bestCandidate = candidateOriginal[bestKey]
             if (bestCandidate != null) {
                 safeLogDebug(TAG) { "Selected store name candidate: $bestCandidate" }
