@@ -799,19 +799,59 @@ JNIEXPORT void JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_setInferenceParams(
     JNIEnv* env, jobject /* this */, jlong model_handle,
     jfloat temperature, jint max_tokens, jfloat top_p) {
-    
+
     (void)env;
-    
+
     std::lock_guard<std::mutex> lock(g_model_mutex);
-    
+
     auto it = g_model_handles.find(model_handle);
     if (it == g_model_handles.end()) {
         LOGE("Invalid model handle: %lld", (long long)model_handle);
         return;
     }
-    
+
     LOGI("Inference params set: temp=%.2f, max_tokens=%d, top_p=%.2f",
          temperature, max_tokens, top_p);
+}
+
+JNIEXPORT void JNICALL
+Java_com_example_coupontracker_llm_MlcLlmNative_cancelInference(
+    JNIEnv* env, jobject /* this */, jlong model_handle) {
+
+    (void)env;
+
+    std::lock_guard<std::mutex> lock(g_model_mutex);
+
+    auto it = g_model_handles.find(model_handle);
+    if (it == g_model_handles.end()) {
+        LOGW("cancelInference called with unknown handle: %lld", (long long)model_handle);
+        return;
+    }
+
+    LOGW("cancelInference requested for handle %lld, but llama.cpp backend has no cooperative cancel support; request ignored.",
+         (long long)model_handle);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_example_coupontracker_llm_MlcLlmNative_isInferenceRunning(
+    JNIEnv* env, jobject /* this */, jlong model_handle) {
+
+    (void)env;
+    (void)model_handle;
+
+    // The llama.cpp backend processes requests synchronously; no async state to report.
+    return JNI_FALSE;
+}
+
+JNIEXPORT jfloat JNICALL
+Java_com_example_coupontracker_llm_MlcLlmNative_getInferenceProgress(
+    JNIEnv* env, jobject /* this */, jlong model_handle) {
+
+    (void)env;
+    (void)model_handle;
+
+    // Progress reporting is unsupported for synchronous text inference; return 0.0.
+    return 0.0f;
 }
 
 JNIEXPORT void JNICALL

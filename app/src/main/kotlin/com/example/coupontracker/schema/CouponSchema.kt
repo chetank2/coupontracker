@@ -28,13 +28,15 @@ object CouponSchema {
                     hints = listOf(
                         "Extract brand name only, not full company name",
                         "Prefer the issuing brand over partner or watermark text",
-                        "Use title case (e.g., 'Amazon' not 'AMAZON')"
+                        "Use title case (e.g., 'Amazon' not 'AMAZON')",
+                        "If any brand, merchant, or app name appears in OCR, choose the best match instead of returning null"
                     ),
                     extractionHints = "Usually appears at the top or as a logo. May be in large text or header.",
                     validationRules = listOf(
                         "Must not be empty or 'Unknown'",
                         "Must not contain generic terms like 'Store', 'Brand', 'Company'",
-                        "Must be 2-50 characters"
+                        "Must be 2-50 characters",
+                        "Return null only when the OCR text truly has no identifiable brand or merchant"
                     )
                 )
             ),
@@ -107,6 +109,7 @@ object CouponSchema {
         globalRules = listOf(
             "Output ONLY the keys: storeName, redeemCode, expiryDate, description",
             "Use null for any field that cannot be confidently extracted",
+            "storeName must not be null when the OCR snippet includes any brand-like word, header text, or app name",
             "Preserve the offer description verbatim without arithmetic or rephrasing",
             "If the coupon only states it expires in N days and a capture timestamp is provided, convert it to an ISO date using that timestamp",
             "Do not hallucinate additional structured fields or metadata"
