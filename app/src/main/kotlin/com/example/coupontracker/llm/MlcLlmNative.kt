@@ -102,7 +102,7 @@ class MlcLlmNative {
     
     /**
      * Initialize the native runtime with model path
-     * @param modelPath Path to the model directory
+     * @param modelPath Path to the primary GGUF model file
      * @param configPath Path to the model configuration
      * @return Handle to the initialized model (0 if failed)
      */

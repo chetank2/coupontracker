@@ -329,8 +329,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         
         // Initialize model through native interface
         val handle = nativeInterface.initializeModel(
-            modelDir.absolutePath,   // Model directory (for tokenizer / auxiliary files)
-            configPath.absolutePath  // Configuration file consumed by the native loader
+            modelFile.absolutePath,   // Pass the GGUF model file path to native loader
+            configPath.absolutePath   // Configuration file consumed by the native loader
         )
         
         if (handle == 0L) {
@@ -600,9 +600,15 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             // Real llama.cpp backend is available - create native engine
             Log.i(TAG, "✅ Native LLM library available - creating real engine")
 
+            detectedModelId = detectInstalledModel()
+            val primaryModelFile = com.example.coupontracker.model.ModelPaths.getModelFile(
+                context,
+                detectedModelId
+            )
+
             MLCEngineReal(
                 nativeInterface = nativeInterface,
-                modelDirectory = modelDir,
+                modelFile = primaryModelFile,
                 configFile = configPath,
                 tokenizerFile = tokenizerPath,
                 maxTokens = MAX_TOKENS
@@ -681,7 +687,7 @@ interface MLCEngine {
  */
 private class MLCEngineReal(
     private val nativeInterface: SafeMlcLlmNative,
-    private val modelDirectory: File,
+    private val modelFile: File,
     private val configFile: File,
     private val tokenizerFile: File,
     private val maxTokens: Int
@@ -696,6 +702,11 @@ private class MLCEngineReal(
     private val modelHandle: Long
 
     init {
+        val modelDirectory = modelFile.parentFile
+
+        require(modelFile.exists()) {
+            "Model file missing at ${modelFile.absolutePath}"
+        }
         require(configFile.exists()) {
             "MLC config missing at ${configFile.absolutePath}"
         }
@@ -703,9 +714,10 @@ private class MLCEngineReal(
             "Tokenizer missing at ${tokenizerFile.absolutePath}"
         }
 
-        Log.i(TAG, "Initializing MLC runtime from ${modelDirectory.absolutePath}")
+        val modelDirectoryPath = modelDirectory?.absolutePath ?: modelFile.absolutePath
+        Log.i(TAG, "Initializing MLC runtime from $modelDirectoryPath")
         modelHandle = nativeInterface.initializeModel(
-            modelDirectory.absolutePath,
+            modelFile.absolutePath,
             configFile.absolutePath
         ).also { handle ->
             require(handle != 0L) { "MLC runtime returned invalid handle" }
