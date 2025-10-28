@@ -322,7 +322,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
 
         // Load native library
         if (!MlcLlmNative.loadLibrary(context)) {
-            throw IllegalStateException("Failed to load MLC-LLM native library")
+            throw IllegalStateException("Failed to load native LLM library")
         }
         
         Log.d(TAG, "Initializing $modelName model...")
@@ -577,15 +577,15 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     }
     
     /**
-     * Create MLC Engine instance - DEPRECATED
-     * This is replaced by native MLC-LLM integration
+     * Create legacy engine instance - DEPRECATED
+     * This is replaced by the native llama.cpp integration
      */
     @Deprecated("Use native interface instead")
     private fun createMLCEngine(): MLCEngine? {
         return try {
-            // Check if real MLC-LLM native library is available
+            // Check if the real native llama.cpp library is available
             if (!MlcLlmNative.isAvailable()) {
-                Log.w(TAG, "⚠️ MLC-LLM native library not available - using stub implementation")
+                Log.w(TAG, "⚠️ Native LLM library not available - using stub implementation")
                 Log.w(TAG, "LLM_FIRST strategy will return mock data until real libraries are integrated")
                 Log.w(TAG, "See MLC_LLM_INTEGRATION_GUIDE.md for integration instructions")
 
@@ -597,8 +597,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 )
             }
 
-            // Real MLC-LLM is available - create native engine
-            Log.i(TAG, "✅ MLC-LLM native library available - creating real engine")
+            // Real llama.cpp backend is available - create native engine
+            Log.i(TAG, "✅ Native LLM library available - creating real engine")
 
             MLCEngineReal(
                 nativeInterface = nativeInterface,
@@ -661,8 +661,8 @@ data class ProcessedImage(
 )
 
 /**
- * MLC Engine interface (placeholder)
- * In real implementation, this would be provided by MLC-LLM JNI bindings
+ * Native engine interface (placeholder)
+ * In real implementation, this is backed by the llama.cpp JNI bindings.
  */
 interface MLCEngine {
     fun generate(
@@ -774,7 +774,7 @@ private class MLCEngineReal(
 
 /**
  * Stub implementation for development
- * This will be replaced with actual MLC-LLM integration
+ * This will be replaced with the real llama.cpp integration.
  */
 private class MLCEngineStub(
     private val modelPath: String,
@@ -791,7 +791,7 @@ private class MLCEngineStub(
         timeoutMs: Long
     ): String? {
         // Stub implementation - returns mock JSON response
-        // In real implementation, this would call MLC-LLM native inference
+        // In real implementation, this would call the native llama.cpp backend
         Log.d("MLCEngineStub", "Mock inference for image ${image.width}x${image.height}")
         
         return """

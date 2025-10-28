@@ -155,7 +155,7 @@ object ExtractionConfig {
 
     /**
      * Get available strategies based on current model availability
-     * Returns only OCR_FIRST and LEGACY until real MLC-LLM binaries are integrated
+     * Returns only OCR_FIRST and LEGACY until the native llama.cpp binaries are integrated
      */
     fun getAvailableStrategies(): List<ExtractionStrategy> {
         val strategies = linkedSetOf(

@@ -5,8 +5,8 @@ import android.util.Log
 import androidx.annotation.VisibleForTesting
 
 /**
- * JNI interface for MLC-LLM native library
- * Provides low-level access to MiniCPM-Llama3-V2.5 inference
+ * JNI interface for the native offline LLM library (llama.cpp backend)
+ * Provides low-level access to local inference without network calls.
  */
 class MlcLlmNative {
     
@@ -36,7 +36,7 @@ class MlcLlmNative {
         }
 
         /**
-         * Load the native MLC-LLM library
+         * Load the native llama.cpp-based library
          */
         fun loadLibrary(context: Context? = null): Boolean {
             if (isLibraryLoaded) return true
@@ -49,7 +49,7 @@ class MlcLlmNative {
                 try {
                     libraryLoader.loadLibrary(LIBRARY_NAME)
                     isLibraryLoaded = true
-                    Log.i(TAG, "MLC-LLM native library loaded from application package")
+                    Log.i(TAG, "Native LLM library loaded from application package")
                     return true
                 } catch (e: Throwable) {
                     loadErrors.add(e)
@@ -63,7 +63,7 @@ class MlcLlmNative {
                         try {
                             libraryLoader.load(candidate.absolutePath)
                             isLibraryLoaded = true
-                            Log.i(TAG, "Loaded MLC-LLM native library from ${candidate.absolutePath}")
+                            Log.i(TAG, "Loaded native LLM library from ${candidate.absolutePath}")
                             return true
                         } catch (fallbackError: Throwable) {
                             loadErrors.add(fallbackError)
@@ -78,9 +78,9 @@ class MlcLlmNative {
 
                 val primaryError = loadErrors.firstOrNull()
                 if (primaryError != null) {
-                    Log.e(TAG, "Failed to load MLC-LLM native library", primaryError)
+                    Log.e(TAG, "Failed to load native LLM library", primaryError)
                 } else {
-                    Log.e(TAG, "Failed to load MLC-LLM native library: no candidates found")
+                    Log.e(TAG, "Failed to load native LLM library: no candidates found")
                 }
 
                 return false
@@ -101,7 +101,7 @@ class MlcLlmNative {
     // Native method declarations - implemented in C++
     
     /**
-     * Initialize the MLC-LLM runtime with model path
+     * Initialize the native runtime with model path
      * @param modelPath Path to the model directory
      * @param configPath Path to the model configuration
      * @return Handle to the initialized model (0 if failed)

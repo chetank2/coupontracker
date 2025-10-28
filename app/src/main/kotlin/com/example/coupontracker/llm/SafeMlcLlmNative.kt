@@ -18,9 +18,9 @@ class SafeMlcLlmNative(context: Context) {
 
     init {
         if (!MlcLlmNative.loadLibrary(appContext)) {
-            throw IllegalStateException("MLC-LLM native library unavailable")
+            throw IllegalStateException("Native LLM library unavailable")
         }
-        Log.i(TAG, "MLC-LLM native interface initialized")
+        Log.i(TAG, "Native LLM interface initialized")
     }
 
     fun initializeModel(modelPath: String, configPath: String): Long {
