@@ -83,15 +83,37 @@ python coupon_trainer_cli.py --url <URL> --output-dir <OUTPUT_DIR>
 ./gradlew assembleDebug
 ```
 
-## 🔐 Protected Branch Workflow
+## 🌿 Branch Management
 
-We enforce branch protection on `main`, `release/*`, and `hotfix/*` to keep production code stable. All contributions must:
+**Active Branches:** ![Branches](https://img.shields.io/badge/branches-10-green)
 
-- Land via pull requests with at least one approving review from the appropriate code owner.
-- Pass all required status checks before the merge button is enabled.
-- Avoid force pushes or history rewrites against the protected branches; create feature branches for new work instead.
+We maintain a clean repository with automated branch cleanup:
 
-See [`docs/git-maintenance/protected-branches.md`](docs/git-maintenance/protected-branches.md) for the full policy, including expectations for release and hotfix procedures.
+- **Protected Branches**: `main`, `feature/qwen-multi-coupon-extraction`, `gh-pages`
+- **Automated Cleanup**: Merged branches are automatically deleted weekly
+- **Branch Lifecycle**: Feature branches are deleted after PR merge
+
+### Current Branch Status
+
+| Branch | Purpose | Status |
+|--------|---------|--------|
+| `main` | Production code | 🟢 Active |
+| `feature/qwen-multi-coupon-extraction` | LLM integration | 🟡 In Progress |
+| `gh-pages` | Documentation site | 📚 Archive |
+
+📋 [View Branch Report](./docs/archive/branch_report_after_cleanup_20251030.md) |
+🗑️ [Cleanup Log](./BRANCH_CLEANUP_LOG.md) |
+📖 [Branch Policy](./docs/BRANCH_MANAGEMENT_POLICY.md)
+
+### Contributing
+
+All contributions must:
+- Land via pull requests with at least one approving review
+- Pass all required status checks before merge
+- Follow the branch naming convention: `feature/`, `bugfix/`, `hotfix/`
+- Branches are automatically deleted after PR merge
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
 
 ## 🧪 Testing
 
@@ -166,6 +188,26 @@ Both jobs can take several minutes to finish after a pull request is opened or u
 - **Python Environment**: Python 3.8+, pip packages from requirements.txt
 - **ML Training**: CUDA-capable GPU (recommended)
 - **Web Development**: Modern browser with PWA support
+
+## 📚 Documentation
+
+### Active Documentation
+- [README.md](./README.md) - Project overview and setup
+- [CONTRIBUTING.md](./CONTRIBUTING.md) - Contribution guidelines
+- [Branch Management Policy](./docs/BRANCH_MANAGEMENT_POLICY.md) - Git workflow
+- [Implementation Status](./docs/IMPLEMENTATION_STATUS.md) - Current status
+- [LLM Integration](./docs/LLM_INTEGRATION.md) - AI/ML documentation
+
+### Archived Documentation
+Historical documentation has been organized into `docs/archive/`:
+- **architecture/** - Architecture diagrams and design documents
+- **implementation/** - Implementation plans and progress trackers
+- **fixes/** - Bug fixes and debugging documentation
+- **testing/** - Testing reports and verification documents
+- **releases/** - Release notes and delivery summaries
+- **sessions/** - Development session notes
+
+See [docs/archive/README.md](./docs/archive/README.md) for the complete index.
 
 ## 🏆 Production Ready
 

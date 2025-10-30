@@ -1,0 +1,67 @@
+{
+  "analysis_date": "2025-10-30T12:44:51.636110",
+  "total_branches": 80,
+  "categories": {
+    "merged_via_pr": [
+      "origin/codex/fix-missing-download-button-on-home-screen"
+    ],
+    "very_old": [
+      "origin/gh-pages"
+    ],
+    "far_behind": [
+      "origin/gh-pages"
+    ],
+    "no_unique_commits": [],
+    "active": [
+      "origin/codex/add-automatic-branch-cleanup-script",
+      "origin/codex/add-comprehensive-test-suite-for-storenamevalidator",
+      "origin/codex/add-edit-functionality-for-coupons",
+      "origin/codex/add-score-card-to-screen",
+      "origin/codex/adjust-calculateuniversalcodescore-logic",
+      "origin/codex/capture-ocr-text-and-validation-outcomes",
+      "origin/codex/clean-up-merged-local-and-remote-branches",
+      "origin/codex/create-ai-guardrails-documentation-and-update-readme",
+      "origin/codex/create-branch-inventory-document",
+      "origin/codex/create-plan-to-clean-git-repository-branches",
+      "origin/codex/document-and-protect-long-lived-branches",
+      "origin/codex/enhance-coupon-validation-and-extraction-process",
+      "origin/codex/evaluate-production-readiness-of-implementation",
+      "origin/codex/evaluate-training-needs-for-extraction-performance",
+      "origin/codex/explain-extraction-issue-in-plain-english",
+      "origin/codex/filter-and-manage-old-branches",
+      "origin/codex/find-discrepancies-in-coupon-extraction",
+      "origin/codex/find-discrepancies-in-coupon-extraction-hghfvu",
+      "origin/codex/fix-ci-workflow-for-android-sdk-installation",
+      "origin/codex/fix-error-downloading-qwen-model",
+      "origin/codex/fix-extraction-issue-after-changes",
+      "origin/codex/fix-high-priority-bug-in-store-validation",
+      "origin/codex/fix-high-priority-bug-in-storenamemetricstracker",
+      "origin/codex/fix-high-priority-bug-in-storenamemetricstracker-r6dl4z",
+      "origin/codex/fix-incomplete-description-fetch-issue",
+      "origin/codex/fix-incomplete-description-fetch-issue-nexgag",
+      "origin/codex/fix-incorrect-coupon-code-and-description",
+      "origin/codex/fix-kotlin-compiler-errors-in-analytics-and-validation",
+      "origin/codex/fix-ocr-pipeline-and-performance-issues",
+      "origin/codex/fix-score-card-placeholder-data-and-layout",
+      "origin/codex/fix-twostagedetector-and-database-issues-u5aocq",
+      "origin/codex/fix-twostagedetector-and-database-issues-zlrypj",
+      "origin/codex/identify-issues-in-coupon-tracker-implementations",
+      "origin/codex/implement-ai-guardrails-and-monitoring",
+      "origin/codex/implement-automatic-version-number-updates",
+      "origin/codex/implement-mlcenginereal-and-update-jni-logic",
+      "origin/codex/investigate-and-fix-tess-two-initialization-failures",
+      "origin/codex/investigate-data-extraction-issues",
+      "origin/codex/investigate-incomplete-checks-status",
+      "origin/codex/llm-store-fallback",
+      "origin/codex/locate-missing-score-in-ui",
+      "origin/codex/make-it-available",
+      "origin/codex/organize-git-branches",
+      "origin/codex/redesign-universalextractionservice-and-improve-pipeline",
+      "origin/codex/refactor-visibility-and-state-handling-in-kotlin",
+      "origin/codex/replace-currentstate-with-state-in-scannerscreen.kt",
+      "origin/codex/update-extractionconfig-to-honor-selections",
+      "origin/codex/update-production-timeout-and-warmup",
+      "origin/codex/update-testing-tasks-for-android"
+    ]
+  }
+}
