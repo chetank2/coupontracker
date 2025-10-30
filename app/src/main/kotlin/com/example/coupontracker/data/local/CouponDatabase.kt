@@ -559,6 +559,103 @@ abstract class CouponDatabase : RoomDatabase() {
 
                 database.execSQL(
                     """
+                    WITH source AS (
+                        SELECT
+                            `id`,
+                            `storeName`,
+                            `description`,
+                            `expiryDate`,
+                            `redeemCode`,
+                            `imageUri`,
+                            `imagePhash`,
+                            `imageSignature`,
+                            `category`,
+                            `status`,
+                            `minimumPurchase`,
+                            `maximumDiscount`,
+                            `isPriority`,
+                            `paymentMethod`,
+                            `usageLimit`,
+                            `usageCount`,
+                            `reminderDate`,
+                            `reminderLeadTimeMinutes`,
+                            `platformType`,
+                            `extractionQualityScore`,
+                            `extractionConfidenceBreakdown`,
+                            `extractionStage`,
+                            `extractionRunPath`,
+                            `extractionTimestamp`,
+                            `rating`,
+                            `createdAt`,
+                            `updatedAt`,
+                            `needsAttention`,
+                            `storeNameSource`,
+                            `storeNameEvidence`,
+                            CASE
+                                WHEN `cashbackType` = 'percent' AND `cashbackValueNum` IS NOT NULL AND `cashbackValueNum` > 0
+                                    THEN printf('Cashback: %.0f%% off', `cashbackValueNum`)
+                                WHEN `cashbackValueNum` IS NOT NULL AND `cashbackValueNum` > 0
+                                    THEN printf(
+                                        'Cashback: %s%.0f off',
+                                        CASE
+                                            WHEN `cashbackCurrency` IS NULL OR TRIM(`cashbackCurrency`) = '' THEN '₹'
+                                            WHEN UPPER(`cashbackCurrency`) IN ('INR', '₹', 'RS', 'RS.') THEN '₹'
+                                            WHEN UPPER(`cashbackCurrency`) IN ('USD', '$') THEN '$'
+                                            WHEN UPPER(`cashbackCurrency`) IN ('EUR', '€') THEN '€'
+                                            WHEN UPPER(`cashbackCurrency`) IN ('GBP', '£') THEN '£'
+                                            ELSE `cashbackCurrency` || ' '
+                                        END,
+                                        `cashbackValueNum`
+                                    )
+                                WHEN `cashbackAmount` IS NOT NULL AND `cashbackAmount` > 0
+                                    THEN printf('Cashback: ₹%.0f off', `cashbackAmount`)
+                                ELSE NULL
+                            END AS `cashbackDetail`
+                        FROM `coupons`
+                    ),
+                    enriched AS (
+                        SELECT
+                            `id`,
+                            `storeName`,
+                            `description`,
+                            `expiryDate`,
+                            `redeemCode`,
+                            `imageUri`,
+                            `imagePhash`,
+                            `imageSignature`,
+                            `category`,
+                            `status`,
+                            `minimumPurchase`,
+                            `maximumDiscount`,
+                            `isPriority`,
+                            `paymentMethod`,
+                            `usageLimit`,
+                            `usageCount`,
+                            `reminderDate`,
+                            `reminderLeadTimeMinutes`,
+                            `platformType`,
+                            `extractionQualityScore`,
+                            `extractionConfidenceBreakdown`,
+                            `extractionStage`,
+                            `extractionRunPath`,
+                            `extractionTimestamp`,
+                            `rating`,
+                            `createdAt`,
+                            `updatedAt`,
+                            `needsAttention`,
+                            `storeNameSource`,
+                            `storeNameEvidence`,
+                            `cashbackDetail`,
+                            CASE
+                                WHEN TRIM(COALESCE(`description`, '')) = '' THEN COALESCE(`cashbackDetail`, 'Coupon offer')
+                                ELSE TRIM(`description`) ||
+                                    CASE
+                                        WHEN `cashbackDetail` IS NOT NULL THEN '\n' || `cashbackDetail`
+                                        ELSE ''
+                                    END
+                            END AS `newDescription`
+                        FROM source
+                    )
                     INSERT INTO `coupons_v13` (
                         `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
                         `redeemCode`, `imageUri`, `imagePhash`, `imageSignature`, `category`,
@@ -600,39 +697,7 @@ abstract class CouponDatabase : RoomDatabase() {
                         `needsAttention`,
                         `storeNameSource`,
                         COALESCE(`storeNameEvidence`, '[]')
-                    FROM (
-                        SELECT
-                            *,
-                            CASE
-                                WHEN `cashbackType` = 'percent' AND `cashbackValueNum` IS NOT NULL AND `cashbackValueNum` > 0
-                                    THEN printf('Cashback: %.0f%% off', `cashbackValueNum`)
-                                WHEN `cashbackValueNum` IS NOT NULL AND `cashbackValueNum` > 0
-                                    THEN printf(
-                                        'Cashback: %s%.0f off',
-                                        CASE
-                                            WHEN `cashbackCurrency` IS NULL OR TRIM(`cashbackCurrency`) = '' THEN '₹'
-                                            WHEN UPPER(`cashbackCurrency`) IN ('INR', '₹', 'RS', 'RS.') THEN '₹'
-                                            WHEN UPPER(`cashbackCurrency`) IN ('USD', '$') THEN '$'
-                                            WHEN UPPER(`cashbackCurrency`) IN ('EUR', '€') THEN '€'
-                                            WHEN UPPER(`cashbackCurrency`) IN ('GBP', '£') THEN '£'
-                                            ELSE `cashbackCurrency` || ' '
-                                        END,
-                                        `cashbackValueNum`
-                                    )
-                                WHEN `cashbackAmount` IS NOT NULL AND `cashbackAmount` > 0
-                                    THEN printf('Cashback: ₹%.0f off', `cashbackAmount`)
-                                ELSE NULL
-                            END AS `cashbackDetail`,
-                            CASE
-                                WHEN TRIM(COALESCE(`description`, '')) = '' THEN COALESCE(`cashbackDetail`, 'Coupon offer')
-                                ELSE TRIM(`description`) ||
-                                    CASE
-                                        WHEN `cashbackDetail` IS NOT NULL THEN '\n' || `cashbackDetail`
-                                        ELSE ''
-                                    END
-                            END AS `newDescription`
-                        FROM `coupons`
-                    )
+                    FROM enriched
                     """.trimIndent()
                 )
 
