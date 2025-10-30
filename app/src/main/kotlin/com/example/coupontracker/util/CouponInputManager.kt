@@ -71,6 +71,70 @@ private fun areWithinTolerance(first: Date, second: Date): Boolean {
     return abs(first.time - second.time) <= EXPIRY_FALLBACK_TOLERANCE_MS
 }
 
+private fun formatCurrency(amount: Double): String {
+    val rounded = if (amount % 1.0 == 0.0) {
+        amount.toLong().toString()
+    } else {
+        String.format(Locale.US, "%.2f", amount)
+    }
+    return "₹$rounded"
+}
+
+private fun buildDescriptionFromInfo(info: CouponInfo): String {
+    val segments = linkedSetOf<String>()
+
+    if (info.description.isNotBlank()) {
+        segments += info.description.trim()
+    }
+
+    info.cashbackAmount?.takeIf { it > 0 }?.let { amount ->
+        val formatted = when (info.discountType?.uppercase(Locale.ROOT)) {
+            "PERCENTAGE" -> "${amount.toInt()}% off"
+            "AMOUNT" -> "${formatCurrency(amount)} off"
+            else -> formatCurrency(amount)
+        }
+        segments += formatted
+    }
+
+    info.minimumPurchase?.takeIf { it > 0 }?.let {
+        segments += "Minimum purchase: ${formatCurrency(it)}"
+    }
+
+    info.maximumDiscount?.takeIf { it > 0 }?.let {
+        segments += "Maximum discount: ${formatCurrency(it)}"
+    }
+
+    info.category?.takeIf { it.isNotBlank() }?.let {
+        segments += "Category: ${it.trim()}"
+    }
+
+    info.paymentMethod?.takeIf { it.isNotBlank() }?.let {
+        segments += "Payment method: ${it.trim()}"
+    }
+
+    info.platformType?.takeIf { it.isNotBlank() }?.let {
+        segments += "Platform: ${it.trim()}"
+    }
+
+    info.usageLimit?.takeIf { it > 0 }?.let {
+        segments += "Usage limit: $it"
+    }
+
+    info.rating?.takeIf { it.isNotBlank() }?.let {
+        segments += "Rating: ${it.trim()}"
+    }
+
+    info.status?.takeIf { it.isNotBlank() && !it.equals("Active", ignoreCase = true) }?.let {
+        segments += "Status: ${it.trim()}"
+    }
+
+    if (segments.isEmpty()) {
+        return "No description"
+    }
+
+    return segments.joinToString(separator = "\n")
+}
+
 /**
  * Manager class for handling various coupon input methods
  */
@@ -335,44 +399,34 @@ class CouponInputManager(
                 val couponInfo = imageProcessor.processImage(bitmap, captureTimestamp)
                 ExtractionLogBuffer.appendInfo(TAG, "ImageProcessor returned coupon info: store='${couponInfo.storeName}', description='${couponInfo.description}'")
 
-                val normalizedDiscountType = when (couponInfo.discountType?.uppercase(Locale.ROOT)) {
-                    "PERCENTAGE" -> "percent"
-                    "AMOUNT" -> "amount"
-                    "TEXT" -> "text"
-                    else -> null
-                }
-                val cashbackValueNum = couponInfo.cashbackAmount
-                val category = couponInfo.category?.takeIf { it.isNotBlank() }
                 val status = couponInfo.status?.takeIf { it.isNotBlank() }
-                val paymentMethod = couponInfo.paymentMethod?.takeIf { it.isNotBlank() }
-                val platformType = couponInfo.platformType?.takeIf { it.isNotBlank() }
-                val rating = couponInfo.rating?.takeIf { it.isNotBlank() }
+                val composedDescription = buildDescriptionFromInfo(couponInfo)
 
                 val baseCoupon = Coupon(
                     id = 0,
                     storeName = couponInfo.storeName.ifBlank { "Unknown Store" },
-                    description = couponInfo.description.ifBlank { "No description" },
+                    description = composedDescription.ifBlank { "No description" },
                     expiryDate = couponInfo.expiryDate,
-                    cashbackAmount = cashbackValueNum ?: 0.0,
+                    cashbackAmount = 0.0,
                     redeemCode = couponInfo.redeemCode,
                     imageUri = null,
-                    category = category,
+                    category = null,
                     status = status ?: "Active",
-                    cashbackType = normalizedDiscountType,
-                    cashbackValueNum = cashbackValueNum,
-                    minimumPurchase = couponInfo.minimumPurchase,
-                    maximumDiscount = couponInfo.maximumDiscount,
-                    paymentMethod = paymentMethod,
-                    usageLimit = couponInfo.usageLimit,
-                    platformType = platformType,
-                    rating = rating,
+                    cashbackType = null,
+                    cashbackValueNum = null,
+                    minimumPurchase = null,
+                    maximumDiscount = null,
+                    paymentMethod = null,
+                    usageLimit = null,
+                    platformType = null,
+                    rating = null,
                     createdAt = Date(),
                     updatedAt = Date()
                 )
 
                 val contextText = listOfNotNull(
                     quickOcrText.takeIf { it.isNotBlank() },
-                    couponInfo.description.takeIf { it.isNotBlank() }
+                    composedDescription.takeIf { it.isNotBlank() }
                 ).joinToString("\n").ifBlank { null }
 
                 val refinedCoupon = CouponPostProcessor.refine(

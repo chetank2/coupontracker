@@ -579,7 +579,9 @@ class BatchScannerViewModel @Inject constructor(
             
             when (ocrResult) {
                 is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success -> {
-                    val ocrText = ocrResult.extractedInfo.values.joinToString(" ")
+                    val ocrText = ocrResult.text.ifBlank {
+                        ocrResult.extractedInfo.values.joinToString(" ")
+                    }
                     val extractionResult = universalExtractionService.extractCoupon(
                         bitmap, ocrText, com.example.coupontracker.universal.ExtractionContext()
                     )
@@ -658,7 +660,9 @@ class BatchScannerViewModel @Inject constructor(
                         val ocr = multiEngineOCR.processImage(bitmap)
                         when (ocr) {
                             is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success -> {
-                                val text = ocr.extractedInfo.values.joinToString(" ")
+                                val text = ocr.text.ifBlank {
+                                    ocr.extractedInfo.values.joinToString(" ")
+                                }
                                 universalExtractionService.extractCoupon(bitmap, text, com.example.coupontracker.universal.ExtractionContext())
                             }
                             else -> null
@@ -886,7 +890,9 @@ class BatchScannerViewModel @Inject constructor(
                         val ocrResult = multiEngineOCR.processImage(instance.cropBitmap)
                         when (ocrResult) {
                             is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success -> {
-                                val ocrText = ocrResult.extractedInfo.values.joinToString(" ")
+                                val ocrText = ocrResult.text.ifBlank {
+                                    ocrResult.extractedInfo.values.joinToString(" ")
+                                }
                                 val universalResult = universalExtractionService.extractCoupon(
                                     instance.cropBitmap, ocrText, com.example.coupontracker.universal.ExtractionContext()
                                 )
@@ -909,7 +915,9 @@ class BatchScannerViewModel @Inject constructor(
                         val ocrResult = multiEngineOCR.processImage(instance.cropBitmap)
                         when (ocrResult) {
                             is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success -> {
-                                val ocrText = ocrResult.extractedInfo.values.joinToString(" ")
+                                val ocrText = ocrResult.text.ifBlank {
+                                    ocrResult.extractedInfo.values.joinToString(" ")
+                                }
                                 val universalResult = universalExtractionService.extractCoupon(
                                     instance.cropBitmap, ocrText, com.example.coupontracker.universal.ExtractionContext()
                                 )
@@ -1101,37 +1109,88 @@ class BatchScannerViewModel @Inject constructor(
         uri: Uri,
         fieldConfidences: Map<String, Float> = emptyMap()
     ): Coupon {
-        // Parse typed cashback from LLM result
-        val cashbackAmount = couponInfo.cashbackAmount ?: 0.0
-        val (cashbackType, cashbackValueNum, cashbackCurrency) = when {
-            couponInfo.discountType == "PERCENTAGE" && cashbackAmount > 0 -> {
-                Triple("percent", cashbackAmount, null)
-            }
-            cashbackAmount > 0 -> {
-                Triple("amount", cashbackAmount, "INR")
-            }
-            else -> {
-                Triple("text", 0.0, null)
-            }
-        }
+        val description = buildDescriptionFromInfo(couponInfo)
         
         return Coupon(
             id = 0,
             storeName = couponInfo.storeName.takeIf { it.isNotBlank() } ?: "Unknown Store",
-            description = couponInfo.description.takeIf { it.isNotBlank() } ?: "Extracted via LLM",
+            description = description.ifBlank { "Extracted via LLM" },
             expiryDate = couponInfo.expiryDate,
-            cashbackAmount = cashbackAmount,
+            cashbackAmount = 0.0,
             redeemCode = couponInfo.redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" },
             imageUri = persistUri(uri),
-            category = couponInfo.category,
+            category = null,
             status = "Active",
             createdAt = java.util.Date(),
             updatedAt = java.util.Date(),
-            // V2: Typed cashback fields (CRITICAL - was missing!)
-            cashbackType = cashbackType,
-            cashbackValueNum = cashbackValueNum,
-            cashbackCurrency = cashbackCurrency
+            cashbackType = null,
+            cashbackValueNum = null,
+            cashbackCurrency = null
         )
+    }
+
+    private fun buildDescriptionFromInfo(info: com.example.coupontracker.util.CouponInfo): String {
+        val segments = linkedSetOf<String>()
+
+        if (info.description.isNotBlank()) {
+            segments += info.description.trim()
+        }
+
+        info.cashbackAmount?.takeIf { it > 0 }?.let { amount ->
+            val formatted = when (info.discountType?.uppercase(Locale.ROOT)) {
+                "PERCENTAGE" -> "${amount.toInt()}% off"
+                "AMOUNT" -> "${formatCurrency(amount)} off"
+                else -> formatCurrency(amount)
+            }
+            segments += formatted
+        }
+
+        info.minimumPurchase?.takeIf { it > 0 }?.let {
+            segments += "Minimum purchase: ${formatCurrency(it)}"
+        }
+
+        info.maximumDiscount?.takeIf { it > 0 }?.let {
+            segments += "Maximum discount: ${formatCurrency(it)}"
+        }
+
+        info.category?.takeIf { it.isNotBlank() }?.let {
+            segments += "Category: ${it.trim()}"
+        }
+
+        info.paymentMethod?.takeIf { it.isNotBlank() }?.let {
+            segments += "Payment method: ${it.trim()}"
+        }
+
+        info.platformType?.takeIf { it.isNotBlank() }?.let {
+            segments += "Platform: ${it.trim()}"
+        }
+
+        info.usageLimit?.takeIf { it > 0 }?.let {
+            segments += "Usage limit: $it"
+        }
+
+        info.rating?.takeIf { it.isNotBlank() }?.let {
+            segments += "Rating: ${it.trim()}"
+        }
+
+        info.status?.takeIf { it.isNotBlank() && !it.equals("Active", ignoreCase = true) }?.let {
+            segments += "Status: ${it.trim()}"
+        }
+
+        if (segments.isEmpty()) {
+            return "Extracted via LLM"
+        }
+
+        return segments.joinToString(separator = "\n")
+    }
+
+    private fun formatCurrency(amount: Double): String {
+        val rounded = if (amount % 1.0 == 0.0) {
+            amount.toLong().toString()
+        } else {
+            String.format(Locale.US, "%.2f", amount)
+        }
+        return "₹$rounded"
     }
 
     override fun onCleared() {

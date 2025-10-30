@@ -4,19 +4,17 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
 import android.util.Log
-import com.example.coupontracker.data.model.CashbackInfo
-import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.universal.PatternLearningEngine
 import com.example.coupontracker.util.CouponFixContext
 import com.example.coupontracker.util.CouponPostProcessor
 import com.example.coupontracker.util.ImageMetadataExtractor
-import com.example.coupontracker.util.IndianCurrencyParser
 import com.example.coupontracker.util.IndianDateParser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
+import java.time.LocalDate
 import java.time.ZoneId
 import java.util.*
 import javax.inject.Inject
@@ -54,9 +52,13 @@ class ProgressiveExtractionService @Inject constructor(
     companion object {
         private const val TAG = "ProgressiveExtractionService"
 
-        // Define critical fields that should be extracted
+        private val PRIMARY_FIELD_TYPES = setOf(
+            FieldType.STORE_NAME,
+            FieldType.DESCRIPTION,
+            FieldType.COUPON_CODE,
+            FieldType.EXPIRY_DATE
+        )
         private val CRITICAL_FIELDS = setOf(FieldType.STORE_NAME, FieldType.DESCRIPTION)
-        private val IMPORTANT_FIELDS = setOf(FieldType.AMOUNT, FieldType.COUPON_CODE)
         private val STORE_FALLBACK_STOPWORDS = setOf(
             "NOW",
             "SAVE",
@@ -318,6 +320,22 @@ class ProgressiveExtractionService @Inject constructor(
                 )
             )
         }
+
+        if (FieldType.AMOUNT in missingFields && couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) {
+            val discountType = couponInfo.discountType?.uppercase(Locale.ROOT)
+            val formattedAmount = when (discountType) {
+                "PERCENTAGE" -> "${couponInfo.cashbackAmount.toInt()}% off"
+                else -> "₹${couponInfo.cashbackAmount.toInt()} off"
+            }
+            results.getOrPut(FieldType.AMOUNT) { mutableListOf() }.add(
+                FieldCandidate(
+                    value = formattedAmount,
+                    confidence = 0.65f,
+                    source = "minicpm_llm",
+                    context = "LLM amount metadata"
+                )
+            )
+        }
         
         return results
     }
@@ -363,11 +381,15 @@ class ProgressiveExtractionService @Inject constructor(
         image: Bitmap,
         imageUri: String
     ): ProgressiveExtractionResult {
-        
         val coupon = buildCouponFromFields(extractedFields, imageUri, context)
-        val overallConfidence = extractedFields.values.map { it.confidence }.average().toFloat()
+        val primaryFields = filterPrimaryFields(extractedFields)
+        val overallConfidence = if (primaryFields.isEmpty()) {
+            0f
+        } else {
+            primaryFields.values.map { it.confidence }.average().toFloat()
+        }
         
-        Log.d(TAG, "Built coupon: store='${coupon.storeName}', desc='${coupon.description.take(50)}...', amount=${coupon.cashbackAmount}")
+        Log.d(TAG, "Built coupon: store='${coupon.storeName}', desc='${coupon.description.take(50)}...'")
         
         val refined = CouponPostProcessor.refine(
             coupon = coupon,
@@ -380,7 +402,7 @@ class ProgressiveExtractionService @Inject constructor(
         return ProgressiveExtractionResult(
             coupon = refined,
             confidence = overallConfidence,
-            extractedFields = extractedFields,
+            extractedFields = primaryFields,
             success = true,
             extractionAttempts = context.attempts,
             passesUsed = context.attempts.size
@@ -400,33 +422,32 @@ class ProgressiveExtractionService @Inject constructor(
         val storeName = resolveStoreName(context, extractedFields)
         
         // Description: ALWAYS use OCR text as fallback (never "Error processing coupon")
-        val description = extractedFields[FieldType.DESCRIPTION]?.value 
+        val descriptionCandidate = extractedFields[FieldType.DESCRIPTION]?.value
             ?: context.ocrText.take(200).trim().ifBlank { "Coupon offer" }
+        val description = buildSupplementalDescription(extractedFields, descriptionCandidate)
         
         // Redeem Code
         val redeemCode = extractedFields[FieldType.COUPON_CODE]?.value
             ?.takeIf { it != "NO_CODE_NEEDED" }
         
         // Expiry Date
-        val expiryDate = extractedFields[FieldType.EXPIRY_DATE]?.value?.let { parseDate(it) }
+        val expiryDate = extractedFields[FieldType.EXPIRY_DATE]
+            ?.value
+            ?.let { resolveExpiryDate(it, context.captureTimestamp, context.ocrText) }
         
-        // Amount and Cashback Info
-        val cashbackAmount = 0.0
-        val cashbackInfo = CashbackInfo(CashbackType.AMOUNT, 0.0)
-        
-        val confidenceBreakdown = buildConfidenceBreakdown(extractedFields)
+        val confidenceBreakdown = buildConfidenceBreakdown(filterPrimaryFields(extractedFields))
 
         return Coupon(
             id = 0,
             storeName = storeName,
             description = description,
             expiryDate = expiryDate,
-            cashbackAmount = cashbackAmount,
+            cashbackAmount = 0.0,
             redeemCode = redeemCode,
             imageUri = imageUri,
-            cashbackType = cashbackInfo.type.name.lowercase(),
-            cashbackValueNum = cashbackInfo.valueNum,
-            cashbackCurrency = cashbackInfo.currency,
+            cashbackType = null,
+            cashbackValueNum = null,
+            cashbackCurrency = null,
             category = null,
             rating = null,
             status = "ACTIVE",
@@ -477,6 +498,41 @@ class ProgressiveExtractionService @Inject constructor(
         }
     }
     
+    private fun filterPrimaryFields(
+        extractedFields: Map<FieldType, FieldCandidate>
+    ): Map<FieldType, FieldCandidate> = extractedFields.filterKeys { it in PRIMARY_FIELD_TYPES }
+
+    private fun buildSupplementalDescription(
+        extractedFields: Map<FieldType, FieldCandidate>,
+        baseDescription: String
+    ): String {
+        val segments = linkedSetOf<String>()
+        if (baseDescription.isNotBlank()) {
+            segments += baseDescription.trim()
+        }
+
+        extractedFields.forEach { (type, candidate) ->
+            if (type !in PRIMARY_FIELD_TYPES) {
+                val value = candidate.value.trim()
+                if (value.isNotEmpty() && segments.none { it.equals(value, ignoreCase = true) }) {
+                    val labeledValue = when (type) {
+                        FieldType.MIN_PURCHASE -> "Minimum purchase: $value"
+                        FieldType.AMOUNT -> value
+                        FieldType.OTHER -> value
+                        else -> "${type.name.replace('_', ' ').lowercase(Locale.ROOT).replaceFirstChar { it.uppercase() }}: $value"
+                    }
+                    segments += labeledValue
+                }
+            }
+        }
+
+        if (segments.isEmpty()) {
+            return "Coupon offer"
+        }
+
+        return segments.joinToString(separator = "\n")
+    }
+    
     /**
      * Parse date string to Date object
      */
@@ -525,6 +581,25 @@ class ProgressiveExtractionService @Inject constructor(
         Log.w(TAG, "Could not parse date: $dateString")
         return null
     }
+
+    private fun resolveExpiryDate(
+        rawValue: String,
+        captureTimestamp: Date?,
+        fallbackText: String
+    ): Date? {
+        parseDate(rawValue)?.let { return it }
+
+        val zone = ZoneId.systemDefault()
+        val baseDate = captureTimestamp?.toInstant()?.atZone(zone)?.toLocalDate() ?: LocalDate.now()
+
+        val direct = IndianDateParser.extractExpiryFromText(rawValue, baseDate).date
+        if (direct != null) {
+            return Date.from(direct.atStartOfDay(zone).toInstant())
+        }
+
+        val fallback = IndianDateParser.extractExpiryFromText(fallbackText, baseDate).date
+        return fallback?.let { Date.from(it.atStartOfDay(zone).toInstant()) }
+    }
     
     /**
      * Extract value from text using a learned pattern (regex)
@@ -544,22 +619,22 @@ class ProgressiveExtractionService @Inject constructor(
      * Calculate overall confidence from extracted fields (weighted average)
      */
     private fun calculateOverallConfidence(fields: Map<FieldType, FieldCandidate>): Float {
-        if (fields.isEmpty()) return 0f
+        val primaryFields = filterPrimaryFields(fields)
+        if (primaryFields.isEmpty()) return 0f
         
         // Weighted confidence: critical fields count more
         val weights = mapOf(
             FieldType.STORE_NAME to 2.0f,      // Critical
             FieldType.DESCRIPTION to 2.0f,     // Critical
             FieldType.COUPON_CODE to 1.5f,     // Important
-            FieldType.AMOUNT to 1.5f,          // Important
             FieldType.EXPIRY_DATE to 1.0f      // Nice to have
         )
         
-        val weightedSum = fields.entries.sumOf { (type, candidate) ->
+        val weightedSum = primaryFields.entries.sumOf { (type, candidate) ->
             (candidate.confidence * (weights[type] ?: 1.0f)).toDouble()
         }
         
-        val totalWeight = fields.keys.sumOf { (weights[it] ?: 1.0f).toDouble() }
+        val totalWeight = primaryFields.keys.sumOf { (weights[it] ?: 1.0f).toDouble() }
         
         return (weightedSum / totalWeight).toFloat()
     }
@@ -656,4 +731,3 @@ data class ProgressiveExtractionResult(
     val passesUsed: Int,
     val error: String? = null
 )
-

@@ -235,7 +235,6 @@ class ImageProcessor(
                 Log.d(TAG, "✅ Progressive extraction SUCCESS:")
                 Log.d(TAG, "  - Store: '${progressiveResult.coupon.storeName}'")
                 Log.d(TAG, "  - Description: '${progressiveResult.coupon.description.take(80)}...'")
-                Log.d(TAG, "  - Amount: ${progressiveResult.coupon.cashbackAmount}")
                 Log.d(TAG, "  - Confidence: ${progressiveResult.confidence}")
                 Log.d(TAG, "  - Passes used: ${progressiveResult.passesUsed}")
                 
@@ -243,12 +242,12 @@ class ImageProcessor(
                 val couponInfo = CouponInfo(
                     storeName = progressiveResult.coupon.storeName,
                     description = progressiveResult.coupon.description,
-                    cashbackAmount = if (progressiveResult.coupon.cashbackAmount > 0.0) 
-                        progressiveResult.coupon.cashbackAmount else null,
                     expiryDate = progressiveResult.coupon.expiryDate,
                     redeemCode = progressiveResult.coupon.redeemCode,
                     category = progressiveResult.coupon.category,
-                    status = progressiveResult.coupon.status
+                    status = progressiveResult.coupon.status,
+                    cashbackAmount = null,
+                    discountType = null
                 )
                 
                 Log.d(TAG, "✅ Converted to CouponInfo successfully")

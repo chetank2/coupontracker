@@ -125,7 +125,9 @@ class HybridCouponDetector(
         
         // Step 4: If no regions found, return full image as fallback
         return if (fusedRegions.isEmpty()) {
-            val fullText = ocrResult.extractedInfo.values.joinToString("\n")
+            val fullText = ocrResult.text.ifBlank {
+                ocrResult.extractedInfo.values.joinToString("\n")
+            }
             listOf(
                 CouponRegion(
                     boundingBox = Rect(0, 0, bitmap.width, bitmap.height),
@@ -342,4 +344,3 @@ class HybridCouponDetector(
         }
     }
 }
-

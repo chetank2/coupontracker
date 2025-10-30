@@ -80,7 +80,9 @@ class OcrAnchorSegmenter(
         Log.d(TAG, "Starting OCR anchor-based segmentation")
         
         // Extract full OCR text
-        val fullText = ocrResult.extractedInfo.values.joinToString("\n")
+        val fullText = ocrResult.text.ifBlank {
+            ocrResult.extractedInfo.values.joinToString("\n")
+        }
         val lines = fullText.lines()
         
         Log.d(TAG, "OCR text has ${lines.size} lines")
@@ -281,4 +283,3 @@ class OcrAnchorSegmenter(
         return stats
     }
 }
-

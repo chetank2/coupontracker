@@ -44,8 +44,8 @@ data class CouponInfo(
             return false
         }
 
-        // Must have either a code or an amount
-        if (redeemCode.isNullOrBlank() && (cashbackAmount == null || cashbackAmount <= 0)) {
+        // Must have either a code or a descriptive body
+        if (redeemCode.isNullOrBlank() && description.isBlank()) {
             return false
         }
 

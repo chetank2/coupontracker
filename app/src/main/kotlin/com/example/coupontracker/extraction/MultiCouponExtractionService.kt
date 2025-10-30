@@ -335,7 +335,9 @@ class MultiCouponExtractionService @Inject constructor(
                 return@withContext false
             }
 
-            val fullText = ocrResult.extractedInfo.values.joinToString("\n")
+            val fullText = ocrResult.text.ifBlank {
+                ocrResult.extractedInfo.values.joinToString("\n")
+            }
 
             // Quick classification
             val classification = screenshotClassifier.classify(bitmap, fullText)
@@ -388,7 +390,9 @@ class MultiCouponExtractionService @Inject constructor(
         }
 
         val ocrSuccess = ocrResult
-        val fullText = ocrSuccess.extractedInfo.values.joinToString("\n")
+        val fullText = ocrSuccess.text.ifBlank {
+            ocrSuccess.extractedInfo.values.joinToString("\n")
+        }
         Log.d(TAG, "OCR extracted ${fullText.length} characters")
 
         Log.d(TAG, "Step 2: Classifying screenshot type...")
