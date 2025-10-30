@@ -57,7 +57,6 @@ class SmartCouponSanitizer(
             id = 0,
             storeName = canonicalStore ?: "Unknown Store",
             description = description,
-            cashbackAmount = 0.0,
             redeemCode = sanitizedCode,
             expiryDate = expiryDateConverted,
             imageUri = imageUri,

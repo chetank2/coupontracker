@@ -302,9 +302,10 @@ class SystemVerificationHarness @Inject constructor(
         
         val hasValidStore = !GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)
         val hasValidCode = !couponInfo.redeemCode.isNullOrBlank()
-        val hasValidAmount = couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0
-        
-        return hasValidStore || hasValidCode || hasValidAmount
+        val hasValidCashbackDetail = !couponInfo.cashbackDetail.isNullOrBlank()
+        val hasSavingsInDescription = GenericFieldHeuristics.hasMeaningfulCashback(couponInfo.description)
+
+        return hasValidStore || hasValidCode || hasValidCashbackDetail || hasSavingsInDescription
     }
     
     /**

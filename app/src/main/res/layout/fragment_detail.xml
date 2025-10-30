@@ -70,16 +70,6 @@
                         tools:text="you won a voucher up to ₹200 off from Myntra" />
 
                     <TextView
-                        android:id="@+id/cashbackAmount"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:textAppearance="?attr/textAppearanceHeadlineSmall"
-                        android:textColor="@color/primary"
-                        android:textStyle="bold"
-                        tools:text="₹200 off" />
-
-                    <TextView
                         android:id="@+id/expiryDate"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

@@ -17,6 +17,7 @@ import androidx.navigation.NavController
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.extraction.ExtractionValidator
 import com.example.coupontracker.extraction.MultiCouponExtractionService
+import com.example.coupontracker.data.util.DescriptionUtils
 
 /**
  * Multi-Coupon Preview Screen
@@ -271,20 +272,19 @@ private fun CouponPreviewCard(
                 Spacer(modifier = Modifier.height(4.dp))
             }
             
-            // Cashback Amount
-            if (coupon.cashbackAmount > 0) {
+            DescriptionUtils.extractCashbackLine(coupon.description)?.let { detail ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
-                        Icons.Default.MoneyOff,
+                        Icons.Default.LocalOffer,
                         contentDescription = null,
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.tertiary
                     )
                     Text(
-                        text = "₹${coupon.cashbackAmount} ${coupon.cashbackType}",
+                        text = detail,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface
                     )
@@ -394,4 +394,3 @@ private fun EmptyStateContent() {
         }
     }
 }
-

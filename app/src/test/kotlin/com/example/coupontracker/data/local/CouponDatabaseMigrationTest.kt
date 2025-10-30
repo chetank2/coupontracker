@@ -16,6 +16,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import com.example.coupontracker.data.util.CouponDedupUtils
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [33])
@@ -38,7 +39,8 @@ class CouponDatabaseMigrationTest {
                 CouponDatabase.MIGRATION_8_9,
                 CouponDatabase.MIGRATION_9_10,
                 CouponDatabase.MIGRATION_10_11,
-                CouponDatabase.MIGRATION_11_12
+                CouponDatabase.MIGRATION_11_12,
+                CouponDatabase.MIGRATION_12_13
             )
             .allowMainThreadQueries()
             .build()
@@ -46,6 +48,31 @@ class CouponDatabaseMigrationTest {
         database.openHelper.writableDatabase.use { migratedDb ->
             assertColumnExistsWithDefault(migratedDb)
             assertExistingRowsReceiveDefault(migratedDb)
+            assertCashbackColumnsRemoved(migratedDb)
+        }
+
+        database.close()
+    }
+
+    @Test
+    fun migration12To13_mergesCashbackIntoDescription() {
+        createVersion12DatabaseWithCashbackRow()
+
+        val database = Room.databaseBuilder(context, CouponDatabase::class.java, dbName)
+            .addMigrations(CouponDatabase.MIGRATION_12_13)
+            .allowMainThreadQueries()
+            .build()
+
+        database.openHelper.writableDatabase.use { migratedDb ->
+            migratedDb.query("SELECT description, normalizedDescription FROM coupons WHERE storeName = 'Cashback Store'").use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                val expectedDescription = "Limited time deal\nCashback: 30% off"
+                assertEquals(expectedDescription, cursor.getString(0))
+                assertEquals(
+                    CouponDedupUtils.normalizeDescription(expectedDescription),
+                    cursor.getString(1)
+                )
+            }
         }
 
         database.close()
@@ -62,6 +89,30 @@ class CouponDatabaseMigrationTest {
                 override fun onCreate(db: SupportSQLiteDatabase) {
                     applySchema(schema, db)
                     seedCouponRow(db)
+                }
+
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {
+                    // Not needed for tests
+                }
+            })
+            .build()
+
+        val helper = openHelperFactory.create(configuration)
+        helper.writableDatabase.close()
+        helper.close()
+    }
+
+    private fun createVersion12DatabaseWithCashbackRow() {
+        context.deleteDatabase(dbName)
+
+        val schema = loadSchemaJson(12)
+        val openHelperFactory = FrameworkSQLiteOpenHelperFactory()
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(dbName)
+            .callback(object : SupportSQLiteOpenHelper.Callback(12) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    applySchema(schema, db)
+                    seedTypedCashbackRow(db)
                 }
 
                 override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -131,6 +182,42 @@ class CouponDatabaseMigrationTest {
         )
     }
 
+    private fun seedTypedCashbackRow(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            INSERT INTO coupons (
+                storeName,
+                description,
+                cashbackAmount,
+                cashbackType,
+                cashbackValueNum,
+                cashbackCurrency,
+                isPriority,
+                usageCount,
+                extractionConfidenceBreakdown,
+                createdAt,
+                updatedAt,
+                needsAttention,
+                storeNameEvidence
+            ) VALUES (
+                'Cashback Store',
+                'Limited time deal',
+                0.0,
+                'percent',
+                30.0,
+                'INR',
+                0,
+                0,
+                '{}',
+                0,
+                0,
+                0,
+                '[]'
+            )
+            """.trimIndent()
+        )
+    }
+
     private fun assertColumnExistsWithDefault(db: SupportSQLiteDatabase) {
         db.query("PRAGMA table_info(`coupons`)").use { cursor ->
             var found = false
@@ -154,6 +241,21 @@ class CouponDatabaseMigrationTest {
         db.query("SELECT extractionConfidenceBreakdown FROM coupons").use { cursor ->
             assertTrue(cursor.moveToFirst())
             assertEquals("{}", cursor.getString(0))
+        }
+    }
+
+    private fun assertCashbackColumnsRemoved(db: SupportSQLiteDatabase) {
+        db.query("PRAGMA table_info(`coupons`)").use { cursor ->
+            val nameIndex = cursor.getColumnIndex("name")
+            val columnNames = buildList {
+                while (cursor.moveToNext()) {
+                    add(cursor.getString(nameIndex))
+                }
+            }
+            assertTrue("cashbackAmount column should be removed", "cashbackAmount" !in columnNames)
+            assertTrue("cashbackType column should be removed", "cashbackType" !in columnNames)
+            assertTrue("cashbackValueNum column should be removed", "cashbackValueNum" !in columnNames)
+            assertTrue("cashbackCurrency column should be removed", "cashbackCurrency" !in columnNames)
         }
     }
 

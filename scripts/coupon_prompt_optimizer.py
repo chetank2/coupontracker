@@ -29,13 +29,12 @@ class CouponPromptOptimizer:
     def __init__(self):
         self.base_schema = {
             "storeName": "string (required) - Name of the store/brand",
-            "description": "string (required) - Description of the offer",
-            "cashbackAmount": "string (optional) - Amount or percentage off",
+            "description": "string (required) - Offer description including savings details",
             "redeemCode": "string (optional) - Coupon/promo code",
             "expiryDate": "string (optional) - Expiry date in YYYY-MM-DD format",
-            "minOrderAmount": "string (optional) - Minimum order value required",
-            "category": "string (optional) - Product category",
-            "terms": "string (optional) - Terms and conditions"
+            "storeNameSource": "string (optional) - How the store name was inferred",
+            "storeNameEvidence": "array of strings (optional) - OCR snippets backing the store name",
+            "needsAttention": "boolean (required) - true if extraction looks uncertain"
         }
         
         self.few_shot_examples = self._create_few_shot_examples()
@@ -47,39 +46,36 @@ class CouponPromptOptimizer:
                 "description": "Amazon coupon with 20% off electronics",
                 "expected_output": {
                     "storeName": "Amazon",
-                    "description": "20% off electronics",
-                    "cashbackAmount": "20%",
-                    "redeemCode": null,
-                    "expiryDate": null,
-                    "minOrderAmount": null,
-                    "category": "Electronics",
-                    "terms": null
+                    "description": "Get 20% off electronics",
+                    "redeemCode": None,
+                    "expiryDate": None,
+                    "storeNameSource": "heading",
+                    "storeNameEvidence": ["Amazon"],
+                    "needsAttention": False
                 }
             },
             {
                 "description": "Flipkart promo code SAVE500 for ₹500 off on orders above ₹2000, valid till Dec 31",
                 "expected_output": {
                     "storeName": "Flipkart", 
-                    "description": "₹500 off on orders above ₹2000",
-                    "cashbackAmount": "₹500",
+                    "description": "Use code SAVE500 for ₹500 off on orders above ₹2000",
                     "redeemCode": "SAVE500",
                     "expiryDate": "2024-12-31",
-                    "minOrderAmount": "₹2000",
-                    "category": null,
-                    "terms": "valid till Dec 31"
+                    "storeNameSource": "heading",
+                    "storeNameEvidence": ["Flipkart"],
+                    "needsAttention": False
                 }
             },
             {
                 "description": "Zomato: Get 50% off up to ₹150 on your first order. Use code FIRST50",
                 "expected_output": {
                     "storeName": "Zomato",
-                    "description": "50% off up to ₹150 on first order", 
-                    "cashbackAmount": "50%",
+                    "description": "Get 50% off up to ₹150 on your first order",
                     "redeemCode": "FIRST50",
-                    "expiryDate": null,
-                    "minOrderAmount": null,
-                    "category": "Food",
-                    "terms": "on your first order, up to ₹150"
+                    "expiryDate": None,
+                    "storeNameSource": "logo",
+                    "storeNameEvidence": ["Zomato"],
+                    "needsAttention": False
                 }
             }
         ]
@@ -92,21 +88,20 @@ class CouponPromptOptimizer:
 CRITICAL RULES:
 1. Extract ONLY information visible in the image
 2. Return valid JSON with the exact schema provided
-3. Use null for missing information (never leave fields empty)
-4. Be conservative - if unsure, use null
+3. Use null for missing optional fields (never invent values)
+4. Keep all savings/cashback specifics inside `description`
 5. Preserve original currency symbols and formatting
-6. For dates, use YYYY-MM-DD format when possible
+6. For dates, prefer YYYY-MM-DD when possible, otherwise use `DD/MM/YYYY`
 
 SCHEMA:
 {
   "storeName": "string (required) - Store/brand name",
-  "description": "string (required) - Offer description", 
-  "cashbackAmount": "string|null - Amount/percentage off",
+  "description": "string (required) - Offer description including savings details", 
   "redeemCode": "string|null - Promo/coupon code",
   "expiryDate": "string|null - Expiry in YYYY-MM-DD format",
-  "minOrderAmount": "string|null - Minimum order value",
-  "category": "string|null - Product category",
-  "terms": "string|null - Terms and conditions"
+  "storeNameSource": "string|null - Indicator of how the store was inferred",
+  "storeNameEvidence": "array|null - OCR snippet(s) backing the store name",
+  "needsAttention": "boolean (required) - true if output looks uncertain"
 }"""
 
         user_prompt = """Analyze this coupon image and extract the information in the exact JSON format specified.
@@ -116,9 +111,7 @@ Look for:
 - Offer details (discount amount, percentage)
 - Promo codes (alphanumeric codes like SAVE20, FIRST50)
 - Expiry dates (look for "valid till", "expires", dates)
-- Minimum order amounts (₹500, $50, etc.)
-- Category information (electronics, food, fashion)
-- Terms and conditions (fine print)
+- Mention minimum order requirements, categories, or terms inside the description when they appear.
 
 Return ONLY the JSON object, no additional text."""
 
@@ -142,16 +135,15 @@ Return ONLY the JSON object, no additional text."""
     def _create_validation_rules(self) -> Dict:
         """Create validation rules for extracted data"""
         return {
-            "required_fields": ["storeName", "description"],
+            "required_fields": ["storeName", "description", "needsAttention"],
             "field_types": {
                 "storeName": str,
                 "description": str,
-                "cashbackAmount": [str, type(None)],
                 "redeemCode": [str, type(None)],
                 "expiryDate": [str, type(None)],
-                "minOrderAmount": [str, type(None)],
-                "category": [str, type(None)],
-                "terms": [str, type(None)]
+                "storeNameSource": [str, type(None)],
+                "storeNameEvidence": [list, type(None)],
+                "needsAttention": bool
             },
             "date_formats": [
                 "%Y-%m-%d",
@@ -292,19 +284,20 @@ Return JSON only. Be conservative if uncertain."""
     
     def _create_fast_prompt(self) -> CouponPromptTemplate:
         """Create minimal prompt for fast inference"""
-        system_prompt = """Extract coupon info as JSON. Required: storeName, description. Optional: cashbackAmount, redeemCode, expiryDate, minOrderAmount, category, terms. Use null for missing data."""
+        system_prompt = """Extract coupon info as JSON. Required fields: storeName, description, needsAttention. Optional: redeemCode, expiryDate, storeNameSource, storeNameEvidence. Use null for missing optional data."""
         
-        user_prompt = """Extract from this coupon image:
+        user_prompt = """Return ONLY this JSON structure:
 {
   "storeName": "?",
-  "description": "?", 
-  "cashbackAmount": "?",
+  "description": "?",
   "redeemCode": "?",
   "expiryDate": "?",
-  "minOrderAmount": "?",
-  "category": "?",
-  "terms": "?"
-}"""
+  "storeNameSource": "?",
+  "storeNameEvidence": ["?"],
+  "needsAttention": false
+}
+
+Ensure all savings and cashback information stays inside `description`."""
         
         return CouponPromptTemplate(
             system_prompt=system_prompt,

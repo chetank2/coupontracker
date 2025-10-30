@@ -7,9 +7,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
-import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.CouponDedupUtils
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.util.CouponInputManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Date
-import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -103,7 +102,6 @@ class CouponFormViewModel @Inject constructor(
      * Save the coupon
      * @param storeName Store name
      * @param description Description
-     * @param amount Amount
      * @param code Redeem code
      * @param expiryDate Expiry date
      * @param category Category
@@ -112,7 +110,6 @@ class CouponFormViewModel @Inject constructor(
     fun saveCoupon(
         storeName: String,
         description: String,
-        amount: Double,
         code: String,
         expiryDate: Date?,
         category: String,
@@ -139,8 +136,12 @@ class CouponFormViewModel @Inject constructor(
                 val persistedImageUri = _uiState.value.persistedImageUri ?: imageUri
 
                 val coupon = createCoupon(
-                    storeName, description, amount, code,
-                    expiryDate, category, persistedImageUri
+                    storeName = storeName,
+                    description = description,
+                    code = code,
+                    expiryDate = expiryDate,
+                    category = category,
+                    imageUri = persistedImageUri
                 )
                 val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
                 val savedCouponId = couponRepository.saveOrMergeCoupon(
@@ -174,7 +175,6 @@ class CouponFormViewModel @Inject constructor(
     private fun createCoupon(
         storeName: String,
         description: String,
-        amount: Double,
         code: String,
         expiryDate: Date?,
         category: String,
@@ -183,7 +183,6 @@ class CouponFormViewModel @Inject constructor(
         return Coupon(
             storeName = storeName,
             description = description,
-            cashbackAmount = amount,
             redeemCode = code.takeIf { it.isNotBlank() },
             expiryDate = expiryDate,
             category = category.takeIf { it.isNotBlank() },
@@ -197,23 +196,18 @@ class CouponFormViewModel @Inject constructor(
      * Map a Coupon object to CouponInfo
      */
     private fun mapCouponToCouponInfo(coupon: Coupon): CouponInfo {
-        val cashbackInfo = coupon.getCashbackInfo()
-        val discountType = when (coupon.cashbackType?.lowercase(Locale.ROOT)) {
-            "percent" -> "PERCENTAGE"
-            "amount" -> "AMOUNT"
-            "text" -> "TEXT"
-            else -> when (cashbackInfo.type) {
-                CashbackType.PERCENT -> "PERCENTAGE"
-                CashbackType.AMOUNT -> "AMOUNT"
-                CashbackType.TEXT -> null
-            }
+        val cashbackDetail = DescriptionUtils.extractCashbackLine(coupon.description)
+        val discountType = when {
+            cashbackDetail?.contains("%") == true -> "PERCENTAGE"
+            cashbackDetail?.any { it.isDigit() } == true -> "AMOUNT"
+            else -> null
         }
 
         return CouponInfo(
             storeName = coupon.storeName,
             description = coupon.description,
             expiryDate = coupon.expiryDate,
-            cashbackAmount = coupon.cashbackValueNum ?: cashbackInfo.valueNum,
+            cashbackDetail = cashbackDetail,
             redeemCode = coupon.redeemCode,
             category = coupon.category,
             rating = coupon.rating,

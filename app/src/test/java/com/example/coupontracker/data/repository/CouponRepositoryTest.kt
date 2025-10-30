@@ -38,7 +38,6 @@ class CouponRepositoryTest {
                 storeName = "Test Store",
                 description = "Test Description",
                 expiryDate = Date(),
-                cashbackAmount = 10.0,
                 redeemCode = "TEST123",
                 imageUri = null,
                 category = "Test"
@@ -61,7 +60,6 @@ class CouponRepositoryTest {
             storeName = "Test Store",
             description = "Test Description",
             expiryDate = Date(),
-            cashbackAmount = 10.0,
             redeemCode = "TEST123",
             imageUri = null,
             category = "Test"
@@ -85,7 +83,6 @@ class CouponRepositoryTest {
             storeName = "Test Store",
             description = "Test Description",
             expiryDate = Date(),
-            cashbackAmount = 10.0,
             redeemCode = "TEST123",
             imageUri = null,
             category = "Test"
@@ -110,7 +107,6 @@ class CouponRepositoryTest {
             description = description,
             normalizedDescription = normalized,
             expiryDate = Date(),
-            cashbackAmount = 10.0,
             redeemCode = "CODE123",
             imageUri = null,
             category = "Test",
@@ -125,7 +121,6 @@ class CouponRepositoryTest {
             id = 0,
             normalizedDescription = null,
             redeemCode = null,
-            cashbackAmount = 20.0,
             usageCount = 5,
             expiryDate = null,
             createdAt = Date(),
@@ -153,7 +148,6 @@ class CouponRepositoryTest {
                         it.normalizedDescription == normalized &&
                         it.redeemCode == existing.redeemCode &&
                         it.expiryDate == existing.expiryDate &&
-                        it.cashbackAmount == incoming.cashbackAmount &&
                         it.usageCount == kotlin.math.max(existing.usageCount, incoming.usageCount) &&
                         it.createdAt == existing.createdAt
                 }
@@ -170,7 +164,6 @@ class CouponRepositoryTest {
             storeName = "Reminder Store",
             description = "Reminder Description",
             expiryDate = expiry,
-            cashbackAmount = 5.0,
             redeemCode = "REM123",
             imageUri = null,
             category = "Test",
@@ -191,7 +184,6 @@ class CouponRepositoryTest {
             storeName = "Store",
             description = "Desc",
             expiryDate = Date(),
-            cashbackAmount = 1.0,
             redeemCode = null,
             imageUri = null,
             category = "Cat",

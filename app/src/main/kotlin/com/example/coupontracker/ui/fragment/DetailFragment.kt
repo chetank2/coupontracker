@@ -14,10 +14,7 @@ import android.view.MenuInflater
 import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
@@ -108,7 +105,7 @@ class DetailFragment : Fragment() {
         }
 
         binding.trackUsageButton.setOnClickListener {
-            showUsageTrackingDialog()
+            viewModel.trackUsage()
         }
 
         binding.setReminderButton.setOnClickListener {
@@ -117,34 +114,6 @@ class DetailFragment : Fragment() {
 
         binding.cancelReminderButton.setOnClickListener {
             viewModel.cancelReminder()
-        }
-    }
-
-    private fun showUsageTrackingDialog() {
-        viewModel.coupon.value?.let { coupon ->
-            val dialogView = LayoutInflater.from(requireContext())
-                .inflate(R.layout.dialog_track_usage, null)
-
-            val amountInput = dialogView.findViewById<EditText>(R.id.amountSavedInput)
-            amountInput.setText(coupon.cashbackAmount.toString())
-
-            val usageText = dialogView.findViewById<TextView>(R.id.usageText)
-            if (coupon.usageLimit != null) {
-                usageText.text = "Usage: ${coupon.usageCount} of ${coupon.usageLimit}"
-                usageText.visibility = View.VISIBLE
-            } else {
-                usageText.visibility = View.GONE
-            }
-
-            AlertDialog.Builder(requireContext())
-                .setTitle("Track Coupon Usage")
-                .setView(dialogView)
-                .setPositiveButton("Track") { _, _ ->
-                    val amountSaved = amountInput.text.toString().toDoubleOrNull() ?: coupon.cashbackAmount
-                    viewModel.trackUsage(amountSaved)
-                }
-                .setNegativeButton("Cancel", null)
-                .show()
         }
     }
 
@@ -191,15 +160,6 @@ class DetailFragment : Fragment() {
 
                             // Show full description
                             description.text = coupon.description
-
-                            // Use typed cashback display
-                            val cashbackDisplayText = coupon.getCashbackDisplayText()
-                            if (cashbackDisplayText.isNotBlank() && coupon.getCashbackNumericValue() > 0) {
-                                cashbackAmount.text = cashbackDisplayText // Shows "75%" or "₹500" correctly
-                                cashbackAmount.visibility = View.VISIBLE
-                            } else {
-                                cashbackAmount.visibility = View.GONE
-                            }
 
                             expiryDate.text = if (coupon.expiryDate != null) {
                                 "Expires: ${dateFormat.format(coupon.expiryDate)}"

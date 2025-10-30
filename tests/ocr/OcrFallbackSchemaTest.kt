@@ -38,7 +38,7 @@ class OcrFallbackSchemaTest {
         val fallback = CouponInfo(
             storeName = "Example Store",
             description = "Use code SAVE20 to earn ₹200 cashback on electronics",
-            cashbackAmount = 200.0,
+            cashbackDetail = "Cashback: ₹200 off",
             redeemCode = "SAVE20",
             expiryDate = primary.expiryDate,
             category = primary.category
@@ -54,7 +54,7 @@ class OcrFallbackSchemaTest {
         val fields = mutableSetOf<String>()
         if (info.storeName.isNotBlank()) fields.add("storeName")
         if (info.description.isNotBlank()) fields.add("description")
-        if (info.cashbackAmount != null) fields.add("cashbackAmount")
+        if (!info.cashbackDetail.isNullOrBlank()) fields.add("cashbackDetail")
         if (!info.redeemCode.isNullOrBlank()) fields.add("redeemCode")
         if (info.expiryDate != null) fields.add("expiryDate")
         if (!info.category.isNullOrBlank()) fields.add("category")

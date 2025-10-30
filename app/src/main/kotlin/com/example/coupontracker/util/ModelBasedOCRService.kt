@@ -3,6 +3,7 @@ package com.example.coupontracker.util
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.CouponInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -118,10 +119,10 @@ class ModelBasedOCRService(
                 if (dateStr != null) DateParser.parseDate(dateStr) else null
             } else info.expiryDate,
             
-            cashbackAmount = if (info.cashbackAmount == null) {
-                val amountStr = extractAmount(mlKitText)
-                parseAmount(amountStr)
-            } else info.cashbackAmount
+            cashbackDetail = if (!GenericFieldHeuristics.hasMeaningfulCashback(info.cashbackDetail) &&
+                !GenericFieldHeuristics.hasMeaningfulCashback(info.description)) {
+                extractCashbackDetail(mlKitText) ?: info.cashbackDetail
+            } else info.cashbackDetail
         )
     }
     
@@ -138,13 +139,18 @@ class ModelBasedOCRService(
         val storeName = patternResults["store"] ?: extractStoreName(mlKitText)
         val code = patternResults["code"] ?: extractCouponCode(mlKitText)
         val expiryDateStr = patternResults["expiry"] ?: extractExpiryDate(mlKitText, captureTimestamp)
-        val amountStr = patternResults["amount"] ?: extractAmount(mlKitText)
+        val patternDetail = patternResults["amount"]?.let { DescriptionUtils.formatCashbackDetail(it) ?: it }
 
         // Extract description from the full text
         val description = extractDescription(mlKitText)
 
-        // Parse amount to Double if possible
-        val amount = parseAmount(amountStr)
+        // Resolve cashback detail
+        val cashbackDetail = patternDetail ?: extractCashbackDetail(mlKitText)
+        val discountType = when {
+            cashbackDetail?.contains("%") == true -> "PERCENTAGE"
+            cashbackDetail?.any { it.isDigit() } == true -> "AMOUNT"
+            else -> null
+        }
 
         // Parse expiry date if available
         val expiryDate = DateParser.parseDate(expiryDateStr, captureTimestamp)
@@ -153,8 +159,9 @@ class ModelBasedOCRService(
             storeName = storeName ?: "",
             description = description ?: "",
             expiryDate = expiryDate,
-            cashbackAmount = amount,
-            redeemCode = code
+            cashbackDetail = cashbackDetail,
+            redeemCode = code,
+            discountType = discountType
         )
     }
 
@@ -189,12 +196,10 @@ class ModelBasedOCRService(
     }
 
     /**
-     * Extract amount from text
+     * Extract cashback detail from text
      */
-    private fun extractAmount(mlKitText: String): String? {
-        // Use TextExtractor to get amount
-        val amount = textExtractor.extractCashbackAmount(mlKitText)
-        return amount?.toString()
+    private fun extractCashbackDetail(mlKitText: String): String? {
+        return textExtractor.extractCashbackDetail(mlKitText)
     }
 
     /**

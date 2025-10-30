@@ -3,6 +3,7 @@ package com.example.coupontracker.util
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.util.Log
+import com.example.coupontracker.data.util.DescriptionUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.regex.Pattern
@@ -46,7 +47,7 @@ class RegionBasedExtractor(
             val redeemCode = extractRedeemCode(fullText, bitmap)
             val description = extractDescription(fullText, bitmap)
             val expiryDate = extractExpiryDate(fullText, bitmap)
-            val cashbackAmount = extractCashbackAmount(fullText, bitmap)
+            val cashbackDetail = extractCashbackDetail(fullText, bitmap)
 
             // Get additional info using standard extractor
             val category = textExtractor.extractCategory(fullText)
@@ -57,7 +58,7 @@ class RegionBasedExtractor(
                 storeName = storeName ?: textExtractor.extractStoreName(fullText) ?: "Unknown Store",
                 description = description ?: textExtractor.extractDescription(fullText) ?: "",
                 expiryDate = expiryDate ?: textExtractor.extractExpiryDate(fullText),
-                cashbackAmount = cashbackAmount ?: textExtractor.extractCashbackAmount(fullText),
+                cashbackDetail = cashbackDetail ?: textExtractor.extractCashbackDetail(fullText),
                 redeemCode = redeemCode ?: textExtractor.extractRedeemCode(fullText),
                 category = category,
                 rating = rating,
@@ -347,9 +348,10 @@ class RegionBasedExtractor(
     }
 
     /**
-     * Extract cashback/discount amount with improved accuracy
+     * Extract cashback/discount detail with improved accuracy.
+     * Returns a human-readable string that can be appended to description.
      */
-    private fun extractCashbackAmount(fullText: String, bitmap: Bitmap): Double? {
+    private fun extractCashbackDetail(fullText: String, bitmap: Bitmap): String? {
         try {
             // Pattern for percentage discounts (like in the Mivi example: 80%)
             val percentagePatterns = listOf(
@@ -363,8 +365,11 @@ class RegionBasedExtractor(
                 if (matcher.find()) {
                     val percentage = matcher.group(1)?.toDoubleOrNull()
                     if (percentage != null) {
-                        Log.d(TAG, "Found percentage discount: $percentage%")
-                        return percentage
+                        val formatted = DescriptionUtils.formatCashbackDetail(percentage, "percent")
+                        if (formatted != null) {
+                            Log.d(TAG, "Found percentage discount detail: $formatted")
+                            return formatted
+                        }
                     }
                 }
             }
@@ -380,9 +385,11 @@ class RegionBasedExtractor(
                 val matcher = pattern.matcher(fullText)
                 if (matcher.find()) {
                     val amount = matcher.group(1)?.toDoubleOrNull()
-                    if (amount != null) {
-                        Log.d(TAG, "Found fixed amount discount: ₹$amount")
-                        return amount
+                    if (amount != null && amount > 0) {
+                        val formatted = DescriptionUtils.formatCashbackDetail(amount, "amount", "INR")
+                            ?: "Cashback: ₹${amount.toInt()} off"
+                        Log.d(TAG, "Found fixed amount discount detail: $formatted")
+                        return formatted
                     }
                 }
             }
@@ -391,13 +398,14 @@ class RegionBasedExtractor(
             if (fullText.contains("Mivi", ignoreCase = true) &&
                 fullText.contains("80", ignoreCase = true) &&
                 fullText.contains("%", ignoreCase = true)) {
-                Log.d(TAG, "Using special case for Mivi: 80.0")
-                return 80.0
+                val formatted = DescriptionUtils.formatCashbackDetail(80.0, "percent")
+                Log.d(TAG, "Using special case for Mivi: $formatted")
+                return formatted
             }
 
             return null
         } catch (e: Exception) {
-            Log.e(TAG, "Error extracting cashback amount", e)
+            Log.e(TAG, "Error extracting cashback detail", e)
             return null
         }
     }
@@ -411,7 +419,7 @@ class RegionBasedExtractor(
         data["storeName"] = couponInfo.storeName
         data["description"] = couponInfo.description
         data["expiryDate"] = couponInfo.expiryDate
-        data["cashbackAmount"] = couponInfo.cashbackAmount
+        data["cashbackDetail"] = couponInfo.cashbackDetail
         data["redeemCode"] = couponInfo.redeemCode
         data["category"] = couponInfo.category
         data["rating"] = couponInfo.rating
@@ -450,37 +458,31 @@ class RegionBasedExtractor(
             }
 
             // Set amount
-            if (data["cashbackAmount"] == null) {
-                data["cashbackAmount"] = 80.0
+            if (data["cashbackDetail"] == null) {
+                data["cashbackDetail"] = DescriptionUtils.formatCashbackDetail(80.0, "percent")
             }
         }
 
-        // RULE 3: If we have a cashback amount but no description, create a synthetic one
-        if (data["description"] == "" && data["cashbackAmount"] != null && data["storeName"] != "Unknown Store") {
-            val amount = data["cashbackAmount"]
-            val store = data["storeName"]
-            if (amount is Double && amount > 0) {
-                if (amount % 1 == 0.0 && amount > 10) {
-                    // Likely a percentage if it's a whole number above 10
-                    data["description"] = "${amount.toInt()}% off at $store"
-                } else {
-                    // Likely a fixed amount
-                    data["description"] = "₹${amount.toInt()} off at $store"
-                }
+        // RULE 3: If we have a cashback detail but no description, create a synthetic one
+        if (data["description"] == "" && data["cashbackDetail"] != null && data["storeName"] != "Unknown Store") {
+            val detail = data["cashbackDetail"] as? String
+            val store = data["storeName"] as? String ?: "the store"
+            if (!detail.isNullOrBlank()) {
+                data["description"] = DescriptionUtils.appendDetails("Offer from $store", detail)
                 Log.d(TAG, "Created synthetic description: ${data["description"]}")
             }
         }
 
         // Create new CouponInfo with validated/enriched data
         return CouponInfo(
-            storeName = data["storeName"] as String,
-            description = data["description"] as String,
+            storeName = data["storeName"] as? String ?: "Unknown Store",
+            description = data["description"] as? String ?: "",
             expiryDate = data["expiryDate"] as java.util.Date?,
-            cashbackAmount = data["cashbackAmount"] as Double?,
-            redeemCode = data["redeemCode"] as String?,
-            category = data["category"] as String?,
-            rating = data["rating"] as String?,
-            status = data["status"] as String?
+            cashbackDetail = data["cashbackDetail"] as? String,
+            redeemCode = data["redeemCode"] as? String,
+            category = data["category"] as? String,
+            rating = data["rating"] as? String,
+            status = data["status"] as? String
         )
     }
 

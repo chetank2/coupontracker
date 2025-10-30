@@ -12,14 +12,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.CurrencyRupee
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Save
@@ -45,7 +43,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -64,8 +61,6 @@ fun UnifiedCouponForm(
     onStoreNameChange: (String) -> Unit,
     description: String,
     onDescriptionChange: (String) -> Unit,
-    amount: String,
-    onAmountChange: (String) -> Unit,
     code: String,
     onCodeChange: (String) -> Unit,
     expiryDateString: String,
@@ -133,21 +128,6 @@ fun UnifiedCouponForm(
                 Icon(Icons.Default.Description, contentDescription = null)
             }
         )
-        
-        // Amount field - HIDDEN per user request (unreliable extraction)
-        // User feedback: "Don't show the amount - description has the full offer text"
-        /*
-        OutlinedTextField(
-            value = amount,
-            onValueChange = onAmountChange,
-            label = { Text("Amount (₹)") },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = {
-                Icon(Icons.Default.CurrencyRupee, contentDescription = null)
-            },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-        )
-        */
         
         // Code field
         OutlinedTextField(

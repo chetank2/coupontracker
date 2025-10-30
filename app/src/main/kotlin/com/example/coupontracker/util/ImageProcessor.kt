@@ -11,6 +11,7 @@ import android.util.Log
 import androidx.core.graphics.drawable.toBitmap
 import com.example.coupontracker.ocr.OcrEngine
 import com.example.coupontracker.ocr.TesseractOcrEngine
+import com.example.coupontracker.data.util.DescriptionUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
@@ -239,6 +240,7 @@ class ImageProcessor(
                 Log.d(TAG, "  - Passes used: ${progressiveResult.passesUsed}")
                 
                 // Convert Coupon to CouponInfo
+                val cashbackDetail = DescriptionUtils.extractCashbackLine(progressiveResult.coupon.description)
                 val couponInfo = CouponInfo(
                     storeName = progressiveResult.coupon.storeName,
                     description = progressiveResult.coupon.description,
@@ -246,8 +248,7 @@ class ImageProcessor(
                     redeemCode = progressiveResult.coupon.redeemCode,
                     category = progressiveResult.coupon.category,
                     status = progressiveResult.coupon.status,
-                    cashbackAmount = null,
-                    discountType = null
+                    cashbackDetail = cashbackDetail
                 )
                 
                 Log.d(TAG, "✅ Converted to CouponInfo successfully")

@@ -2,6 +2,8 @@ package com.example.coupontracker.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.example.coupontracker.data.util.CouponDedupUtils
+import com.example.coupontracker.data.util.DescriptionUtils
 import java.util.Date
 
 @Entity(tableName = "coupons")
@@ -12,13 +14,7 @@ data class Coupon(
     val description: String,
     val normalizedDescription: String? = null,
     val expiryDate: Date? = null,
-    val cashbackAmount: Double, // Legacy field - will be migrated
     val redeemCode: String?,
-    
-    // New typed cashback fields
-    val cashbackType: String? = null, // "percent", "amount", "text"
-    val cashbackValueNum: Double? = null, // Numeric value only
-    val cashbackCurrency: String? = "INR", // Currency for amounts
     val imageUri: String?,
     val imagePhash: String? = null,
     val imageSignature: String? = null,
@@ -53,36 +49,40 @@ data class Coupon(
     val storeNameSource: String? = null,
     val storeNameEvidence: List<String> = emptyList()
 ) {
-    /**
-     * Gets the typed cashback information, falling back to legacy cashbackAmount if needed.
-     */
-    fun getCashbackInfo(): CashbackInfo {
-        return if (cashbackType != null && cashbackValueNum != null) {
-            // Use new typed fields
-            val type = when (cashbackType) {
-                "percent" -> CashbackType.PERCENT
-                "amount" -> CashbackType.AMOUNT
-                "text" -> CashbackType.TEXT
-                else -> CashbackType.AMOUNT // Default fallback
-            }
-            CashbackInfo(type, cashbackValueNum, cashbackCurrency ?: "INR")
-        } else {
-            // Fallback to legacy field with heuristic detection
-            CashbackInfo.fromLegacyAmount(cashbackAmount, description)
-        }
+    fun withAdditionalDetails(vararg details: String?): Coupon {
+        val mergedDescription = DescriptionUtils.appendDetails(description, *details)
+        return copy(
+            description = mergedDescription,
+            normalizedDescription = CouponDedupUtils.normalizeDescription(mergedDescription)
+        )
     }
 
-    /**
-     * Gets the display text for cashback, relying exclusively on the canonical description when available.
-     */
     fun getCashbackDisplayText(): String {
-        return description.takeIf { it.isNotBlank() } ?: getCashbackInfo().getDisplayText()
+        val detail = DescriptionUtils.extractCashbackLine(description) ?: return ""
+        return detail.removePrefix("Cashback:").trim()
     }
 
-    /**
-     * Gets the numeric value for sorting and comparison.
-     */
     fun getCashbackNumericValue(): Double {
-        return cashbackValueNum ?: cashbackAmount
+        val display = getCashbackDisplayText()
+        val percentMatch = Regex("(\\d+(?:\\.\\d+)?)%", RegexOption.IGNORE_CASE).find(display)
+        if (percentMatch != null) {
+            return percentMatch.groupValues[1].toDoubleOrNull() ?: 0.0
+        }
+        val amountMatch = Regex("[₹\\$€£]?\\s*(\\d+(?:,\\d{3})*(?:\\.\\d+)?)").find(display)
+        if (amountMatch != null) {
+            return amountMatch.groupValues[1].replace(",", "").toDoubleOrNull() ?: 0.0
+        }
+        return 0.0
+    }
+
+    fun getCashbackInfo(): CashbackInfo {
+        val display = getCashbackDisplayText()
+        return when {
+            display.contains("%", ignoreCase = true) -> CashbackInfo(CashbackType.PERCENT, getCashbackNumericValue())
+            display.contains("₹") || display.contains("$") || display.contains("€") || display.contains("£") ->
+                CashbackInfo(CashbackType.AMOUNT, getCashbackNumericValue())
+            display.isNotBlank() -> CashbackInfo(CashbackType.TEXT, 0.0)
+            else -> CashbackInfo(CashbackType.TEXT, 0.0)
+        }
     }
 }

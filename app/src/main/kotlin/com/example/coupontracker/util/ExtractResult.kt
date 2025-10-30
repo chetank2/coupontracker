@@ -1,6 +1,7 @@
 package com.example.coupontracker.util
 
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.util.GenericFieldHeuristics.hasMeaningfulCashback
 
 /**
  * Sealed interface for extraction results with explicit success/failure states
@@ -148,9 +149,10 @@ object ExtractionPolicy {
             is ExtractResult.Good -> true
             is ExtractResult.LowQuality -> {
                 // Accept low quality if we have some useful information
-                result.info.storeName != "Unknown Store" || 
+                result.info.storeName != "Unknown Store" ||
                 !result.info.redeemCode.isNullOrBlank() ||
-                (result.info.cashbackAmount != null && result.info.cashbackAmount > 0)
+                hasMeaningfulCashback(result.info.cashbackDetail) ||
+                hasMeaningfulCashback(result.info.description)
             }
             is ExtractResult.Failed -> false
         }

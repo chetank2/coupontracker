@@ -171,7 +171,7 @@ fun CouponItem(
 
                 // Amount if > 0 (use typed display)
                 val cashbackDisplayText = coupon.getCashbackDisplayText()
-                if (cashbackDisplayText.isNotBlank() && coupon.getCashbackNumericValue() > 0) {
+                if (cashbackDisplayText.isNotBlank()) {
                     Surface(
                         shape = BrandShapes.MediumCornerShape,
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)

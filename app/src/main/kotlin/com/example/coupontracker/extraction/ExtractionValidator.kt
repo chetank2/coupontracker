@@ -3,6 +3,7 @@ package com.example.coupontracker.extraction
 import android.util.Log
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.data.util.DescriptionUtils
 
 /**
  * Post-extraction validator for coupon data
@@ -106,10 +107,10 @@ class ExtractionValidator(
             )
         }
         
-        if (coupon.cashbackAmount > 0.0) {
+        DescriptionUtils.extractCashbackLine(coupon.description)?.let { cashbackLine ->
             confidences[FieldType.AMOUNT] = confidenceScorer.scoreField(
                 FieldType.AMOUNT,
-                "Rs. ${coupon.cashbackAmount}",
+                cashbackLine,
                 com.example.coupontracker.universal.ExtractionContext()
             )
         }
@@ -234,4 +235,3 @@ class ExtractionValidator(
                result.extractionQuality == ExtractionQuality.POOR
     }
 }
-

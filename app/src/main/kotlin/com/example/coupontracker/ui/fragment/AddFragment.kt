@@ -38,6 +38,7 @@ import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.util.CouponInputManager
 import com.example.coupontracker.util.ExtractionLogBuffer
 import com.example.coupontracker.util.SecurePreferencesManager
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.ApiType
 import com.example.coupontracker.llm.ModelDownloadManager
 import com.example.coupontracker.llm.DownloadProgress
@@ -803,17 +804,18 @@ class AddFragment : Fragment() {
 
                 val coupon = couponInputManager.processCouponFromImageUriWithPersistence(uri)
                 ExtractionLogBuffer.appendInfo(TAG, "Coupon processing completed: store='${coupon.storeName}', description='${coupon.description}'")
+                val cashbackDetail = DescriptionUtils.extractCashbackLine(coupon.description)
                 val couponInfo = CouponInfo(
                     storeName = coupon.storeName,
                     description = coupon.description,
-                    cashbackAmount = coupon.getCashbackNumericValue().takeIf { it > 0.0 },
+                    cashbackDetail = cashbackDetail,
                     redeemCode = coupon.redeemCode,
                     expiryDate = coupon.expiryDate,
                     category = coupon.category,
                     status = coupon.status,
-                    discountType = when (coupon.cashbackType) {
-                        "percent" -> "PERCENTAGE"
-                        "amount" -> "AMOUNT"
+                    discountType = when {
+                        cashbackDetail?.contains("%") == true -> "PERCENTAGE"
+                        cashbackDetail?.any { it.isDigit() } == true -> "AMOUNT"
                         else -> null
                     },
                     minimumPurchase = coupon.minimumPurchase,
@@ -825,7 +827,7 @@ class AddFragment : Fragment() {
                 Log.d(TAG, "Extracted coupon info: $couponInfo")
 
                 if (couponInfo.storeName.isBlank() && couponInfo.description.isBlank() &&
-                    couponInfo.cashbackAmount == null && couponInfo.redeemCode.isNullOrBlank()) {
+                    couponInfo.redeemCode.isNullOrBlank()) {
                     Log.w(TAG, "No coupon information was extracted")
                     ExtractionLogBuffer.appendWarning(TAG, "No coupon information extracted from image")
                     binding.errorText.text = "Could not extract coupon information from image. Try adjusting the image or entering details manually."
@@ -862,9 +864,6 @@ class AddFragment : Fragment() {
                 updateReminderSummary(viewModel.getReminderLeadTimeMinutes())
             }
 
-            couponInfo.cashbackAmount?.let { amount ->
-                cashbackAmountInput.setText(amount.toString())
-            }
 
             couponInfo.redeemCode?.let { code ->
                 redeemCodeInput.setText(code)
@@ -956,7 +955,6 @@ class AddFragment : Fragment() {
     private fun saveCoupon() {
         val storeName = binding.storeNameInput.text.toString()
         val description = binding.descriptionInput.text.toString()
-        val cashbackAmount = binding.cashbackAmountInput.text.toString().toDoubleOrNull()
         val redeemCode = binding.redeemCodeInput.text.toString()
         val category = binding.categoryInput.text.toString()
         val rating = binding.ratingInput.text.toString()
@@ -970,19 +968,18 @@ class AddFragment : Fragment() {
         val usageLimit = binding.usageLimitInput.text.toString().toIntOrNull()
         val isPriority = binding.priorityCheckbox.isChecked
 
-        if (storeName.isBlank() || description.isBlank() || cashbackAmount == null) {
+        if (storeName.isBlank() || description.isBlank()) {
             Toast.makeText(requireContext(), "Please fill all required fields", Toast.LENGTH_SHORT).show()
             return
         }
 
         // Set priority in view model
         viewModel.setPriority(isPriority)
-        ExtractionLogBuffer.appendInfo(TAG, "Saving coupon: store='$storeName', description='$description', amount=$cashbackAmount")
+        ExtractionLogBuffer.appendInfo(TAG, "Saving coupon: store='$storeName', description length=${description.length}")
 
         viewModel.saveCoupon(
             storeName = storeName,
             description = description,
-            cashbackAmount = cashbackAmount,
             redeemCode = redeemCode.takeIf { it.isNotBlank() },
             category = category.takeIf { it.isNotBlank() },
             rating = rating.takeIf { it.isNotBlank() },

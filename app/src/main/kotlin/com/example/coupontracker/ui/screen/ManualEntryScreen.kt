@@ -60,7 +60,6 @@ fun ManualEntryScreen(
     // Form fields
     var storeName by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf("") }
     var code by remember { mutableStateOf(initialCode ?: "") }
     var expiryDateString by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
@@ -74,7 +73,6 @@ fun ManualEntryScreen(
         uiState.urlData?.let { data ->
             storeName = data.storeName
             description = data.description
-            amount = data.amount?.toString() ?: ""
             code = data.code ?: ""
         }
     }
@@ -110,8 +108,6 @@ fun ManualEntryScreen(
                 onStoreNameChange = { storeName = it },
                 description = description,
                 onDescriptionChange = { description = it },
-                amount = amount,
-                onAmountChange = { amount = it },
                 code = code,
                 onCodeChange = { code = it },
                 expiryDateString = expiryDateString,
@@ -120,7 +116,6 @@ fun ManualEntryScreen(
                 onCategoryChange = { category = it },
                 imageUri = null,
                 onSave = {
-                    val amountValue = amount.toDoubleOrNull() ?: 0.0
                     val expiryDate = try {
                         if (expiryDateString.isNotBlank()) {
                             val format = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
@@ -135,10 +130,9 @@ fun ManualEntryScreen(
                     viewModel.saveCoupon(
                         storeName = storeName,
                         description = description,
-                        amount = amountValue,
                         code = code,
                         expiryDate = expiryDate,
-                        category = category
+                        category = category.takeIf { it.isNotBlank() }
                     )
                 },
                 onCopyLogs = {

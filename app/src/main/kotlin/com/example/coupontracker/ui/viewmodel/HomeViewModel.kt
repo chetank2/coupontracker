@@ -280,7 +280,6 @@ class HomeViewModel @Inject constructor(
                 compareBy<Coupon> { it.expiryDate == null }.thenBy { it.expiryDate }
             )
             SortOrder.NAME -> filteredCoupons.sortedBy { it.storeName.lowercase() }
-            SortOrder.AMOUNT -> filteredCoupons.sortedByDescending { it.cashbackAmount }
             SortOrder.CREATED_DATE -> filteredCoupons.sortedByDescending { it.createdAt }
         }
 

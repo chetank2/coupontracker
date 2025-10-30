@@ -168,11 +168,9 @@ class LocalLlmOcrService(
 
     private fun CouponInfo.toCanonicalContract(): CouponInfo {
         return copy(
-            cashbackAmount = null,
             category = null,
             rating = null,
             status = null,
-            discountType = null,
             minimumPurchase = null,
             maximumDiscount = null,
             paymentMethod = null,
@@ -349,8 +347,8 @@ class LocalLlmOcrService(
 
         val smokePrompt = """
             You are CouponTracker's local Qwen assistant. Read the coupon text and return a single JSON object with the keys
-            storeName, description, amount, code, expiryDate, cashbackAmount, minOrderAmount. Ensure the response is valid JSON
-            without comments or markdown.
+            storeName, description, code, expiryDate. Put every savings, cashback, or amount detail into the description text.
+            Ensure the response is valid JSON without comments or markdown.
         """.trimIndent()
 
         val smokeOcr = """
@@ -873,7 +871,7 @@ class LocalLlmOcrService(
      * Returns true if the response matches known mock patterns
      */
     /**
-     * Create optimized structured prompt for coupon extraction with strict schema and typed cashback
+     * Create optimized structured prompt for coupon extraction with strict schema that funnels savings into description only
      */
     private fun createCouponExtractionPrompt(ocrText: String): String {
         // CRITICAL: Clean OCR text first to remove UI chrome (battery, signal, status bar)
@@ -1002,7 +1000,16 @@ $sanitizedOcr
     private fun enforceCanonicalFields(jsonString: String): String {
         return try {
             val jsonObject = JSONObject(jsonString)
-            val allowedKeys = setOf("storeName", "description", "redeemCode", "couponCode", "expiryDate")
+            val allowedKeys = setOf(
+                "storeName",
+                "description",
+                "redeemCode",
+                "couponCode",
+                "expiryDate",
+                "storeNameSource",
+                "storeNameEvidence",
+                "needsAttention"
+            )
             val keysToRemove = jsonObject.keys().asSequence()
                 .filter { it !in allowedKeys }
                 .toList()
@@ -1245,13 +1252,12 @@ $sanitizedOcr
                 storeName = finalStoreName,
                 description = description,
                 expiryDate = resolvedExpiry,
-                cashbackAmount = null,
+                cashbackDetail = null,
                 redeemCode = finalCode,
                 needsAttention = storeNeedsAttention,
                 storeNameSource = storeSource,
                 storeNameEvidence = storeEvidence,
-                minimumPurchase = null,
-                discountType = null
+                minimumPurchase = null
             )
 
         } catch (e: JSONException) {
@@ -1559,20 +1565,7 @@ $sanitizedOcr
      */
     private fun sanitizeSentinelValues(json: org.json.JSONObject) {
         try {
-            // 1. Sanitize cashback.valueNum: -1, 0, negative → null
-            if (json.has("cashback") && !json.isNull("cashback")) {
-                val cashback = json.optJSONObject("cashback")
-                if (cashback != null) {
-                    val valueNum = cashback.optDouble("valueNum", 0.0)
-                    
-                    if (valueNum <= 0) {
-                        Log.w(TAG, "⚠️ Sanitizing invalid cashback.valueNum: $valueNum → null")
-                        json.put("cashback", org.json.JSONObject.NULL)
-                    }
-                }
-            }
-            
-            // 2. Sanitize redeemCode: "NULL", "null", "N/A", "NA" → null
+            // 1. Sanitize redeemCode: "NULL", "null", "N/A", "NA" → null
             if (json.has("redeemCode") && !json.isNull("redeemCode")) {
                 val code = json.optString("redeemCode", "")
                 val sentinelCodes = setOf("NULL", "null", "Null", "N/A", "NA", "n/a", "na", "NONE", "None", "none")
@@ -1583,12 +1576,17 @@ $sanitizedOcr
                 }
             }
             
-            // 3. Sanitize description: "null", "NULL" → null (already handled in cleanDescription)
+            // 2. Sanitize description: "null", "NULL" → null (already handled in cleanDescription)
             // No action needed here, cleanDescription handles it
             
         } catch (e: Exception) {
             Log.w(TAG, "Error sanitizing sentinel values", e)
         }
+    }
+
+    private fun hasSavingsDetail(info: CouponInfo): Boolean {
+        if (!info.cashbackDetail.isNullOrBlank()) return true
+        return GenericFieldHeuristics.hasMeaningfulCashback(info.description)
     }
     
     /**
@@ -1601,7 +1599,8 @@ $sanitizedOcr
         // Check essential fields
         if (couponInfo.storeName != "Unknown Store") qualityScore += 30
         if (!couponInfo.redeemCode.isNullOrBlank()) qualityScore += 25
-        if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) qualityScore += 25
+        val hasSavingsDetail = hasSavingsDetail(couponInfo)
+        if (hasSavingsDetail) qualityScore += 25
         if (couponInfo.expiryDate != null) qualityScore += 10
         if (GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)) qualityScore += 10
         
@@ -1609,7 +1608,7 @@ $sanitizedOcr
         val hasGenericStoreName = GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)
         val hasGenericDescription = !GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)
         val hasGenericCode = GenericFieldHeuristics.isGenericOrMissing(couponInfo.redeemCode)
-        val hasMeaninglessAmount = GenericFieldHeuristics.isZeroOrMeaningless(couponInfo.cashbackAmount)
+        val isCashbackDetailMissing = !hasSavingsDetail
         
         // Check for duplicate fields (already handled in parsing, but validate here too)
         val hasDuplicateFields = GenericFieldHeuristics.areDuplicateFields(
@@ -1617,14 +1616,14 @@ $sanitizedOcr
         )
         
         Log.d(TAG, "Extraction quality score: $qualityScore/100")
-        Log.d(TAG, "Generic checks - Store: $hasGenericStoreName, Desc: $hasGenericDescription, Code: $hasGenericCode, Amount: $hasMeaninglessAmount, Duplicates: $hasDuplicateFields")
+        Log.d(TAG, "Generic checks - Store: $hasGenericStoreName, Desc: $hasGenericDescription, Code: $hasGenericCode, SavingsMissing: $isCashbackDetailMissing, Duplicates: $hasDuplicateFields")
         
         // Determine failure reasons for better telemetry
         when {
             // Complete failure - no meaningful data at all
             couponInfo.storeName == "Unknown Store" && 
             couponInfo.redeemCode.isNullOrBlank() && 
-            hasMeaninglessAmount -> {
+            isCashbackDetailMissing -> {
                 failureReason = "COMPLETE_EXTRACTION_FAILURE"
             }
             
@@ -1680,9 +1679,9 @@ $sanitizedOcr
                 }
             
             // Validate that we got meaningful extraction results
-            if (extractedInfo.storeName == "Unknown Store" && 
-                extractedInfo.redeemCode.isNullOrBlank() && 
-                (extractedInfo.cashbackAmount == null || extractedInfo.cashbackAmount <= 0)) {
+            if (extractedInfo.storeName == "Unknown Store" &&
+                extractedInfo.redeemCode.isNullOrBlank() &&
+                !hasSavingsDetail(extractedInfo)) {
                 throw Exception("ML Kit OCR produced insufficient coupon data")
             }
             
@@ -1783,7 +1782,7 @@ $sanitizedOcr
         // Score based on field completeness and quality
         if (!GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)) qualityScore += 25
         if (!couponInfo.redeemCode.isNullOrBlank()) qualityScore += 30
-        if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) qualityScore += 20
+        if (hasSavingsDetail(couponInfo)) qualityScore += 20
         if (couponInfo.expiryDate != null) qualityScore += 15
         if (GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)) qualityScore += 10
         
@@ -1798,7 +1797,7 @@ $sanitizedOcr
             "storeName" to if (GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)) 0.3f else 0.9f,
             "description" to if (GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)) 0.8f else 0.3f,
             "redeemCode" to if (couponInfo.redeemCode.isNullOrBlank()) 0.0f else 0.9f,
-            "cashbackAmount" to if (couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) 0.8f else 0.2f,
+            "cashbackDetail" to if (hasSavingsDetail(couponInfo)) 0.8f else 0.1f,
             "expiryDate" to if (couponInfo.expiryDate != null) 0.7f else 0.1f
         )
     }
@@ -1810,7 +1809,7 @@ $sanitizedOcr
         val hasGenericStoreName = GenericFieldHeuristics.isGenericOrMissing(couponInfo.storeName)
         val hasGenericDescription = !GenericFieldHeuristics.isMeaningfulDescription(couponInfo.description)
         val hasGenericCode = GenericFieldHeuristics.isGenericOrMissing(couponInfo.redeemCode)
-        val hasMeaninglessAmount = GenericFieldHeuristics.isZeroOrMeaningless(couponInfo.cashbackAmount)
+        val isCashbackDetailMissing = !hasSavingsDetail(couponInfo)
         val hasDuplicateFields = GenericFieldHeuristics.areDuplicateFields(
             couponInfo.storeName, couponInfo.redeemCode
         )
@@ -1818,14 +1817,14 @@ $sanitizedOcr
         return when {
             couponInfo.storeName == "Unknown Store" &&
             couponInfo.redeemCode.isNullOrBlank() &&
-            hasMeaninglessAmount -> QualityReason.COMPLETE_EXTRACTION_FAILURE
+            isCashbackDetailMissing -> QualityReason.COMPLETE_EXTRACTION_FAILURE
             
             hasGenericStoreName && hasGenericCode && hasGenericDescription -> 
                 QualityReason.ALL_GENERIC_CONTENT
             
             hasDuplicateFields -> QualityReason.DUPLICATE_FIELD_VALUES
             
-            couponInfo.redeemCode.isNullOrBlank() && hasMeaninglessAmount -> 
+            couponInfo.redeemCode.isNullOrBlank() && isCashbackDetailMissing ->
                 QualityReason.MISSING_CRITICAL_FIELDS
             
             else -> QualityReason.LOW_QUALITY_EXTRACTION

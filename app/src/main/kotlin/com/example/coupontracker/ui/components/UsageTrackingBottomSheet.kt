@@ -19,7 +19,7 @@ fun UsageTrackingBottomSheet(
     onTrackUsage: (Double) -> Unit,
     coupon: Coupon
 ) {
-    var amountSaved by remember { mutableStateOf(coupon.cashbackAmount.toString()) }
+    var amountSaved by remember { mutableStateOf("") }
     
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -70,8 +70,8 @@ fun UsageTrackingBottomSheet(
             
             // Track usage button
             Button(
-                onClick = { 
-                    val amount = amountSaved.toDoubleOrNull() ?: coupon.cashbackAmount
+                onClick = {
+                    val amount = amountSaved.toDoubleOrNull() ?: 0.0
                     onTrackUsage(amount)
                 },
                 modifier = Modifier.fillMaxWidth(),

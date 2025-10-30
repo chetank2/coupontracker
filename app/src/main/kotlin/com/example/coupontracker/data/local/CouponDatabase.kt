@@ -15,7 +15,7 @@ import com.example.coupontracker.data.util.CouponDedupUtils
         ExtractionFeedback::class,      // V2: Feedback & telemetry
         ValidatorFeedbackRecord::class  // Validator override & correction dataset
     ],
-    version = 12,
+    version = 13,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -514,6 +514,150 @@ abstract class CouponDatabase : RoomDatabase() {
         val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL("ALTER TABLE coupons ADD COLUMN reminderLeadTimeMinutes INTEGER")
+            }
+        }
+
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `coupons_v13` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `storeName` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `normalizedDescription` TEXT,
+                        `expiryDate` INTEGER,
+                        `redeemCode` TEXT,
+                        `imageUri` TEXT,
+                        `imagePhash` TEXT,
+                        `imageSignature` TEXT,
+                        `category` TEXT,
+                        `status` TEXT,
+                        `minimumPurchase` REAL,
+                        `maximumDiscount` REAL,
+                        `isPriority` INTEGER NOT NULL DEFAULT 0,
+                        `paymentMethod` TEXT,
+                        `usageLimit` INTEGER,
+                        `usageCount` INTEGER NOT NULL DEFAULT 0,
+                        `reminderDate` INTEGER,
+                        `reminderLeadTimeMinutes` INTEGER,
+                        `platformType` TEXT,
+                        `extractionQualityScore` INTEGER,
+                        `extractionConfidenceBreakdown` TEXT NOT NULL DEFAULT '{}',
+                        `extractionStage` TEXT,
+                        `extractionRunPath` TEXT,
+                        `extractionTimestamp` INTEGER,
+                        `rating` TEXT,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        `needsAttention` INTEGER NOT NULL DEFAULT 0,
+                        `storeNameSource` TEXT,
+                        `storeNameEvidence` TEXT NOT NULL DEFAULT '[]'
+                    )
+                    """.trimIndent()
+                )
+
+                database.execSQL(
+                    """
+                    INSERT INTO `coupons_v13` (
+                        `id`, `storeName`, `description`, `normalizedDescription`, `expiryDate`,
+                        `redeemCode`, `imageUri`, `imagePhash`, `imageSignature`, `category`,
+                        `status`, `minimumPurchase`, `maximumDiscount`, `isPriority`, `paymentMethod`,
+                        `usageLimit`, `usageCount`, `reminderDate`, `reminderLeadTimeMinutes`, `platformType`,
+                        `extractionQualityScore`, `extractionConfidenceBreakdown`, `extractionStage`, `extractionRunPath`,
+                        `extractionTimestamp`, `rating`, `createdAt`, `updatedAt`, `needsAttention`,
+                        `storeNameSource`, `storeNameEvidence`
+                    )
+                    SELECT
+                        `id`,
+                        `storeName`,
+                        `newDescription`,
+                        LOWER(`newDescription`),
+                        `expiryDate`,
+                        `redeemCode`,
+                        `imageUri`,
+                        `imagePhash`,
+                        `imageSignature`,
+                        `category`,
+                        `status`,
+                        `minimumPurchase`,
+                        `maximumDiscount`,
+                        `isPriority`,
+                        `paymentMethod`,
+                        `usageLimit`,
+                        `usageCount`,
+                        `reminderDate`,
+                        `reminderLeadTimeMinutes`,
+                        `platformType`,
+                        `extractionQualityScore`,
+                        `extractionConfidenceBreakdown`,
+                        `extractionStage`,
+                        `extractionRunPath`,
+                        `extractionTimestamp`,
+                        `rating`,
+                        `createdAt`,
+                        `updatedAt`,
+                        `needsAttention`,
+                        `storeNameSource`,
+                        COALESCE(`storeNameEvidence`, '[]')
+                    FROM (
+                        SELECT
+                            *,
+                            CASE
+                                WHEN `cashbackType` = 'percent' AND `cashbackValueNum` IS NOT NULL AND `cashbackValueNum` > 0
+                                    THEN printf('Cashback: %.0f%% off', `cashbackValueNum`)
+                                WHEN `cashbackValueNum` IS NOT NULL AND `cashbackValueNum` > 0
+                                    THEN printf(
+                                        'Cashback: %s%.0f off',
+                                        CASE
+                                            WHEN `cashbackCurrency` IS NULL OR TRIM(`cashbackCurrency`) = '' THEN '₹'
+                                            WHEN UPPER(`cashbackCurrency`) IN ('INR', '₹', 'RS', 'RS.') THEN '₹'
+                                            WHEN UPPER(`cashbackCurrency`) IN ('USD', '$') THEN '$'
+                                            WHEN UPPER(`cashbackCurrency`) IN ('EUR', '€') THEN '€'
+                                            WHEN UPPER(`cashbackCurrency`) IN ('GBP', '£') THEN '£'
+                                            ELSE `cashbackCurrency` || ' '
+                                        END,
+                                        `cashbackValueNum`
+                                    )
+                                WHEN `cashbackAmount` IS NOT NULL AND `cashbackAmount` > 0
+                                    THEN printf('Cashback: ₹%.0f off', `cashbackAmount`)
+                                ELSE NULL
+                            END AS `cashbackDetail`,
+                            CASE
+                                WHEN TRIM(COALESCE(`description`, '')) = '' THEN COALESCE(`cashbackDetail`, 'Coupon offer')
+                                ELSE TRIM(`description`) ||
+                                    CASE
+                                        WHEN `cashbackDetail` IS NOT NULL THEN '\n' || `cashbackDetail`
+                                        ELSE ''
+                                    END
+                            END AS `newDescription`
+                        FROM `coupons`
+                    )
+                    """.trimIndent()
+                )
+
+                database.execSQL("DROP TABLE `coupons`")
+                database.execSQL("ALTER TABLE `coupons_v13` RENAME TO `coupons`")
+
+                database.query("SELECT id, description FROM `coupons`").use { cursor ->
+                    val idIndex = cursor.getColumnIndexOrThrow("id")
+                    val descriptionIndex = cursor.getColumnIndexOrThrow("description")
+                    val updateStatement = database.compileStatement(
+                        "UPDATE `coupons` SET `normalizedDescription` = ? WHERE `id` = ?"
+                    )
+                    try {
+                        while (cursor.moveToNext()) {
+                            val description = cursor.getString(descriptionIndex) ?: ""
+                            val normalized = CouponDedupUtils.normalizeDescription(description)
+                            updateStatement.bindString(1, normalized)
+                            updateStatement.bindLong(2, cursor.getLong(idIndex))
+                            updateStatement.executeUpdateDelete()
+                            updateStatement.clearBindings()
+                        }
+                    } finally {
+                        updateStatement.close()
+                    }
+                }
             }
         }
     }

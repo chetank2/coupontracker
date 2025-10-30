@@ -9,7 +9,6 @@ interface CouponRepository {
     fun getAllCoupons(): Flow<List<Coupon>>
     suspend fun getCouponById(couponId: Long): Coupon?
     fun searchCoupons(query: String): Flow<List<Coupon>>
-    fun getCouponsByAmount(): Flow<List<Coupon>>
     fun getCouponsByName(): Flow<List<Coupon>>
     fun getExpiringCoupons(date: Date): Flow<List<Coupon>>
     suspend fun insertCoupon(coupon: Coupon): Long

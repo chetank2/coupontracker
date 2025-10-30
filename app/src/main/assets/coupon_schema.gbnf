@@ -4,14 +4,15 @@
 root ::= object
 ws ::= [ \t\n\r]*
 
-# Main coupon object with all 7 required keys
-object ::= "{" ws "\"storeName\"" ws ":" ws value ws "," ws "\"description\"" ws ":" ws value ws "," ws "\"cashback\"" ws ":" ws cashback-value ws "," ws "\"redeemCode\"" ws ":" ws value ws "," ws "\"expiryDate\"" ws ":" ws value ws "," ws "\"minOrderAmount\"" ws ":" ws value ws "}" ws
+# Main coupon object with required keys
+object ::= "{" ws "\"storeName\"" ws ":" ws value ws "," ws "\"description\"" ws ":" ws value ws "," ws "\"redeemCode\"" ws ":" ws value ws "," ws "\"expiryDate\"" ws ":" ws value ws "," ws "\"storeNameSource\"" ws ":" ws value ws "," ws "\"storeNameEvidence\"" ws ":" ws evidence-array ws "," ws "\"needsAttention\"" ws ":" ws boolean ws "}" ws
 
-# Cashback: null or typed object
-cashback-value ::= "null" | cashback-object
-cashback-object ::= "{" ws "\"type\"" ws ":" ws cashback-type ws "," ws "\"valueNum\"" ws ":" ws positive-number ws "," ws "\"currency\"" ws ":" ws currency-value ws "}" ws
-cashback-type ::= "\"percent\"" | "\"amount\"" | "\"text\""
-currency-value ::= "null" | string
+# Evidence array (null or array of strings)
+evidence-array ::= "null" | "[" ws evidence-elements? "]" ws
+evidence-elements ::= value (ws "," ws value)*
+
+# Boolean values
+boolean ::= "true" | "false"
 
 # Values: string, null (NO bare numbers for text fields)
 value ::= string | "null"
@@ -24,4 +25,3 @@ string-char ::= [a-zA-Z0-9 .,!?@#$%&*()\-_+=;:'/\[\]{}]
 # Explicitly blocks: -1, 0, 0.5, -0.5, leading zeros
 # Allows: 1, 1.0, 50, 99.99, 100
 positive-number ::= [1-9] [0-9]* ("." [0-9]+)?
-

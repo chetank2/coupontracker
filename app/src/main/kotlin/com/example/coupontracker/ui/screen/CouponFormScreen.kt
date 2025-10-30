@@ -72,7 +72,6 @@ fun CouponFormScreen(
     var storeName by remember { mutableStateOf(uiState.couponInfo?.storeName ?: "") }
 
     var description by remember { mutableStateOf(uiState.couponInfo?.description ?: "") }
-    var amount by remember { mutableStateOf(uiState.couponInfo?.cashbackAmount?.toString() ?: "") }
     var code by remember { mutableStateOf(uiState.couponInfo?.redeemCode ?: "") }
     var expiryDateString by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(uiState.couponInfo?.category ?: "") }
@@ -94,7 +93,6 @@ fun CouponFormScreen(
         uiState.couponInfo?.let { info ->
             storeName = info.storeName
             description = info.description
-            amount = info.cashbackAmount?.toString() ?: ""
             code = info.redeemCode ?: ""
             category = info.category ?: ""
 
@@ -177,8 +175,6 @@ fun CouponFormScreen(
                 onStoreNameChange = { storeName = it },
                 description = description,
                 onDescriptionChange = { description = it },
-                amount = amount,
-                onAmountChange = { amount = it },
                 code = code,
                 onCodeChange = { code = it },
                 expiryDateString = expiryDateString,
@@ -187,7 +183,6 @@ fun CouponFormScreen(
                 onCategoryChange = { category = it },
                 imageUri = previewImageUri,
                 onSave = {
-                val amountValue = amount.toDoubleOrNull() ?: 0.0
                 val expiryDate = try {
                     if (expiryDateString.isNotBlank()) {
                         val format = SimpleDateFormat("MM/dd/yyyy", Locale.getDefault())
@@ -202,7 +197,6 @@ fun CouponFormScreen(
                     viewModel.saveCoupon(
                         storeName = storeName,
                         description = description,
-                        amount = amountValue,
                         code = code,
                         expiryDate = expiryDate,
                         category = category,

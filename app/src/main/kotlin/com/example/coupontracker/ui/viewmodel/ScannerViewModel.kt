@@ -13,6 +13,7 @@ import com.example.coupontracker.data.model.CashbackInfo
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugScorer
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
@@ -58,6 +59,7 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import com.example.coupontracker.util.DateParser
 import javax.inject.Inject
 
 @HiltViewModel
@@ -520,40 +522,31 @@ class ScannerViewModel @Inject constructor(
         imageUri: Uri,
         fieldConfidences: Map<String, Float> = emptyMap()
     ): Coupon {
-        // Parse cashback using typed info
-        val cashbackInfo = if (couponInfo.cashbackAmount != null) {
-            val amount = couponInfo.cashbackAmount
-            if (couponInfo.discountType == "PERCENTAGE") {
-                CashbackInfo(com.example.coupontracker.data.model.CashbackType.PERCENT, amount)
-            } else {
-                CashbackInfo(com.example.coupontracker.data.model.CashbackType.AMOUNT, amount, "INR")
-            }
-        } else {
-            CashbackInfo(com.example.coupontracker.data.model.CashbackType.TEXT, 0.0)
-        }
-        
-        // CouponInfo.expiryDate is already a Date?, not a string
         val expiryDate = couponInfo.expiryDate
-        
-        return Coupon(
-            id = 0,
+        val baseDescription = couponInfo.description
+            .takeIf { it.isNotBlank() }
+            ?: "Extracted via LLM"
+        val cashbackDetail = couponInfo.cashbackDetail?.takeIf { it.isNotBlank() }
+
+        val baseCoupon = Coupon(
             storeName = couponInfo.storeName.takeIf { it.isNotBlank() } ?: "Unknown Store",
-            description = couponInfo.description.takeIf { it.isNotBlank() } ?: "Extracted via LLM",
+            description = baseDescription,
             expiryDate = expiryDate,
-            cashbackAmount = cashbackInfo.valueNum,
             redeemCode = couponInfo.redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
             imageUri = imageUri.toString(),
             category = couponInfo.category,
             status = "Active",
-            createdAt = Date(),
-            updatedAt = Date(),
-            cashbackType = cashbackInfo.type.name.lowercase(),
-            cashbackValueNum = cashbackInfo.valueNum,
-            cashbackCurrency = cashbackInfo.currency,
+            extractionConfidenceBreakdown = fieldConfidences,
             needsAttention = couponInfo.needsAttention,
             storeNameSource = couponInfo.storeNameSource,
             storeNameEvidence = couponInfo.storeNameEvidence
         )
+
+        return if (cashbackDetail != null) {
+            baseCoupon.withAdditionalDetails(cashbackDetail)
+        } else {
+            baseCoupon
+        }
     }
     
     /**
@@ -880,42 +873,30 @@ class ScannerViewModel @Inject constructor(
             ocrCoupon.expiryDate ?: llmInfo.expiryDate
         }
         
-        // Cashback: prefer LLM if confident, else OCR
-        val (cashbackAmount, cashbackInfo) = if (llmConf.getOrDefault("cashback", 0f) > 0.6f && llmInfo.cashbackAmount != null) {
-            val amount = llmInfo.cashbackAmount
-            val info = if (llmInfo.discountType == "PERCENTAGE") {
-                CashbackInfo(com.example.coupontracker.data.model.CashbackType.PERCENT, amount)
-            } else {
-                CashbackInfo(com.example.coupontracker.data.model.CashbackType.AMOUNT, amount, "INR")
-            }
-            Pair(amount, info)
-        } else if (ocrCoupon.getCashbackNumericValue() > 0) {
-            Pair(ocrCoupon.getCashbackNumericValue(), ocrCoupon.getCashbackInfo())
-        } else {
-            Pair(0.0, CashbackInfo(com.example.coupontracker.data.model.CashbackType.TEXT, 0.0))
+        // Cashback detail: prefer confident LLM detail, otherwise use OCR-derived detail
+        val llmDetail = llmInfo.cashbackDetail?.takeIf { GenericFieldHeuristics.hasMeaningfulCashback(it) }
+        val ocrDetail = DescriptionUtils.extractCashbackLine(ocrCoupon.description)
+        val cashbackDetail = when {
+            llmConf.getOrDefault("cashback", 0f) > 0.6f && llmDetail != null -> llmDetail
+            GenericFieldHeuristics.hasMeaningfulCashback(ocrDetail) -> ocrDetail
+            else -> llmDetail ?: ocrDetail
         }
-        
-        // Description: prefer raw LLM text, otherwise fall back to OCR text
+
+        // Description: prefer raw LLM text, otherwise fall back to OCR text, then append cashback detail
         val description = listOf(llmInfo.description, ocrCoupon.description)
             .map { it.trim() }
             .firstOrNull { it.isNotBlank() }
             ?: "Coupon offer"
+        val mergedDescription = DescriptionUtils.appendDetails(description, cashbackDetail)
         
         return Coupon(
-            id = 0,
             storeName = storeName,
-            description = description,
+            description = mergedDescription,
             expiryDate = expiryDate,
-            cashbackAmount = cashbackAmount,
             redeemCode = redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
             imageUri = imageUri.toString(),
             category = llmInfo.category ?: ocrCoupon.category,
-            status = "Active",
-            createdAt = Date(),
-            updatedAt = Date(),
-            cashbackType = cashbackInfo.type.name.lowercase(),
-            cashbackValueNum = cashbackInfo.valueNum,
-            cashbackCurrency = cashbackInfo.currency
+            status = "Active"
         )
     }
 
@@ -1445,14 +1426,12 @@ class ScannerViewModel @Inject constructor(
             fields["expiryDate"] = formatter.format(date)
         }
 
-        couponInfo.cashbackAmount?.takeIf { !GenericFieldHeuristics.isZeroOrMeaningless(it) }?.let {
-            // Preserve type information for percentages
-            if (couponInfo.discountType == "PERCENTAGE") {
-                fields["amount"] = "${formatNumeric(it)}%"  // ✅ Preserve % for percentage
-            } else {
-                fields["amount"] = formatNumeric(it)  // Keep as number for amounts
-            }
-        }
+        val savingsDetail = couponInfo.cashbackDetail
+            ?.takeIf { GenericFieldHeuristics.hasMeaningfulCashback(it) }
+            ?: DescriptionUtils.extractCashbackLine(couponInfo.description)
+                ?.takeIf { GenericFieldHeuristics.hasMeaningfulCashback(it) }
+
+        savingsDetail?.let { fields["amount"] = it }
 
         couponInfo.minimumPurchase?.takeIf { !GenericFieldHeuristics.isZeroOrMeaningless(it) }?.let {
             fields["minOrderAmount"] = formatNumeric(it)
@@ -1472,7 +1451,8 @@ class ScannerViewModel @Inject constructor(
         val descriptionWeak = fieldHeuristics.isGenericOrMissing(fields["description"])
         val duplicateStoreAndCode = fieldHeuristics.areDuplicateFields(fields["storeName"], fields["code"])
         val codeMissing = couponInfo.redeemCode.isNullOrBlank()
-        val amountWeak = GenericFieldHeuristics.isZeroOrMeaningless(couponInfo.cashbackAmount)
+        val amountWeak = !GenericFieldHeuristics.hasMeaningfulCashback(couponInfo.cashbackDetail) &&
+            !GenericFieldHeuristics.hasMeaningfulCashback(couponInfo.description)
 
         return storeWeak || descriptionWeak || duplicateStoreAndCode || (codeMissing && amountWeak)
     }
@@ -1535,7 +1515,8 @@ class ScannerViewModel @Inject constructor(
         }
 
         return when (key) {
-            "amount", "minOrderAmount" -> {
+            "amount" -> !GenericFieldHeuristics.hasMeaningfulCashback(existing)
+            "minOrderAmount" -> {
                 val currentValue = extractNumericValue(existing)
                 GenericFieldHeuristics.isZeroOrMeaningless(currentValue)
             }
@@ -1593,15 +1574,10 @@ class ScannerViewModel @Inject constructor(
         // Parse expiry date string to Date if available
         val expiryDate = parseExpiryDate(extractedInfo["expiryDate"])
 
-        // Parse amount to double with Indian currency support
-        val amount = extractedInfo["amount"]?.let {
-            IndianCurrencyParser.parseAmount(it) ?: 0.0
-        } ?: 0.0
-
-        // Create typed cashback info from extracted amount
-        val cashbackInfo = extractedInfo["amount"]?.let { amountText ->
-            CashbackInfo.fromText(amountText)
-        } ?: CashbackInfo.fromLegacyAmount(amount, extractedInfo["description"])
+        // Normalize cashback detail if present
+        val cashbackDetail = extractedInfo["amount"]?.let { raw ->
+            DescriptionUtils.formatCashbackDetail(raw) ?: raw
+        }
 
         val runPathSummary = extractionResult.runPath?.let { path ->
             buildString {
@@ -1613,21 +1589,16 @@ class ScannerViewModel @Inject constructor(
             }.ifBlank { null }
         }
 
+        val baseDescription = extractedInfo["description"] ?: extractedInfo["benefit"] ?: "Multi-coupon detected"
+        val mergedDescription = DescriptionUtils.appendDetails(baseDescription, cashbackDetail)
+
         return Coupon(
-            id = 0, // Auto-generated by Room
             storeName = extractedInfo["storeName"] ?: extractedInfo["app"] ?: "Unknown Store",
-            description = extractedInfo["description"] ?: extractedInfo["benefit"] ?: "Multi-coupon detected",
+            description = mergedDescription,
             expiryDate = expiryDate,
-            cashbackAmount = amount, // Keep for backward compatibility
             redeemCode = extractedInfo["code"], // Don't generate fallback - use null if not extracted
             imageUri = imageUri,
-
-            // New typed cashback fields
-            cashbackType = cashbackInfo.type.name.lowercase(),
-            cashbackValueNum = cashbackInfo.valueNum,
-            cashbackCurrency = cashbackInfo.currency,
             category = determineCategory(extractedInfo),
-            rating = null,
             status = when (couponInstance.status) {
                 com.example.coupontracker.ml.CouponStatus.COMPLETE -> "ACTIVE"
                 com.example.coupontracker.ml.CouponStatus.PARTIAL_TOP -> "PARTIAL"
@@ -1637,9 +1608,7 @@ class ScannerViewModel @Inject constructor(
             extractionConfidenceBreakdown = extractionResult.fieldConfidences,
             extractionStage = extractionResult.sourceStage?.name,
             extractionRunPath = runPathSummary,
-            extractionTimestamp = Date(),
-            createdAt = Date(),
-            updatedAt = Date()
+            extractionTimestamp = Date()
         )
     }
 
@@ -1980,34 +1949,21 @@ class ScannerViewModel @Inject constructor(
         // Parse expiry date string to Date if available
         val expiryDate = parseExpiryDate(extractedInfo["expiryDate"])
 
-        // Parse amount to double with Indian currency support
-        val amount = extractedInfo["amount"]?.let {
-            IndianCurrencyParser.parseAmount(it) ?: 0.0
-        } ?: 0.0
+        val cashbackDetail = extractedInfo["amount"]?.let { raw ->
+            DescriptionUtils.formatCashbackDetail(raw) ?: raw
+        }
 
-        // Create typed cashback info from extracted amount
-        val cashbackInfo = extractedInfo["amount"]?.let { amountText ->
-            CashbackInfo.fromText(amountText)
-        } ?: CashbackInfo.fromLegacyAmount(amount, extractedInfo["description"])
+        val baseDescription = extractedInfo["description"] ?: "No description"
+        val mergedDescription = DescriptionUtils.appendDetails(baseDescription, cashbackDetail)
 
         return Coupon(
-            id = 0, // Auto-generated by Room
             storeName = extractedInfo["storeName"] ?: "Unknown Store",
-            description = extractedInfo["description"] ?: "No description",
+            description = mergedDescription,
             expiryDate = expiryDate,
-            cashbackAmount = amount, // Keep for backward compatibility
-            redeemCode = extractedInfo["code"], // Don't generate fallback - use null if not extracted
+            redeemCode = extractedInfo["code"],
             imageUri = imageUri,
-            
-            // New typed cashback fields
-            cashbackType = cashbackInfo.type.name.lowercase(),
-            cashbackValueNum = cashbackInfo.valueNum,
-            cashbackCurrency = cashbackInfo.currency,
             category = determineCategory(extractedInfo),
-            rating = null,
-            status = "ACTIVE",
-            createdAt = Date(),
-            updatedAt = Date()
+            status = "ACTIVE"
         )
     }
 
@@ -2053,7 +2009,7 @@ class ScannerViewModel @Inject constructor(
     fun submitExtractionCorrection(
         correctedStoreName: String?,
         correctedCode: String?,
-        correctedAmount: String?,
+        correctedDetail: String?,
         correctedExpiry: String?
     ) {
         viewModelScope.launch {
@@ -2065,7 +2021,7 @@ class ScannerViewModel @Inject constructor(
                     val correctedFields = mutableSetOf<String>()
                     if (!correctedStoreName.isNullOrBlank()) correctedFields.add("storeName")
                     if (!correctedCode.isNullOrBlank()) correctedFields.add("redeemCode")
-                    if (!correctedAmount.isNullOrBlank()) correctedFields.add("cashback")
+                    if (!correctedDetail.isNullOrBlank()) correctedFields.add("cashback")
                     if (!correctedExpiry.isNullOrBlank()) correctedFields.add("expiryDate")
                     
                     // Record negative feedback with corrections
@@ -2076,12 +2032,21 @@ class ScannerViewModel @Inject constructor(
                     )
                     
                     // Create corrected coupon
-                    val correctedCoupon = extractionResult.coupon.copy(
+                    var correctedCoupon = extractionResult.coupon.copy(
                         storeName = correctedStoreName ?: extractionResult.coupon.storeName,
                         redeemCode = correctedCode,
-                        // Note: For amount and expiry, we'd need more sophisticated parsing
-                        // For now, we'll just learn from the text patterns
                     )
+
+                    if (!correctedDetail.isNullOrBlank()) {
+                        correctedCoupon = correctedCoupon.withAdditionalDetails(correctedDetail)
+                    }
+
+                    val parsedExpiry = correctedExpiry?.let { input ->
+                        DateParser.parseDate(input)
+                    }
+                    if (parsedExpiry != null) {
+                        correctedCoupon = correctedCoupon.copy(expiryDate = parsedExpiry)
+                    }
                     
                     val context = buildFeedbackContext()
                     universalExtractionService.learnFromCorrection(
@@ -2103,10 +2068,16 @@ class ScannerViewModel @Inject constructor(
                     
                     // Update the current coupon with corrections if it's still in preview
                     pendingPreview?.let { preview ->
-                        val updatedCoupon = preview.coupon.copy(
+                        var updatedCoupon = preview.coupon.copy(
                             storeName = correctedStoreName ?: preview.coupon.storeName,
                             redeemCode = correctedCode
                         )
+                        if (!correctedDetail.isNullOrBlank()) {
+                            updatedCoupon = updatedCoupon.withAdditionalDetails(correctedDetail)
+                        }
+                        if (parsedExpiry != null) {
+                            updatedCoupon = updatedCoupon.copy(expiryDate = parsedExpiry)
+                        }
                         
                         pendingPreview = preview.copy(coupon = updatedCoupon)
                         _uiState.value = ScannerUiState.Success(updatedCoupon, preview.miniCpmStatus)

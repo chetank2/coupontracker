@@ -7,6 +7,7 @@ import android.util.Log
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.universal.PatternLearningEngine
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.CouponFixContext
 import com.example.coupontracker.util.CouponPostProcessor
 import com.example.coupontracker.util.ImageMetadataExtractor
@@ -321,20 +322,18 @@ class ProgressiveExtractionService @Inject constructor(
             )
         }
 
-        if (FieldType.AMOUNT in missingFields && couponInfo.cashbackAmount != null && couponInfo.cashbackAmount > 0) {
-            val discountType = couponInfo.discountType?.uppercase(Locale.ROOT)
-            val formattedAmount = when (discountType) {
-                "PERCENTAGE" -> "${couponInfo.cashbackAmount.toInt()}% off"
-                else -> "₹${couponInfo.cashbackAmount.toInt()} off"
-            }
-            results.getOrPut(FieldType.AMOUNT) { mutableListOf() }.add(
-                FieldCandidate(
-                    value = formattedAmount,
-                    confidence = 0.65f,
-                    source = "minicpm_llm",
-                    context = "LLM amount metadata"
+        if (FieldType.AMOUNT in missingFields) {
+            val detail = couponInfo.cashbackDetail?.takeIf { it.isNotBlank() }
+            if (detail != null) {
+                results.getOrPut(FieldType.AMOUNT) { mutableListOf() }.add(
+                    FieldCandidate(
+                        value = detail,
+                        confidence = 0.65f,
+                        source = "minicpm_llm",
+                        context = "LLM amount metadata"
+                    )
                 )
-            )
+            }
         }
         
         return results
@@ -438,22 +437,13 @@ class ProgressiveExtractionService @Inject constructor(
         val confidenceBreakdown = buildConfidenceBreakdown(filterPrimaryFields(extractedFields))
 
         return Coupon(
-            id = 0,
             storeName = storeName,
             description = description,
             expiryDate = expiryDate,
-            cashbackAmount = 0.0,
             redeemCode = redeemCode,
             imageUri = imageUri,
-            cashbackType = null,
-            cashbackValueNum = null,
-            cashbackCurrency = null,
-            category = null,
-            rating = null,
             status = "ACTIVE",
-            extractionConfidenceBreakdown = confidenceBreakdown,
-            createdAt = Date(),
-            updatedAt = Date()
+            extractionConfidenceBreakdown = confidenceBreakdown
         )
     }
 
@@ -517,7 +507,7 @@ class ProgressiveExtractionService @Inject constructor(
                 if (value.isNotEmpty() && segments.none { it.equals(value, ignoreCase = true) }) {
                     val labeledValue = when (type) {
                         FieldType.MIN_PURCHASE -> "Minimum purchase: $value"
-                        FieldType.AMOUNT -> value
+                        FieldType.AMOUNT -> DescriptionUtils.formatCashbackDetail(value) ?: value
                         FieldType.OTHER -> value
                         else -> "${type.name.replace('_', ' ').lowercase(Locale.ROOT).replaceFirstChar { it.uppercase() }}: $value"
                     }

@@ -34,6 +34,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.viewmodel.BatchScannerViewModel
 import com.example.coupontracker.ui.viewmodel.ImageProcessingStatus
@@ -797,22 +798,20 @@ fun CouponItem(
                 }
 
                 Column {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
+                    DescriptionUtils.extractCashbackLine(coupon.description)?.let { detail ->
                         Text(
-                            text = "Amount: ₹${coupon.cashbackAmount}",
+                            text = detail,
                             style = MaterialTheme.typography.bodySmall
                         )
+                    }
 
-                        coupon.redeemCode?.let {
-                            Text(
-                                text = "Code: $it",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
+                    coupon.redeemCode?.let {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Code: $it",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
                     }
 
                     expiryText?.let { formattedDate ->

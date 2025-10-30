@@ -11,7 +11,7 @@ class MockLlmResponseDetectorTest {
         val placeholderCoupon = CouponInfo(
             storeName = "Mock Store",
             description = "Mock coupon offer - 50% off",
-            cashbackAmount = 100.0,
+            cashbackDetail = "Cashback: 50% off",
             redeemCode = "MOCK50",
             minimumPurchase = 1000.0
         )
@@ -24,7 +24,7 @@ class MockLlmResponseDetectorTest {
         val realCoupon = CouponInfo(
             storeName = "Amazon",
             description = "Flat 50% OFF on electronics above ₹999",
-            cashbackAmount = 50.0,
+            cashbackDetail = "Cashback: 50% off",
             redeemCode = "AMZ50",
             minimumPurchase = 999.0
         )
@@ -32,4 +32,3 @@ class MockLlmResponseDetectorTest {
         assertFalse(MockLlmResponseDetector.isMockResponse(realCoupon))
     }
 }
-

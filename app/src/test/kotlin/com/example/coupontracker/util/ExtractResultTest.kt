@@ -88,7 +88,7 @@ class ExtractResultTest {
             storeName = storeName,
             description = "Test coupon",
             redeemCode = redeemCode,
-            cashbackAmount = 100.0
+            cashbackDetail = "Cashback: ₹100 off"
         )
     }
     

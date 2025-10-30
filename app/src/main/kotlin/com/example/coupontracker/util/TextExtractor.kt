@@ -1,6 +1,7 @@
 package com.example.coupontracker.util
 
 import android.util.Log
+import com.example.coupontracker.data.util.DescriptionUtils
 import java.io.Serializable
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -16,12 +17,12 @@ data class CouponInfo(
     val storeName: String = "",
     val description: String = "",
     val expiryDate: Date? = null,
-    val cashbackAmount: Double? = null,
+    val cashbackDetail: String? = null,
     val redeemCode: String? = null,
     val category: String? = null,
     val rating: String? = null,
     val status: String? = null,
-    val discountType: String? = null, // "PERCENTAGE" or "AMOUNT"
+    val discountType: String? = null,
 
     // Provenance metadata
     val needsAttention: Boolean = false,
@@ -54,8 +55,8 @@ data class CouponInfo(
 
     override fun toString(): String {
         return "CouponInfo(storeName='$storeName', description='$description', " +
-               "expiryDate=$expiryDate, cashbackAmount=$cashbackAmount, " +
-               "discountType=$discountType, redeemCode=$redeemCode, category=$category, " +
+               "expiryDate=$expiryDate, cashbackDetail=$cashbackDetail, " +
+               "redeemCode=$redeemCode, category=$category, discountType=$discountType, " +
                "rating=$rating, status=$status, minimumPurchase=$minimumPurchase, " +
                "maximumDiscount=$maximumDiscount, paymentMethod=$paymentMethod, " +
                "platformType=$platformType, usageLimit=$usageLimit)"
@@ -106,12 +107,11 @@ class TextExtractor {
         val storeName = extractStoreName(text)
         val description = extractDescription(text)
         val expiryDate = extractExpiryDate(text, baseDate)
-        val cashbackAmount = extractCashbackAmount(text)
+        val cashbackDetail = extractCashbackDetail(text)
         val redeemCode = extractRedeemCode(text)
         val category = extractCategory(text)
         val rating = extractRating(text)
         val status = extractStatus(text)
-        val discountType = extractDiscountType(text)
 
         // Extract new fields
         val minimumPurchase = extractMinimumPurchase(text)
@@ -119,12 +119,13 @@ class TextExtractor {
         val paymentMethod = extractPaymentMethod(text)
         val platformType = extractPlatformType(text)
         val usageLimit = extractUsageLimit(text)
+        val discountType = inferDiscountType(cashbackDetail)
 
         val result = CouponInfo(
             storeName = storeName ?: "",
             description = description ?: "",
             expiryDate = expiryDate,
-            cashbackAmount = cashbackAmount,
+            cashbackDetail = cashbackDetail,
             redeemCode = redeemCode,
             category = category,
             rating = rating,
@@ -288,6 +289,19 @@ class TextExtractor {
         }
 
         return null
+    }
+
+    private fun inferDiscountType(detail: String?): String? {
+        if (detail.isNullOrBlank()) return null
+        val normalized = detail.lowercase(Locale.ROOT)
+        return when {
+            normalized.contains("%") -> "PERCENTAGE"
+            normalized.contains("₹") ||
+                normalized.contains("rs") ||
+                normalized.contains("inr") ||
+                Regex("\\d").containsMatchIn(normalized) -> "AMOUNT"
+            else -> null
+        }
     }
 
     private fun cleanCandidate(raw: String?): String? {
@@ -832,7 +846,7 @@ class TextExtractor {
      * @param text The text to extract from
      * @return The extracted cashback amount or null if not found
      */
-    fun extractCashbackAmount(text: String): Double? {
+    fun extractCashbackDetail(text: String): String? {
         // Look for specific percentage patterns first
         val percentagePatterns = listOf(
             Pattern.compile("(?i)(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:off|cashback|discount)"),
@@ -843,11 +857,14 @@ class TextExtractor {
             val matcher = pattern.matcher(text)
             if (matcher.find()) {
                 try {
+                    val raw = matcher.group(0)
                     val amount = matcher.group(1)?.toDoubleOrNull()
+                    if (!raw.isNullOrBlank()) {
+                        safeLogDebug(TAG) { "Found percentage discount text: $raw" }
+                        DescriptionUtils.formatCashbackDetail(raw)?.let { return it }
+                    }
                     if (amount != null) {
-                        safeLogDebug(TAG) { "Found percentage discount: $amount%" }
-                        // Don't apply any conversion factor for percentages
-                        return amount
+                        DescriptionUtils.formatCashbackDetail(amount, "percent")?.let { return it }
                     }
                 } catch (e: Exception) {
                     safeLogError(TAG, "Error parsing percentage", e)
@@ -866,10 +883,14 @@ class TextExtractor {
             val matcher = pattern.matcher(text)
             if (matcher.find()) {
                 try {
+                    val raw = matcher.group(0)
                     val amount = matcher.group(1)?.toDoubleOrNull()
+                    if (!raw.isNullOrBlank()) {
+                        safeLogDebug(TAG) { "Found fixed currency amount text: $raw" }
+                        DescriptionUtils.formatCashbackDetail(raw)?.let { return it }
+                    }
                     if (amount != null) {
-                        safeLogDebug(TAG) { "Found fixed currency amount: $amount" }
-                        return amount
+                        DescriptionUtils.formatCashbackDetail(amount, "amount", "INR")?.let { return it }
                     }
                 } catch (e: Exception) {
                     safeLogError(TAG, "Error parsing amount", e)
@@ -883,10 +904,14 @@ class TextExtractor {
             val myntraAmountMatcher = myntraAmountPattern.matcher(text)
             if (myntraAmountMatcher.find()) {
                 try {
+                    val raw = myntraAmountMatcher.group(0)
                     val amount = myntraAmountMatcher.group(1)?.toDoubleOrNull()
+                    if (!raw.isNullOrBlank()) {
+                        safeLogDebug(TAG) { "Found Myntra cashback amount text: $raw" }
+                        DescriptionUtils.formatCashbackDetail(raw)?.let { return it }
+                    }
                     if (amount != null) {
-                        safeLogDebug(TAG) { "Found Myntra cashback amount: $amount" }
-                        return amount
+                        DescriptionUtils.formatCashbackDetail(amount, "amount", "INR")?.let { return it }
                     }
                 } catch (e: Exception) {
                     safeLogError(TAG, "Error parsing Myntra amount", e)
@@ -899,55 +924,17 @@ class TextExtractor {
         val simpleAmountMatcher = simpleAmountPattern.matcher(text)
         if (simpleAmountMatcher.find()) {
             try {
+                val raw = simpleAmountMatcher.group(0)
                 val amount = simpleAmountMatcher.group(1)?.toDoubleOrNull()
+                if (!raw.isNullOrBlank()) {
+                    safeLogDebug(TAG) { "Found simple cashback amount text: $raw" }
+                    DescriptionUtils.formatCashbackDetail(raw)?.let { return it }
+                }
                 if (amount != null) {
-                    safeLogDebug(TAG) { "Found simple cashback amount: $amount" }
-                    return amount
+                    DescriptionUtils.formatCashbackDetail(amount, "amount", "INR")?.let { return it }
                 }
             } catch (e: Exception) {
                 safeLogError(TAG, "Error parsing simple amount", e)
-            }
-        }
-
-        return null
-    }
-
-    /**
-     * Determine the type of discount (percentage or fixed amount)
-     * @param text The text to analyze
-     * @return "PERCENTAGE" or "AMOUNT" or null if undetermined
-     */
-    fun extractDiscountType(text: String): String? {
-        // Check if text contains percentage indicators
-        if (text.contains("%")) {
-            val percentagePatterns = listOf(
-                Pattern.compile("(?i)(\\d+(?:\\.\\d+)?)\\s*%\\s*(?:off|cashback|discount)"),
-                Pattern.compile("(?i)(?:up to|upto|flat)\\s*(\\d+(?:\\.\\d+)?)\\s*%"),
-                Pattern.compile("(?i)(\\d+(?:\\.\\d+)?)\\s*%")
-            )
-
-            for (pattern in percentagePatterns) {
-                val matcher = pattern.matcher(text)
-                if (matcher.find()) {
-                    safeLogDebug(TAG) { "Identified discount type: PERCENTAGE" }
-                    return "PERCENTAGE"
-                }
-            }
-        }
-
-        // Check for currency amount patterns
-        val amountPatterns = listOf(
-            Pattern.compile("(?i)(?:Rs\\.?|₹)\\s*(\\d+(?:\\.\\d+)?)"),
-            Pattern.compile("(?i)(?:upto|up to|flat|get)\\s*(?:Rs\\.?|₹)\\s*(\\d+(?:\\.\\d+)?)"),
-            Pattern.compile("(?i)(?:Rs\\.?|₹)\\s*(\\d+(?:\\.\\d+)?)\\s*(?:off|cashback)"),
-            Pattern.compile("(?i)(?:save|discount of)\\s*(?:Rs\\.?|₹)\\s*(\\d+(?:\\.\\d+)?)")
-        )
-
-        for (pattern in amountPatterns) {
-            val matcher = pattern.matcher(text)
-            if (matcher.find()) {
-                safeLogDebug(TAG) { "Identified discount type: AMOUNT" }
-                return "AMOUNT"
             }
         }
 

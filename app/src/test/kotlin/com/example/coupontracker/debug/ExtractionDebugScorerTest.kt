@@ -23,7 +23,7 @@ class ExtractionDebugScorerTest {
             storeName = "Sample Store",
             description = "20% off",
             expiryDate = Date(),
-            cashbackAmount = 20.0,
+            cashbackDetail = "Cashback: 20% off",
             redeemCode = "SAVE20"
         )
     }
@@ -106,8 +106,7 @@ class ExtractionDebugScorerTest {
         val coupon = Coupon(
             id = 1,
             storeName = "Sample Store",
-            description = "20% off",
-            cashbackAmount = 10.0,
+            description = "Get 20% off",
             redeemCode = "SAVE",
             imageUri = null
         )

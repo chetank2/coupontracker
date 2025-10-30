@@ -810,11 +810,11 @@ private class MLCEngineStub(
         {
             "storeName": "Mock Store",
             "description": "Mock coupon offer - 50% off",
-            "amount": "₹500",
             "code": "MOCK50",
             "expiryDate": "31/12/2024",
-            "cashbackAmount": "₹100",
-            "minOrderAmount": "₹1000"
+            "storeNameSource": "stub",
+            "storeNameEvidence": ["Mock Store"],
+            "needsAttention": true
         }
         """.trimIndent()
     }

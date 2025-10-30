@@ -3,6 +3,7 @@ package com.example.coupontracker.util
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.util.Log
+import com.example.coupontracker.data.util.DescriptionUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.regex.Pattern
@@ -150,6 +151,7 @@ class CouponTemplateExtractor {
             
             // Amount - Mivi coupons in this format typically offer 80% off
             val amount = 80.0
+            val cashbackDetail = DescriptionUtils.formatCashbackDetail(amount, "percent")
             
             // Expiry - extract from "EXPIRES IN XX DAYS" format
             val expiryPattern = Pattern.compile("(?i)EXPIRES\\s+IN\\s+(\\d+)\\s+DAYS", Pattern.CASE_INSENSITIVE)
@@ -168,7 +170,7 @@ class CouponTemplateExtractor {
                 storeName = storeName,
                 description = description,
                 expiryDate = expiryDate,
-                cashbackAmount = amount,
+                cashbackDetail = cashbackDetail,
                 redeemCode = redeemCode,
                 category = "Electronics",
                 status = "Available to Redeem"
@@ -179,7 +181,7 @@ class CouponTemplateExtractor {
                 storeName = "Mivi",
                 description = "Discount on Mivi products",
                 redeemCode = "CREDS80",
-                cashbackAmount = 80.0
+                cashbackDetail = DescriptionUtils.formatCashbackDetail(80.0, "percent")
             )
         }
     }
@@ -226,7 +228,8 @@ class CouponTemplateExtractor {
         // Amount pattern specific to Myntra coupons
         val amountPattern = Pattern.compile("(?i)(?:up to|flat|get|upto)\\s+(?:Rs\\.?|₹)\\s*(\\d+)")
         val amountStr = findPattern(amountPattern, text)
-        val amount = amountStr?.toDoubleOrNull() ?: textExtractor.extractCashbackAmount(text)
+        val amountDetail = amountStr?.let { DescriptionUtils.formatCashbackDetail(it) }
+            ?: textExtractor.extractCashbackDetail(text)
         
         // Description pattern for Myntra vouchers
         val descPattern = Pattern.compile("(?i)(you won a voucher.*?(?:off|myntra))") 
@@ -236,7 +239,7 @@ class CouponTemplateExtractor {
             storeName = "Myntra",
             description = description,
             expiryDate = textExtractor.extractExpiryDate(text),
-            cashbackAmount = amount,
+            cashbackDetail = amountDetail,
             redeemCode = redeemCode,
             category = "Fashion",
             status = textExtractor.extractStatus(text)
@@ -261,7 +264,7 @@ class CouponTemplateExtractor {
             storeName = "ABHIBUS",
             description = description,
             expiryDate = textExtractor.extractExpiryDate(text),
-            cashbackAmount = textExtractor.extractCashbackAmount(text),
+            cashbackDetail = textExtractor.extractCashbackDetail(text),
             redeemCode = redeemCode,
             category = "Travel",
             status = textExtractor.extractStatus(text)
@@ -285,7 +288,7 @@ class CouponTemplateExtractor {
             storeName = storeName,
             description = textExtractor.extractDescription(text) ?: "",
             expiryDate = textExtractor.extractExpiryDate(text),
-            cashbackAmount = textExtractor.extractCashbackAmount(text),
+            cashbackDetail = textExtractor.extractCashbackDetail(text),
             redeemCode = redeemCode,
             category = textExtractor.extractCategory(text),
             rating = extractRating(text),

@@ -36,9 +36,7 @@ class CouponViewModel @Inject constructor(
     }.flatMapLatest { (query, sortOrder) ->
         when {
             query.isNotBlank() -> repository.searchCoupons(query)
-            sortOrder == SortOrder.EXPIRY_DATE -> repository.getAllCoupons()
             sortOrder == SortOrder.NAME -> repository.getCouponsByName()
-            sortOrder == SortOrder.AMOUNT -> repository.getCouponsByAmount()
             else -> repository.getAllCoupons()
         }
     }.stateIn(

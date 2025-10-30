@@ -11,14 +11,11 @@ JSON schema to emit:
 {
   "storeName": string,
   "description": string,
-  "amount": string,
   "code": string,
   "expiryDate": string,
-  "cashbackAmount": string,
-  "minOrderAmount": string,
   "storeNameSource": string,
   "storeNameEvidence": [string],
   "needsAttention": boolean
 }
 
-If a field is missing, return "Unknown" (or []/false for arrays/booleans). No additional commentary.
+All savings, cashback, discount, and fine-print details must live inside `description`. If a field is missing, return "Unknown" (or []/false for arrays/booleans). No additional commentary.

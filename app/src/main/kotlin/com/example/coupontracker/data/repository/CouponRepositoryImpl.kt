@@ -21,8 +21,6 @@ class CouponRepositoryImpl @Inject constructor(
 
     override fun searchCoupons(query: String): Flow<List<Coupon>> = couponDao.searchCoupons(query)
 
-    override fun getCouponsByAmount(): Flow<List<Coupon>> = couponDao.getCouponsByAmount()
-
     override fun getCouponsByName(): Flow<List<Coupon>> = couponDao.getCouponsByName()
 
     override fun getExpiringCoupons(date: Date): Flow<List<Coupon>> = couponDao.getExpiringCoupons(date)

@@ -183,7 +183,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runTextInference(
         // Step 3: Generate response
         LOGI("Step 3: Generating response...");
         std::vector<llama_token> output_tokens;
-        int max_tokens = 600;  // Increased from 400 to fit complete schema JSON (7 fields + nested cashback)
+        int max_tokens = 600;  // Increased from 400 to fit complete schema JSON with metadata fields
         llama_token eos_token = llama_vocab_eos(vocab);
         llama_token new_token = llama_sampler_sample(ctx->sampler, ctx->ctx, -1);
         
@@ -601,9 +601,11 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
                 result << "{";
                 result << "\"storeName\": \"Text Mode\",";
                 result << "\"description\": \"Vision encoding requires GPU acceleration. Using OCR-based extraction.\",";
-                result << "\"cashbackAmount\": \"0.00\",";
                 result << "\"redeemCode\": \"\",";
                 result << "\"expiryDate\": \"\",";
+                result << "\"storeNameSource\": \"system\",";
+                result << "\"storeNameEvidence\": [\"Text Mode\"],";
+                result << "\"needsAttention\": true,";
                 result << "\"status\": \"VISION_TOO_SLOW\",";
                 result << "\"note\": \"CLIP encoding takes 5-30 min on CPU. Consider GPU device or use OCR-only mode.\"";
                 result << "}";
@@ -695,9 +697,11 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
             result << "{";
             result << "\"storeName\": \"Model Loaded\",";
             result << "\"description\": \"Text model loaded. Download mmproj file for vision support.\",";
-            result << "\"cashbackAmount\": \"0.00\",";
             result << "\"redeemCode\": \"\",";
             result << "\"expiryDate\": \"\",";
+            result << "\"storeNameSource\": \"system\",";
+            result << "\"storeNameEvidence\": [\"Model Loaded\"],";
+            result << "\"needsAttention\": true,";
             result << "\"status\": \"NEED_MMPROJ\",";
             result << "\"note\": \"Download mmproj-model-f16.gguf from Settings\"";
             result << "}";

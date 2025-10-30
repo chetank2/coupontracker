@@ -144,4 +144,19 @@ object GenericFieldHeuristics {
     fun isZeroOrMeaningless(value: Double?): Boolean {
         return value == null || value <= 0.0 || value.isNaN() || value.isInfinite()
     }
+
+    /**
+     * Determine if a cashback/detail string contains meaningful savings information.
+     */
+    fun hasMeaningfulCashback(detail: String?): Boolean {
+        if (detail.isNullOrBlank()) return false
+        val normalized = detail.trim().lowercase()
+        val hasDigit = normalized.any { it.isDigit() }
+        val hasPercent = normalized.contains('%')
+        val hasCurrencySymbol = currencyRegex.containsMatchIn(normalized)
+        val hasQuantifier = hasDigit || hasPercent || hasCurrencySymbol
+        val hasKeyword = descriptionKeywords.any { normalized.contains(it) }
+        if (hasQuantifier) return true
+        return hasKeyword && normalized.contains("cashback")
+    }
 }

@@ -52,10 +52,6 @@ class SettingsFragment : Fragment() {
             viewModel.updateSortOrder(SortOrder.NAME)
         }
 
-        binding.sortByAmount.setOnClickListener {
-            viewModel.updateSortOrder(SortOrder.AMOUNT)
-        }
-
         binding.notificationsSwitch.setOnCheckedChangeListener { _, isChecked ->
             viewModel.updateNotificationsEnabled(isChecked)
         }
@@ -85,9 +81,14 @@ class SettingsFragment : Fragment() {
     private fun updateUI(settings: Settings) {
         binding.apply {
             when (settings.sortOrder) {
-                SortOrder.EXPIRY_DATE -> sortByDate.isChecked = true
-                SortOrder.NAME -> sortByName.isChecked = true
-                SortOrder.AMOUNT -> sortByAmount.isChecked = true
+                SortOrder.EXPIRY_DATE -> {
+                    sortByDate.isChecked = true
+                    sortByName.isChecked = false
+                }
+                SortOrder.NAME -> {
+                    sortByDate.isChecked = false
+                    sortByName.isChecked = true
+                }
             }
             notificationsSwitch.isChecked = settings.notificationsEnabled
             darkModeSwitch.isChecked = settings.darkMode

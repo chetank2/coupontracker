@@ -104,7 +104,8 @@ class UniversalExtractionServiceTest {
         assertNotNull(amountCandidate)
         assertTrue(result.extractedFields.containsKey(FieldType.AMOUNT))
         assertEquals("₹599 + ₹50 cashback", amountCandidate!!.text)
-        assertEquals(649.0, result.coupon.cashbackAmount, 0.0)
+        assertTrue(result.coupon.description.contains("Cashback:"))
+        assertTrue(result.coupon.description.contains("₹599 + ₹50 cashback"))
     }
 
     @Test
@@ -162,7 +163,6 @@ class UniversalExtractionServiceTest {
         return Coupon(
             storeName = "Placeholder",
             description = "placeholder",
-            cashbackAmount = 0.0,
             redeemCode = null,
             imageUri = null,
             status = "ACTIVE",

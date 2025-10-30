@@ -24,12 +24,15 @@ class PreferencesManager @Inject constructor(
     }
 
     fun loadSettings(): Settings {
+        val storedSortOrder = prefs.getString(KEY_SORT_ORDER, SortOrder.EXPIRY_DATE.name)
+        val sortOrder = runCatching {
+            SortOrder.valueOf(storedSortOrder ?: SortOrder.EXPIRY_DATE.name)
+        }.getOrElse { SortOrder.EXPIRY_DATE }
+
         return Settings(
             notificationsEnabled = prefs.getBoolean(KEY_NOTIFICATIONS_ENABLED, true),
             notificationTiming = prefs.getInt(KEY_NOTIFICATION_TIMING, 1),
-            sortOrder = SortOrder.valueOf(
-                prefs.getString(KEY_SORT_ORDER, SortOrder.EXPIRY_DATE.name) ?: SortOrder.EXPIRY_DATE.name
-            ),
+            sortOrder = sortOrder,
             darkMode = prefs.getBoolean(KEY_DARK_MODE, false)
         )
     }

@@ -16,6 +16,7 @@ import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.extraction.MultiCouponExtractionService.CouponWithConfidence
 import com.example.coupontracker.extraction.MultiCouponExtractionService.MultiCouponResult
@@ -87,12 +88,8 @@ private fun buildDescriptionFromInfo(info: CouponInfo): String {
         segments += info.description.trim()
     }
 
-    info.cashbackAmount?.takeIf { it > 0 }?.let { amount ->
-        val formatted = when (info.discountType?.uppercase(Locale.ROOT)) {
-            "PERCENTAGE" -> "${amount.toInt()}% off"
-            "AMOUNT" -> "${formatCurrency(amount)} off"
-            else -> formatCurrency(amount)
-        }
+    info.cashbackDetail?.takeIf { it.isNotBlank() }?.let { detail ->
+        val formatted = DescriptionUtils.formatCashbackDetail(detail) ?: detail.trim()
         segments += formatted
     }
 
@@ -380,16 +377,11 @@ class CouponInputManager(
                         if (!code.isNullOrBlank()) {
                             // Create a basic coupon with just the code
                             return@withContext Coupon(
-                                id = 0,
                                 storeName = "Unknown Store",
                                 description = "Scanned from QR code",
-                                cashbackAmount = 0.0,
-                                expiryDate = null,
                                 redeemCode = code,
                                 imageUri = null,
-                                status = "Active",
-                                createdAt = Date(),
-                                updatedAt = Date()
+                                status = "Active"
                             )
                         }
                     }
@@ -403,25 +395,12 @@ class CouponInputManager(
                 val composedDescription = buildDescriptionFromInfo(couponInfo)
 
                 val baseCoupon = Coupon(
-                    id = 0,
                     storeName = couponInfo.storeName.ifBlank { "Unknown Store" },
                     description = composedDescription.ifBlank { "No description" },
                     expiryDate = couponInfo.expiryDate,
-                    cashbackAmount = 0.0,
                     redeemCode = couponInfo.redeemCode,
                     imageUri = null,
-                    category = null,
-                    status = status ?: "Active",
-                    cashbackType = null,
-                    cashbackValueNum = null,
-                    minimumPurchase = null,
-                    maximumDiscount = null,
-                    paymentMethod = null,
-                    usageLimit = null,
-                    platformType = null,
-                    rating = null,
-                    createdAt = Date(),
-                    updatedAt = Date()
+                    status = status ?: "Active"
                 )
 
                 val contextText = listOfNotNull(
@@ -557,18 +536,13 @@ class CouponInputManager(
                         // Try to extract coupon code from URL
                         val code = extractCouponCodeFromUrl(urlString)
                         if (code != null) {
-                            return@withContext Coupon(
-                                id = 0,
-                                storeName = extractDomainFromUrl(urlString),
-                                description = "Coupon from URL",
-                                cashbackAmount = 0.0,
-                                expiryDate = null,
-                                redeemCode = code,
-                                imageUri = null,
-                                status = "Active",
-                                createdAt = Date(),
-                                updatedAt = Date()
-                            )
+                        return@withContext Coupon(
+                            storeName = extractDomainFromUrl(urlString),
+                            description = "Coupon from URL",
+                            redeemCode = code,
+                            imageUri = null,
+                            status = "Active"
+                        )
                         }
 
                         throw IOException("Unsupported content type: $contentType")
@@ -598,16 +572,11 @@ class CouponInputManager(
 
                 // Otherwise, treat as a coupon code
                 return@withContext Coupon(
-                    id = 0,
                     storeName = "Unknown Store",
                     description = "Manual entry",
-                    cashbackAmount = 0.0,
-                    expiryDate = null,
                     redeemCode = text,
                     imageUri = null,
-                    status = "Active",
-                    createdAt = Date(),
-                    updatedAt = Date()
+                    status = "Active"
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon from text", e)
@@ -937,10 +906,10 @@ class CouponInputManager(
      * Convert a stored [Coupon] into a [CouponInfo] snapshot for form prefilling.
      */
     fun toCouponInfo(coupon: Coupon): CouponInfo {
-        val numericCashback = coupon.getCashbackNumericValue()
-        val cashbackAmount = when {
-            numericCashback > 0 -> numericCashback
-            coupon.cashbackAmount > 0 -> coupon.cashbackAmount
+        val cashbackDetail = DescriptionUtils.extractCashbackLine(coupon.description)
+        val discountType = when {
+            cashbackDetail?.contains("%") == true -> "PERCENTAGE"
+            cashbackDetail?.any { it.isDigit() } == true -> "AMOUNT"
             else -> null
         }
 
@@ -948,11 +917,12 @@ class CouponInputManager(
             storeName = coupon.storeName,
             description = coupon.description,
             expiryDate = coupon.expiryDate,
-            cashbackAmount = cashbackAmount,
+            cashbackDetail = cashbackDetail,
             redeemCode = coupon.redeemCode,
             category = coupon.category,
             rating = coupon.rating,
             status = coupon.status,
+            discountType = discountType,
             minimumPurchase = coupon.minimumPurchase,
             maximumDiscount = coupon.maximumDiscount,
             paymentMethod = coupon.paymentMethod,

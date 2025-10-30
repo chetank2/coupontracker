@@ -9,8 +9,10 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.AnalyticsTracker
 import com.example.coupontracker.util.CouponInputManager
+import com.example.coupontracker.util.GenericFieldHeuristics
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
@@ -496,20 +498,13 @@ class BatchScannerViewModel @Inject constructor(
      */
     private suspend fun buildPlaceholderCoupon(uri: Uri): Coupon {
         return Coupon(
-            id = 0,
             storeName = "Unknown Store",
             description = "Extraction failed - please edit manually",
             expiryDate = null,
-            cashbackAmount = 0.0,
             redeemCode = null,
             imageUri = persistUri(uri),
             category = "Other",
-            status = "Active",
-            createdAt = java.util.Date(),
-            updatedAt = java.util.Date(),
-            cashbackType = com.example.coupontracker.data.model.CashbackType.TEXT.name.lowercase(),
-            cashbackValueNum = 0.0,
-            cashbackCurrency = null
+            status = "Active"
         )
     }
     
@@ -778,48 +773,32 @@ class BatchScannerViewModel @Inject constructor(
             ocrCoupon.expiryDate ?: llmInfo.expiryDate
         }
         
-        // Cashback: prefer LLM if confident (>0.6), else OCR
-        val (cashbackAmount, cashbackValueNum, cashbackType, cashbackCurrency) = 
-            if (llmConf.getOrDefault("cashback", 0f) > 0.6f && llmInfo.cashbackAmount != null) {
-                val amount = llmInfo.cashbackAmount
-                if (llmInfo.discountType == "PERCENTAGE") {
-                    Tuple4(amount, amount, com.example.coupontracker.data.model.CashbackType.PERCENT.name.lowercase(), null)
-                } else {
-                    Tuple4(amount, amount, com.example.coupontracker.data.model.CashbackType.AMOUNT.name.lowercase(), "INR")
-                }
-            } else if (ocrCoupon.getCashbackNumericValue() > 0) {
-                val value = ocrCoupon.getCashbackNumericValue()
-                Tuple4(value, value, ocrCoupon.cashbackType ?: "text", ocrCoupon.cashbackCurrency)
-            } else {
-                Tuple4(0.0, 0.0, com.example.coupontracker.data.model.CashbackType.TEXT.name.lowercase(), null)
-            }
-        
+        // Cashback detail: prefer LLM detail if confident, else fall back to OCR-derived line
+        val llmDetail = llmInfo.cashbackDetail?.takeIf { GenericFieldHeuristics.hasMeaningfulCashback(it) }
+        val ocrDetail = DescriptionUtils.extractCashbackLine(ocrCoupon.description)
+        val cashbackDetail = when {
+            llmConf.getOrDefault("cashback", 0f) > 0.6f && llmDetail != null -> llmDetail
+            GenericFieldHeuristics.hasMeaningfulCashback(ocrDetail) -> ocrDetail
+            else -> llmDetail ?: ocrDetail
+        }
+
         // Description: prefer LLM verbatim text, fall back to OCR text
         val description = listOf(llmInfo.description, ocrCoupon.description)
             .map { it.trim() }
             .firstOrNull { it.isNotBlank() }
             ?: "Coupon offer"
+        val mergedDescription = DescriptionUtils.appendDetails(description, cashbackDetail)
         
         return Coupon(
-            id = 0,
             storeName = storeName,
-            description = description,
+            description = mergedDescription,
             expiryDate = expiryDate,
-            cashbackAmount = cashbackAmount,
             redeemCode = redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
             imageUri = persistUri(uri),
             category = llmInfo.category ?: ocrCoupon.category,
-            status = "Active",
-            createdAt = java.util.Date(),
-            updatedAt = java.util.Date(),
-            cashbackType = cashbackType,
-            cashbackValueNum = cashbackValueNum,
-            cashbackCurrency = cashbackCurrency
+            status = "Active"
         )
     }
-
-    // Helper data class for tuple return
-    private data class Tuple4<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
 
     private fun mergeConfidenceBreakdown(
         llmConf: Map<String, Float>,
@@ -980,14 +959,13 @@ class BatchScannerViewModel @Inject constructor(
             fields["expiryDate"] = formatter.format(date)
         }
         
-        // Cashback amount (preserve type information)
-        couponInfo.cashbackAmount?.let { amount ->
-            if (couponInfo.discountType == "PERCENTAGE") {
-                fields["amount"] = "${amount}%"  // ✅ Preserve % for percentage
-            } else {
-                fields["amount"] = amount.toString()  // Keep as number for amounts
-            }
-        }
+        // Cashback detail (already formatted string)
+        val savingsDetail = couponInfo.cashbackDetail
+            ?.takeIf { GenericFieldHeuristics.hasMeaningfulCashback(it) }
+            ?: DescriptionUtils.extractCashbackLine(couponInfo.description)
+                ?.takeIf { GenericFieldHeuristics.hasMeaningfulCashback(it) }
+
+        savingsDetail?.let { fields["amount"] = it }
         
         // Category
         couponInfo.category?.let { category ->
@@ -1020,13 +998,8 @@ class BatchScannerViewModel @Inject constructor(
             fields["expiryDate"] = formatter.format(date)
         }
         
-        if (coupon.cashbackAmount > 0) {
-            // Preserve type information from typed cashback fields
-            if (coupon.cashbackType == "percent") {
-                fields["amount"] = "${coupon.cashbackAmount}%"  // ✅ Preserve % for percentage
-            } else {
-                fields["amount"] = coupon.cashbackAmount.toString()  // Keep as number for amounts
-            }
+        DescriptionUtils.extractCashbackLine(coupon.description)?.let { detail ->
+            fields["amount"] = detail
         }
         
         coupon.category?.let { category ->
@@ -1068,39 +1041,17 @@ class BatchScannerViewModel @Inject constructor(
             }
         }
         
-        // Parse cashback amount
-        val cashbackAmount = fields["amount"]?.let { amountStr ->
-            com.example.coupontracker.util.IndianCurrencyParser.parseAmount(amountStr) ?: 0.0
-        } ?: 0.0
-        
-        // Determine cashback type and currency
-        val (cashbackType, cashbackValueNum, cashbackCurrency) = if (cashbackAmount > 0) {
-            val originalAmount = fields["amount"] ?: ""
-            if (originalAmount.contains("%")) {
-                Triple("percent", cashbackAmount, null)  // ✅ lowercase
-            } else {
-                Triple("amount", cashbackAmount, "INR")  // ✅ lowercase
-            }
-        } else {
-            Triple("text", 0.0, null)  // ✅ lowercase
-        }
+        val baseDescription = fields["description"]?.takeIf { it.isNotBlank() } ?: "Batch processed coupon"
+        val mergedDescription = DescriptionUtils.appendDetails(baseDescription, fields["amount"])
         
         return Coupon(
-            id = 0,
             storeName = fields["storeName"] ?: "Unknown Store",
-            description = fields["description"] ?: "Batch processed coupon",
+            description = mergedDescription,
             expiryDate = expiryDate,
-            cashbackAmount = cashbackAmount,
             redeemCode = fields["code"]?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
             imageUri = persistUri(uri),
-            category = fields["category"] ?: "Other",
-            status = "Active",
-            createdAt = java.util.Date(),
-            updatedAt = java.util.Date(),
-            // V2: Typed cashback fields
-            cashbackType = cashbackType,
-            cashbackValueNum = cashbackValueNum,
-            cashbackCurrency = cashbackCurrency
+            category = fields["category"],
+            status = "Active"
         )
     }
     
@@ -1112,20 +1063,12 @@ class BatchScannerViewModel @Inject constructor(
         val description = buildDescriptionFromInfo(couponInfo)
         
         return Coupon(
-            id = 0,
             storeName = couponInfo.storeName.takeIf { it.isNotBlank() } ?: "Unknown Store",
             description = description.ifBlank { "Extracted via LLM" },
             expiryDate = couponInfo.expiryDate,
-            cashbackAmount = 0.0,
             redeemCode = couponInfo.redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" },
             imageUri = persistUri(uri),
-            category = null,
-            status = "Active",
-            createdAt = java.util.Date(),
-            updatedAt = java.util.Date(),
-            cashbackType = null,
-            cashbackValueNum = null,
-            cashbackCurrency = null
+            status = "Active"
         )
     }
 
@@ -1136,13 +1079,8 @@ class BatchScannerViewModel @Inject constructor(
             segments += info.description.trim()
         }
 
-        info.cashbackAmount?.takeIf { it > 0 }?.let { amount ->
-            val formatted = when (info.discountType?.uppercase(Locale.ROOT)) {
-                "PERCENTAGE" -> "${amount.toInt()}% off"
-                "AMOUNT" -> "${formatCurrency(amount)} off"
-                else -> formatCurrency(amount)
-            }
-            segments += formatted
+        info.cashbackDetail?.takeIf { GenericFieldHeuristics.hasMeaningfulCashback(it) }?.let { detail ->
+            segments += detail.trim()
         }
 
         info.minimumPurchase?.takeIf { it > 0 }?.let {
@@ -1398,26 +1336,22 @@ class BatchScannerViewModel @Inject constructor(
         val runPathSummary = runPath.final.takeIf { it.isNotBlank() }?.let { final ->
             "${runPath.strategy} → $final"
         }
-            return Coupon(
-                id = 0,
-                storeName = couponInfo.storeName,
-                description = couponInfo.description,
-                cashbackAmount = couponInfo.cashbackAmount ?: 0.0,
-                cashbackType = couponInfo.discountType ?: "",
-                expiryDate = couponInfo.expiryDate,
-                redeemCode = couponInfo.redeemCode,
-                imageUri = uri.toString(),
-                status = "Active",
-                needsAttention = couponInfo.needsAttention,
-                storeNameSource = couponInfo.storeNameSource,
-                storeNameEvidence = couponInfo.storeNameEvidence,
-                extractionQualityScore = signals.qualityScore,
-                extractionConfidenceBreakdown = signals.fieldConfidences,
-                extractionStage = signals.stage.name,
-                extractionRunPath = runPathSummary,
-                extractionTimestamp = java.util.Date(),
-            createdAt = java.util.Date(),
-            updatedAt = java.util.Date()
+        val description = DescriptionUtils.appendDetails(couponInfo.description, couponInfo.cashbackDetail)
+        return Coupon(
+            storeName = couponInfo.storeName,
+            description = description,
+            expiryDate = couponInfo.expiryDate,
+            redeemCode = couponInfo.redeemCode,
+            imageUri = uri.toString(),
+            status = "Active",
+            needsAttention = couponInfo.needsAttention,
+            storeNameSource = couponInfo.storeNameSource,
+            storeNameEvidence = couponInfo.storeNameEvidence,
+            extractionQualityScore = signals.qualityScore,
+            extractionConfidenceBreakdown = signals.fieldConfidences,
+            extractionStage = signals.stage.name,
+            extractionRunPath = runPathSummary,
+            extractionTimestamp = java.util.Date()
         )
     }
 

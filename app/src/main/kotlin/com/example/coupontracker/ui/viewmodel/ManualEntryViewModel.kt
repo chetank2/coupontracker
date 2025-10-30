@@ -83,7 +83,6 @@ class ManualEntryViewModel @Inject constructor(
                     urlData = UrlData(
                         storeName = coupon.storeName,
                         description = coupon.description,
-                        amount = coupon.cashbackAmount,
                         code = coupon.redeemCode
                     )
                 )
@@ -103,7 +102,6 @@ class ManualEntryViewModel @Inject constructor(
     fun saveCoupon(
         storeName: String,
         description: String,
-        amount: Double,
         code: String?,
         expiryDate: Date?,
         category: String?
@@ -121,7 +119,6 @@ class ManualEntryViewModel @Inject constructor(
                     id = 0,
                     storeName = storeName,
                     description = description,
-                    cashbackAmount = amount,
                     expiryDate = expiryDate,
                     redeemCode = code.takeIf { !it.isNullOrBlank() },
                     imageUri = null,
@@ -168,6 +165,5 @@ data class ManualEntryUiState(
 data class UrlData(
     val storeName: String,
     val description: String,
-    val amount: Double?,
     val code: String?
 )

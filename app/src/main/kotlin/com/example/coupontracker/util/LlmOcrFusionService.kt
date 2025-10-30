@@ -2,6 +2,7 @@ package com.example.coupontracker.util
 
 import android.graphics.Bitmap
 import android.util.Log
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.CouponInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -42,16 +43,13 @@ class LlmOcrFusionService(
             // Fuse each field independently
             val fusedCode = fuseCode(llmResult.redeemCode, ocrSpans, brand)
             val fusedExpiry = fuseExpiryDate(llmResult.expiryDate, ocrSpans)
-            val fusedAmount = fuseCashbackAmount(llmResult.cashbackAmount, ocrSpans, brand)
+            val fusedDetail = fuseCashbackDetail(llmResult.cashbackDetail, ocrSpans, brand)
             
             // Return fused result
             llmResult.copy(
                 redeemCode = fusedCode,
                 expiryDate = fusedExpiry, // Already a Date object, no conversion needed
-                cashbackAmount = fusedAmount?.let { amount ->
-                    // Parse Indian currency format with thousand separators
-                    IndianCurrencyParser.parseAmount(amount) ?: llmResult.cashbackAmount
-                } ?: llmResult.cashbackAmount
+                cashbackDetail = fusedDetail ?: llmResult.cashbackDetail
             )
             
         } catch (e: Exception) {
@@ -354,44 +352,44 @@ class LlmOcrFusionService(
     }
     
     /**
-     * Fuse cashback amounts with brand-aware validation
+     * Fuse cashback details with brand-aware validation
      */
-    private fun fuseCashbackAmount(llmAmount: Double?, ocrSpans: List<TextSpan>, brand: String?): String? {
-        val ocrAmountCandidates = ocrSpans
+    private fun fuseCashbackDetail(llmDetail: String?, ocrSpans: List<TextSpan>, brand: String?): String? {
+        val ocrDetailCandidates = ocrSpans
             .nearKeywords(AMOUNT_KEYWORDS)
             .mapNotNull { span ->
                 val patterns = getUniversalCashbackPatterns()
                 patterns.firstNotNullOfOrNull { pattern ->
-                    pattern.find(span.text)?.value
+                    val raw = pattern.find(span.text)?.value
+                    raw?.let { DescriptionUtils.formatCashbackDetail(it) ?: it.trim() }
                 }
             }
             .distinct()
         
         return when {
-            llmAmount == null && ocrAmountCandidates.isNotEmpty() -> {
-                val bestCandidate = ocrAmountCandidates.first()
-                Log.d(TAG, "Using OCR amount (no LLM): $bestCandidate")
+            llmDetail.isNullOrBlank() && ocrDetailCandidates.isNotEmpty() -> {
+                val bestCandidate = ocrDetailCandidates.first()
+                Log.d(TAG, "Using OCR cashback detail (no LLM): $bestCandidate")
                 bestCandidate
             }
             
-            llmAmount != null && ocrAmountCandidates.isNotEmpty() -> {
-                // Validate LLM amount against OCR
-                val llmAmountStr = llmAmount.toString()
-                val hasOcrSupport = ocrAmountCandidates.any { candidate ->
-                    val normalizedOcr = candidate.replace(Regex("\\s+"), "")
-                    llmAmountStr.contains(normalizedOcr) || normalizedOcr.contains(llmAmountStr)
+            !llmDetail.isNullOrBlank() && ocrDetailCandidates.isNotEmpty() -> {
+                val normalizedLlm = llmDetail.replace(Regex("\\s+"), "").lowercase()
+                val hasOcrSupport = ocrDetailCandidates.any { candidate ->
+                    val normalizedOcr = candidate.replace(Regex("\\s+"), "").lowercase()
+                    normalizedOcr.contains(normalizedLlm) || normalizedLlm.contains(normalizedOcr)
                 }
-                
+
                 if (hasOcrSupport) {
-                    Log.d(TAG, "LLM amount validated by OCR: $llmAmount")
-                    llmAmountStr
+                    Log.d(TAG, "LLM cashback detail validated by OCR: $llmDetail")
+                    llmDetail
                 } else {
-                    Log.w(TAG, "LLM amount not supported by OCR, using OCR: ${ocrAmountCandidates.first()}")
-                    ocrAmountCandidates.first()
+                    Log.w(TAG, "LLM cashback detail not supported by OCR, using OCR: ${ocrDetailCandidates.first()}")
+                    ocrDetailCandidates.first()
                 }
             }
             
-            else -> llmAmount?.toString()
+            else -> llmDetail
         }
     }
     
@@ -593,4 +591,3 @@ private fun List<TextSpan>.nearKeywords(keywords: List<String>, maxDistance: Int
 private fun String.normalize(): String {
     return this.trim().uppercase().replace(Regex("\\s+"), "")
 }
-

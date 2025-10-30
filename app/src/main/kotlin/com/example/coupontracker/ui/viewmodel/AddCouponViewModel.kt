@@ -122,7 +122,6 @@ class AddCouponViewModel @Inject constructor(
     fun saveCoupon(
         storeName: String,
         description: String,
-        cashbackAmount: Double,
         redeemCode: String? = null,
         category: String? = null,
         rating: String? = null,
@@ -155,7 +154,6 @@ class AddCouponViewModel @Inject constructor(
                         storeName = storeName,
                         description = description,
                         expiryDate = currentExpiryDate,
-                        cashbackAmount = cashbackAmount,
                         redeemCode = redeemCode ?: existingCoupon.redeemCode,
                         imageUri = persistedImageUri ?: existingCoupon.imageUri,
                         category = category ?: existingCoupon.category,
@@ -181,7 +179,6 @@ class AddCouponViewModel @Inject constructor(
                         storeName = storeName,
                         description = description,
                         expiryDate = currentExpiryDate,
-                        cashbackAmount = cashbackAmount,
                         redeemCode = redeemCode,
                         imageUri = persistedImageUri,
                         category = category,

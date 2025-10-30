@@ -105,18 +105,18 @@ You are an expert at extracting information from coupon images. Analyze this cou
 Return ONLY valid JSON in this exact format (no additional text):
 {
     "storeName": "name of the store or brand",
-    "description": "brief description of the offer", 
-    "amount": "discount amount with ₹ symbol if present",
+    "description": "brief description of the offer including any savings/cashback details", 
     "code": "coupon or promo code if visible",
     "expiryDate": "expiry date if visible",
-    "cashbackAmount": "cashback amount if mentioned",
-    "minOrderAmount": "minimum order requirement if specified"
+    "storeNameSource": "how the store name was determined (if provided)",
+    "storeNameEvidence": ["OCR snippet(s) that justify the store name"],
+    "needsAttention": true/false
 }
 
 Extraction rules:
 - Use "Unknown" for fields that cannot be determined
 - Include ₹ symbol for Indian rupee amounts
-- Keep descriptions concise (max 50 characters)
+- Keep descriptions concise (max 80 characters) while preserving offer specifics
 - Extract codes exactly as shown (preserve case and formatting)
 - Format dates as DD/MM/YYYY when possible
 - Look for common coupon elements: store logos, discount percentages, promo codes, expiry dates

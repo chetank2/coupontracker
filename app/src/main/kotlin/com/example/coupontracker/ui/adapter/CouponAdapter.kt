@@ -70,11 +70,12 @@ class CouponAdapter(
                 }
                 couponDescription.text = desc
 
-                if (coupon.cashbackAmount > 0) {
-                    couponValue.visibility = View.VISIBLE
-                    couponValue.text = String.format("₹%.0f", coupon.cashbackAmount)
+                val cashbackDisplay = coupon.getCashbackDisplayText()
+                couponValue.visibility = if (cashbackDisplay.isNotBlank()) {
+                    couponValue.text = cashbackDisplay
+                    View.VISIBLE
                 } else {
-                    couponValue.visibility = View.GONE
+                    View.GONE
                 }
                 
                 // Set expiry date text with color based on days remaining

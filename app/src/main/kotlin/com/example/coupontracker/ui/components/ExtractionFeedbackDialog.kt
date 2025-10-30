@@ -36,7 +36,7 @@ fun ExtractionFeedbackDialog(
     var showCorrectionForm by remember { mutableStateOf(false) }
     var correctedStoreName by remember { mutableStateOf(coupon.storeName) }
     var correctedCode by remember { mutableStateOf(coupon.redeemCode ?: "") }
-    var correctedAmount by remember { mutableStateOf(coupon.getCashbackDisplayText()) }
+    var correctedSavingsDetail by remember { mutableStateOf(coupon.getCashbackDisplayText()) }
     var correctedExpiry by remember { mutableStateOf(
         coupon.expiryDate?.let { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(it) } ?: ""
     ) }
@@ -74,7 +74,7 @@ fun ExtractionFeedbackDialog(
                     ) {
                         ExtractionField("Store", coupon.storeName)
                         ExtractionField("Code", coupon.redeemCode ?: "Not found")
-                        ExtractionField("Amount", coupon.getCashbackDisplayText())
+                        ExtractionField("Savings", coupon.getCashbackDisplayText())
                         ExtractionField(
                             "Expiry", 
                             coupon.expiryDate?.let { 
@@ -131,9 +131,9 @@ fun ExtractionFeedbackDialog(
                     )
 
                     OutlinedTextField(
-                        value = correctedAmount,
-                        onValueChange = { correctedAmount = it },
-                        label = { Text("Amount (e.g., ₹500 or 25%)") },
+                        value = correctedSavingsDetail,
+                        onValueChange = { correctedSavingsDetail = it },
+                        label = { Text("Savings Detail (e.g., Cashback: ₹500 off)") },
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -162,7 +162,7 @@ fun ExtractionFeedbackDialog(
                                 val correction = CorrectedCoupon(
                                     storeName = correctedStoreName.takeIf { it.isNotBlank() },
                                     redeemCode = correctedCode.takeIf { it.isNotBlank() },
-                                    cashbackAmount = correctedAmount.takeIf { it.isNotBlank() },
+                                    cashbackDetail = correctedSavingsDetail.takeIf { it.isNotBlank() },
                                     expiryDate = correctedExpiry.takeIf { it.isNotBlank() }
                                 )
                                 onSubmitCorrection(correction)
@@ -219,6 +219,6 @@ private fun ExtractionField(
 data class CorrectedCoupon(
     val storeName: String?,
     val redeemCode: String?,
-    val cashbackAmount: String?,
+    val cashbackDetail: String?,
     val expiryDate: String?
 )

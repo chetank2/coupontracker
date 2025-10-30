@@ -41,11 +41,11 @@ import com.example.coupontracker.R
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.ui.components.DateFormatter
 import com.example.coupontracker.ui.components.ExtractionDebugPanel
-import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.ui.components.StatusType
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.DetailViewModel
 import com.example.coupontracker.util.GenericFieldHeuristics
+import com.example.coupontracker.data.util.DescriptionUtils
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -107,7 +107,7 @@ fun CouponDetailScreen(
                     coupon = coupon,
                     showImagePreview = showImagePreview,
                     onToggleImagePreview = { showImagePreview = it },
-                    onTrackUsage = { viewModel.trackUsage(coupon.cashbackAmount) },
+                    onTrackUsage = { viewModel.trackUsage() },
                     context = context,
                     debugSnapshot = debugSnapshot,
                     isDebugBuild = isDebugBuild
@@ -665,8 +665,8 @@ private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.C
     val confidences = coupon.extractionConfidenceBreakdown
     val storeValid = !GenericFieldHeuristics.isGenericOrMissing(coupon.storeName)
     val codeValid = !GenericFieldHeuristics.isGenericOrMissingCode(coupon.redeemCode)
-    val numericValue = coupon.getCashbackNumericValue()
-    val amountValid = !GenericFieldHeuristics.isZeroOrMeaningless(numericValue)
+    val cashbackDetail = DescriptionUtils.extractCashbackLine(coupon.description)
+    val amountValid = GenericFieldHeuristics.hasMeaningfulCashback(cashbackDetail)
     val expiryDate = coupon.expiryDate
     val descriptionValid = GenericFieldHeuristics.isMeaningfulDescription(coupon.description)
 
@@ -744,7 +744,7 @@ private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.C
         ),
         buildMetric(
             label = "Savings detected",
-            confidence = confidences["cashbackAmount"],
+            confidence = confidences["amount"],
             fallbackAchieved = amountValid,
             successDescription = "Cashback or discount captured",
             failureDescription = "Savings not detected",

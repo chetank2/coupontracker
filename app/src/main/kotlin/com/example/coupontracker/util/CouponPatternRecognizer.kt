@@ -7,6 +7,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Rect
 import android.util.Log
+import com.example.coupontracker.data.util.DescriptionUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
@@ -717,7 +718,7 @@ class CouponPatternRecognizer(
         val description = elements["description"] ?: ""
         val expiryDateStr = elements["expiry"]
         val redeemCode = elements["code"]
-        val amountStr = elements["amount"]
+        val amountStr = elements["amount"]?.trim()
 
         // Parse expiry date
         val expiryDate = if (expiryDateStr != null) {
@@ -726,19 +727,12 @@ class CouponPatternRecognizer(
             null
         }
 
-        // Parse cashback amount
-        val cashbackAmount = if (amountStr != null) {
-            parseCashbackAmount(amountStr)
-        } else {
-            null
-        }
-
-        // Determine discount type
-        val discountType = if (amountStr != null && amountStr.contains("%")) {
-            "PERCENTAGE"
-        } else {
-            "AMOUNT"
-        }
+        // Normalize cashback detail text
+        val cashbackDetail = amountStr
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { raw ->
+                DescriptionUtils.formatCashbackDetail(raw) ?: raw
+            }
 
         // Extract minimum purchase amount if present in description
         val minimumPurchase = extractMinimumPurchase(description)
@@ -753,9 +747,8 @@ class CouponPatternRecognizer(
             storeName = storeName,
             description = description,
             expiryDate = expiryDate,
-            cashbackAmount = cashbackAmount,
+            cashbackDetail = cashbackDetail,
             redeemCode = redeemCode,
-            discountType = discountType,
             minimumPurchase = minimumPurchase,
             paymentMethod = paymentMethod
         )
@@ -812,30 +805,5 @@ class CouponPatternRecognizer(
         return textExtractor.parseExpiryDate(dateStr)
     }
 
-    /**
-     * Parse cashback amount from string
-     */
-    private fun parseCashbackAmount(amountStr: String): Double? {
-        return try {
-            when {
-                // Percentage discount
-                amountStr.contains("%") -> {
-                    val percentStr = amountStr.replace("[^0-9.]".toRegex(), "")
-                    percentStr.toDoubleOrNull()
-                }
-                // Fixed amount discount
-                amountStr.contains("₹") || amountStr.contains("Rs") -> {
-                    val amountNumStr = amountStr.replace("[^0-9.]".toRegex(), "")
-                    amountNumStr.toDoubleOrNull()
-                }
-                // Try to parse as a number
-                else -> {
-                    amountStr.replace("[^0-9.]".toRegex(), "").toDoubleOrNull()
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error parsing cashback amount: $amountStr", e)
-            null
-        }
-    }
+    // Removed legacy cashback parsing; amount text now folded into description
 }

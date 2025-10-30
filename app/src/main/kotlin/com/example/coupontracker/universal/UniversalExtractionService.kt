@@ -3,14 +3,12 @@ package com.example.coupontracker.universal
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import com.example.coupontracker.data.model.CashbackInfo
-import com.example.coupontracker.data.model.CashbackType
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.ProgressiveExtractionResult
 import com.example.coupontracker.extraction.ProgressiveExtractionService
-import com.example.coupontracker.util.IndianCurrencyParser
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.IndianDateParser
 import com.example.coupontracker.util.OcrTextCleaner
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -454,6 +452,19 @@ class UniversalExtractionService @Inject constructor(
         return confidence.coerceIn(0f, 1f)
     }
 
+    private fun parseCompoundAmountValue(text: String): Double? {
+        val normalized = text.lowercase(Locale.ROOT)
+        val percentMatch = Regex("(\\d+(?:\\.\\d+)?)%").find(normalized)
+        if (percentMatch != null) {
+            return percentMatch.groupValues[1].toDoubleOrNull()
+        }
+        val amountMatch = Regex("(?:₹|rs\\.?|inr|usd|eur|gbp|\\$|€|£)?\\s*(\\d+(?:,\\d{3})*(?:\\.\\d+)?)").find(normalized)
+        if (amountMatch != null) {
+            return amountMatch.groupValues[1].replace(",", "").toDoubleOrNull()
+        }
+        return null
+    }
+
     private fun normalizeForField(fieldType: FieldType, text: String): String {
         return when (fieldType) {
             FieldType.COUPON_CODE -> text.trim().uppercase(Locale.ROOT)
@@ -482,11 +493,11 @@ class UniversalExtractionService @Inject constructor(
         val expiryDate = extractedFields[FieldType.EXPIRY_DATE]?.text?.let { parseExpiryDate(it) }
 
         val amountCandidate = extractedFields[FieldType.AMOUNT]
-        val (cashbackAmount, cashbackInfo) = if (amountCandidate != null) {
-            parseCashbackAmount(amountCandidate.text)
-        } else {
-            Pair(0.0, CashbackInfo(CashbackType.TEXT, 0.0))
-        }
+        val cashbackDetail = amountCandidate
+            ?.text
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { DescriptionUtils.formatCashbackDetail(it) ?: it }
 
         val description = buildDescription(extractedFields, cleanedOcr, storeName)
 
@@ -504,14 +515,10 @@ class UniversalExtractionService @Inject constructor(
             storeNameCandidate == null ||
             storeNameCandidate.confidence < 0.5f
 
-        return Coupon(
+        val baseCoupon = Coupon(
             storeName = storeName,
             description = description,
-            cashbackAmount = cashbackAmount,
             redeemCode = redeemCode,
-            cashbackType = cashbackInfo.type.name.lowercase(Locale.ROOT),
-            cashbackValueNum = cashbackInfo.valueNum,
-            cashbackCurrency = cashbackInfo.currency,
             imageUri = imageUri,
             expiryDate = expiryDate,
             storeNameSource = storeSource,
@@ -519,6 +526,11 @@ class UniversalExtractionService @Inject constructor(
             extractionConfidenceBreakdown = confidenceBreakdown,
             needsAttention = needsAttention
         )
+        return if (cashbackDetail != null) {
+            baseCoupon.withAdditionalDetails(cashbackDetail)
+        } else {
+            baseCoupon
+        }
     }
 
     private fun buildDescription(
@@ -535,13 +547,8 @@ class UniversalExtractionService @Inject constructor(
 
         extractMeaningfulSnippet(cleanedOcr)?.let { return it }
 
-        val amount = extractedFields[FieldType.AMOUNT]?.text
         return buildString {
             append("Offer from $storeName")
-            if (!amount.isNullOrBlank()) {
-                append(": ")
-                append(amount)
-            }
         }
     }
 
@@ -554,41 +561,6 @@ class UniversalExtractionService @Inject constructor(
             Log.w(TAG, "Failed to parse expiry date: $dateText", e)
             null
         }
-    }
-
-    private fun parseCashbackAmount(amountText: String): Pair<Double, CashbackInfo> {
-        return try {
-            val compoundValue = parseCompoundAmountValue(amountText)
-            if (compoundValue != null && amountText.contains("+")) {
-                Pair(
-                    compoundValue,
-                    CashbackInfo(CashbackType.AMOUNT, compoundValue, "INR")
-                )
-            } else {
-                val numericValue = compoundValue ?: IndianCurrencyParser.parseAmount(amountText) ?: 0.0
-                val cashbackInfo = when {
-                    amountText.contains("%") -> CashbackInfo(CashbackType.PERCENT, numericValue)
-                    amountText.contains("₹") || amountText.contains("Rs", ignoreCase = true) ->
-                        CashbackInfo(CashbackType.AMOUNT, numericValue, "INR")
-                    numericValue <= 100 && amountText.contains("off", ignoreCase = true) ->
-                        CashbackInfo(CashbackType.PERCENT, numericValue)
-                    else -> CashbackInfo(CashbackType.AMOUNT, numericValue, "INR")
-                }
-                Pair(numericValue, cashbackInfo)
-            }
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to parse cashback amount: $amountText", e)
-            Pair(0.0, CashbackInfo(CashbackType.TEXT, 0.0))
-        }
-    }
-
-    private fun parseCompoundAmountValue(text: String): Double? {
-        if (!text.contains("+")) {
-            return IndianCurrencyParser.parseAmount(text)
-        }
-        val parts = text.split("+")
-        val values = parts.mapNotNull { IndianCurrencyParser.parseAmount(it) }
-        return if (values.isNotEmpty()) values.sum() else null
     }
 
     private fun convertProgressiveCandidates(
@@ -696,11 +668,7 @@ class UniversalExtractionService @Inject constructor(
         return Coupon(
             storeName = store,
             description = description,
-            cashbackAmount = 0.0,
             redeemCode = null,
-            cashbackType = CashbackType.TEXT.name.lowercase(Locale.ROOT),
-            cashbackValueNum = 0.0,
-            cashbackCurrency = "INR",
             imageUri = null,
             status = "NEEDS_REVIEW",
             needsAttention = true

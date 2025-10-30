@@ -258,7 +258,6 @@ private fun SortSection(
                     text = when (sortOrder) {
                         SortOrder.EXPIRY_DATE -> "Expiry date"
                         SortOrder.NAME -> "Store name"
-                        SortOrder.AMOUNT -> "Cashback amount"
                         SortOrder.CREATED_DATE -> "Date added"
                     }
                 )

@@ -17,9 +17,6 @@ interface CouponDao {
     @Query("SELECT * FROM coupons WHERE storeName LIKE '%' || :query || '%' OR category LIKE '%' || :query || '%'")
     fun searchCoupons(query: String): Flow<List<Coupon>>
 
-    @Query("SELECT * FROM coupons ORDER BY cashbackAmount DESC")
-    fun getCouponsByAmount(): Flow<List<Coupon>>
-
     @Query("SELECT * FROM coupons ORDER BY storeName COLLATE NOCASE ASC")
     fun getCouponsByName(): Flow<List<Coupon>>
 
