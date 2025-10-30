@@ -1319,6 +1319,7 @@ class ScannerViewModel @Inject constructor(
             var qualityScore: Int? = null
             var fieldConfidences: Map<String, Float> = emptyMap()
             var sourceStage: ExtractionStage? = null
+            var fullOcrText: String? = null
 
             extractedInfo["minicpmConfidence"] = couponInstance.confidence.toString()
             extractedInfo["minicpmDetectionStatus"] = couponInstance.status.name
@@ -1352,8 +1353,9 @@ class ScannerViewModel @Inject constructor(
                         // Try fallback for low quality
                         triedStages.add("FALLBACK_OCR")
                         finalStage = "FALLBACK_OCR"
-                        val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
-                        mergeValidatedFields(extractedInfo, fallbackFields)
+                        val fallbackResult = runFallbackOcr(couponInstance.cropBitmap)
+                        mergeValidatedFields(extractedInfo, fallbackResult.fields)
+                        fullOcrText = fallbackResult.text ?: fullOcrText
                         
                         Log.w(TAG, "⚠️ LLM low quality (${result.reason}), used fallback")
                     }
@@ -1366,8 +1368,9 @@ class ScannerViewModel @Inject constructor(
                         qualityScore = result.signals?.qualityScore
                         fieldConfidences = result.signals?.fieldConfidences ?: emptyMap()
                         sourceStage = result.signals?.stage ?: result.stage
-                        val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
-                        extractedInfo.putAll(fallbackFields)
+                        val fallbackResult = runFallbackOcr(couponInstance.cropBitmap)
+                        extractedInfo.putAll(fallbackResult.fields)
+                        fullOcrText = fallbackResult.text ?: fullOcrText
 
                         Log.e(TAG, "❌ LLM extraction failed: ${result.error.message}")
                     }
@@ -1380,8 +1383,9 @@ class ScannerViewModel @Inject constructor(
                 progress = MiniCpmProgress.FALLBACK
                 qualityScore = qualityScore ?: 0
                 sourceStage = sourceStage ?: ExtractionStage.LLM
-                val fallbackFields = runFallbackOcr(couponInstance.cropBitmap)
-                extractedInfo.putAll(fallbackFields)
+                val fallbackResult = runFallbackOcr(couponInstance.cropBitmap)
+                extractedInfo.putAll(fallbackResult.fields)
+                fullOcrText = fallbackResult.text ?: fullOcrText
             }
 
             // Track run path telemetry
@@ -1411,7 +1415,8 @@ class ScannerViewModel @Inject constructor(
                 runPath = runPath,
                 qualityScore = qualityScore,
                 fieldConfidences = fieldConfidences,
-                sourceStage = sourceStage
+                sourceStage = sourceStage,
+                fullOcrText = fullOcrText
             )
 
             val snapshot = ExtractionDebugScorer.fromFieldExtraction(baseResult, runPath)
@@ -1472,15 +1477,20 @@ class ScannerViewModel @Inject constructor(
         return storeWeak || descriptionWeak || duplicateStoreAndCode || (codeMissing && amountWeak)
     }
 
-    private suspend fun runFallbackOcr(bitmap: Bitmap): Map<String, String> {
+    private suspend fun runFallbackOcr(bitmap: Bitmap): FallbackOcrResult {
         return when (val result = multiEngineOCR.processImage(bitmap)) {
-            is MultiEngineOCR.OCRResult.Success -> result.extractedInfo
+            is MultiEngineOCR.OCRResult.Success -> FallbackOcrResult(result.extractedInfo, result.text)
             is MultiEngineOCR.OCRResult.Error -> {
                 Log.w(TAG, "Fallback OCR failed: ${result.message}")
-                emptyMap()
+                FallbackOcrResult(emptyMap(), null)
             }
         }
     }
+
+    private data class FallbackOcrResult(
+        val fields: Map<String, String>,
+        val text: String?
+    )
 
     @VisibleForTesting
     internal fun mergeValidatedFields(primary: MutableMap<String, String>, fallback: Map<String, String>) {
@@ -2329,5 +2339,6 @@ data class FieldExtractionResult(
     val debugSnapshot: ExtractionDebugSnapshot? = null,
     val qualityScore: Int? = null,
     val fieldConfidences: Map<String, Float> = emptyMap(),
-    val sourceStage: ExtractionStage? = null
+    val sourceStage: ExtractionStage? = null,
+    val fullOcrText: String? = null
 )

@@ -32,7 +32,9 @@ class CouponRepositoryImpl @Inject constructor(
         val id = couponDao.insertCoupon(normalized)
         if (id > 0) {
             val persisted = normalized.copy(id = id)
-            reminderScheduler.schedule(persisted, persisted.reminderDate)
+            if (persisted.reminderLeadTimeMinutes != null) {
+                reminderScheduler.schedule(persisted, persisted.reminderDate)
+            }
         }
         return id
     }

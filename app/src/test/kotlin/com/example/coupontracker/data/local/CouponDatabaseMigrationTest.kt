@@ -37,7 +37,8 @@ class CouponDatabaseMigrationTest {
             .addMigrations(
                 CouponDatabase.MIGRATION_8_9,
                 CouponDatabase.MIGRATION_9_10,
-                CouponDatabase.MIGRATION_10_11
+                CouponDatabase.MIGRATION_10_11,
+                CouponDatabase.MIGRATION_11_12
             )
             .allowMainThreadQueries()
             .build()

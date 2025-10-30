@@ -115,6 +115,8 @@ class CouponRepositoryTest {
             imageUri = null,
             category = "Test",
             usageCount = 1,
+            reminderLeadTimeMinutes = 120,
+            reminderDate = Date(System.currentTimeMillis() + 120 * 60 * 1000),
             createdAt = Date(0),
             updatedAt = Date(0)
         )

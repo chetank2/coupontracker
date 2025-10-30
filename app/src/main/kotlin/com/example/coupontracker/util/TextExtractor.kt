@@ -322,6 +322,10 @@ class TextExtractor {
             builder.add(trimmedToken)
         }
 
+        while (builder.isNotEmpty() && GENERIC_TRAILING_TOKENS.contains(builder.last().uppercase(Locale.ROOT))) {
+            builder.removeAt(builder.lastIndex)
+        }
+
         val cleaned = builder.joinToString(" ").trim()
         if (cleaned.length < 3) {
             return null
@@ -1341,6 +1345,22 @@ class TextExtractor {
         private val CATEGORIES = listOf(
             "Food", "Travel", "Shopping", "Electronics", "Fashion", "Beauty",
             "Health", "Entertainment", "Education", "Services"
+        )
+
+        private val GENERIC_TRAILING_TOKENS = setOf(
+            "ANNUAL",
+            "PLAN",
+            "PLANS",
+            "OFFER",
+            "OFFERS",
+            "SALE",
+            "DEAL",
+            "DEALS",
+            "REWARDS",
+            "PROGRAM",
+            "MEMBERSHIP",
+            "SUBSCRIPTION",
+            "CARD"
         )
     }
 }
