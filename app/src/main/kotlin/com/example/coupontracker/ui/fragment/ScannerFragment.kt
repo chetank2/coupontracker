@@ -177,7 +177,7 @@ class ScannerFragment : Fragment() {
 
                         // Show success message with coupon details
                         val coupon = state.coupon
-                        val progressLabel = state.miniCpmStatus.displayName()
+                        val progressLabel = state.llmStatus.displayName()
                         Snackbar.make(
                             binding.root,
                             "Successfully scanned coupon: ${coupon.redeemCode ?: ""} ($progressLabel)",

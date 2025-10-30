@@ -2,7 +2,7 @@ package com.example.coupontracker.debug
 
 import com.example.coupontracker.util.ExtractResult
 import com.example.coupontracker.util.RunPath
-import com.example.coupontracker.ui.viewmodel.MiniCpmProgress
+import com.example.coupontracker.ui.viewmodel.LlmProgress
 import com.example.coupontracker.ui.viewmodel.FieldExtractionResult
 import com.example.coupontracker.universal.UniversalExtractionResult
 import java.util.Locale
@@ -192,10 +192,10 @@ object ExtractionDebugScorer {
     }
 
     fun fromFieldExtraction(result: FieldExtractionResult, runPath: RunPath?): ExtractionDebugSnapshot {
-        val llmScore = (result.qualityScore ?: when (result.miniCpmStatus) {
-            MiniCpmProgress.SUCCESS -> 80
-            MiniCpmProgress.NEEDS_REVIEW -> 55
-            MiniCpmProgress.FALLBACK -> 35
+        val llmScore = (result.qualityScore ?: when (result.llmStatus) {
+            LlmProgress.SUCCESS -> 80
+            LlmProgress.NEEDS_REVIEW -> 55
+            LlmProgress.FALLBACK -> 35
         }).coerceIn(0, 100)
         val ocrFallback = runPath?.final?.uppercase(Locale.getDefault())?.contains("OCR") == true
         val ocrScore = if (ocrFallback) 50 else 75
@@ -203,7 +203,7 @@ object ExtractionDebugScorer {
         val fusionScore = ((llmScore + ocrScore + detectionScore) / 3).coerceIn(20, 85)
 
         val culprit = when {
-            result.miniCpmStatus == MiniCpmProgress.FALLBACK -> ExtractionComponent.LLM
+            result.llmStatus == LlmProgress.FALLBACK -> ExtractionComponent.LLM
             ocrScore < DEGRADED_THRESHOLD -> ExtractionComponent.OCR
             detectionScore < DEGRADED_THRESHOLD -> ExtractionComponent.DETECTOR
             else -> null
@@ -227,7 +227,7 @@ object ExtractionDebugScorer {
                 score = llmScore,
                 status = statusFor(llmScore),
                 notes = buildList {
-                    add("MiniCPM status: ${result.miniCpmStatus}")
+                    add("LLM status: ${result.llmStatus}")
                     result.qualityScore?.let { add("Reported quality: $it") }
                     result.fieldConfidences.takeIf { it.isNotEmpty() }?.let { confidences ->
                         val weakest = confidences.minByOrNull { it.value }

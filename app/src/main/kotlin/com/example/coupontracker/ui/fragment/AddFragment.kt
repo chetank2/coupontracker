@@ -521,8 +521,7 @@ class AddFragment : Fragment() {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("About Local AI OCR")
             .setMessage(
-                "Local AI OCR uses MiniCPM-Llama3-V2.5, a state-of-the-art vision-language model " +
-                "for enhanced coupon text extraction. This feature:\n\n" +
+                "Local AI OCR now uses the Qwen2.5 on-device text model for enhanced coupon extraction. This feature:\n\n" +
                 "• Works completely offline (no internet required)\n" +
                 "• Provides better accuracy for complex coupons\n" +
                 "• Understands context and layout\n" +

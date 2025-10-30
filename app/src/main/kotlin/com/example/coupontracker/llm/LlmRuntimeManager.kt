@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.LazyThreadSafetyMode
 
 /**
- * Singleton manager for MiniCPM-Llama3-V2.5 LLM runtime
+ * Singleton manager for the on-device Qwen2.5 LLM runtime (with legacy MiniCPM hooks preserved).
  * Handles model loading, inference, and resource management
  */
 class LlmRuntimeManager private constructor(private val context: Context) {
@@ -271,8 +271,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     }
     
     /**
-     * Load model or throw exception (internal method)
-     * Supports both Qwen2 and MiniCPM models
+     * Load model or throw exception (internal method).
+     * Qwen2.5 text inference is the primary target; MiniCPM hooks remain only for legacy multimodal builds.
      */
     private suspend fun loadModelOrThrow(): Long {
         // Check if model files exist
@@ -302,12 +302,12 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         Log.d(TAG, "  Version: ${metadata.version}")
         Log.d(TAG, "  Tensors: ${metadata.tensorCount}")
         
-        // Check if model has vision support
+        // Check if model has optional multimodal support
         val hasVision = com.example.coupontracker.model.ModelPaths.hasVisionSupport(detectedModelId)
         if (hasVision) {
-            Log.d(TAG, "✅ Model has vision support (MiniCPM)")
+            Log.d(TAG, "ℹ️  Legacy multimodal hooks detected (MiniCPM compatibility)")
         } else {
-            Log.d(TAG, "ℹ️  Text-only model (Qwen2) - optimized for speed")
+            Log.d(TAG, "ℹ️  Text-only model (Qwen2.5) - optimized for speed")
         }
         
         if (!configPath.exists() || configPath.length() == 0L) {
@@ -350,7 +350,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             topP = 0.85f  // Slightly lower for less randomness (was 0.9)
         )
         
-        Log.d(TAG, "MiniCPM model loaded successfully (handle: $handle)")
+        Log.d(TAG, "$modelName model loaded successfully (handle: $handle)")
         return handle
     }
     
@@ -376,7 +376,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             try {
                 val currentHandle = modelHandle ?: throw IllegalStateException("Model handle is null after acquire")
                 
-                Log.d(TAG, "Running MiniCPM inference...")
+                Log.d(TAG, "Running legacy MiniCPM vision inference (deprecated)...")
                 
                 // Preprocess image for model requirements
                 val processedImage = preprocessImageForMiniCPM(bitmap)
@@ -414,9 +414,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     }
     
     /**
-     * Run TEXT-ONLY inference with OCR text
-     * This is MUCH faster than vision inference (5-10s vs 15-30 min)
-     * and still uses MiniCPM's intelligence to understand the text
+     * Run TEXT-ONLY inference with OCR text.
+     * The Qwen2.5 model is optimized for this path; legacy vision flows remain disabled by default.
      */
     suspend fun runTextInference(
         ocrText: String,
@@ -433,7 +432,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             try {
                 val currentHandle = modelHandle ?: throw IllegalStateException("Model handle is null after acquire")
                 
-                Log.d(TAG, "Running MiniCPM TEXT-ONLY inference...")
+                Log.d(TAG, "Running Qwen2.5 text inference...")
                 Log.d(TAG, "OCR text length: ${ocrText.length} chars")
                 
                 val inferenceStart = System.currentTimeMillis()

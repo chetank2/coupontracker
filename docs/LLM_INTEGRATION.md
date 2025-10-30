@@ -1,22 +1,22 @@
-# MiniCPM-Llama3-V2.5 LLM OCR Integration
+# Qwen2.5 On-Device LLM OCR Integration
 
 ## Overview
 
-This document describes the integration of MiniCPM-Llama3-V2.5, a state-of-the-art vision-language model, into the CouponTracker Android app for enhanced on-device OCR capabilities.
+This document describes the integration of the Qwen2.5-1.5B (text-only) model into the CouponTracker Android app for enhanced on-device extraction. Legacy MiniCPM hooks remain in the codebase for backward compatibility but are no longer the primary path.
 
 ## Architecture
 
 ### Core Components
 
 1. **LlmRuntimeManager** (`app/src/main/kotlin/com/example/coupontracker/llm/LlmRuntimeManager.kt`)
-   - Singleton manager for model lifecycle
+   - Singleton manager for Qwen2.5 model lifecycle
    - Handles lazy loading with reference counting
    - Automatic model unloading after inactivity
    - Memory usage monitoring and optimization
 
 2. **LocalLlmOcrService** (`app/src/main/kotlin/com/example/coupontracker/util/LocalLlmOcrService.kt`)
-   - Main OCR service using MiniCPM-Llama3-V2.5
-   - Structured JSON extraction from coupon images
+   - Main OCR service using the Qwen2.5 text model
+   - Structured JSON extraction from coupon OCR text
    - Graceful fallback to existing OCR pipeline
    - Quality validation and confidence scoring
 
@@ -39,18 +39,18 @@ This document describes the integration of MiniCPM-Llama3-V2.5, a state-of-the-a
 
 ## Model Specifications
 
-### MiniCPM-Llama3-V2.5 Configuration
-- **Base Model**: `openbmb/MiniCPM-Llama3-V-2_5`
+### Qwen2.5-1.5B Configuration
+- **Base Model**: `mlc-ai/Qwen2.5-1.5B-Instruct-q4f16_1`
 - **Quantization**: 4-bit (q4f16_1)
-- **Target Size**: ~2.4GB after quantization
+- **Target Size**: ~2.0GB after quantization
 - **Context Length**: 2048 tokens (mobile optimized)
-- **Image Resolution**: 768x768 maximum
+- **Input Modality**: Text only (OCR output)
 - **Runtime**: MLC-LLM with Vulkan/NNAPI acceleration
 
 ### Performance Expectations
-- **Inference Time**: 2-4 seconds per image
+- **Inference Time**: 1-2 seconds per request (average after warmup)
 - **Cold Start**: 3-5 seconds (model loading)
-- **Memory Usage**: 2-3GB during inference
+- **Memory Usage**: ~2GB during inference
 - **Minimum Requirements**: Android 8.0+, 4GB RAM
 
 ## Model Conversion Pipeline
@@ -61,10 +61,10 @@ pip install torch>=2.0.0 transformers>=4.30.0 mlc-llm>=0.12.0
 ```
 
 ### Conversion Process
-1. **Download Base Model**: From Hugging Face Hub
-2. **Apply Mobile Optimizations**: Reduce context, cap resolution
-3. **4-bit Quantization**: Compress to mobile-friendly size
-4. **MLC-LLM Export**: Convert to Android-compatible format
+1. **Download Base Model**: From the MLC-AI distribution of Qwen2.5
+2. **Apply Mobile Optimizations**: Validate quantization and parameter configs
+3. **4-bit Quantization**: (Provided by upstream build)
+4. **MLC-LLM Export**: Convert/verify Android-compatible GGUF package
 5. **Package for Deployment**: Create asset bundle with checksums
 
 ### Usage
@@ -72,8 +72,8 @@ pip install torch>=2.0.0 transformers>=4.30.0 mlc-llm>=0.12.0
 # Test system readiness
 python3 scripts/test_model_conversion.py
 
-# Run conversion (when ready)
-python3 scripts/convert_minicpm_to_mobile.py --output-dir android_models
+# Run conversion/export (when ready)
+python3 scripts/mlc_model_builder.py --output-dir android_models
 ```
 
 ## Implementation Status

@@ -163,7 +163,7 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
 
                         Toast.makeText(
                             this@MultiCouponSelectionActivity,
-                            "Coupon processed successfully: ${state.coupon.redeemCode} (${state.miniCpmStatus.displayName()})",
+                            "Coupon processed successfully: ${state.coupon.redeemCode} (${state.llmStatus.displayName()})",
                             Toast.LENGTH_LONG
                         ).show()
 

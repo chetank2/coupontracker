@@ -5,10 +5,10 @@
 - Entry points: `CouponInputManager.processCouponFromBitmap`, `ScannerViewModel.scanWithLegacyPath`.
 - `ImageProcessor.processImage(bitmap, captureTimestamp, originalUri)` first attempts the progressive pipeline when injected `ProgressiveExtractionService` is available.
 - Progressive pipeline builds a `Coupon` via `ProgressiveExtractionService.finishExtraction()` → `buildFinalResult()`.
-  - `storeName`: primary from MiniCPM pass, otherwise best pattern candidate; falls back to `"Unknown Store"` if heuristics reject.
-  - `description`: MiniCPM, pattern, or heuristics; final fallback is first 200 chars of OCR text with `"Coupon offer"` default.
-  - `redeemCode`: MiniCPM candidate, structured patterns, heuristics.
-  - `expiryDate`: MiniCPM or structured pass; normalized via `ParseDate` and `IndianDateParser`; relative dates ignore screenshot metadata until rule added.
+  - `storeName`: primary from the Qwen pass, otherwise best pattern candidate; falls back to `"Unknown Store"` if heuristics reject.
+  - `description`: Qwen, pattern, or heuristics; final fallback is first 200 chars of OCR text with `"Coupon offer"` default.
+  - `redeemCode`: Qwen candidate, structured patterns, heuristics.
+  - `expiryDate`: Qwen or structured pass; normalized via `ParseDate` and `IndianDateParser`; relative dates ignore screenshot metadata until rule added.
 - When progressive pipeline fails (OCR blank, exception), flow drops to legacy `ModelBasedOCRService` → `CouponInfo` which still returns `"Unknown Store"`/`"No description"` when patterns miss.
 
 ## 2. Multi-Coupon Screenshots → `MultiCouponExtractionService`
@@ -42,4 +42,3 @@
 - Introduce a shared field post-processor enforcing rules before returning any `Coupon`.
 - Feed capture timestamp into progressive + legacy fallbacks so relative expiry calculations succeed.
 - Relax heuristics so legitimate short brand names survive but still filter UI chrome.
-

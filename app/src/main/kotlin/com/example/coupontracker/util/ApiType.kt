@@ -5,12 +5,12 @@ package com.example.coupontracker.util
  */
 enum class ApiType(val displayName: String, val description: String) {
     /**
-     * Local LLM-based OCR using MiniCPM-Llama3-V2.5
-     * Fully offline, privacy-focused, structured extraction
+     * Local LLM-based OCR using the Qwen2.5 text model.
+     * Fully offline, privacy-focused, structured extraction.
      */
     LOCAL_LLM(
         displayName = "Local AI Model", 
-        description = "On-device MiniCPM model for structured coupon extraction"
+        description = "On-device Qwen2.5 model for structured coupon extraction"
     ),
     
     /**

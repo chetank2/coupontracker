@@ -393,7 +393,7 @@ class ScannerViewModel @Inject constructor(
      */
     private suspend fun scanWithLlmFirstPath(imageUri: Uri, bitmap: Bitmap, persistImmediately: Boolean) {
         val startTime = System.currentTimeMillis()
-        Log.d(TAG, "LLM_FIRST: Running MiniCPM for direct field extraction")
+        Log.d(TAG, "LLM_FIRST: Running Qwen2.5 for direct field extraction")
         
         try {
             // Step 1: Call LLM service to extract fields directly
@@ -426,17 +426,17 @@ class ScannerViewModel @Inject constructor(
                         persistCoupon(
                             coupon = finalCoupon,
                             normalizedDescription = normalizedDescription,
-                            miniCpmStatus = MiniCpmProgress.SUCCESS,
+                            llmStatus = LlmProgress.SUCCESS,
                             debugSnapshot = debugSnapshot
                         )
                     } else {
                         pendingPreview = PendingPreview(
                             coupon = finalCoupon,
                             normalizedDescription = normalizedDescription,
-                            miniCpmStatus = MiniCpmProgress.SUCCESS,
+                            llmStatus = LlmProgress.SUCCESS,
                             debugSnapshot = debugSnapshot
                         )
-                        _uiState.value = ScannerUiState.Success(finalCoupon, MiniCpmProgress.SUCCESS)
+                        _uiState.value = ScannerUiState.Success(finalCoupon, LlmProgress.SUCCESS)
                     }
 
                     // Step 4: Learn patterns (store extraction result for learning)
@@ -624,7 +624,7 @@ class ScannerViewModel @Inject constructor(
                         )
                         
                         // Step 6: Update UI
-                        _uiState.value = ScannerUiState.Success(finalCoupon, MiniCpmProgress.SUCCESS)
+                        _uiState.value = ScannerUiState.Success(finalCoupon, LlmProgress.SUCCESS)
                         Log.d(TAG, "OCR_FIRST: Completed successfully in ${processingTime}ms")
                         
                     } else {
@@ -789,7 +789,7 @@ class ScannerViewModel @Inject constructor(
                 )
                 
                 // Update UI
-                _uiState.value = ScannerUiState.Success(finalCoupon, MiniCpmProgress.SUCCESS)
+                _uiState.value = ScannerUiState.Success(finalCoupon, LlmProgress.SUCCESS)
                 Log.d(TAG, "HYBRID: Completed successfully in ${processingTime}ms")
                 
             } else {
@@ -992,7 +992,7 @@ class ScannerViewModel @Inject constructor(
                 mapOf(
                     "source" to "two_stage",
                     "confidence" to String.format(Locale.US, "%.2f", couponInstance.confidence),
-                    "mini_cpm" to extractionResult.miniCpmStatus.name,
+                    "llm_status" to extractionResult.llmStatus.name,
                     "fields" to extractionResult.fields.size
                 )
             )
@@ -1004,17 +1004,17 @@ class ScannerViewModel @Inject constructor(
                 persistCoupon(
                     coupon = coupon,
                     normalizedDescription = normalizedDescription,
-                    miniCpmStatus = extractionResult.miniCpmStatus,
+                    llmStatus = extractionResult.llmStatus,
                     debugSnapshot = debugSnapshot
                 )
             } else {
                 pendingPreview = PendingPreview(
                     coupon = coupon,
                     normalizedDescription = normalizedDescription,
-                    miniCpmStatus = extractionResult.miniCpmStatus,
+                    llmStatus = extractionResult.llmStatus,
                     debugSnapshot = debugSnapshot
                 )
-                _uiState.value = ScannerUiState.Success(coupon, extractionResult.miniCpmStatus)
+                _uiState.value = ScannerUiState.Success(coupon, extractionResult.llmStatus)
                 Log.d(TAG, "Preview ready for review without immediate persistence")
 
                 analyticsTracker.trackEvent(
@@ -1022,7 +1022,7 @@ class ScannerViewModel @Inject constructor(
                     mapOf(
                         "persisted" to false,
                         "result" to "pending_review",
-                        "mini_cpm" to extractionResult.miniCpmStatus.name
+                        "llm_status" to extractionResult.llmStatus.name
                     )
                 )
             }
@@ -1038,7 +1038,7 @@ class ScannerViewModel @Inject constructor(
     private suspend fun persistCoupon(
         coupon: Coupon,
         normalizedDescription: String,
-        miniCpmStatus: MiniCpmProgress,
+        llmStatus: LlmProgress,
         debugSnapshot: ExtractionDebugSnapshot?
     ) {
         // First check if a duplicate already exists using the saveOrMerge helper
@@ -1062,7 +1062,7 @@ class ScannerViewModel @Inject constructor(
             val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt ?: savedCoupon.createdAt)
 
             if (isDuplicate) {
-                _uiState.value = ScannerUiState.AlreadySaved(savedCoupon, miniCpmStatus)
+                _uiState.value = ScannerUiState.AlreadySaved(savedCoupon, llmStatus)
                 Log.d(
                     TAG,
                     "Duplicate coupon detected, existing ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}"
@@ -1085,7 +1085,7 @@ class ScannerViewModel @Inject constructor(
             mapOf(
                 "persisted" to persistedFlag,
                 "result" to analyticsResult,
-                "mini_cpm" to miniCpmStatus.name
+                "llm_status" to llmStatus.name
             )
         )
     }
@@ -1100,7 +1100,7 @@ class ScannerViewModel @Inject constructor(
                 persistCoupon(
                     coupon = couponToPersist,
                     normalizedDescription = normalizedDescription,
-                    miniCpmStatus = preview.miniCpmStatus,
+                    llmStatus = preview.llmStatus,
                     debugSnapshot = preview.debugSnapshot
                 )
             } catch (e: Exception) {
@@ -1117,11 +1117,11 @@ class ScannerViewModel @Inject constructor(
     }
 
     @VisibleForTesting
-    internal fun setPendingPreviewForTest(coupon: Coupon, miniCpmStatus: MiniCpmProgress) {
+    internal fun setPendingPreviewForTest(coupon: Coupon, llmStatus: LlmProgress) {
         pendingPreview = PendingPreview(
             coupon = coupon,
             normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description),
-            miniCpmStatus = miniCpmStatus,
+            llmStatus = llmStatus,
             debugSnapshot = null
         )
     }
@@ -1234,7 +1234,7 @@ class ScannerViewModel @Inject constructor(
             val coupon = createCouponFromInstance(instance, extractionResult, originalImageUri)
 
                 couponRepository.insertCoupon(coupon)
-                processedResults.add(CouponProcessingSummary(coupon, extractionResult.miniCpmStatus))
+                processedResults.add(CouponProcessingSummary(coupon, extractionResult.llmStatus))
 
                 Log.d(
                     TAG,
@@ -1245,7 +1245,7 @@ class ScannerViewModel @Inject constructor(
                     AnalyticsTracker.EVENT_COUPON_DETECTED,
                     mapOf(
                         "source" to "multi_coupon_batch",
-                        "mini_cpm" to extractionResult.miniCpmStatus.name,
+                        "llm_status" to extractionResult.llmStatus.name,
                         "fields" to extractionResult.fields.size
                     )
                 )
@@ -1254,7 +1254,7 @@ class ScannerViewModel @Inject constructor(
                     mapOf(
                         "persisted" to true,
                         "result" to "batch",
-                        "mini_cpm" to extractionResult.miniCpmStatus.name
+                        "llm_status" to extractionResult.llmStatus.name
                     )
                 )
 
@@ -1294,7 +1294,7 @@ class ScannerViewModel @Inject constructor(
         return withContext(Dispatchers.IO) {
             val startTime = System.currentTimeMillis()
             val extractedInfo = mutableMapOf<String, String>()
-            var progress = MiniCpmProgress.SUCCESS
+            var progress = LlmProgress.SUCCESS
             val triedStages = mutableListOf<String>()
             var finalStage = "UNKNOWN"
             var qualityScore: Int? = null
@@ -1317,7 +1317,7 @@ class ScannerViewModel @Inject constructor(
                 when (result) {
                     is ExtractResult.Good -> {
                         extractedInfo.putAll(mapCouponInfoToFields(result.info))
-                        progress = MiniCpmProgress.SUCCESS
+                        progress = LlmProgress.SUCCESS
                         qualityScore = result.signals.qualityScore
                         fieldConfidences = result.signals.fieldConfidences
                         sourceStage = result.signals.stage
@@ -1326,7 +1326,7 @@ class ScannerViewModel @Inject constructor(
 
                     is ExtractResult.LowQuality -> {
                         extractedInfo.putAll(mapCouponInfoToFields(result.info))
-                        progress = MiniCpmProgress.NEEDS_REVIEW
+                        progress = LlmProgress.NEEDS_REVIEW
                         qualityScore = result.signals.qualityScore
                         fieldConfidences = result.signals.fieldConfidences
                         sourceStage = result.signals.stage
@@ -1345,7 +1345,7 @@ class ScannerViewModel @Inject constructor(
                         // LLM failed, use fallback
                         triedStages.add("FALLBACK_OCR")
                         finalStage = "FALLBACK_OCR"
-                        progress = MiniCpmProgress.FALLBACK
+                        progress = LlmProgress.FALLBACK
                         qualityScore = result.signals?.qualityScore
                         fieldConfidences = result.signals?.fieldConfidences ?: emptyMap()
                         sourceStage = result.signals?.stage ?: result.stage
@@ -1358,10 +1358,10 @@ class ScannerViewModel @Inject constructor(
                 }
                 
             } catch (e: Exception) {
-                Log.e(TAG, "MiniCPM processing failed, using fallback", e)
+                Log.e(TAG, "Qwen processing failed, using fallback", e)
                 triedStages.add("FALLBACK_OCR")
                 finalStage = "FALLBACK_OCR"
-                progress = MiniCpmProgress.FALLBACK
+                progress = LlmProgress.FALLBACK
                 qualityScore = qualityScore ?: 0
                 sourceStage = sourceStage ?: ExtractionStage.LLM
                 val fallbackResult = runFallbackOcr(couponInstance.cropBitmap)
@@ -1392,7 +1392,7 @@ class ScannerViewModel @Inject constructor(
 
             val baseResult = FieldExtractionResult(
                 fields = extractedInfo.toMap(),
-                miniCpmStatus = progress,
+                llmStatus = progress,
                 runPath = runPath,
                 qualityScore = qualityScore,
                 fieldConfidences = fieldConfidences,
@@ -1705,18 +1705,18 @@ class ScannerViewModel @Inject constructor(
                 pendingPreview = PendingPreview(
                     coupon = coupon,
                     normalizedDescription = normalizedDescription,
-                    miniCpmStatus = MiniCpmProgress.SUCCESS,
+                    llmStatus = LlmProgress.SUCCESS,
                     debugSnapshot = debugSnapshot
                 )
 
-                _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.SUCCESS)
+                _uiState.value = ScannerUiState.Success(coupon, LlmProgress.SUCCESS)
 
                 analyticsTracker.trackEvent(
                     AnalyticsTracker.EVENT_COUPON_DETECTED,
                     mapOf(
                         "source" to "universal",
                         "confidence" to String.format(Locale.US, "%.2f", extractionResult.confidence),
-                        "mini_cpm" to MiniCpmProgress.SUCCESS.name,
+                        "llm_status" to LlmProgress.SUCCESS.name,
                         "fields" to extractionResult.extractedFields.size
                     )
                 )
@@ -1725,7 +1725,7 @@ class ScannerViewModel @Inject constructor(
                     mapOf(
                         "persisted" to false,
                         "result" to "pending_review",
-                        "mini_cpm" to MiniCpmProgress.SUCCESS.name
+                        "llm_status" to LlmProgress.SUCCESS.name
                     )
                 )
 
@@ -1793,17 +1793,17 @@ class ScannerViewModel @Inject constructor(
                         pendingPreview = PendingPreview(
                             coupon = coupon,
                             normalizedDescription = normalizedDescription,
-                            miniCpmStatus = MiniCpmProgress.FALLBACK,
+                            llmStatus = LlmProgress.FALLBACK,
                             debugSnapshot = debugSnapshot
                         )
-                        _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.FALLBACK)
+                        _uiState.value = ScannerUiState.Success(coupon, LlmProgress.FALLBACK)
 
                         analyticsTracker.trackEvent(
                             AnalyticsTracker.EVENT_COUPON_DETECTED,
                             mapOf(
                                 "source" to "traditional_ocr",
                                 "fields" to extractedInfo.size,
-                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                                "llm_status" to LlmProgress.FALLBACK.name
                             )
                         )
                         analyticsTracker.trackEvent(
@@ -1811,7 +1811,7 @@ class ScannerViewModel @Inject constructor(
                             mapOf(
                                 "persisted" to false,
                                 "result" to "pending_review",
-                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                                "llm_status" to LlmProgress.FALLBACK.name
                             )
                         )
                     }
@@ -1868,17 +1868,17 @@ class ScannerViewModel @Inject constructor(
                         pendingPreview = PendingPreview(
                             coupon = coupon,
                             normalizedDescription = normalizedDescription,
-                            miniCpmStatus = MiniCpmProgress.FALLBACK,
+                            llmStatus = LlmProgress.FALLBACK,
                             debugSnapshot = debugSnapshot
                         )
-                        _uiState.value = ScannerUiState.Success(coupon, MiniCpmProgress.FALLBACK)
+                        _uiState.value = ScannerUiState.Success(coupon, LlmProgress.FALLBACK)
 
                         analyticsTracker.trackEvent(
                             AnalyticsTracker.EVENT_COUPON_DETECTED,
                             mapOf(
                                 "source" to "traditional_ocr",
                                 "fields" to extractedInfo.size,
-                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                                "llm_status" to LlmProgress.FALLBACK.name
                             )
                         )
                         analyticsTracker.trackEvent(
@@ -1886,7 +1886,7 @@ class ScannerViewModel @Inject constructor(
                             mapOf(
                                 "persisted" to false,
                                 "result" to "pending_review",
-                                "mini_cpm" to MiniCpmProgress.FALLBACK.name
+                                "llm_status" to LlmProgress.FALLBACK.name
                             )
                         )
                     }
@@ -2080,7 +2080,7 @@ class ScannerViewModel @Inject constructor(
                         }
                         
                         pendingPreview = preview.copy(coupon = updatedCoupon)
-                        _uiState.value = ScannerUiState.Success(updatedCoupon, preview.miniCpmStatus)
+                        _uiState.value = ScannerUiState.Success(updatedCoupon, preview.llmStatus)
                     }
                     
                     // Clear the stored result
@@ -2263,9 +2263,9 @@ class ScannerViewModel @Inject constructor(
 sealed class ScannerUiState {
     object Initial : ScannerUiState()
     data class Scanning(val progress: LlmProgressUpdate? = null) : ScannerUiState()
-    data class Success(val coupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
+    data class Success(val coupon: Coupon, val llmStatus: LlmProgress) : ScannerUiState()
     data class Saved(val coupon: Coupon) : ScannerUiState()
-    data class AlreadySaved(val existingCoupon: Coupon, val miniCpmStatus: MiniCpmProgress) : ScannerUiState()
+    data class AlreadySaved(val existingCoupon: Coupon, val llmStatus: LlmProgress) : ScannerUiState()
     data class Error(val message: String) : ScannerUiState()
     
     // New states for multi-coupon support
@@ -2280,17 +2280,17 @@ sealed class ScannerUiState {
 
 data class CouponProcessingSummary(
     val coupon: Coupon,
-    val miniCpmStatus: MiniCpmProgress
+    val llmStatus: LlmProgress
 )
 
 private data class PendingPreview(
     val coupon: Coupon,
     val normalizedDescription: String,
-    val miniCpmStatus: MiniCpmProgress,
+    val llmStatus: LlmProgress,
     val debugSnapshot: ExtractionDebugSnapshot?
 )
 
-enum class MiniCpmProgress {
+enum class LlmProgress {
     SUCCESS,
     NEEDS_REVIEW,
     FALLBACK;
@@ -2305,7 +2305,7 @@ enum class MiniCpmProgress {
 
 data class FieldExtractionResult(
     val fields: Map<String, String>,
-    val miniCpmStatus: MiniCpmProgress,
+    val llmStatus: LlmProgress,
     val runPath: RunPath? = null,
     val debugSnapshot: ExtractionDebugSnapshot? = null,
     val qualityScore: Int? = null,

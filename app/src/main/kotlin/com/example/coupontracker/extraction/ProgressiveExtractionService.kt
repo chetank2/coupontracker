@@ -23,10 +23,10 @@ import javax.inject.Singleton
 
 /**
  * Progressive Extraction Service - Multi-pass extraction pipeline.
- * MiniCPM-FIRST STRATEGY: Uses vision AI as primary method, patterns as fallback.
- * 
+ * Qwen FIRST STRATEGY: Uses the on-device Qwen2.5 text model as the primary method, patterns as fallback.
+ *
  * NEW ORDER (October 2, 2025):
- * 1. MiniCPM Vision AI (PRIMARY - if available and high confidence, stop here)
+ * 1. Qwen2.5 Text LLM (PRIMARY - if available and high confidence, stop here)
  * 2. Structured Pattern Matching (fallback/supplement)
  * 3. Semantic Analysis (refinement)
  * 4. Learned Patterns (database)
@@ -92,7 +92,7 @@ class ProgressiveExtractionService @Inject constructor(
     
     /**
      * Extract coupon using progressive refinement pipeline
-     * NEW: MiniCPM-FIRST STRATEGY
+ * NEW: Qwen-first STRATEGY
      */
     suspend fun extractCoupon(
         androidContext: Context,
@@ -103,7 +103,7 @@ class ProgressiveExtractionService @Inject constructor(
         captureTimestamp: Date? = null  // FIXED: Accept timestamp as parameter
     ): ProgressiveExtractionResult = withContext(Dispatchers.Default) {
         
-        Log.d(TAG, "🚀 Starting MiniCPM-FIRST extraction pipeline")
+        Log.d(TAG, "🚀 Starting Qwen-first extraction pipeline")
         Log.d(TAG, "OCR text length: ${ocrText.length} characters")
         
         // FIXED: Use provided timestamp if available, otherwise try to extract from URI
@@ -137,49 +137,49 @@ class ProgressiveExtractionService @Inject constructor(
         
         val extractedFields = mutableMapOf<FieldType, FieldCandidate>()
         
-        // ====== PASS 1: MiniCPM Vision AI (PRIMARY METHOD) ======
-        Log.d(TAG, "▶ Pass 1: MiniCPM Vision AI (PRIMARY extraction method)")
+        // ====== PASS 1: Qwen2.5 text LLM (PRIMARY METHOD) ======
+        Log.d(TAG, "▶ Pass 1: Qwen2.5 text LLM (PRIMARY extraction method)")
         var miniCpmConfidence = 0f
         var passesUsed = 1
         
         if (llmService != null) {
             try {
-                Log.d(TAG, "✅ MiniCPM LLM available - using vision AI")
+                Log.d(TAG, "✅ Qwen2.5 LLM available - running primary text extraction")
                 val llmInfo = llmService.processCouponImage(image, effectiveCaptureTimestamp)
                 
                 if (llmInfo != null) {
-                    // Convert ALL fields from MiniCPM (not just missing ones)
+                    // Convert ALL fields from Qwen (not just missing ones)
                     val llmResults = convertCouponInfoToFieldCandidates(llmInfo, FieldType.values().toSet())
                     mergeResults(extractedFields, llmResults, replaceIfBetter = true)
                     
                     miniCpmConfidence = calculateOverallConfidence(extractedFields)
-                    Log.d(TAG, "  MiniCPM extracted ${extractedFields.size} fields (confidence: $miniCpmConfidence)")
+                    Log.d(TAG, "  Qwen extracted ${extractedFields.size} fields (confidence: $miniCpmConfidence)")
                     logPassResults(1, extractedFields)
                     
                     // HIGH CONFIDENCE? We're done! 🎯
                     if (miniCpmConfidence >= 0.85f && CRITICAL_FIELDS.all { it in extractedFields }) {
-                        Log.d(TAG, "✅ HIGH confidence from MiniCPM (${miniCpmConfidence}) - stopping here!")
-                        return@withContext finishExtraction(context, extractedFields, image, imageUri, passesUsed, "MiniCPM Vision AI")
+                        Log.d(TAG, "✅ HIGH confidence from Qwen (${miniCpmConfidence}) - stopping here!")
+                        return@withContext finishExtraction(context, extractedFields, image, imageUri, passesUsed, "Qwen2.5 Text LLM")
                     }
                     
                     // Medium confidence - continue to supplement with patterns
-                    Log.d(TAG, "  Medium confidence from MiniCPM - supplementing with pattern-based extraction")
+                    Log.d(TAG, "  Medium confidence from Qwen - supplementing with pattern-based extraction")
                 } else {
-                    Log.w(TAG, "⚠️  MiniCPM returned null - falling back to patterns")
+                    Log.w(TAG, "⚠️  Qwen returned null - falling back to patterns")
                 }
                 
             } catch (e: Exception) {
-                Log.e(TAG, "❌ MiniCPM error: ${e.message} - falling back to patterns", e)
+                Log.e(TAG, "❌ Qwen error: ${e.message} - falling back to patterns", e)
             }
         } else {
-            Log.w(TAG, "⚠️  MiniCPM LLM NOT available - using pattern-based extraction")
+            Log.w(TAG, "⚠️  Qwen LLM NOT available - using pattern-based extraction")
         }
         
         // ====== PASS 2: Structured Pattern Matching (Fallback/Supplement) ======
         Log.d(TAG, "▶ Pass 2: Structured pattern extraction (supplement)")
         passesUsed++
         val structuredResults = structuredExtractor.detectFieldsStructured(context, minConfidence = 0.4f)
-        // Only merge if it improves confidence (don't replace good MiniCPM results)
+        // Only merge if it improves confidence (don't replace good Qwen results)
         mergeResults(extractedFields, structuredResults, replaceIfBetter = false)
         logPassResults(2, extractedFields)
         
@@ -260,7 +260,7 @@ class ProgressiveExtractionService @Inject constructor(
         
         // Determine primary method used
         val primaryMethod = if (miniCpmConfidence > 0.4f) {
-            "MiniCPM Vision AI + Patterns"
+            "Qwen2.5 Text LLM + Patterns"
         } else {
             "Pattern-based"
         }
@@ -283,7 +283,7 @@ class ProgressiveExtractionService @Inject constructor(
                     value = couponInfo.storeName,
                     confidence = 0.75f,
                     source = "minicpm_llm",
-                    context = "Extracted by MiniCPM LLM"
+                    context = "Extracted by Qwen LLM"
                 )
             )
         }
@@ -294,7 +294,7 @@ class ProgressiveExtractionService @Inject constructor(
                     value = couponInfo.description,
                     confidence = 0.75f,
                     source = "minicpm_llm",
-                    context = "Extracted by MiniCPM LLM"
+                    context = "Extracted by Qwen LLM"
                 )
             )
         }
@@ -305,7 +305,7 @@ class ProgressiveExtractionService @Inject constructor(
                     value = couponInfo.redeemCode,
                     confidence = 0.75f,
                     source = "minicpm_llm",
-                    context = "Extracted by MiniCPM LLM"
+                    context = "Extracted by Qwen LLM"
                 )
             )
         }
@@ -317,7 +317,7 @@ class ProgressiveExtractionService @Inject constructor(
                     value = dateFormat.format(couponInfo.expiryDate),
                     confidence = 0.75f,
                     source = "minicpm_llm",
-                    context = "Extracted by MiniCPM LLM"
+                    context = "Extracted by Qwen LLM"
                 )
             )
         }

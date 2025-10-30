@@ -3,7 +3,7 @@ package com.example.coupontracker.debug
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.universal.UniversalExtractionResult
 import com.example.coupontracker.ui.viewmodel.FieldExtractionResult
-import com.example.coupontracker.ui.viewmodel.MiniCpmProgress
+import com.example.coupontracker.ui.viewmodel.LlmProgress
 import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.util.ExtractResult
 import com.example.coupontracker.util.ExtractionSignals
@@ -88,7 +88,7 @@ class ExtractionDebugScorerTest {
         )
         val baseResult = FieldExtractionResult(
             fields = mapOf("storeName" to "Sample Store"),
-            miniCpmStatus = MiniCpmProgress.FALLBACK,
+            llmStatus = LlmProgress.FALLBACK,
             runPath = runPath
         )
 

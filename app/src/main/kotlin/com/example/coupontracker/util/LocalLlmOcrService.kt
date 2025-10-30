@@ -67,7 +67,7 @@ class LocalLlmOcrService(
         private const val SERVICE_VERSION = "1.4.0"  // Qwen2.5 migration
         private const val SUPPORTED_MODEL_VERSION = "qwen25_1.5b_instruct_q4"
 
-        // Shorten OCR snippet to keep prompts under ~300 tokens and reduce latency on MiniCPM
+        // Shorten OCR snippet to keep prompts under ~300 tokens and reduce latency on Qwen
         private const val OCR_SNIPPET_MAX_CHARS = 1200
         
         // Feature flags for schema-driven architecture
@@ -246,7 +246,7 @@ class LocalLlmOcrService(
             }
             maybeScheduleNativeSmokeTest(modelInfo)
         } else {
-            Log.w(TAG, "⚠️  MiniCPM model NOT available - extraction will use pattern fallbacks")
+            Log.w(TAG, "⚠️  Qwen model NOT available - extraction will use pattern fallbacks")
             Log.w(TAG, "   Download the model from Settings to enable AI-powered extraction")
         }
     }
@@ -747,7 +747,7 @@ class LocalLlmOcrService(
             
             // Step 5: Run TEXT-ONLY LLM inference with OCR text
             Log.d(TAG, "========================================")
-            Log.d(TAG, "🤖 Running MiniCPM TEXT-ONLY inference...")
+            Log.d(TAG, "🤖 Running Qwen text-only inference...")
             Log.d(TAG, "⏱️  First run: ~60s (model warmup)")
             Log.d(TAG, "⏱️  Subsequent runs: ~10s")
             Log.d(TAG, "⏳ Please wait... (max ${INFERENCE_TIMEOUT_MS / 1000}s)")
@@ -802,7 +802,7 @@ class LocalLlmOcrService(
                 memoryUsageMB = memoryUsage
             )
             
-            Log.d(TAG, "MiniCPM extraction completed successfully in ${duration}ms")
+            Log.d(TAG, "Qwen extraction completed successfully in ${duration}ms")
             couponInfo
             
         } catch (e: Exception) {
@@ -1478,8 +1478,8 @@ $sanitizedOcr
     }
 
     /**
-     * Preprocess bitmap specifically for MiniCPM-Llama3-V2.5 vision model
-     * Ensures optimal input format: 768px long side, RGB format, proper aspect ratio
+     * Legacy preprocessing for the MiniCPM vision model (kept for backward compatibility).
+     * Qwen2.5 text inference does not invoke this path.
      */
     private fun preprocessForMiniCPM(bitmap: Bitmap): Bitmap {
         val targetLongSide = 768
@@ -1507,7 +1507,7 @@ $sanitizedOcr
             scaledBitmap
         }
         
-        Log.d(TAG, "MiniCPM preprocessing: ${originalWidth}x${originalHeight} -> ${newWidth}x${newHeight} (scale: $scale)")
+        Log.d(TAG, "Legacy MiniCPM preprocessing: ${originalWidth}x${originalHeight} -> ${newWidth}x${newHeight} (scale: $scale)")
         
         return rgbBitmap
     }
