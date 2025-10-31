@@ -27,13 +27,10 @@ class HybridCouponDetector(
     private val ocrEngine: OcrEngine
 ) {
     
-    private val twoStageDetector: TwoStageDetector? = try {
+    private val twoStageDetector: TwoStageDetector? = runCatching {
         TwoStageDetector(context)
-    } catch (e: IllegalStateException) {
-        Log.e(TAG, "TwoStageDetector integrity check failed: ${e.message}", e)
-        throw e
-    } catch (e: Exception) {
-        Log.w(TAG, "TwoStageDetector not available: ${e.message}")
+    }.getOrElse { error ->
+        Log.w(TAG, "TwoStageDetector not available: ${error.message}", error)
         null
     }
     

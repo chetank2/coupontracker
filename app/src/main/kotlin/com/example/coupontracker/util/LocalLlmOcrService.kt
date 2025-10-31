@@ -28,12 +28,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.withTimeout
 import org.json.JSONException
 import org.json.JSONObject
 import java.util.Calendar
@@ -85,6 +87,7 @@ class LocalLlmOcrService(
             "Claim Now",
             "Use Code",
             "Use coupon",
+            "Shop Now",
             "Apply Code",
             "Apply coupon",
             "I'll use it later",
@@ -398,27 +401,37 @@ class LocalLlmOcrService(
             lastMemoryUsage = llmRuntime.getMemoryStats().modelLoadedMemoryMB.toLong()
             val attemptStart = System.currentTimeMillis()
 
-            val result = runCatching {
-                llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned)
+            var timedOut = false
+            val candidateResponse = try {
+                withTimeout(INFERENCE_TIMEOUT_MS) {
+                    llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned)
+                }
+            } catch (timeout: TimeoutCancellationException) {
+                timedOut = true
+                Log.w(
+                    TAG,
+                    "LLM inference timed out after ${INFERENCE_TIMEOUT_MS}ms (attempt ${attempt + 1}/$MAX_LLM_ATTEMPTS)"
+                )
+                runCatching { llmRuntime.cancelOngoingInference() }
+                    .onFailure { error -> Log.w(TAG, "Failed to cancel native inference", error) }
+                runCatching { llmRuntime.resetAfterTimeout() }
+                    .onFailure { error -> Log.w(TAG, "Failed to reset runtime after timeout", error) }
+                null
+            } catch (error: Exception) {
+                throw error
             }
+
             val elapsed = System.currentTimeMillis() - attemptStart
-            val timedOut = elapsed > INFERENCE_TIMEOUT_MS
 
-            if (result.isFailure) {
-                // Native layer surfaced a hard failure; propagate immediately.
-                throw result.exceptionOrNull() ?: IllegalStateException("LLM inference failed")
-            }
-
-            response = result.getOrNull()
-
-            if (response != null && !timedOut) {
+            if (!timedOut && candidateResponse != null) {
+                response = candidateResponse
                 break
             }
 
             response = null
             telemetryService.recordTimeout(elapsed, lastMemoryUsage)
             val reason = if (timedOut) {
-                "exceeded ${INFERENCE_TIMEOUT_MS}ms (actual ${elapsed}ms)"
+                "timed out after ${elapsed}ms (limit ${INFERENCE_TIMEOUT_MS}ms)"
             } else {
                 "returned empty response (${elapsed}ms)"
             }
@@ -1353,6 +1366,15 @@ $sanitizedOcr
         }
 
         if (candidates.isEmpty()) {
+            uppercasePattern.findAll(rawText).forEach { match ->
+                val rawCandidate = match.value.trim()
+                if (isStoreCandidateAcceptable(rawCandidate, rawText)) {
+                    candidates += rawCandidate
+                }
+            }
+        }
+
+        if (candidates.isEmpty()) {
             return null
         }
 
@@ -1383,7 +1405,11 @@ $sanitizedOcr
         if (!fullText.isNullOrBlank()) {
             val occurrences = countOccurrences(fullText, trimmed)
             if (occurrences >= 3) {
-                return false
+                val longEnough = trimmed.length >= 6
+                val multiWord = trimmed.contains(' ')
+                if (!longEnough && !multiWord) {
+                    return false
+                }
             }
         }
 

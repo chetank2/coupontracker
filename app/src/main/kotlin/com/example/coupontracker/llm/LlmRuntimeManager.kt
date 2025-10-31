@@ -306,8 +306,20 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         val hasVision = com.example.coupontracker.model.ModelPaths.hasVisionSupport(detectedModelId)
         if (hasVision) {
             Log.d(TAG, "ℹ️  Legacy multimodal hooks detected (MiniCPM compatibility)")
+            val textOnlySentinel = File(modelDir, ".text_only")
+            if (textOnlySentinel.exists() && !textOnlySentinel.delete()) {
+                Log.w(TAG, "Failed to remove stale text-only sentinel at ${textOnlySentinel.absolutePath}")
+            }
         } else {
             Log.d(TAG, "ℹ️  Text-only model (Qwen2.5) - optimized for speed")
+            val textOnlySentinel = File(modelDir, ".text_only")
+            if (!textOnlySentinel.exists()) {
+                runCatching {
+                    textOnlySentinel.writeText("vision-disabled\n")
+                }.onFailure { error ->
+                    Log.w(TAG, "Failed to write text-only sentinel", error)
+                }
+            }
         }
         
         if (!configPath.exists() || configPath.length() == 0L) {

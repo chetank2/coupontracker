@@ -117,9 +117,7 @@ class TwoStageDetector(
             }
         }
 
-        // Try to load models, but fallback gracefully if they're placeholders
-        var modelsLoaded = false
-        try {
+        runCatching {
             ModelAssetIntegrity.ensureAssetMinSize(
                 context,
                 STAGE1_MODEL_PATH,
@@ -132,7 +130,19 @@ class TwoStageDetector(
                 MIN_STAGE2_MODEL_BYTES,
                 "stage2"
             )
+        }.onFailure { error ->
+            val message = when (error) {
+                is IllegalArgumentException -> "Two-stage detector assets below minimum size"
+                is IllegalStateException -> "Two-stage detector assets missing or unreadable"
+                else -> "Two-stage detector asset validation failed"
+            }
+            fallbackToStubMode(message, error)
+            return
+        }
 
+        // Try to load models, but fallback gracefully if they're placeholders
+        var modelsLoaded = false
+        try {
             // Load Stage 1 Model (Coupon Detection)
             loadStage1Model()
 
@@ -143,17 +153,9 @@ class TwoStageDetector(
             Log.i(TAG, "Production models loaded successfully")
 
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to load production models (likely placeholders): ${e.message}")
-
-            if (demoMode) {
-                Log.i(TAG, "Demo mode enabled - continuing with placeholder models for synthetic detections")
-                stage1Interpreter = null
-                stage2Interpreter = null
-                modelsLoaded = true // Allow demo mode to work
-            } else {
-                Log.e(TAG, "No demo mode fallback available, initialization failed")
-                throw e
-            }
+            Log.w(TAG, "Failed to load production models: ${e.message}")
+            fallbackToStubMode("Falling back to stub detections", e)
+            return
         }
 
         if (modelsLoaded) {
@@ -221,6 +223,21 @@ class TwoStageDetector(
             Log.e(TAG, "Failed to validate model asset $assetPath", error)
             throw IllegalStateException("Unable to validate model asset $assetPath", error)
         }
+    }
+
+    private fun fallbackToStubMode(reason: String, cause: Throwable? = null) {
+        if (!stubMode) {
+            Log.w(TAG, "Entering stub mode: $reason", cause)
+        } else if (cause != null) {
+            Log.w(TAG, reason, cause)
+        } else {
+            Log.w(TAG, reason)
+        }
+        stubMode = true
+        stage1Interpreter = null
+        stage2Interpreter = null
+        initializeImageProcessors()
+        isInitialized = true
     }
     
     private fun initializeImageProcessors() {

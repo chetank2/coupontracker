@@ -650,7 +650,7 @@ abstract class CouponDatabase : RoomDatabase() {
                                 WHEN TRIM(COALESCE(`description`, '')) = '' THEN COALESCE(`cashbackDetail`, 'Coupon offer')
                                 ELSE TRIM(`description`) ||
                                     CASE
-                                        WHEN `cashbackDetail` IS NOT NULL THEN '\n' || `cashbackDetail`
+                                        WHEN `cashbackDetail` IS NOT NULL THEN char(10) || `cashbackDetail`
                                         ELSE ''
                                     END
                             END AS `newDescription`

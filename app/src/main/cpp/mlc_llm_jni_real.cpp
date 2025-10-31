@@ -304,8 +304,20 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         ctx->has_vision = llama_model_has_encoder(ctx->model);
         LOGI("  - Has encoder: %s", ctx->has_vision ? "YES" : "NO");
         
-        // NEW: Try to load mmproj file for vision support
+        // Detect explicit opt-out for vision (text-only sentinel)
+        bool skip_mmproj = false;
         if (!ctx->has_vision) {
+            std::string text_only_flag = model_path_str.substr(0, model_path_str.find_last_of("/")) + "/.text_only";
+            FILE* sentinel = fopen(text_only_flag.c_str(), "rb");
+            if (sentinel) {
+                fclose(sentinel);
+                skip_mmproj = true;
+                LOGI("Text-only sentinel detected (%s) – skipping mmproj probing", text_only_flag.c_str());
+            }
+        }
+
+        // NEW: Try to load mmproj file for vision support
+        if (!ctx->has_vision && !skip_mmproj) {
             LOGI("Step 4b: Attempting to load mmproj (vision projector)...");
             
             // Extract model directory from model path
@@ -341,8 +353,12 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
                 LOGW("⚠️  Model will operate in text-only mode");
                 LOGW("⚠️  Download mmproj-model-f16.gguf for vision support");
             }
-        } else {
+        } else if (ctx->has_vision) {
             LOGI("✅ Model has BUILT-IN vision encoder!");
+        }
+
+        if (skip_mmproj) {
+            LOGI("Vision: DISABLED (text-only model)");
         }
         
         // Get model metadata
@@ -454,7 +470,10 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         LOGI("========================================");
         LOGI("Handle: %lld", (long long)handle);
         LOGI("Status: READY FOR INFERENCE");
-        LOGI("Vision: %s", ctx->has_vision ? "ENABLED" : "DISABLED (need mmproj)");
+        const char* vision_status = ctx->has_vision
+            ? "ENABLED"
+            : (skip_mmproj ? "DISABLED (text-only model)" : "DISABLED (need mmproj)");
+        LOGI("Vision: %s", vision_status);
         LOGI("========================================");
         
         return handle;

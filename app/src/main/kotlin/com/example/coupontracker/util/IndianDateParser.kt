@@ -220,14 +220,17 @@ object IndianDateParser {
         var cleaned = decodeUrlEscapes(rawDate.trim())
             .replace(Regex("\\s+"), " ") // Normalize whitespace
             .replace(",", "") // Remove commas initially for parsing
+            .replace(Regex("""\b(\d{1,2})(st|nd|rd|th)\b""", RegexOption.IGNORE_CASE), "$1") // Drop ordinal suffixes
         
         // Remove time components that aren't part of the date
         // E.g., "24 Midnight 2025" -> "24 2025" (invalid but won't cause recursion)
-        cleaned = cleaned.replace(Regex("\\b(?:midnight|noon|am|pm)\\b", RegexOption.IGNORE_CASE), "")
+        cleaned = cleaned.replace(Regex("\\b(?:at\\s+)?(?:midnight|noon)\\b", RegexOption.IGNORE_CASE), " ")
+            .replace(Regex("\\b(?:am|pm)\\b", RegexOption.IGNORE_CASE), "")
             .replace(Regex("T\\d{1,2}:\\d{2}(?::\\d{2})?Z?", RegexOption.IGNORE_CASE), " ") // Remove ISO time tails (T23:59Z)
             .replace(Regex("\\d{1,2}:\\d{2}(?::\\d{2})?"), "") // Remove times like "8:20"
             .trim()
             .replace(Regex("\\s+"), " ") // Normalize again after removals
+            .replace(Regex("\\bat\\s*$", RegexOption.IGNORE_CASE), "") // Remove trailing "at"
 
         cleaned = decodeUrlEscapes(cleaned)
 

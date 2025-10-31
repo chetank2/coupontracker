@@ -51,6 +51,18 @@ object DescriptionUtils {
             return "Cashback: ${text.uppercase(Locale.ROOT)} off"
         }
 
+        if (normalized.contains("cashback", ignoreCase = true)) {
+            val trimmed = text.trim()
+            return if (trimmed.startsWith("cashback", ignoreCase = true)) {
+                // Normalize casing of the Cashback prefix
+                trimmed.replaceFirstChar { ch ->
+                    if (ch.isLowerCase()) ch.titlecase(Locale.ROOT) else ch.toString()
+                }
+            } else {
+                "Cashback: $trimmed"
+            }
+        }
+
         val detectedSymbol = CurrencyUtils.detectSymbol(text)
         if (detectedSymbol != null) {
             val parsedAmount = IndianCurrencyParser.parseAmount(text)
@@ -64,10 +76,6 @@ object DescriptionUtils {
             val amountDigits = text.filter { it.isDigit() }
             val symbol = CurrencyUtils.resolveSymbol(null)
             return "Cashback: ${symbol}${amountDigits} off"
-        }
-
-        if (normalized.contains("cashback", ignoreCase = true)) {
-            return text.trim()
         }
 
         return "Cashback: $text".trim()
