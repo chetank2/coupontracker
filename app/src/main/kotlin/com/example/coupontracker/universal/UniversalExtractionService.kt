@@ -14,6 +14,7 @@ import com.example.coupontracker.util.OcrTextCleaner
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.LocalTime
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
@@ -53,7 +54,19 @@ class UniversalExtractionService @Inject constructor(
             FieldType.EXPIRY_DATE,
             FieldType.AMOUNT
         )
-        private val GENERIC_STORE_NAMES = setOf("store", "shop", "brand", "seller")
+        private val GENERIC_STORE_NAMES = setOf(
+            "store",
+            "shop",
+            "brand",
+            "seller",
+            "minimum",
+            "minimum order",
+            "minimum order value",
+            "order value",
+            "value",
+            "validity",
+            "details"
+        )
         private val GENERIC_DESCRIPTION_PHRASES = setOf(
             "coupon offer",
             "coupon extracted",
@@ -556,7 +569,11 @@ class UniversalExtractionService @Inject constructor(
         return try {
             val parseResult = IndianDateParser.extractExpiryFromText(dateText)
             val localDate = parseResult.date ?: IndianDateParser.parseExpiryIST(dateText).date
-            localDate?.let { Date.from(it.atStartOfDay(ZoneId.of("Asia/Kolkata")).toInstant()) }
+            localDate?.let {
+                val zone = ZoneId.of("Asia/Kolkata")
+                val endOfDay = it.atTime(LocalTime.of(23, 59, 59))
+                Date.from(endOfDay.atZone(zone).toInstant())
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Failed to parse expiry date: $dateText", e)
             null
@@ -649,7 +666,11 @@ class UniversalExtractionService @Inject constructor(
     private fun isGenericStoreName(name: String?): Boolean {
         if (name.isNullOrBlank()) return true
         val normalized = name.trim().lowercase(Locale.ROOT)
-        return normalized in GENERIC_STORE_NAMES || normalized.matches(Regex("store\\d*"))
+        if (normalized.matches(Regex("store\\d*"))) return true
+
+        return GENERIC_STORE_NAMES.any { generic ->
+            normalized == generic || normalized.startsWith("$generic ")
+        }
     }
 
     private fun isGenericDescription(description: String?): Boolean {

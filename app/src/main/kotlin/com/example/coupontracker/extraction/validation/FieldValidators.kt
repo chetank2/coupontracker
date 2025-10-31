@@ -48,6 +48,8 @@ internal class StoreNameValidator(
     private val ctaStopwords: Set<String> =
         if (brandLexicon.ctaStopwords.isEmpty()) DEFAULT_CTA_STOPWORDS else brandLexicon.ctaStopwords
 
+    private val layoutStopwords = setOf("minimum", "order", "value", "validity", "details")
+
     fun assessCandidate(
         value: String?,
         description: String?,
@@ -66,9 +68,13 @@ internal class StoreNameValidator(
             return assessment
         }
 
-        val lower = trimmed.lowercase()
+        val lower = trimmed.lowercase(Locale.ROOT)
         if (ctaStopwords.any { lower.contains(it) }) {
             issues += "cta_stopword"
+        }
+
+        if (layoutStopwords.any { lower.contains(it) }) {
+            issues += "layout_token"
         }
 
         if (trimmed.length < 3) issues += "too_short"
