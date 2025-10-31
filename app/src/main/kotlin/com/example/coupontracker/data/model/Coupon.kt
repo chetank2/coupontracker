@@ -60,7 +60,7 @@ data class Coupon(
 
     fun getCashbackDisplayText(): String {
         val detail = DescriptionUtils.extractCashbackLine(description) ?: return ""
-        return detail.removePrefix("Cashback:").trim()
+        return detail.substringAfter(":", "").trim()
     }
 
     fun getCashbackNumericValue(): Double {

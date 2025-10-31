@@ -21,8 +21,11 @@ class StructuredFieldExtractor {
             "THE", "AND", "FOR", "YOU", "GET", "WITH", "FROM", "EXPIRES", "CODE",
             "COUPON", "OFFER", "VALID", "UPTO", "FLAT", "OFF", "CASHBACK", "THIS",
             "THAT", "YOUR", "USE", "APPLY", "SAVE", "DISCOUNT", "VIA", "PAY", "ONLY",
-            "WON", "WIN", "NEXT", "ORDER", "PURCHASE", "BUY", "DETAILS", "NOW", "NEW"
+            "WON", "WIN", "NEXT", "ORDER", "PURCHASE", "BUY", "DETAILS", "NOW", "NEW",
+            "MINIMUM", "VALUE", "MIN", "VALIDITY"
         )
+
+        private val LAYOUT_TOKENS = setOf("minimum", "order", "value", "validity", "details")
 
         // Payment methods - NOT store names
         private val PAYMENT_METHODS = setOf(
@@ -142,10 +145,12 @@ class StructuredFieldExtractor {
             val storeName = match.value
             val words = storeName.split("\\s+".toRegex())
             val wordCount = words.size
-            
+
             // Skip if all words are common
             val isAllCommon = words.all { it.uppercase() in COMMON_WORDS }
             if (isAllCommon) return@forEach
+
+            if (words.any { LAYOUT_TOKENS.contains(it.lowercase(Locale.ROOT)) }) return@forEach
             
             // Validate brand name quality (reject OCR garbage like "Pastm Patm")
             if (!isValidBrandName(storeName) || isLikelyWatermark(storeName)) return@forEach
@@ -509,6 +514,9 @@ class StructuredFieldExtractor {
      */
     private fun isValidBrandName(name: String): Boolean {
         val cleanName = name.trim()
+        val lower = cleanName.lowercase(Locale.ROOT)
+
+        if (LAYOUT_TOKENS.any { lower.contains(it) }) return false
 
         // Too short or too long
         if (cleanName.length < 3 || cleanName.length > 25) return false
