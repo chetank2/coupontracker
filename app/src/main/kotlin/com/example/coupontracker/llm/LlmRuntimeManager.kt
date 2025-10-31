@@ -49,6 +49,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     }
     private var modelHandle: Long? = null
     private val referenceCount = AtomicInteger(0)
+    private val pendingTimeoutReset = AtomicBoolean(false)
     private val lifecycleMutex = Mutex()
     private val inferenceMutex = Mutex()  // CRITICAL: Serialize inference to prevent concurrent access
     private val ioScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -494,14 +495,35 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         }
     }
 
-    suspend fun resetAfterTimeout() {
-        lifecycleMutex.withLock {
-            autoUnloadJob?.cancel()
-            autoUnloadJob = null
-            unloadModelInternal(modelHandle)
-            modelHandle = null
-            referenceCount.set(0)
-            Log.d(TAG, "Model state reset after timeout")
+    fun resetAfterTimeout() {
+        if (!pendingTimeoutReset.compareAndSet(false, true)) {
+            Log.d(TAG, "Timeout reset already pending; skipping duplicate request")
+            return
+        }
+
+        ioScope.launch {
+            try {
+                // Wait for any in-flight inference to finish before touching native buffers
+                inferenceMutex.withLock {
+                    lifecycleMutex.withLock {
+                        autoUnloadJob?.cancel()
+                        autoUnloadJob = null
+                        val handle = modelHandle
+                        unloadModelInternal(handle)
+                        modelHandle = null
+                        referenceCount.set(0)
+                        if (handle != null && handle != 0L) {
+                            Log.d(TAG, "Model state reset after timeout (handle: $handle)")
+                        } else {
+                            Log.d(TAG, "Model state reset after timeout (no active handle)")
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to reset model state after timeout", e)
+            } finally {
+                pendingTimeoutReset.set(false)
+            }
         }
     }
 
