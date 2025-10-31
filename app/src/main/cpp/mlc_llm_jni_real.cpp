@@ -287,7 +287,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         LOGI("Step 3: Loading model file...");
         LOGI("  - File: %s", model_path_str.c_str());
         
-        ctx->model = llama_load_model_from_file(model_path_str.c_str(), model_params);
+        ctx->model = llama_model_load_from_file(model_path_str.c_str(), model_params);
         
         if (!ctx->model) {
             delete ctx;
@@ -365,7 +365,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         int32_t n_params = llama_model_n_params(ctx->model);
         const llama_vocab* vocab = llama_model_get_vocab(ctx->model);
         int32_t n_vocab = llama_vocab_n_tokens(vocab);
-        int32_t n_ctx_train = llama_n_ctx_train(ctx->model);
+        int32_t n_ctx_train = llama_model_n_ctx_train(ctx->model);
         
         LOGI("Step 5: Model metadata:");
         LOGI("  - Parameters: %d million", n_params / 1000000);
@@ -385,10 +385,10 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         LOGI("  - Threads: %d", ctx_params.n_threads);
         
         // Create inference context
-        ctx->ctx = llama_new_context_with_model(ctx->model, ctx_params);
+        ctx->ctx = llama_init_from_model(ctx->model, ctx_params);
         
         if (!ctx->ctx) {
-            llama_free_model(ctx->model);
+            llama_model_free(ctx->model);
             delete ctx;
             LOGE("========================================");
             LOGE("❌ FAILED: Could not create inference context");
@@ -676,7 +676,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
             LOGI("Step 7: Generating response...");
             std::vector<llama_token> output_tokens;
             int max_tokens = 512;  // Increased for detailed coupon info
-            llama_token eos_token = llama_token_eos(vocab);
+            llama_token eos_token = llama_vocab_eos(vocab);
             llama_token new_token = llama_sampler_sample(ctx->sampler, ctx->ctx, -1);
             
             for (int i = 0; i < max_tokens && new_token != eos_token; i++) {
@@ -761,7 +761,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_getModelInfo(
     int32_t n_params = llama_model_n_params(ctx->model);
     const llama_vocab* vocab = llama_model_get_vocab(ctx->model);
     int32_t n_vocab = llama_vocab_n_tokens(vocab);
-    int32_t n_ctx_train = llama_n_ctx_train(ctx->model);
+    int32_t n_ctx_train = llama_model_n_ctx_train(ctx->model);
     
     std::stringstream info;
     info << "{";
@@ -917,7 +917,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_releaseModel(
     
     // Free model
     if (ctx->model) {
-        llama_free_model(ctx->model);
+        llama_model_free(ctx->model);
         LOGI("✅ Model freed");
     }
     
