@@ -50,6 +50,41 @@ def test_detect_store_prefers_mixed_case_brand_over_short_all_caps():
     assert result['name'] == 'Minimalist'
 
 
+def test_detect_store_rewards_repeated_verified_keyword_over_products():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        The Vitamin C Serum
+        The Retinol Duo
+        Minimalist minimalist glow kit
+        Minimalist Vitamin C Serum by Minimalist
+        beminimalist skincare essentials
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+    result = extractor._detect_store(cleaned_text)
+
+    assert result['type'] == 'extracted'
+    assert result['name'].lower() in {'minimalist', 'beminimalist'}
+
+
+def test_detect_store_downranks_leading_determiner_tokens():
+    extractor = EnhancedCouponFieldExtractor()
+
+    ocr_text = """
+        The Exclusive Offers
+        The Savings Hub
+        Minimalist brings the offers
+        Grab it now
+    """
+
+    cleaned_text = extractor._clean_text(ocr_text)
+    result = extractor._detect_store(cleaned_text)
+
+    assert result['type'] == 'extracted'
+    assert result['name'] == 'Minimalist'
+
+
 def test_extract_discount_handles_combined_percentage_phrases():
     extractor = EnhancedCouponFieldExtractor()
 
