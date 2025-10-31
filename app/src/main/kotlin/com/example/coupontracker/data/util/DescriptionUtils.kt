@@ -1,5 +1,6 @@
 package com.example.coupontracker.data.util
 
+import com.example.coupontracker.util.IndianCurrencyParser
 import java.util.Locale
 
 object DescriptionUtils {
@@ -35,7 +36,10 @@ object DescriptionUtils {
         return when (normalizedType) {
             "percent", "percentage" -> "Cashback: ${amount.toInt()}% off"
             "text" -> null
-            else -> "Cashback: ${currencySymbol(currency)}${amount.toInt()} off"
+            else -> {
+                val symbol = CurrencyUtils.resolveSymbol(currency)
+                "Cashback: ${symbol}${amount.toInt()} off"
+            }
         }
     }
 
@@ -43,13 +47,30 @@ object DescriptionUtils {
         val text = rawText?.trim().orEmpty()
         if (text.isEmpty()) return null
         val normalized = text.lowercase(Locale.ROOT)
-        val formatted = when {
-            normalized.matches(Regex("\\d+%")) -> "Cashback: ${text.uppercase(Locale.ROOT)} off"
-            normalized.matches(Regex("₹?\\d+")) -> "Cashback: ₹${text.filter { it.isDigit() }} off"
-            normalized.contains("cashback", ignoreCase = true) -> text
-            else -> "Cashback: $text"
+        if (normalized.matches(Regex("\\d+%"))) {
+            return "Cashback: ${text.uppercase(Locale.ROOT)} off"
         }
-        return formatted.trim()
+
+        val detectedSymbol = CurrencyUtils.detectSymbol(text)
+        if (detectedSymbol != null) {
+            val parsedAmount = IndianCurrencyParser.parseAmount(text)
+            if (parsedAmount != null && parsedAmount > 0) {
+                return formatCashbackDetail(parsedAmount, "amount", detectedSymbol)
+            }
+        }
+
+        val digitsOnly = normalized.matches(Regex("₹?\\d+"))
+        if (digitsOnly) {
+            val amountDigits = text.filter { it.isDigit() }
+            val symbol = CurrencyUtils.resolveSymbol(null)
+            return "Cashback: ${symbol}${amountDigits} off"
+        }
+
+        if (normalized.contains("cashback", ignoreCase = true)) {
+            return text.trim()
+        }
+
+        return "Cashback: $text".trim()
     }
 
     fun extractCashbackLine(description: String): String? {
@@ -59,13 +80,4 @@ object DescriptionUtils {
             .firstOrNull { it.startsWith("Cashback:", ignoreCase = true) }
     }
 
-    private fun currencySymbol(currency: String?): String {
-        return when (currency?.uppercase(Locale.ROOT)) {
-            null, "", "INR", "₹", "RS", "RS." -> "₹"
-            "USD", "$" -> "$"
-            "EUR", "€" -> "€"
-            "GBP", "£" -> "£"
-            else -> "${currency.uppercase(Locale.ROOT)} "
-        }
-    }
 }

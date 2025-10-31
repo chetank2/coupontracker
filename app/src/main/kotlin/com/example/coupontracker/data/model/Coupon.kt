@@ -3,6 +3,7 @@ package com.example.coupontracker.data.model
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import com.example.coupontracker.data.util.CouponDedupUtils
+import com.example.coupontracker.data.util.CurrencyUtils
 import com.example.coupontracker.data.util.DescriptionUtils
 import java.util.Date
 
@@ -77,10 +78,11 @@ data class Coupon(
 
     fun getCashbackInfo(): CashbackInfo {
         val display = getCashbackDisplayText()
+        val currencySymbol = CurrencyUtils.detectSymbol(display)
         return when {
             display.contains("%", ignoreCase = true) -> CashbackInfo(CashbackType.PERCENT, getCashbackNumericValue())
-            display.contains("₹") || display.contains("$") || display.contains("€") || display.contains("£") ->
-                CashbackInfo(CashbackType.AMOUNT, getCashbackNumericValue())
+            currencySymbol != null ->
+                CashbackInfo(CashbackType.AMOUNT, getCashbackNumericValue(), currencySymbol)
             display.isNotBlank() -> CashbackInfo(CashbackType.TEXT, 0.0)
             else -> CashbackInfo(CashbackType.TEXT, 0.0)
         }

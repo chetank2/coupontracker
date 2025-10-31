@@ -3,6 +3,7 @@ package com.example.coupontracker.util
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.util.Log
+import com.example.coupontracker.data.util.CurrencyUtils
 import com.example.coupontracker.data.util.DescriptionUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -376,18 +377,23 @@ class RegionBasedExtractor(
 
             // Then try fixed amount patterns
             val amountPatterns = listOf(
-                Pattern.compile("(?:Rs\\.?|₹)\\s*(\\d+)\\s+off", Pattern.CASE_INSENSITIVE),
-                Pattern.compile("(?:flat|get|upto)\\s+(?:Rs\\.?|₹)\\s*(\\d+)", Pattern.CASE_INSENSITIVE),
-                Pattern.compile("(?:cashback|save)\\s+(?:of|up to)?\\s+(?:Rs\\.?|₹)\\s*(\\d+)", Pattern.CASE_INSENSITIVE)
+                Pattern.compile("(?:₹|\\$|€|£|Rs\\.?|INR|USD|EUR|GBP)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)\\s+off", Pattern.CASE_INSENSITIVE),
+                Pattern.compile("(?:flat|get|upto)\\s+(?:₹|\\$|€|£|Rs\\.?|INR|USD|EUR|GBP)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)", Pattern.CASE_INSENSITIVE),
+                Pattern.compile("(?:cashback|save)\\s+(?:of|up to)?\\s+(?:₹|\\$|€|£|Rs\\.?|INR|USD|EUR|GBP)\\s*([0-9,]+(?:\\.[0-9]{1,2})?)", Pattern.CASE_INSENSITIVE)
             )
 
             for (pattern in amountPatterns) {
                 val matcher = pattern.matcher(fullText)
                 if (matcher.find()) {
-                    val amount = matcher.group(1)?.toDoubleOrNull()
+                    val amount = matcher.group(1)?.replace(",", "")?.toDoubleOrNull()
                     if (amount != null && amount > 0) {
-                        val formatted = DescriptionUtils.formatCashbackDetail(amount, "amount", "INR")
-                            ?: "Cashback: ₹${amount.toInt()} off"
+                        val raw = matcher.group(0)
+                        val currency = CurrencyUtils.detectSymbol(raw)
+                        val formatted = DescriptionUtils.formatCashbackDetail(amount, "amount", currency)
+                            ?: run {
+                                val symbol = CurrencyUtils.resolveSymbol(currency)
+                                "Cashback: ${symbol}${amount.toInt()} off"
+                            }
                         Log.d(TAG, "Found fixed amount discount detail: $formatted")
                         return formatted
                     }
