@@ -42,6 +42,28 @@ class EnhancedCouponFieldExtractor:
         re.IGNORECASE | re.VERBOSE,
     )
 
+    AMOUNT_WITH_CURRENCY_PATTERN = re.compile(
+        r"""
+        (?P<context>
+            (?:(?:up\s*to|upto|flat|save|extra|get|worth|value|mrp|only|just|pay)\s*)?
+        )
+        (?P<currency>₹|rs\.?|inr|rupees)
+        [\s₹]*
+        (?P<number>\d[\d,]*(?:\.\d+)?)
+        (?:\s*(?:off|cashback|discount|only|deal|each|/-))?
+        """,
+        re.IGNORECASE | re.VERBOSE,
+    )
+
+    AMOUNT_NUMERIC_CONTEXT_PATTERN = re.compile(
+        r"""
+        (?P<context>(?:up\s*to|upto|flat|save|extra|get|worth|value|mrp|only|just|pay)\s*)
+        (?P<number>\d[\d,]*(?:\.\d+)?)
+        (?:\s*(?:off|cashback|discount|only|deal|each|/-))?
+        """,
+        re.IGNORECASE | re.VERBOSE,
+    )
+
     DATE_PATTERN = re.compile(
         r"\b\d{1,2}\s+[A-Za-z]{3,9},\s+\d{4}(?:,\s*\d{1,2}:\d{2}\s*(?:AM|PM))?",
         re.IGNORECASE,
@@ -181,3 +203,62 @@ class EnhancedCouponFieldExtractor:
     def extract_expiry_date(self, text: str) -> Dict[str, Optional[object]]:
         cleaned = self._clean_text(text)
         return self._extract_expiry_date(cleaned)
+
+    def _extract_amount(self, cleaned_text: str) -> Dict[str, Optional[object]]:
+        confident_matches: List[Dict[str, object]] = []
+
+        for match in self.AMOUNT_WITH_CURRENCY_PATTERN.finditer(cleaned_text):
+            number = match.group("number")
+            if not number:
+                continue
+            numeric_value = self._parse_amount_numeric(number)
+            if numeric_value <= 0:
+                continue
+            formatted = self._normalise_amount_value(number)
+            confident_matches.append(
+                {
+                    "type": "currency_amount",
+                    "value": formatted,
+                    "raw_text": match.group(0).strip(),
+                    "confidence": True,
+                    "_numeric": numeric_value,
+                }
+            )
+
+        if confident_matches:
+            best = max(confident_matches, key=lambda candidate: candidate["_numeric"])
+            best.pop("_numeric", None)
+            return best
+
+        numeric_match = self.AMOUNT_NUMERIC_CONTEXT_PATTERN.search(cleaned_text)
+        if numeric_match:
+            return {
+                "type": "numeric_context",
+                "value": None,
+                "raw_text": None,
+                "confidence": False,
+            }
+
+        return {
+            "type": "not_found",
+            "value": None,
+            "raw_text": None,
+            "confidence": False,
+        }
+
+    @staticmethod
+    def _parse_amount_numeric(number: str) -> float:
+        cleaned = number.replace(",", "").strip()
+        try:
+            return float(cleaned)
+        except ValueError:
+            return 0.0
+
+    @staticmethod
+    def _normalise_amount_value(number: str) -> str:
+        cleaned = number.replace(",", "").strip()
+        return f"₹{cleaned}"
+
+    def extract_amount(self, text: str) -> Dict[str, Optional[object]]:
+        cleaned = self._clean_text(text)
+        return self._extract_amount(cleaned)
