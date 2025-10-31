@@ -1,6 +1,7 @@
 package com.example.coupontracker.util
 
 import android.util.Log
+import com.example.coupontracker.data.util.CurrencyUtils
 import com.example.coupontracker.data.util.DescriptionUtils
 import java.io.Serializable
 import java.text.ParseException
@@ -874,23 +875,26 @@ class TextExtractor {
 
         // Now check for currency amount patterns
         val amountPatterns = listOf(
-            Pattern.compile("(?i)(?:upto|up to|flat|get)\\s*(?:Rs\\.?|₹)\\s*(\\d+(?:\\.\\d+)?)"),
-            Pattern.compile("(?i)(?:Rs\\.?|₹)\\s*(\\d+(?:\\.\\d+)?)\\s*(?:off|cashback)"),
-            Pattern.compile("(?i)(?:save|discount of)\\s*(?:Rs\\.?|₹)\\s*(\\d+(?:\\.\\d+)?)")
+            Regex("(?i)(?:upto|up\\s+to|flat|get)\\s*((?:₹|\\$|€|£|Rs\\.?|INR|USD|EUR|GBP)\\s*)?(\\d+(?:[.,]\\d+)?)"),
+            Regex("(?i)((?:₹|\\$|€|£|Rs\\.?|INR|USD|EUR|GBP))\\s*(\\d+(?:[.,]\\d+)?)\\s*(?:off|cashback|back|discount)"),
+            Regex("(?i)(?:save|discount of)\\s*((?:₹|\\$|€|£|Rs\\.?|INR|USD|EUR|GBP))\\s*(\\d+(?:[.,]\\d+)?)")
         )
 
         for (pattern in amountPatterns) {
-            val matcher = pattern.matcher(text)
-            if (matcher.find()) {
+            val matches = pattern.findAll(text)
+            for (match in matches) {
                 try {
-                    val raw = matcher.group(0)
-                    val amount = matcher.group(1)?.toDoubleOrNull()
-                    if (!raw.isNullOrBlank()) {
+                    val raw = match.value
+                    val amountText = match.groupValues.getOrNull(2)?.replace(",", "")?.takeIf { it.isNotBlank() }
+                    val amount = amountText?.toDoubleOrNull()
+                    if (raw.isNotBlank()) {
                         safeLogDebug(TAG) { "Found fixed currency amount text: $raw" }
                         DescriptionUtils.formatCashbackDetail(raw)?.let { return it }
                     }
                     if (amount != null) {
-                        DescriptionUtils.formatCashbackDetail(amount, "amount", "INR")?.let { return it }
+                        val currencyToken = match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }
+                        val currency = CurrencyUtils.detectSymbol(currencyToken) ?: CurrencyUtils.detectSymbol(raw)
+                        DescriptionUtils.formatCashbackDetail(amount, "amount", currency)?.let { return it }
                     }
                 } catch (e: Exception) {
                     safeLogError(TAG, "Error parsing amount", e)

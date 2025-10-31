@@ -1,5 +1,7 @@
 package com.example.coupontracker.data.model
 
+import com.example.coupontracker.data.util.CurrencyUtils
+
 /**
  * Represents typed cashback information to distinguish between percentages, amounts, and text.
  * This prevents UI confusion like showing "75%" as "₹75".
@@ -15,7 +17,7 @@ data class CashbackInfo(
     fun getDisplayText(): String {
         return when (type) {
             CashbackType.PERCENT -> "${valueNum.toInt()}%"
-            CashbackType.AMOUNT -> "₹${valueNum.toInt()}"
+            CashbackType.AMOUNT -> "${CurrencyUtils.resolveSymbol(currency)}${valueNum.toInt()}"
             CashbackType.TEXT -> valueNum.toString() // Fallback, should use offer_text
         }
     }
@@ -58,18 +60,23 @@ data class CashbackInfo(
             }
             
             // Check for amount (₹, Rs, INR, etc.)
-            val amountMatch = Regex("(?:₹|RS\\.?|INR)\\s*(\\d+(?:,\\d{3})*(?:\\.\\d{2})?)").find(cleanText)
+            val amountMatch = Regex("(?:₹|RS\\.?|INR|USD|EUR|GBP|\\$|€|£)\\s*(\\d+(?:,\\d{3})*(?:\\.\\d{2})?)").find(cleanText)
             if (amountMatch != null) {
                 val value = amountMatch.groupValues[1].replace(",", "").toDoubleOrNull() ?: 0.0
-                return CashbackInfo(CashbackType.AMOUNT, value)
+                val symbol = CurrencyUtils.detectSymbol(amountMatch.value)
+                return CashbackInfo(CashbackType.AMOUNT, value, symbol ?: "INR")
             }
-            
+
             // Check for plain number followed by "OFF" or similar
             val numberMatch = Regex("(\\d+(?:\\.\\d+)?)\\s*(?:OFF|BACK|CASHBACK|DISCOUNT)").find(cleanText)
             if (numberMatch != null) {
                 val value = numberMatch.groupValues[1].toDoubleOrNull() ?: 0.0
                 // If it's a small number, likely percentage; if large, likely amount
                 val type = if (value <= 100) CashbackType.PERCENT else CashbackType.AMOUNT
+                if (type == CashbackType.AMOUNT) {
+                    val symbol = CurrencyUtils.detectSymbol(cleanText)
+                    return CashbackInfo(type, value, symbol ?: "INR")
+                }
                 return CashbackInfo(type, value)
             }
             
