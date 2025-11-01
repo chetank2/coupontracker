@@ -32,6 +32,7 @@ import javax.net.ssl.SSLException
 class ModelDownloadManager(
     private val context: Context,
     private val securePrefs: SecurePreferencesManager,
+    private val modelAssetManager: ModelAssetManager,
     private val verificationDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     
@@ -70,12 +71,12 @@ class ModelDownloadManager(
 
         // Expected model files with their individual checksums
         private val REQUIRED_FILES = mapOf(
-        "minicpm_llm_q4f16_1.so" to "65d9139e97c5a196b48ae08facc468bcc41fef82ef1325ecab2c32e85e1fbbde",
-        "model.bin" to "94d7d225fbf28a20ec30534207ec1a0ea017a20cf25674cde166a6d4f0c7bad1",
-        "vision_config.json" to "a1e7efdfb761c86a3b1a323b3e859eb61718babb036ce66574d75528c33ebb6c",
-        "mlc-chat-config.json" to "c039de2a0c0ec44016207af64a896f7cd3b6940962709c3e49c9321d6c666ff6",
-        "tokenizer.model" to "fd635c2e01878a509339a2d4a269c3600531d0e2c8757b553ab4dee59a215869"
-    )
+            "minicpm_llm_q4f16_1.so" to "65d9139e97c5a196b48ae08facc468bcc41fef82ef1325ecab2c32e85e1fbbde",
+            "model.bin" to "94d7d225fbf28a20ec30534207ec1a0ea017a20cf25674cde166a6d4f0c7bad1",
+            "vision_config.json" to "a1e7efdfb761c86a3b1a323b3e859eb61718babb036ce66574d75528c33ebb6c",
+            "mlc-chat-config.json" to "c039de2a0c0ec44016207af64a896f7cd3b6940962709c3e49c9321d6c666ff6",
+            "tokenizer.model" to "fd635c2e01878a509339a2d4a269c3600531d0e2c8757b553ab4dee59a215869"
+        )
         
         // GGUF model files (NEW for vision support)
         private val REQUIRED_GGUF_FILES = mapOf(
@@ -310,7 +311,20 @@ class ModelDownloadManager(
             val verifiedMarker = File(modelDir, ".verified")
             verifiedMarker.writeText("Model verified: $MODEL_VERSION\nTimestamp: ${System.currentTimeMillis()}")
             Log.d(TAG, "Created .verified marker: ${verifiedMarker.absolutePath}")
-            
+
+            runCatching {
+                modelAssetManager.verifyModelAssets(
+                    modelId = ModelPaths.MODEL_ID_MINICPM,
+                    directory = modelDir,
+                    expectedChecksums = REQUIRED_FILES,
+                    useLegacyMiniLayout = true
+                )
+            }.onFailure { error ->
+                val message = "Model asset verification failed: ${error.message}"
+                Log.e(TAG, message, error)
+                return@withContext DownloadResult.Error(message)
+            }
+
             // Update preferences
             val modelSizeMB = getModelSizeMB()
             securePrefs.setLlmModelDownloaded(true)
@@ -421,7 +435,18 @@ class ModelDownloadManager(
             val verifiedMarker = File(modelDir, ".verified")
             verifiedMarker.writeText("GGUF Model with Vision verified: $MODEL_VERSION\nTimestamp: ${System.currentTimeMillis()}\nFiles: $MODEL_FILE, $MMPROJ_FILE")
             Log.d(TAG, "Created .verified marker with vision support")
-            
+
+            runCatching {
+                modelAssetManager.verifyModelAssets(
+                    modelId = ModelPaths.MODEL_ID_MINICPM,
+                    directory = modelDir
+                )
+            }.onFailure { error ->
+                val message = "MiniCPM GGUF asset verification failed: ${error.message}"
+                Log.e(TAG, message, error)
+                return@withContext DownloadResult.Error(message)
+            }
+
             // Update preferences
             val totalSizeMB = (totalDownloaded / (1024f * 1024f))
             securePrefs.setLlmModelDownloaded(true)
@@ -574,7 +599,18 @@ class ModelDownloadManager(
                 }
             )
             Log.d(TAG, "Created .verified marker for Qwen2.5")
-            
+
+            runCatching {
+                modelAssetManager.verifyModelAssets(
+                    modelId = modelId,
+                    directory = modelDir
+                )
+            }.onFailure { error ->
+                val message = "Qwen2.5 asset verification failed: ${error.message}"
+                Log.e(TAG, message, error)
+                return@withContext DownloadResult.Error(message)
+            }
+
             // Update preferences
             val sizeMB = (modelFile.length() / (1024f * 1024f))
             securePrefs.setLlmModelDownloaded(true)
@@ -836,40 +872,19 @@ class ModelDownloadManager(
      * Verify all required model files are present and have correct checksums
      */
     private fun verifyModelFiles(): Boolean {
-        val presentFiles = modelDir.walkTopDown()
-            .filter { it.isFile }
-            .groupBy { it.name }
-
-        val missingFiles = REQUIRED_FILES.keys.filter { required ->
-            presentFiles[required].isNullOrEmpty()
+        return try {
+            modelAssetManager.verifyModelAssets(
+                modelId = ModelPaths.MODEL_ID_MINICPM,
+                directory = modelDir,
+                expectedChecksums = REQUIRED_FILES,
+                useLegacyMiniLayout = true
+            )
+            Log.d(TAG, "All required model files present and verified")
+            true
+        } catch (error: MissingModelAssetsException) {
+            Log.w(TAG, "Model asset verification failed: ${error.message}")
+            false
         }
-
-        if (missingFiles.isNotEmpty()) {
-            Log.w(TAG, "Missing model files: $missingFiles")
-            return false
-        }
-
-        // Verify checksums of present files
-        for ((filename, expectedChecksum) in REQUIRED_FILES) {
-            val candidateFile = presentFiles[filename]?.firstOrNull()
-            if (candidateFile != null) {
-                try {
-                    val actualChecksum = calculateFileChecksum(candidateFile)
-                    if (!actualChecksum.equals(expectedChecksum, ignoreCase = true)) {
-                        Log.e(TAG, "Checksum mismatch for $filename:")
-                        Log.e(TAG, "Expected: $expectedChecksum")
-                        Log.e(TAG, "Actual:   $actualChecksum")
-                        return false
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to verify checksum for $filename", e)
-                    return false
-                }
-            }
-        }
-        
-        Log.d(TAG, "All required model files present and verified")
-        return true
     }
 
     private fun ensureNativeLibraryAlias() {

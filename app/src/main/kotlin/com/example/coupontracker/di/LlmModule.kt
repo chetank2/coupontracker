@@ -36,9 +36,18 @@ object LlmModule {
     @Singleton
     fun provideModelDownloadManager(
         @ApplicationContext context: Context,
-        securePreferencesManager: SecurePreferencesManager
+        securePreferencesManager: SecurePreferencesManager,
+        modelAssetManager: com.example.coupontracker.llm.ModelAssetManager
     ): ModelDownloadManager {
-        return ModelDownloadManager(context, securePreferencesManager)
+        return ModelDownloadManager(context, securePreferencesManager, modelAssetManager)
+    }
+
+    @Provides
+    @Singleton
+    fun provideModelAssetManager(
+        @ApplicationContext context: Context
+    ): com.example.coupontracker.llm.ModelAssetManager {
+        return com.example.coupontracker.llm.ModelAssetManager(context)
     }
 
     @Provides
