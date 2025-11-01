@@ -1,6 +1,7 @@
 package com.example.coupontracker.di
 
 import android.content.Context
+import com.example.coupontracker.analytics.TelemetryClient
 import com.example.coupontracker.util.AnalyticsTracker
 import dagger.Module
 import dagger.Provides
@@ -23,5 +24,14 @@ object AnalyticsModule {
     @Singleton
     fun provideAnalyticsTracker(@ApplicationContext context: Context): AnalyticsTracker {
         return AnalyticsTracker(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideTelemetryClient(
+        @ApplicationContext context: Context,
+        analyticsTracker: AnalyticsTracker
+    ): TelemetryClient {
+        return TelemetryClient.getInstance(context, analyticsTracker)
     }
 }

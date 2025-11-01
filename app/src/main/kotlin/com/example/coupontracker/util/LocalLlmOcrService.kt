@@ -2,7 +2,9 @@ package com.example.coupontracker.util
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.RectF
 import android.util.Log
+import com.example.coupontracker.analytics.TelemetryClient
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.ExtractionContext
 import com.example.coupontracker.extraction.FieldCandidate
@@ -17,9 +19,12 @@ import com.example.coupontracker.extraction.validation.ValidationEventLogger
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.LlmTelemetryService
 import com.example.coupontracker.ocr.OcrEngine
+import com.example.coupontracker.ocr.OcrResultProcessor
+import com.example.coupontracker.ocr.OcrResultProcessor.OcrTile
+import com.example.coupontracker.ocr.OcrTextSpan
 import com.example.coupontracker.feedback.ValidatorFeedbackRecorder
+import com.example.coupontracker.prompt.PromptBuilder
 import com.example.coupontracker.schema.CouponSchema
-import com.example.coupontracker.schema.PromptGenerator
 import com.example.coupontracker.schema.SchemaValidator
 import com.example.coupontracker.schema.ValidationResult
 import com.example.coupontracker.llm.ModelInfo
@@ -53,7 +58,9 @@ class LocalLlmOcrService(
     private val injectedLlmRuntimeManager: LlmRuntimeManager? = null,
     private val injectedTelemetryService: LlmTelemetryService? = null,
     private val customOcrTextProvider: (suspend (Bitmap) -> String?)? = null,
-    private val validatorFeedbackRecorder: ValidatorFeedbackRecorder? = null
+    private val validatorFeedbackRecorder: ValidatorFeedbackRecorder? = null,
+    private val injectedPromptBuilder: PromptBuilder? = null,
+    private val injectedTelemetryClient: TelemetryClient? = null
 ) {
     
     companion object {
@@ -69,17 +76,15 @@ class LocalLlmOcrService(
         private const val SERVICE_VERSION = "1.4.0"  // Qwen2.5 migration
         private const val SUPPORTED_MODEL_VERSION = "qwen25_1.5b_instruct_q4"
 
-        // Shorten OCR snippet to keep prompts under ~300 tokens and reduce latency on Qwen
-        private const val OCR_SNIPPET_MAX_CHARS = 1200
-        
-        // Feature flags for schema-driven architecture
-        // Set to true to enable schema-driven prompts/validation, false to use manual/legacy
-        private const val USE_SCHEMA_PROMPTS = true
-        private const val USE_SCHEMA_VALIDATION = true
+        private const val MIN_AVG_CONFIDENCE_FOR_PASS_ONE = 0.38f
+        private const val MAX_UNKNOWN_GLYPH_RATE_FOR_PASS_ONE = 0.18f
+        private const val MIN_ALPHANUMERIC_CHARS_FOR_PASS_ONE = 24
 
-        // Prompt optimization: Use compact prompts to reduce token count (920 → ~350 tokens)
-        // Compact prompts rely on grammar enforcement for structure, reducing verbosity
-        private const val USE_COMPACT_PROMPTS = true
+        private const val TELEMETRY_PASS_ONE_SUCCESS = "PassOneSuccess"
+        private const val TELEMETRY_FALLBACK_MOCK = "FallbackDueToMock"
+        private const val TELEMETRY_FALLBACK_LOW_OCR = "FallbackDueToLowOcr"
+        
+        private const val USE_SCHEMA_VALIDATION = true
 
         private const val MAX_LLM_ATTEMPTS = 2
 
@@ -169,6 +174,11 @@ class LocalLlmOcrService(
         val memoryUsageMb: Long
     )
 
+    private data class PreparedPrompt(
+        val rawText: String?,
+        val prompt: PromptBuilder.Result
+    )
+
     private fun CouponInfo.toCanonicalContract(): CouponInfo {
         return copy(
             category = null,
@@ -185,6 +195,8 @@ class LocalLlmOcrService(
     // Dependencies
     private val llmRuntime = injectedLlmRuntimeManager ?: LlmRuntimeManager.getInstance(context)
     private val telemetryService = injectedTelemetryService ?: LlmTelemetryService.getInstance(context)
+    private val promptBuilder = injectedPromptBuilder ?: PromptBuilder()
+    private val telemetryClient = injectedTelemetryClient ?: TelemetryClient.getInstance(context)
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor() // Fallback
     private val structuredFieldExtractor = StructuredFieldExtractor()
@@ -545,14 +557,13 @@ class LocalLlmOcrService(
 
             ensureModelWarm("typed_inference", progressCallback)
 
-            // Step 3: Capture OCR text (used for prompt and post-processing)
             notifyProgress(
                 stage = LlmProgressStage.OCR,
                 percent = 30,
                 message = "Reading coupon text…",
                 progressCallback = progressCallback
             )
-            val rawOcrText = captureRawOcrText(bitmap)?.takeIf { it.isNotBlank() }
+            val preparedPrompt = preparePrompt(bitmap)
                 ?: run {
                     notifyProgress(
                         stage = LlmProgressStage.FAILED,
@@ -565,16 +576,65 @@ class LocalLlmOcrService(
                         error = IllegalStateException("OCR returned blank text; cannot build prompt")
                     )
                 }
+            val promptResult = preparedPrompt.prompt
+            val metrics = promptResult.processedOcr
+
+            if (!metrics.meetsQualityThreshold(
+                    MIN_AVG_CONFIDENCE_FOR_PASS_ONE,
+                    MAX_UNKNOWN_GLYPH_RATE_FOR_PASS_ONE,
+                    MIN_ALPHANUMERIC_CHARS_FOR_PASS_ONE
+                )
+            ) {
+                telemetryClient.incrementCounter(
+                    TELEMETRY_FALLBACK_LOW_OCR,
+                    mapOf(
+                        "avgConfidence" to metrics.averageConfidence,
+                        "unknownRate" to metrics.unknownGlyphRate,
+                        "tiles" to metrics.tileCount,
+                        "entry" to "typed"
+                    )
+                )
+
+                notifyProgress(
+                    stage = LlmProgressStage.FAILED,
+                    percent = 100,
+                    message = "OCR quality too low – using fallback",
+                    progressCallback = progressCallback
+                )
+
+                val fallbackInfo = runCatching { fallbackToTraditionalOCR(bitmap, captureTimestamp) }
+                    .onFailure { Log.w(TAG, "Fallback OCR failed after low-quality detection", it) }
+                    .getOrElse { CouponInfo() }
+
+                val signals = ExtractionSignals(
+                    qualityScore = 0,
+                    fieldConfidences = emptyMap(),
+                    processingTimeMs = System.currentTimeMillis() - startTime,
+                    memoryUsageMB = memoryUsage.toFloat(),
+                    stage = ExtractionStage.LLM,
+                    nativeAvailable = llmRuntime.isModelAvailable(),
+                    modelVersion = SUPPORTED_MODEL_VERSION
+                )
+
+                return@coroutineScope ExtractResult.LowQuality(
+                    info = fallbackInfo,
+                    reason = QualityReason.LOW_QUALITY_EXTRACTION,
+                    signals = signals
+                )
+            }
+
             notifyProgress(
                 stage = LlmProgressStage.PROMPTING,
                 percent = 45,
                 message = "Asking the AI to structure the coupon…",
                 progressCallback = progressCallback
             )
-            val prompt = createCouponExtractionPrompt(rawOcrText)
+
+            val normalizedOcr = promptResult.processedOcr.normalizedText
+            val rawOcrText = preparedPrompt.rawText ?: normalizedOcr
             val extractionContext = ExtractionContext(
                 imageUri = "inline://llm",
-                ocrText = rawOcrText,
+                ocrText = normalizedOcr,
                 captureTimestamp = captureTimestamp
             )
             val structuredCandidatesDeferred = async(Dispatchers.Default) {
@@ -588,7 +648,7 @@ class LocalLlmOcrService(
                 message = "Running on-device AI…",
                 progressCallback = progressCallback
             )
-            val llmOutcome = runLlmInferenceWithRetry(rawOcrText, prompt, progressCallback)
+            val llmOutcome = runLlmInferenceWithRetry(normalizedOcr, promptResult.prompt, progressCallback)
             memoryUsage = llmOutcome.memoryUsageMb
             val llmResponse = llmOutcome.response
 
@@ -655,7 +715,18 @@ class LocalLlmOcrService(
                 
                 // Determine result based on quality
                 return@coroutineScope when {
-                    qualityScore >= 70 -> ExtractResult.Good(couponInfo, signals)
+                    qualityScore >= 70 -> {
+                        telemetryClient.incrementCounter(
+                            TELEMETRY_PASS_ONE_SUCCESS,
+                            mapOf(
+                                "avgConfidence" to metrics.averageConfidence,
+                                "unknownRate" to metrics.unknownGlyphRate,
+                                "tiles" to metrics.tileCount,
+                                "entry" to "typed"
+                            )
+                        )
+                        ExtractResult.Good(couponInfo, signals)
+                    }
                     qualityScore >= 40 -> {
                         val reason = determineQualityReason(couponInfo)
                         ExtractResult.LowQuality(couponInfo, reason, signals)
@@ -723,42 +794,76 @@ class LocalLlmOcrService(
         var memoryUsage = 0L
         var extractedFieldCount = 0
         var fallbackUsed: String? = null
-        
+
         try {
             Log.d(TAG, "Processing coupon with Qwen2-1.5B (text-only)")
-            
-            // Step 1: Validate input
+
             if (bitmap.isRecycled) {
                 throw IllegalArgumentException("Input bitmap is recycled")
             }
-            
-            // Step 2: Check service availability
+
             if (!isServiceAvailable()) {
                 throw IllegalStateException("LLM model not available on device")
             }
 
             ensureModelWarm("legacy_entry", null)
 
-            // Step 3: Extract OCR text from image
-            Log.d(TAG, "Extracting OCR text from image...")
-            val ocrText = captureRawOcrText(bitmap)
-            if (ocrText.isNullOrBlank()) {
-                throw IllegalStateException("OCR text extraction failed or returned empty text")
+            val preparedPrompt = preparePrompt(bitmap)
+                ?: throw IllegalStateException("OCR text extraction failed or returned empty text")
+            val promptResult = preparedPrompt.prompt
+            val metrics = promptResult.processedOcr
+
+            Log.d(
+                TAG,
+                "OCR normalization: raw_chars=${preparedPrompt.rawText?.length ?: 0} cleaned_chars=${promptResult.processedOcr.normalizedText.length} lines=${metrics.mergedLines.size}"
+            )
+
+            if (!metrics.meetsQualityThreshold(
+                    MIN_AVG_CONFIDENCE_FOR_PASS_ONE,
+                    MAX_UNKNOWN_GLYPH_RATE_FOR_PASS_ONE,
+                    MIN_ALPHANUMERIC_CHARS_FOR_PASS_ONE
+                )
+            ) {
+                Log.w(
+                    TAG,
+                    "Bypassing LLM due to low OCR quality (avg_conf=${metrics.averageConfidence}, unknown_rate=${metrics.unknownGlyphRate}, alnum=${metrics.alphanumericCharCount})"
+                )
+                telemetryClient.incrementCounter(
+                    TELEMETRY_FALLBACK_LOW_OCR,
+                    mapOf(
+                        "avgConfidence" to metrics.averageConfidence,
+                        "unknownRate" to metrics.unknownGlyphRate,
+                        "tiles" to metrics.tileCount,
+                        "alnumChars" to metrics.alphanumericCharCount
+                    )
+                )
+
+                val fallbackResult = fallbackToTraditionalOCR(bitmap, captureTimestamp)
+                fallbackUsed = "LOW_OCR"
+                extractedFieldCount = countExtractedFields(fallbackResult)
+                val duration = System.currentTimeMillis() - startTime
+                telemetryService.recordInference(
+                    durationMs = duration,
+                    success = false,
+                    errorType = "LOW_OCR_QUALITY",
+                    fallbackUsed = fallbackUsed,
+                    extractedFieldCount = extractedFieldCount,
+                    memoryUsageMB = memoryUsage
+                )
+                return@coroutineScope fallbackResult
             }
-            Log.d(TAG, "OCR extracted ${ocrText.length} chars: ${ocrText.take(200)}...")
-            
-            // Step 4: Create structured extraction prompt
-            val prompt = createCouponExtractionPrompt(ocrText)
+
+            val normalizedOcr = promptResult.processedOcr.normalizedText
+            val rawOcrText = preparedPrompt.rawText ?: normalizedOcr
             val extractionContext = ExtractionContext(
                 imageUri = "inline://llm",
-                ocrText = ocrText,
+                ocrText = normalizedOcr,
                 captureTimestamp = captureTimestamp
             )
             val structuredCandidatesDeferred = async(Dispatchers.Default) {
                 structuredFieldExtractor.detectFieldsStructured(extractionContext)
             }
-            
-            // Step 5: Run TEXT-ONLY LLM inference with OCR text
+
             Log.d(TAG, "========================================")
             Log.d(TAG, "🤖 Running Qwen text-only inference...")
             Log.d(TAG, "⏱️  First run: ~60s (model warmup)")
@@ -766,47 +871,51 @@ class LocalLlmOcrService(
             Log.d(TAG, "⏳ Please wait... (max ${INFERENCE_TIMEOUT_MS / 1000}s)")
             Log.d(TAG, "========================================")
             val inferenceStartTime = System.currentTimeMillis()
-            val llmOutcome = runLlmInferenceWithRetry(ocrText, prompt, progressCallback = null)
+            val llmOutcome = runLlmInferenceWithRetry(normalizedOcr, promptResult.prompt, progressCallback = null)
             val inferenceElapsed = System.currentTimeMillis() - inferenceStartTime
             memoryUsage = llmOutcome.memoryUsageMb
             val llmResponse = llmOutcome.response
             Log.d(TAG, "⏱️  Inference completed in ${inferenceElapsed / 1000}s")
 
-            // Step 6: Parse and validate response
             val couponInfo = if (llmResponse != null) {
-                // We already have OCR text from Step 3, no need to extract again
                 val structuredCandidates = runCatching { structuredCandidatesDeferred.await() }
                     .onFailure { error ->
                         Log.w(TAG, "Structured extraction failed: ${error.message}", error)
                     }
                     .getOrElse { emptyMap() }
+
                 val parsedInfo = parseLlmResponseToCouponInfo(
                     llmResponse,
-                    ocrText,
+                    rawOcrText,
                     captureTimestamp,
                     structuredCandidates
                 )
-                
-                // CRITICAL: Detect mock responses and fall back to OCR
+
                 if (MockLlmResponseDetector.isMockResponse(parsedInfo)) {
                     Log.w(TAG, "Mock response signature: store='${parsedInfo.storeName}', code='${parsedInfo.redeemCode}', desc='${parsedInfo.description}'")
                     Log.w(TAG, "⚠️ MOCK LLM RESPONSE DETECTED - Falling back to OCR")
+                    telemetryClient.incrementCounter(
+                        TELEMETRY_FALLBACK_MOCK,
+                        mapOf(
+                            "entry" to "typed",
+                            "avgConfidence" to metrics.averageConfidence,
+                            "unknownRate" to metrics.unknownGlyphRate,
+                            "tiles" to metrics.tileCount
+                        )
+                    )
                     throw IllegalStateException("Mock LLM response detected (placeholder runtime output)")
                 }
-                
+
                 parsedInfo
             } else {
-                // Record timeout and throw
                 val duration = System.currentTimeMillis() - startTime
                 telemetryService.recordTimeout(duration, memoryUsage)
                 throw Exception("LLM inference timed out or returned null")
             }
-            
-            // Step 7: Validate extraction quality and count fields
+
             validateExtractionQuality(couponInfo)
             extractedFieldCount = countExtractedFields(couponInfo)
-            
-            // Record successful inference
+
             val duration = System.currentTimeMillis() - startTime
             telemetryService.recordInference(
                 durationMs = duration,
@@ -814,14 +923,23 @@ class LocalLlmOcrService(
                 extractedFieldCount = extractedFieldCount,
                 memoryUsageMB = memoryUsage
             )
-            
+
+            telemetryClient.incrementCounter(
+                TELEMETRY_PASS_ONE_SUCCESS,
+                mapOf(
+                    "avgConfidence" to metrics.averageConfidence,
+                    "unknownRate" to metrics.unknownGlyphRate,
+                    "tiles" to metrics.tileCount,
+                    "durationMs" to duration
+                )
+            )
+
             Log.d(TAG, "Qwen extraction completed successfully in ${duration}ms")
             couponInfo
-            
+
         } catch (e: Exception) {
             Log.e(TAG, "LLM processing failed: ${e.message}", e)
 
-            // Record failure
             val duration = System.currentTimeMillis() - startTime
             val errorType = when {
                 e.message?.contains("too short", ignoreCase = true) == true -> "SHORT_RESPONSE"
@@ -845,11 +963,8 @@ class LocalLlmOcrService(
 
             Log.d(TAG, "Falling back to traditional OCR after invalid LLM response")
             val fallbackResult = fallbackToTraditionalOCR(bitmap, captureTimestamp)
-            // TODO: revisit ML Kit fallback semantics now that LLm path is the primary extractor
 
-            // Determine which fallback was used based on result quality
-            fallbackUsed = if (fallbackResult.storeName != "Unknown Store" ||
-                             !fallbackResult.redeemCode.isNullOrBlank()) {
+            fallbackUsed = if (fallbackResult.storeName != "Unknown Store" || !fallbackResult.redeemCode.isNullOrBlank()) {
                 "ML_KIT"
             } else {
                 "MODEL_BASED"
@@ -883,88 +998,23 @@ class LocalLlmOcrService(
      * Detect mock/placeholder responses from stub JNI
      * Returns true if the response matches known mock patterns
      */
-    /**
-     * Create optimized structured prompt for coupon extraction with strict schema that funnels savings into description only
-     */
-    private fun createCouponExtractionPrompt(ocrText: String): String {
-        // CRITICAL: Clean OCR text first to remove UI chrome (battery, signal, status bar)
-        val cleanedOcr = com.example.coupontracker.util.OcrTextCleaner.cleanOcrText(ocrText)
-        val finalOcr = cleanedOcr.ifBlank { ocrText }  // Fallback to raw if cleaning too aggressive
-        
-        val sanitizedOcr = sanitizeOcrSnippet(finalOcr)
-        return if (USE_SCHEMA_PROMPTS) {
-            // Schema-driven prompt generation
-            if (USE_COMPACT_PROMPTS) {
-                // Compact: ~350 tokens (relies on grammar for structure)
-                com.example.coupontracker.schema.CompactPromptGenerator.generateCompletePrompt(
-                    CouponSchema.SCHEMA, 
-                    sanitizedOcr
-                )
-            } else {
-                // Verbose: ~920 tokens (includes all examples and hints)
-                PromptGenerator.generateCompletePrompt(CouponSchema.SCHEMA, sanitizedOcr)
-            }
-        } else {
-            // Manual prompt (legacy)
-            buildQwenPromptManual(sanitizedOcr)
-        }
+    private suspend fun preparePrompt(bitmap: Bitmap): PreparedPrompt? {
+        val tiles = runCatching { ocrEngine.recognizeWithBoxes(bitmap) }
+            .onFailure { error -> Log.w(TAG, "Failed to capture OCR tiles", error) }
+            .getOrElse { emptyList() }
+            .map { it.toPromptTile() }
+            .filter { it.text.isNotBlank() }
+
+        val rawText = captureRawOcrText(bitmap)
+        val effectiveText = when {
+            !rawText.isNullOrBlank() -> rawText
+            tiles.isNotEmpty() -> tiles.joinToString(separator = "\n") { it.text }
+            else -> null
+        } ?: return null
+
+        val promptResult = promptBuilder.build(effectiveText, tiles)
+        return PreparedPrompt(rawText = rawText, prompt = promptResult)
     }
-
-    /**
-     * Qwen2.5-optimized prompt for structured JSON extraction (MANUAL/LEGACY)
-     * Qwen2.5 has better instruction-following than Qwen2
-     * 
-     * NOTE: This is the manual/legacy prompt. When USE_SCHEMA_PROMPTS=true,
-     * the prompt is generated from CouponSchema instead.
-     */
-    private fun buildQwenPromptManual(sanitizedOcr: String): String = """
-<|im_start|>system
-You are a JSON extractor. Extract coupon data and output ONLY valid JSON.
-
-🚨 REQUIRED JSON KEYS (always include these four keys):
-1. "storeName" - Store/brand name exactly from the coupon
-2. "redeemCode" - Coupon/promo code. Use null if no code is present
-3. "expiryDate" - Expiry date text exactly as written (no reformatting)
-4. "description" - Offer description verbatim, no extra math or commentary
-
-CRITICAL RULES:
-1. Output ONLY these four keys. No additional fields are allowed.
-2. If data is missing, output null (never invent values or placeholders).
-3. Preserve the coupon wording: do NOT add numbers together or rewrite text.
-4. Do not change date formats. Copy the characters exactly as seen.
-5. Output ONLY the JSON object. No explanations before or after the JSON.
-
-Schema:
-{"storeName":str|null,"redeemCode":str|null,"expiryDate":str|null,"description":str|null}
-
-EXTRACTION GUIDE:
-
-storeName:
-- Brand name only (e.g., "PUMA", "Amazon", "Flipkart")
-- Ignore partner logos or watermarks.
-
-redeemCode:
-- Search for "Code:", "Coupon:", or standalone alphanumeric codes.
-- Strip prefixes and whitespace. Example: "Code: SAVE50" → "SAVE50".
-- Use null when no code is visible.
-
-expiryDate:
-- Copy the date text exactly (e.g., "31 May 2025", "2025-12-31").
-- If the coupon only says "Expires in 5 days", return null (the app will compute it).
-- Never invent months or days.
-
-description:
-- Use the main offer sentence exactly as printed.
-- Keep symbols like "₹", "+", "%".
-- Do NOT append helper text like "(Hybrid)" or perform arithmetic.
-
-Provide the JSON object now.
-<|im_end|>
-<|im_start|>user
-OCR_TEXT:
-$sanitizedOcr
-<|im_end|>
-""".trimIndent()
 
     private suspend fun captureRawOcrText(bitmap: Bitmap): String? {
         customOcrTextProvider?.let { provider ->
@@ -997,11 +1047,17 @@ $sanitizedOcr
         }
     }
 
-    private fun sanitizeOcrSnippet(ocrText: String): String {
-        if (ocrText.isBlank()) return "(no OCR text captured)"
-        val normalized = ocrText.trim().replace("\r", "")
-        return if (normalized.length <= OCR_SNIPPET_MAX_CHARS) normalized
-        else normalized.substring(0, OCR_SNIPPET_MAX_CHARS).trimEnd() + "…"
+    private fun OcrTextSpan.toPromptTile(): OcrTile {
+        val bounds = try {
+            RectF(boundingBox)
+        } catch (_: Throwable) {
+            RectF()
+        }
+        return OcrTile(
+            text = text,
+            bounds = bounds,
+            confidence = confidence.coerceIn(0f, 1f)
+        )
     }
 
     private fun extractJsonSlice(text: String): String? {
