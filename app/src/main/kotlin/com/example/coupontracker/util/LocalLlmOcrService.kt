@@ -678,13 +678,43 @@ class LocalLlmOcrService(
                         Log.w(TAG, "Structured extraction failed: ${error.message}", error)
                     }
                     .getOrElse { emptyMap() }
-                val couponInfo = parseLlmResponseToCouponInfo(
-                    llmResponse,
-                    rawOcrText,
-                    captureTimestamp,
-                    structuredCandidates
-                )
-                
+                val couponInfo = try {
+                    parseLlmResponseToCouponInfo(
+                        llmResponse,
+                        rawOcrText,
+                        captureTimestamp,
+                        structuredCandidates
+                    )
+                } catch (schemaError: IllegalArgumentException) {
+                    if (schemaError.message?.contains("invalid json schema", ignoreCase = true) == true) {
+                        notifyProgress(
+                            stage = LlmProgressStage.FAILED,
+                            percent = 100,
+                            message = "AI returned invalid schema",
+                            progressCallback = progressCallback
+                        )
+                        return@coroutineScope ExtractResult.Failed(
+                            stage = ExtractionStage.LLM,
+                            error = schemaError
+                        )
+                    }
+                    throw schemaError
+                } catch (jsonError: IllegalStateException) {
+                    if (jsonError.message?.contains("invalid json", ignoreCase = true) == true) {
+                        notifyProgress(
+                            stage = LlmProgressStage.FAILED,
+                            percent = 100,
+                            message = "AI response was not valid JSON",
+                            progressCallback = progressCallback
+                        )
+                        return@coroutineScope ExtractResult.Failed(
+                            stage = ExtractionStage.LLM,
+                            error = jsonError
+                        )
+                    }
+                    throw jsonError
+                }
+
                 // CRITICAL: Detect mock responses and reject them
                 if (MockLlmResponseDetector.isMockResponse(couponInfo)) {
                     Log.w(TAG, "Mock response signature: store='${couponInfo.storeName}', code='${couponInfo.redeemCode}', desc='${couponInfo.description}'")

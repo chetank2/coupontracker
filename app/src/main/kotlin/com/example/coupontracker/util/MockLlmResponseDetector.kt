@@ -20,6 +20,7 @@ internal object MockLlmResponseDetector {
         Regex("^mock\\s+store$", RegexOption.IGNORE_CASE),
         Regex("^example\\s+store$", RegexOption.IGNORE_CASE),
         Regex("^sample\\s+store$", RegexOption.IGNORE_CASE),
+        Regex("^demo\\s+store$", RegexOption.IGNORE_CASE)
     )
 
     private val MOCK_CODE_PATTERNS = listOf(
@@ -31,8 +32,13 @@ internal object MockLlmResponseDetector {
         Regex("mock\\s+coupon\\s+offer", RegexOption.IGNORE_CASE),
         Regex("placeholder\\s+offer", RegexOption.IGNORE_CASE),
         Regex("sample\\s+coupon", RegexOption.IGNORE_CASE),
-        Regex("example\\s+coupon", RegexOption.IGNORE_CASE)
+        Regex("example\\s+coupon", RegexOption.IGNORE_CASE),
+        Regex("demo\\s+coupon", RegexOption.IGNORE_CASE)
     )
+
+    private val MOCK_TOKEN_REGEX = Regex("\\bmock(?:ed)?\\b", RegexOption.IGNORE_CASE)
+    private val PLACEHOLDER_REGEX = Regex("\\b(?:placeholder|sample|demo|example)\\b", RegexOption.IGNORE_CASE)
+    private val STUB_SOURCE_HINTS = listOf("stub", "mock", "placeholder")
 
     /**
      * Returns true when the coupon info clearly matches a mock response.
@@ -57,6 +63,36 @@ internal object MockLlmResponseDetector {
             lowerDesc.startsWith("mock ") || lowerDesc.contains("mock coupon")
         }
 
+        val hasMockTokens = sequenceOf(
+            store,
+            description,
+            couponInfo.cashbackDetail,
+            couponInfo.category,
+            couponInfo.status,
+            couponInfo.discountType
+        )
+            .filterNotNull()
+            .any { MOCK_TOKEN_REGEX.containsMatchIn(it) }
+
+        val placeholderLanguage = listOf(store, description)
+            .any { value -> PLACEHOLDER_REGEX.containsMatchIn(value) }
+
+        val stubSource = couponInfo.storeNameSource
+            ?.let { source -> STUB_SOURCE_HINTS.any { hint -> source.contains(hint, ignoreCase = true) } }
+            ?: false
+
+        val evidenceHints = couponInfo.storeNameEvidence.any { evidence ->
+            STUB_SOURCE_HINTS.any { hint -> evidence.contains(hint, ignoreCase = true) } ||
+                MOCK_TOKEN_REGEX.containsMatchIn(evidence)
+        }
+
+        val lowConfidenceSignals = couponInfo.needsAttention &&
+            (couponInfo.storeNameEvidence.isEmpty() || stubSource)
+
+        val normalizedStore = store.normalizeForComparison()
+        val normalizedCode = code.normalizeForComparison()
+        val identicalStoreAndCode = normalizedStore.isNotEmpty() && normalizedStore == normalizedCode
+
         val stubSignature = store.equals("mock store", ignoreCase = true) &&
             code.equals("MOCK50", ignoreCase = true) &&
             description.contains("50%", ignoreCase = true)
@@ -65,10 +101,20 @@ internal object MockLlmResponseDetector {
             isMockStore,
             isMockCode,
             isMockDescription,
-            stubSignature
+            stubSignature,
+            hasMockTokens,
+            placeholderLanguage,
+            stubSource,
+            evidenceHints,
+            lowConfidenceSignals,
+            identicalStoreAndCode
         )
 
         return indicators.count { it } >= 2
+    }
+
+    private fun String.normalizeForComparison(): String {
+        return filter { it.isLetterOrDigit() }.lowercase(Locale.ROOT)
     }
 }
 
