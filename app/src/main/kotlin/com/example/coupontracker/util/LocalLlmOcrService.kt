@@ -6,6 +6,7 @@ import android.util.Log
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.ExtractionContext
 import com.example.coupontracker.extraction.FieldCandidate
+import com.example.coupontracker.extraction.PassOneUnavailableException
 import com.example.coupontracker.extraction.StructuredFieldExtractor
 import com.example.coupontracker.extraction.validation.BrandLexicon
 import com.example.coupontracker.extraction.validation.FieldValidationCoordinator
@@ -23,6 +24,7 @@ import com.example.coupontracker.schema.PromptGenerator
 import com.example.coupontracker.schema.SchemaValidator
 import com.example.coupontracker.schema.ValidationResult
 import com.example.coupontracker.llm.ModelInfo
+import com.example.coupontracker.llm.StartupMetricsLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -292,34 +294,100 @@ class LocalLlmOcrService(
                 return
             }
 
-            notifyProgress(
-                stage = LlmProgressStage.WARMING_UP,
-                percent = 20,
-                message = "Loading AI model…",
-                progressCallback = progressCallback
-            )
+            try {
+                notifyProgress(
+                    stage = LlmProgressStage.WARMING_UP,
+                    percent = 20,
+                    message = "Loading AI model…",
+                    progressCallback = progressCallback
+                )
 
-            val warmupStart = System.currentTimeMillis()
-            val warmed = warmUpModel()
-            val warmupDuration = System.currentTimeMillis() - warmupStart
+                val warmupDuration = warmUpModel()
+                val warmupMetrics = runTextWarmupPrompt()
 
-            if (!warmed) {
+                val readyMessage = "AI model ready in ${(warmupDuration / 1000).coerceAtLeast(1)}s @ ${"%.2f".format(warmupMetrics.tokensPerSecond)} tok/s"
+                notifyProgress(
+                    stage = LlmProgressStage.WARMING_UP,
+                    percent = 25,
+                    message = readyMessage,
+                    progressCallback = progressCallback
+                )
+            } catch (error: PassOneUnavailableException) {
                 notifyProgress(
                     stage = LlmProgressStage.FAILED,
                     percent = 100,
-                    message = "AI model warmup failed",
+                    message = error.message ?: "AI model warmup failed",
                     progressCallback = progressCallback
                 )
-                throw IllegalStateException("Failed to warm up LLM model ($reason)")
+                throw error
+            } catch (error: Exception) {
+                val unavailable = PassOneUnavailableException(
+                    "Failed to warm up LLM model ($reason)",
+                    error
+                )
+                notifyProgress(
+                    stage = LlmProgressStage.FAILED,
+                    percent = 100,
+                    message = unavailable.message ?: "AI model warmup failed",
+                    progressCallback = progressCallback
+                )
+                throw unavailable
             }
-
-            notifyProgress(
-                stage = LlmProgressStage.WARMING_UP,
-                percent = 25,
-                message = "AI model ready in ${(warmupDuration / 1000).coerceAtLeast(1)}s",
-                progressCallback = progressCallback
-            )
         }
+    }
+
+    private data class WarmupPromptMetrics(
+        val durationMs: Long,
+        val tokensPerSecond: Double,
+        val tokenCount: Int
+    )
+
+    private suspend fun runTextWarmupPrompt(): WarmupPromptMetrics {
+        val warmupPrompt = "Extract a JSON object with storeName and code from the text. Respond with valid JSON only."
+        val warmupOcr = "Warmup coupon: Store WarmupCo offers 5% off with code WARMUP5 until 31 Dec 2025."
+
+        val start = System.currentTimeMillis()
+        return try {
+            val response = llmRuntime.runTextInference(
+                ocrText = warmupOcr,
+                prompt = warmupPrompt,
+                keepLoaded = true
+            ) ?: throw IllegalStateException("Warmup prompt returned null response")
+
+            val duration = System.currentTimeMillis() - start
+            val tokenCount = countTokens(warmupPrompt, warmupOcr, response)
+            val tokensPerSecond = if (duration > 0) tokenCount / (duration / 1000.0) else 0.0
+
+            Log.i(
+                TAG,
+                "✅ Text warmup prompt completed in ${duration}ms (~${"%.2f".format(tokensPerSecond)} tokens/sec, $tokenCount tokens)"
+            )
+            StartupMetricsLogger.logWarmupComplete(
+                success = true,
+                durationMs = duration,
+                tokensPerSecond = tokensPerSecond,
+                message = "Text warmup prompt"
+            )
+
+            WarmupPromptMetrics(duration, tokensPerSecond, tokenCount)
+        } catch (error: Exception) {
+            val duration = System.currentTimeMillis() - start
+            StartupMetricsLogger.logWarmupComplete(
+                success = false,
+                durationMs = duration,
+                message = "Text warmup prompt failed",
+                throwable = error
+            )
+            Log.e(TAG, "Warmup prompt failed", error)
+            throw PassOneUnavailableException("Warmup prompt failed", error)
+        }
+    }
+
+    private fun countTokens(vararg segments: String?): Int {
+        return segments.filterNotNull()
+            .flatMap { it.split(Regex("\\s+")) }
+            .count { it.isNotBlank() }
+            .coerceAtLeast(1)
     }
 
     private fun maybeScheduleNativeSmokeTest(modelInfo: ModelInfo) {
@@ -1750,23 +1818,41 @@ $sanitizedOcr
     /**
      * Warm up the model (preload for faster inference)
      */
-    suspend fun warmUpModel(): Boolean {
+    suspend fun warmUpModel(): Long {
         val warmupStart = System.currentTimeMillis()
-        return try {
-            Log.d(TAG, "Warming up LLM model...")
+        Log.d(TAG, "Warming up LLM model...")
+
+        try {
             val loaded = llmRuntime.loadModel()
             val warmupDuration = System.currentTimeMillis() - warmupStart
             telemetryService.recordModelLoad(loaded, warmupDuration)
-            if (loaded) {
-                modelPinned = true
-                Log.d(TAG, "LLM model pinned in memory for reuse (warmup ${warmupDuration}ms)")
+
+            if (!loaded) {
+                val message = "loadModel() returned false"
+                StartupMetricsLogger.logWarmupComplete(
+                    success = false,
+                    durationMs = warmupDuration,
+                    message = message
+                )
+                throw PassOneUnavailableException(message)
             }
-            loaded
-        } catch (e: Exception) {
+
+            modelPinned = true
+            Log.d(TAG, "LLM model pinned in memory for reuse (warmup ${warmupDuration}ms)")
+            return warmupDuration
+        } catch (error: PassOneUnavailableException) {
+            throw error
+        } catch (error: Exception) {
             val warmupDuration = System.currentTimeMillis() - warmupStart
             telemetryService.recordModelLoad(false, warmupDuration)
-            Log.e(TAG, "Failed to warm up model", e)
-            false
+            Log.e(TAG, "Failed to warm up model", error)
+            StartupMetricsLogger.logWarmupComplete(
+                success = false,
+                durationMs = warmupDuration,
+                message = error.message,
+                throwable = error
+            )
+            throw PassOneUnavailableException("Failed to warm up model", error)
         }
     }
     
