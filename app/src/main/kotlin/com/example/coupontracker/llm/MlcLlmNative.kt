@@ -36,54 +36,31 @@ class MlcLlmNative {
         }
 
         /**
-         * Load the native llama.cpp-based library
+         * Load the native llama.cpp-based library.
+         *
+         * The call now surfaces a hard failure when the packaged binary cannot
+         * be loaded so production builds fail fast instead of silently
+         * degrading to runtime fallbacks.
          */
+        @Suppress("UNUSED_PARAMETER")
         fun loadLibrary(context: Context? = null): Boolean {
             if (isLibraryLoaded) return true
 
             synchronized(this) {
                 if (isLibraryLoaded) return true
 
-                val loadErrors = mutableListOf<Throwable>()
-
-                try {
+                return try {
                     libraryLoader.loadLibrary(LIBRARY_NAME)
                     isLibraryLoaded = true
                     Log.i(TAG, "Native LLM library loaded from application package")
-                    return true
-                } catch (e: Throwable) {
-                    loadErrors.add(e)
-                    Log.w(TAG, "Packaged native library unavailable, attempting downloaded artifacts", e)
-                }
+                    true
+                } catch (error: Throwable) {
+                    val failureMessage =
+                        "Unable to load native LLM library '$LIBRARY_NAME' from the application package"
+                    Log.e(TAG, failureMessage, error)
 
-                val candidateContext = context?.applicationContext ?: context
-                if (candidateContext != null) {
-                    val candidates = ModelDownloadManager.getNativeLibraryCandidates(candidateContext)
-                    for (candidate in candidates) {
-                        try {
-                            libraryLoader.load(candidate.absolutePath)
-                            isLibraryLoaded = true
-                            Log.i(TAG, "Loaded native LLM library from ${candidate.absolutePath}")
-                            return true
-                        } catch (fallbackError: Throwable) {
-                            loadErrors.add(fallbackError)
-                            Log.e(
-                                TAG,
-                                "Failed to load native library from ${candidate.absolutePath}",
-                                fallbackError
-                            )
-                        }
-                    }
+                    throw IllegalStateException(failureMessage, error)
                 }
-
-                val primaryError = loadErrors.firstOrNull()
-                if (primaryError != null) {
-                    Log.e(TAG, "Failed to load native LLM library", primaryError)
-                } else {
-                    Log.e(TAG, "Failed to load native LLM library: no candidates found")
-                }
-
-                return false
             }
         }
 

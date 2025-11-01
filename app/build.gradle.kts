@@ -28,6 +28,8 @@ android {
     namespace = "com.example.coupontracker"
     compileSdk = 34
 
+    val supportedAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+
     defaultConfig {
         applicationId = "com.example.coupontracker"
         minSdk = 24
@@ -40,7 +42,8 @@ android {
 
         // Native library configuration
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+            abiFilters.clear()
+            abiFilters += supportedAbis
         }
 
         // CMake configuration for llama.cpp vision
@@ -161,7 +164,7 @@ android {
 
     sourceSets {
         getByName("main") {
-            jniLibs.srcDirs("libs/mlc_llm/lib")
+            jniLibs.setSrcDirs(listOf("libs/mlc_llm/lib", "src/main/jniLibs"))
         }
         getByName("test") {
             java.srcDir("tests")
@@ -220,7 +223,7 @@ android {
         abi {
             isEnable = true
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            include(*supportedAbis.toTypedArray())
             isUniversalApk = true
         }
     }
