@@ -2,6 +2,7 @@ package com.example.coupontracker.llm
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.util.Log
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
@@ -194,7 +195,9 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         }
 
         if (missingFiles.isNotEmpty()) {
-            Log.d(TAG, "Missing or empty model files: ${missingFiles.joinToString(", ")}")
+            val reason = "Missing or empty model files: ${missingFiles.joinToString(", ")}"
+            Log.d(TAG, reason)
+            StartupMetricsLogger.logModelFilesValidated(success = false, message = reason)
             return false
         }
 
@@ -203,6 +206,12 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         }
 
         Log.d(TAG, "✅ All required model files are present and valid ($modelName)")
+        val sentinelMessage = if (missingSentinel) {
+            "$modelName (sentinel missing)"
+        } else {
+            modelName
+        }
+        StartupMetricsLogger.logModelFilesValidated(success = true, message = sentinelMessage)
         return true
     }
     
@@ -335,9 +344,15 @@ class LlmRuntimeManager private constructor(private val context: Context) {
 
         // Load native library
         if (!MlcLlmNative.loadLibrary(context)) {
+            StartupMetricsLogger.logNativeLlmLoaded(
+                success = false,
+                message = "mlc_llm_android.so unavailable"
+            )
             throw IllegalStateException("Failed to load native LLM library")
         }
-        
+
+        StartupMetricsLogger.logNativeLlmLoaded(success = true, message = "mlc_llm_android.so")
+
         Log.d(TAG, "Initializing $modelName model...")
         
         // Initialize model through native interface
@@ -645,7 +660,9 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 configFile = configPath,
                 tokenizerFile = tokenizerPath,
                 maxTokens = MAX_TOKENS
-            )
+            ).also { engine ->
+                runVisionWarmupPrompt(engine)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create MLC engine", e)
             null
@@ -814,6 +831,58 @@ private class MLCEngineReal(
             result[index++] = (pixel and 0xFF).toByte()
         }
         return result
+    }
+
+    private fun runVisionWarmupPrompt(engine: MLCEngine) {
+        val warmupImage = createWarmupImage()
+        val warmupPrompt = "Warm up vision model with a quick classification. Return the word WARM.".trim()
+
+        runCatching {
+            val start = System.currentTimeMillis()
+            val response = engine.generate(
+                prompt = warmupPrompt,
+                image = warmupImage,
+                maxTokens = 32,
+                temperature = 0.2f,
+                timeoutMs = 5_000L
+            ) ?: throw IllegalStateException("Warmup prompt returned null response")
+
+            val duration = System.currentTimeMillis() - start
+            val tokenCount = countTokens(warmupPrompt, response)
+            val tokensPerSecond = if (duration > 0) tokenCount / (duration / 1000.0) else 0.0
+
+            Log.i(
+                TAG,
+                "✅ Vision warmup prompt succeeded in ${duration}ms (~${"%.2f".format(tokensPerSecond)} tokens/sec)"
+            )
+            StartupMetricsLogger.logWarmupComplete(
+                success = true,
+                durationMs = duration,
+                tokensPerSecond = tokensPerSecond,
+                message = "Vision warmup prompt"
+            )
+        }.onFailure { error ->
+            Log.w(TAG, "Vision warmup prompt failed", error)
+            StartupMetricsLogger.logWarmupComplete(
+                success = false,
+                message = "Vision warmup prompt failed",
+                throwable = error
+            )
+        }
+    }
+
+    private fun createWarmupImage(): ProcessedImage {
+        val size = 16
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        bitmap.eraseColor(Color.BLACK)
+        return ProcessedImage(bitmap, size, size, 3)
+    }
+
+    private fun countTokens(vararg segments: String?): Int {
+        return segments.filterNotNull()
+            .flatMap { it.split(Regex("\\s+")) }
+            .count { it.isNotBlank() }
+            .coerceAtLeast(1)
     }
 }
 

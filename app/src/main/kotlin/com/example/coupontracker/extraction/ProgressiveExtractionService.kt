@@ -18,6 +18,7 @@ import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.*
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -49,6 +50,7 @@ class ProgressiveExtractionService @Inject constructor(
     // V2: Validation components for multi-coupon extraction
     private val confidenceScorer = ConfidenceScorer()
     private val extractionValidator = ExtractionValidator(confidenceScorer)
+    private val llmPassEnabled = AtomicBoolean(true)
     
     companion object {
         private const val TAG = "ProgressiveExtractionService"
@@ -142,37 +144,42 @@ class ProgressiveExtractionService @Inject constructor(
         var miniCpmConfidence = 0f
         var passesUsed = 1
         
-        if (llmService != null) {
+        if (llmService == null) {
+            Log.w(TAG, "⚠️  Qwen LLM NOT available - using pattern-based extraction")
+        } else if (!llmPassEnabled.get()) {
+            Log.w(TAG, "⚠️  Qwen warmup previously failed - skipping LLM-first pass")
+        } else {
             try {
                 Log.d(TAG, "✅ Qwen2.5 LLM available - running primary text extraction")
                 val llmInfo = llmService.processCouponImage(image, effectiveCaptureTimestamp)
-                
+
                 if (llmInfo != null) {
                     // Convert ALL fields from Qwen (not just missing ones)
                     val llmResults = convertCouponInfoToFieldCandidates(llmInfo, FieldType.values().toSet())
                     mergeResults(extractedFields, llmResults, replaceIfBetter = true)
-                    
+
                     miniCpmConfidence = calculateOverallConfidence(extractedFields)
                     Log.d(TAG, "  Qwen extracted ${extractedFields.size} fields (confidence: $miniCpmConfidence)")
                     logPassResults(1, extractedFields)
-                    
+
                     // HIGH CONFIDENCE? We're done! 🎯
                     if (miniCpmConfidence >= 0.85f && CRITICAL_FIELDS.all { it in extractedFields }) {
                         Log.d(TAG, "✅ HIGH confidence from Qwen (${miniCpmConfidence}) - stopping here!")
                         return@withContext finishExtraction(context, extractedFields, image, imageUri, passesUsed, "Qwen2.5 Text LLM")
                     }
-                    
+
                     // Medium confidence - continue to supplement with patterns
                     Log.d(TAG, "  Medium confidence from Qwen - supplementing with pattern-based extraction")
                 } else {
                     Log.w(TAG, "⚠️  Qwen returned null - falling back to patterns")
                 }
-                
-            } catch (e: Exception) {
-                Log.e(TAG, "❌ Qwen error: ${e.message} - falling back to patterns", e)
+
+            } catch (error: PassOneUnavailableException) {
+                llmPassEnabled.set(false)
+                Log.w(TAG, "⚠️  Disabling Pass 1 after warmup failure: ${error.message}")
+            } catch (error: Exception) {
+                Log.e(TAG, "❌ Qwen error: ${error.message} - falling back to patterns", error)
             }
-        } else {
-            Log.w(TAG, "⚠️  Qwen LLM NOT available - using pattern-based extraction")
         }
         
         // ====== PASS 2: Structured Pattern Matching (Fallback/Supplement) ======
