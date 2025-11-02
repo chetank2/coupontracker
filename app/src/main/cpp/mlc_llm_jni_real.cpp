@@ -7,6 +7,7 @@
 #include <mutex>
 #include <sstream>
 #include <vector>            // ⭐ NEW: For image data
+#include <atomic>
 
 // Include llama.cpp headers
 #include "llama/llama.h"
@@ -30,6 +31,10 @@ struct ModelContext {
     std::string mmproj_path;  // Path to mmproj file
     std::string grammar_str;     // ⭐ NEW: Loaded grammar string
     bool use_grammar = false;    // ⭐ NEW: Whether grammar enforcement is enabled
+    int max_tokens = 512;
+    float temperature = 0.0f;
+    float top_p = 1.0f;
+    std::atomic<bool> cancel_requested{false};
 };
 
 // Model handle management
@@ -80,6 +85,34 @@ std::string load_grammar_file(const std::string& grammar_path) {
     return grammar_str;
 }
 
+void destroy_model_context(ModelContext* ctx) {
+    if (!ctx) {
+        return;
+    }
+
+    if (ctx->sampler) {
+        llama_sampler_free(ctx->sampler);
+        ctx->sampler = nullptr;
+    }
+
+    if (ctx->ctx) {
+        llama_free(ctx->ctx);
+        ctx->ctx = nullptr;
+    }
+
+    if (ctx->vision_ctx) {
+        clip_free(ctx->vision_ctx);
+        ctx->vision_ctx = nullptr;
+    }
+
+    if (ctx->model) {
+        llama_model_free(ctx->model);
+        ctx->model = nullptr;
+    }
+
+    delete ctx;
+}
+
 // ⭐ Phase 2: Convert Android Bitmap to RGB pixels for CLIP
 std::vector<uint8_t> bitmapToRGB(JNIEnv* env, jbyteArray image_data, jint width, jint height) {
     jbyte* image_bytes = env->GetByteArrayElements(image_data, nullptr);
@@ -124,6 +157,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runTextInference(
     ModelContext* ctx = it->second;
     std::string ocr_text_str = jstring_to_string(env, ocr_text);
     std::string prompt_str = jstring_to_string(env, prompt);
+    ctx->cancel_requested.store(false);
     
     LOGI("OCR text length: %zu chars", ocr_text_str.length());
     LOGD("OCR text preview: %.200s...", ocr_text_str.c_str());
@@ -183,17 +217,34 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runTextInference(
         // Step 3: Generate response
         LOGI("Step 3: Generating response...");
         std::vector<llama_token> output_tokens;
-        int max_tokens = 600;  // Increased from 400 to fit complete schema JSON with metadata fields
+        int max_tokens = ctx->max_tokens;
         llama_token eos_token = llama_vocab_eos(vocab);
         llama_token new_token = llama_sampler_sample(ctx->sampler, ctx->ctx, -1);
         
         for (int i = 0; i < max_tokens && new_token != eos_token; i++) {
+            if (ctx->cancel_requested.load()) {
+                LOGW("⚠️  Inference cancel flag detected before decoding step");
+                break;
+            }
             output_tokens.push_back(new_token);
             llama_batch next_batch = llama_batch_get_one(&new_token, 1);
-            llama_decode(ctx->ctx, next_batch);
+            int decode_status = llama_decode(ctx->ctx, next_batch);
+            if (decode_status != 0) {
+                LOGE("❌ LLM decode failed during generation: %d", decode_status);
+                break;
+            }
+            if (ctx->cancel_requested.load()) {
+                LOGW("⚠️  Inference cancel flag detected after decoding step");
+                break;
+            }
             new_token = llama_sampler_sample(ctx->sampler, ctx->ctx, -1);
         }
         
+        bool cancelled = ctx->cancel_requested.exchange(false);
+        if (cancelled) {
+            LOGW("⚠️  Inference cancelled cooperatively by caller");
+        }
+
         LOGI("  ✅ Generated %zu tokens", output_tokens.size());
         
         // Step 4: Detokenize response
@@ -223,6 +274,10 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runTextInference(
         llama_sampler_reset(ctx->sampler);
         LOGI("🧹 KV cache cleared and sampler reset for next inference");
         
+        if (cancelled) {
+            return string_to_jstring(env, "{\"error\": \"inference_cancelled\"}");
+        }
+
         return string_to_jstring(env, response_text);
         
     } catch (const std::exception& e) {
@@ -406,22 +461,42 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         LOGI("  - Looking for: %s", grammar_path.c_str());
         
         FILE* grammar_test = fopen(grammar_path.c_str(), "r");
-        if (grammar_test) {
-            fclose(grammar_test);
-            ctx->grammar_str = load_grammar_file(grammar_path);
-            if (!ctx->grammar_str.empty()) {
-                ctx->use_grammar = true;
-                LOGI("✅ Grammar file loaded (%zu bytes)", ctx->grammar_str.size());
-                LOGI("  🎯 JSON GRAMMAR ENFORCEMENT ENABLED!");
-            }
-        } else {
-            LOGW("⚠️  Grammar file not found, using standard sampling");
+        if (!grammar_test) {
+            LOGE("❌ Grammar file not found at: %s", grammar_path.c_str());
+            destroy_model_context(ctx);
+            LOGE("========================================");
+            LOGE("❌ FAILED: Missing grammar file");
+            LOGE("========================================");
+            return 0;
         }
+
+        fclose(grammar_test);
+        ctx->grammar_str = load_grammar_file(grammar_path);
+        if (ctx->grammar_str.empty()) {
+            LOGE("❌ Grammar file empty or unreadable: %s", grammar_path.c_str());
+            destroy_model_context(ctx);
+            LOGE("========================================");
+            LOGE("❌ FAILED: Grammar load error");
+            LOGE("========================================");
+            return 0;
+        }
+
+        ctx->use_grammar = true;
+        LOGI("✅ Grammar file loaded (%zu bytes)", ctx->grammar_str.size());
+        LOGI("  🎯 JSON GRAMMAR ENFORCEMENT ENABLED!");
         
         // Create sampler (deterministic for JSON output, prevent echo)
         LOGI("Step 7: Initializing sampler...");
         auto sparams = llama_sampler_chain_default_params();
         ctx->sampler = llama_sampler_chain_init(sparams);
+        if (!ctx->sampler) {
+            LOGE("❌ Failed to initialize sampler chain");
+            destroy_model_context(ctx);
+            LOGE("========================================");
+            LOGE("❌ FAILED: Sampler initialization error");
+            LOGE("========================================");
+            return 0;
+        }
         
         // ⭐ If grammar is loaded, add grammar sampler FIRST (highest priority)
         if (ctx->use_grammar) {
@@ -431,13 +506,16 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
                 ctx->grammar_str.c_str(), 
                 "root"  // Grammar root rule name
             );
-            if (grammar_sampler) {
-                llama_sampler_chain_add(ctx->sampler, grammar_sampler);
-                LOGI("  ✅ Grammar sampler added (STRICT JSON enforcement)");
-            } else {
-                LOGE("  ❌ Failed to create grammar sampler, falling back to standard");
-                ctx->use_grammar = false;
+            if (!grammar_sampler) {
+                LOGE("❌ Failed to create grammar sampler for grammar root 'root'");
+                destroy_model_context(ctx);
+                LOGE("========================================");
+                LOGE("❌ FAILED: Grammar sampler initialization error");
+                LOGE("========================================");
+                return 0;
             }
+            llama_sampler_chain_add(ctx->sampler, grammar_sampler);
+            LOGI("  ✅ Grammar sampler added (STRICT JSON enforcement)");
         }
         
         // Add standard samplers (grammar overrides these if enabled)
@@ -833,8 +911,15 @@ Java_com_example_coupontracker_llm_MlcLlmNative_setInferenceParams(
         return;
     }
 
+    ModelContext* ctx = it->second;
+    if (max_tokens > 0) {
+        ctx->max_tokens = max_tokens;
+    }
+    ctx->temperature = temperature;
+    ctx->top_p = top_p;
+
     LOGI("Inference params set: temp=%.2f, max_tokens=%d, top_p=%.2f",
-         temperature, max_tokens, top_p);
+         ctx->temperature, ctx->max_tokens, ctx->top_p);
 }
 
 JNIEXPORT void JNICALL
@@ -851,8 +936,8 @@ Java_com_example_coupontracker_llm_MlcLlmNative_cancelInference(
         return;
     }
 
-    LOGW("cancelInference requested for handle %lld, but llama.cpp backend has no cooperative cancel support; request ignored.",
-         (long long)model_handle);
+    it->second->cancel_requested.store(true);
+    LOGW("cancelInference requested for handle %lld – cooperative flag set", (long long)model_handle);
 }
 
 JNIEXPORT jboolean JNICALL

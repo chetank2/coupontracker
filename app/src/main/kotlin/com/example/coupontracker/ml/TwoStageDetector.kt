@@ -251,6 +251,12 @@ class TwoStageDetector(
         Log.w(TAG, message, cause)
         throw MultiCouponDetectorDisabledException(reasonCode, message, cause)
     }
+
+    @Synchronized
+    fun isStubModeActive(): Boolean = stubMode
+
+    @Synchronized
+    fun isOperational(): Boolean = isInitialized && !stubMode && disabledReason == null
     
     private fun initializeImageProcessors() {
         stage1Processor = ImageProcessor.Builder()

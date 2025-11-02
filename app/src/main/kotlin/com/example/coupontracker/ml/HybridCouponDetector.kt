@@ -51,6 +51,10 @@ class HybridCouponDetector(
         // Minimum overlap to consider regions as matching
         private const val MIN_OVERLAP_PERCENT = 0.4f
     }
+
+    fun isContourDetectorOperational(): Boolean = twoStageDetector?.isOperational() == true
+
+    fun isContourDetectorStub(): Boolean = twoStageDetector?.isStubModeActive() == true
     
     /**
      * Unified coupon region from hybrid detection
@@ -117,7 +121,7 @@ class HybridCouponDetector(
         Log.d(TAG, "OCR segmentation found ${ocrSegments.size} regions")
         
         // Step 3: Fuse results
-        val fusedRegions = fuseDetections(contourRegions, ocrSegments, bitmap)
+        val fusedRegions = fuseDetections(contourRegions, ocrSegments)
         
         Log.d(TAG, "Fusion produced ${fusedRegions.size} final regions")
         
@@ -145,8 +149,7 @@ class HybridCouponDetector(
      */
     private fun fuseDetections(
         contourRegions: List<Pair<Rect, Float>>,
-        ocrSegments: List<OcrAnchorSegmenter.CouponSegment>,
-        bitmap: Bitmap
+        ocrSegments: List<OcrAnchorSegmenter.CouponSegment>
     ): List<CouponRegion> {
         
         val fusedRegions = mutableListOf<CouponRegion>()
@@ -161,8 +164,8 @@ class HybridCouponDetector(
                 
                 // Find best matching contour region
                 var bestMatch: Pair<Int, Float>? = null
-                contourRegions.forEachIndexed { contourIndex, (contourBox, contourConf) ->
-                    if (contourIndex in matchedContours) return@forEachIndexed
+                contourRegions.forEachIndexed regionLoop@{ contourIndex, (contourBox, _) ->
+                    if (contourIndex in matchedContours) return@regionLoop
                     
                     val overlap = calculateOverlap(ocrBox, contourBox)
                     if (overlap > MIN_OVERLAP_PERCENT) {
@@ -175,13 +178,13 @@ class HybridCouponDetector(
                 if (bestMatch != null) {
                     // Fused region: use contour box (more precise) + OCR text
                     val (contourIndex, overlap) = bestMatch!!
-                    val (contourBox, contourConf) = contourRegions[contourIndex]
+                    val (contourBox, contourConfidence) = contourRegions[contourIndex]
                     
                     fusedRegions.add(
                         CouponRegion(
                             boundingBox = contourBox,
                             ocrText = ocrSegment.textBlock,
-                            confidence = (contourConf + overlap) / 2f,
+                            confidence = (contourConfidence + overlap) / 2f,
                             source = DetectionSource.FUSED,
                             anchorMatches = ocrSegment.anchorMatches,
                             regionIndex = fusedRegions.size

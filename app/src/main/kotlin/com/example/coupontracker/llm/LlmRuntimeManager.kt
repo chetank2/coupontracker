@@ -43,6 +43,56 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         // Auto-unload after 5 minutes of inactivity
         private const val AUTO_UNLOAD_DELAY_MS = 5 * 60 * 1000L
     }
+
+    private fun enforceStopSequences(raw: String): String {
+        val trimmedStart = raw.trimStart()
+        val jsonEnd = findJsonObjectEnd(trimmedStart)
+        val candidate = if (jsonEnd != -1) {
+            trimmedStart.substring(0, jsonEnd + 1)
+        } else {
+            trimmedStart
+        }
+        return candidate.trimEnd()
+    }
+
+    private fun findJsonObjectEnd(text: String): Int {
+        var depth = 0
+        var started = false
+        var inString = false
+        var escape = false
+
+        for (index in text.indices) {
+            val ch = text[index]
+            if (inString) {
+                if (escape) {
+                    escape = false
+                    continue
+                }
+                if (ch == '\\') {
+                    escape = true
+                } else if (ch == '"') {
+                    inString = false
+                }
+                continue
+            }
+
+            when (ch) {
+                '"' -> inString = true
+                '{' -> {
+                    started = true
+                    depth++
+                }
+                '}' -> if (started) {
+                    depth--
+                    if (depth == 0) {
+                        return index
+                    }
+                }
+            }
+        }
+
+        return -1
+    }
     
     // Native interface and model state
     private val nativeInterface: SafeMlcLlmNative by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
@@ -264,7 +314,13 @@ class LlmRuntimeManager private constructor(private val context: Context) {
      * Release model with reference counting and delayed unload
      */
     suspend fun releaseModel(): Unit = lifecycleMutex.withLock {
-        if (referenceCount.decrementAndGet() == 0) {
+        if (referenceCount.get() <= 0) {
+            Log.w(TAG, "releaseModel called with non-positive reference count; skipping")
+            return@withLock
+        }
+
+        val remaining = referenceCount.decrementAndGet()
+        if (remaining == 0) {
             // No more references - schedule auto-unload
             autoUnloadJob = ioScope.launch {
                 delay(AUTO_UNLOAD_DELAY_MS)
@@ -427,7 +483,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                     }
                 }
                 
-                Log.d(TAG, "Inference completed, response length: ${response?.length ?: 0}")
+                Log.d(TAG, "Inference completed, response length: ${response.length}")
                 return@withContext response
                 
             } finally {
@@ -466,7 +522,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 val inferenceStart = System.currentTimeMillis()
                 
                 // CRITICAL: Lock to prevent concurrent inference (llama.cpp is not thread-safe)
-                val response = inferenceMutex.withLock {
+                val rawResponse = inferenceMutex.withLock {
                     Log.d(TAG, "🔒 Acquired inference lock (text-only)")
                     // Run text inference through native interface
                     nativeInterface.runTextInference(
@@ -478,15 +534,20 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                     }
                 }
                 
+                val sanitized = enforceStopSequences(rawResponse)
+
                 val inferenceTime = System.currentTimeMillis() - inferenceStart
-                Log.d(TAG, "Text inference completed in ${inferenceTime}ms, response length: ${response?.length ?: 0}")
+                if (sanitized.length != rawResponse.length) {
+                    Log.d(TAG, "Applied stop enforcement: trimmed response from ${rawResponse.length} to ${sanitized.length} chars")
+                }
+                Log.d(TAG, "Text inference completed in ${inferenceTime}ms, response length: ${sanitized.length}")
                 
                 // Performance warning if inference is unexpectedly slow
                 if (inferenceTime > 30_000) {
                     Log.w(TAG, "⚠️  Slow inference detected: ${inferenceTime}ms (expected ~10-20s after warmup)")
                     Log.w(TAG, "⚠️  Check KV cache clearing and model state reset")
                 }
-                return@withContext response
+                return@withContext sanitized
                 
             } finally {
                 if (releaseAfter) {

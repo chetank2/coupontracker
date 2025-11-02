@@ -342,6 +342,11 @@ class MultiCouponExtractionService @Inject constructor(
             // Quick classification
             val classification = screenshotClassifier.classify(bitmap, fullText)
 
+            if (!hybridDetector.isContourDetectorOperational()) {
+                Log.d(TAG, "Two-stage detector unavailable; routing to single-coupon pipeline")
+                return@withContext false
+            }
+
             // Use multi-coupon extraction if:
             // 1. Classified as MULTI_COUPON_APP with high confidence
             // 2. Or has multiple coupon indicators (fallback check)
@@ -401,6 +406,14 @@ class MultiCouponExtractionService @Inject constructor(
         val classifyMillis = SystemClock.elapsedRealtime() - classifyStart
         Log.d(TAG, "Classification finished in ${classifyMillis}ms")
         Log.d(TAG, "Classification: ${classification.type} (confidence: ${classification.confidence})")
+
+        if (!hybridDetector.isContourDetectorOperational()) {
+            Log.w(
+                TAG,
+                "Two-stage detector unavailable or stubbed; falling back to progressive pipeline (type=${classification.type}, confidence=${classification.confidence})"
+            )
+            return BootstrapOutcome.NeedsFallback("two_stage_detector_unavailable")
+        }
 
         Log.d(TAG, "Step 3: Detecting coupon regions...")
         val detectStart = SystemClock.elapsedRealtime()

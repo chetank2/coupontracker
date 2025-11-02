@@ -1,27 +1,23 @@
-# Coupon JSON Schema Grammar (GBNF format for llama.cpp)
-# Relaxed grammar: allows null for any field to prevent hallucination
-
-root ::= object
+root ::= object ws
 ws ::= [ \t\n\r]*
 
-# Main coupon object with required keys
-object ::= "{" ws "\"storeName\"" ws ":" ws value ws "," ws "\"description\"" ws ":" ws value ws "," ws "\"redeemCode\"" ws ":" ws value ws "," ws "\"expiryDate\"" ws ":" ws value ws "," ws "\"storeNameSource\"" ws ":" ws value ws "," ws "\"storeNameEvidence\"" ws ":" ws evidence-array ws "," ws "\"needsAttention\"" ws ":" ws boolean ws "}" ws
+object ::= "{" ws storeNamePair ws "," ws descriptionPair ws "," ws redeemPair ws "," ws expiryPair ws "," ws storeNameSourcePair ws "," ws storeNameEvidencePair ws "," ws needsAttentionPair ws "}"
 
-# Evidence array (null or array of strings)
-evidence-array ::= "null" | "[" ws evidence-elements? "]" ws
-evidence-elements ::= value (ws "," ws value)*
+storeNamePair ::= "\"storeName\"" ws ":" ws textValue
+descriptionPair ::= "\"description\"" ws ":" ws textValue
+redeemPair ::= "\"redeemCode\"" ws ":" ws textValue
+expiryPair ::= "\"expiryDate\"" ws ":" ws textValue
+storeNameSourcePair ::= "\"storeNameSource\"" ws ":" ws textValue
+storeNameEvidencePair ::= "\"storeNameEvidence\"" ws ":" ws evidenceArray
+needsAttentionPair ::= "\"needsAttention\"" ws ":" ws boolean
 
-# Boolean values
+textValue ::= string | "null"
 boolean ::= "true" | "false"
 
-# Values: string, null (NO bare numbers for text fields)
-value ::= string | "null"
+evidenceArray ::= "null" | "[" ws evidenceItems? ws "]"
+evidenceItems ::= string (ws "," ws string)*
 
-# String: simple chars, no URL encoding
-string ::= "\"" string-char* "\""
-string-char ::= [a-zA-Z0-9 .,!?@#$%&*()\-_+=;:'/\[\]{}]
-
-# Positive number only (STRICT: must be >= 1, no decimals < 1, no negatives)
-# Explicitly blocks: -1, 0, 0.5, -0.5, leading zeros
-# Allows: 1, 1.0, 50, 99.99, 100
-positive-number ::= [1-9] [0-9]* ("." [0-9]+)?
+string ::= "\"" stringBody "\""
+stringBody ::= (stringChar | escape)*
+stringChar ::= [a-zA-Z0-9 ,.?!@#$%&*()_\-+=/:;'{}]
+escape ::= "\\\"" | "\\\\" | "\\/" | "\\b" | "\\f" | "\\n" | "\\r" | "\\t"
