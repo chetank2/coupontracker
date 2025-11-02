@@ -162,7 +162,8 @@ class ModelDownloadManager(
 
         fun getNativeLibraryCandidates(context: Context): List<File> {
             val appContext = context.applicationContext ?: context
-            val modelsDir = appContext?.filesDir?.let { File(it, "models") } ?: return emptyList()
+            val filesDir = appContext.filesDir ?: return emptyList()
+            val modelsDir = File(filesDir, "models")
             if (!modelsDir.exists()) {
                 return emptyList()
             }
@@ -635,22 +636,21 @@ class ModelDownloadManager(
      * This enables strict JSON output formatting by constraining LLM token generation
      */
     private fun deployGrammarFile(modelDir: File) {
-        try {
-            val grammarFile = File(modelDir, "coupon_schema.gbnf")
-            
-            // Copy grammar from assets to model directory
-            context.assets.open("coupon_schema.gbnf").use { input ->
-                grammarFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
+        val result = GrammarAssetSynchronizer.sync(context, modelDir)
+        when {
+            result.hash == null -> {
+                Log.w(TAG, "⚠️  Failed to deploy grammar file (will use standard sampling): ${result.message}")
             }
-            
-            Log.d(TAG, "✅ Deployed grammar file: ${grammarFile.absolutePath} (${grammarFile.length()} bytes)")
-            Log.d(TAG, "   🎯 JSON grammar enforcement will be enabled during inference")
-            
-        } catch (e: Exception) {
-            // Non-fatal: grammar is optional, model will work without it
-            Log.w(TAG, "⚠️  Failed to deploy grammar file (will use standard sampling): ${e.message}")
+            result.copied -> {
+                Log.d(
+                    TAG,
+                    "✅ Deployed grammar file: ${File(modelDir, "coupon_schema.gbnf").absolutePath} (sha256=${result.hash})"
+                )
+                Log.d(TAG, "   🎯 JSON grammar enforcement will be enabled during inference")
+            }
+            else -> {
+                Log.d(TAG, "✅ Grammar file already up to date (sha256=${result.hash})")
+            }
         }
     }
 

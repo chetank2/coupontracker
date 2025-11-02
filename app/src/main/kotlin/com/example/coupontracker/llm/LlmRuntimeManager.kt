@@ -346,6 +346,11 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             throw IllegalStateException("Model files not found. Please download the model first.")
         }
         
+        val grammarSyncResult = GrammarAssetSynchronizer.sync(context, modelDir)
+        if (grammarSyncResult.hash == null) {
+            Log.w(TAG, "Failed to synchronize grammar asset prior to load: ${grammarSyncResult.message}")
+        }
+
         val modelName = com.example.coupontracker.model.ModelPaths.getModelName(detectedModelId)
         val modelFile = com.example.coupontracker.model.ModelPaths.getModelFile(context, detectedModelId)
         
