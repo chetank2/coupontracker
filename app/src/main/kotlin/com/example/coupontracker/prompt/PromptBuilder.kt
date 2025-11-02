@@ -3,13 +3,9 @@ package com.example.coupontracker.prompt
 import com.example.coupontracker.ocr.OcrResultProcessor
 import com.example.coupontracker.ocr.OcrResultProcessor.OcrTile
 import com.example.coupontracker.schema.CouponSchema
-import com.example.coupontracker.schema.FieldType
 import com.example.coupontracker.schema.Schema
-import com.example.coupontracker.schema.SchemaField
 import com.example.coupontracker.schema.PromptGenerator
 import java.util.Locale
-import org.json.JSONArray
-import org.json.JSONObject
 
 /**
  * Builds LLM prompts from OCR output while applying normalization and schema guardrails.
@@ -29,14 +25,27 @@ class PromptBuilder(
     )
 
     companion object {
-        private const val MAX_OCR_CHARS = 800
+        private const val MAX_OCR_CHARS = 360
+        private const val MAX_OCR_LINES = 18
+        private val HIGH_SIGNAL_KEYWORDS = listOf(
+            "code",
+            "coupon",
+            "redeem",
+            "offer",
+            "cashback",
+            "expires",
+            "valid",
+            "store",
+            "brand",
+            "discount"
+        )
     }
 
     fun build(rawOcrText: String, tiles: List<OcrTile> = emptyList()): Result {
         val processed = ocrResultProcessor.process(rawOcrText, tiles)
-        val truncatedOcr = PromptGenerator.sanitizeOcrSnippet(processed.normalizedText, MAX_OCR_CHARS)
-        val system = buildSystemPrompt(processed)
-        val user = buildUserPrompt(truncatedOcr, processed)
+        val ocrExcerpt = buildOcrExcerpt(processed)
+        val system = buildSystemPrompt()
+        val user = buildUserPrompt(ocrExcerpt, processed)
         val assistant = "<|im_start|>assistant\n{"
         val prompt = listOf(system, user, assistant).joinToString(separator = "\n\n")
         return Result(
@@ -45,41 +54,27 @@ class PromptBuilder(
             userPrompt = user,
             assistantPrimer = assistant,
             processedOcr = processed,
-            truncatedOcrForPrompt = truncatedOcr
+            truncatedOcrForPrompt = ocrExcerpt
         )
     }
 
-    private fun buildSystemPrompt(processed: OcrResultProcessor.ProcessedOcrResult): String {
-        val guardrails = buildJsonSchema(schema)
+    private fun buildSystemPrompt(): String {
         val requiredFields = schema.getRequiredFields().joinToString { it.name }
         val optionalFields = schema.getOptionalFields().joinToString { it.name }
-        val confidenceSummary = String.format(
-            Locale.US,
-            "Average OCR confidence: %.2f | Unknown glyph rate: %.2f | Tiles: %d",
-            processed.averageConfidence,
-            processed.unknownGlyphRate,
-            processed.tileCount
-        )
-        val qualityHint = "OCR normalization applied (deskewed, merged lines, UI noise removed). $confidenceSummary"
         return buildString {
             appendLine("<|im_start|>system")
-            appendLine("You are a contractual JSON generator. Emit exactly one JSON object that validates against the schema below.")
-            appendLine("Never include commentary before or after the JSON payload.")
-            appendLine()
-            appendLine("Schema version: ${schema.version}")
-            appendLine("JSON Schema:")
-            appendLine(guardrails)
-            appendLine()
-            appendLine("Rules:")
-            appendLine("- Required keys: $requiredFields")
+            appendLine("You return exactly one compact JSON object and nothing else.")
+            appendLine("Required keys: $requiredFields")
             if (optionalFields.isNotBlank()) {
-                appendLine("- Optional keys: $optionalFields (emit null when unavailable)")
+                appendLine("Optional keys (use the string \"unknown\" when unavailable): $optionalFields")
             }
-            appendLine("- Use null (without quotes) when a field is absent.")
-            appendLine("- Preserve wording verbatim; never add arithmetic or commentary.")
-            appendLine("- Additional properties are forbidden (must not appear in output).")
-            appendLine()
-            appendLine(qualityHint)
+            appendLine("Rules: no markdown, no comments, no extra keys, preserve coupon text verbatim.")
+            appendLine("All string values must be trimmed and non-empty. Never output null, \"null\", \"NULL\", \"N/A\", or empty strings.")
+            appendLine("If a field is truly missing, output the literal string \"unknown\".")
+            appendLine("storeName must be the merchant or brand highlighted in the coupon.")
+            appendLine("redeemCode must match the coupon code text exactly; choose the most prominent if multiple exist.")
+            appendLine("expiryDate must repeat the date format found in the coupon (for example, \"31 May, 2025\").")
+            appendLine("Keep storeNameEvidence to between zero and three short snippets copied from the OCR text.")
             append("<|im_end|>")
         }
     }
@@ -94,121 +89,40 @@ class PromptBuilder(
         )
         return buildString {
             appendLine("<|im_start|>user")
-            appendLine("Structure the following OCR text into JSON (quality $metrics). Only respond with JSON:")
+            appendLine("Structure the OCR excerpt into JSON (quality $metrics). Respond with JSON only.")
+            appendLine("Prioritise extracting merchant/store name, coupon description, redeem code, and expiry date from the text below.")
+            appendLine("If any of those are missing in the text, write \"unknown\" but do not invent new information.")
+            appendLine("OCR excerpt:")
             appendLine(truncatedOcr)
             append("<|im_end|>")
         }
     }
 
-    private fun buildJsonSchema(schema: Schema): String {
-        val json = JSONObject()
-        json.put("\$schema", "https://json-schema.org/draft/2020-12/schema")
-        json.put("title", "${schema.name}Response")
-        json.put("type", "object")
-        json.put("additionalProperties", false)
-
-        val properties = JSONObject()
-        schema.fields.forEach { field ->
-            properties.put(field.name, buildFieldSchema(field))
+    private fun buildOcrExcerpt(processed: OcrResultProcessor.ProcessedOcrResult): String {
+        val prioritized = LinkedHashSet<String>()
+        val merged = processed.mergedLines.map { it.trim() }.filter { it.isNotEmpty() }
+        val highlight = merged.filter { line ->
+            val lower = line.lowercase(Locale.US)
+            HIGH_SIGNAL_KEYWORDS.any { keyword -> lower.contains(keyword) }
         }
-        json.put("properties", properties)
+        highlight.take(MAX_OCR_LINES).forEach { prioritized += it }
+        merged.take(MAX_OCR_LINES).forEach { prioritized += it }
 
-        val required = schema.getRequiredFields()
-        if (required.isNotEmpty()) {
-            json.put("required", JSONArray(required.map { it.name }))
+        val builder = StringBuilder()
+        var linesAdded = 0
+        prioritized.forEach { line ->
+            if (linesAdded >= MAX_OCR_LINES) return@forEach
+            val pendingLength = if (builder.isEmpty()) line.length else builder.length + 1 + line.length
+            if (pendingLength > MAX_OCR_CHARS) return@forEach
+            if (builder.isNotEmpty()) builder.append('\n')
+            builder.append(line)
+            linesAdded++
         }
 
-        return json.toString()
-    }
-
-    private fun buildFieldSchema(field: SchemaField): JSONObject {
-        return when (val type = field.type) {
-            FieldType.StringType, FieldType.DateType -> baseSchema("string", field)
-            FieldType.NumberType -> baseSchema("number", field)
-            FieldType.BooleanType -> baseSchema("boolean", field)
-            is FieldType.EnumType -> baseSchema("string", field).apply {
-                put("enum", JSONArray(type.allowedValues))
-            }
-            is FieldType.ArrayType -> JSONObject().apply {
-                put("type", "array")
-                put("items", buildNestedType(type.itemType))
-                applyNullability(this, field)
-            }
-            is FieldType.ObjectType -> JSONObject().apply {
-                put("type", "object")
-                val nestedProps = JSONObject()
-                type.properties.values.forEach { nestedField ->
-                    nestedProps.put(nestedField.name, buildFieldSchema(nestedField))
-                }
-                put("properties", nestedProps)
-                val nestedRequired = type.properties.values.filter { it.required }
-                if (nestedRequired.isNotEmpty()) {
-                    put("required", JSONArray(nestedRequired.map { it.name }))
-                }
-                put("additionalProperties", false)
-                applyNullability(this, field)
-            }
-            FieldType.NullableType -> JSONObject().apply {
-                put("type", JSONArray(listOf("null", "string")))
-            }
+        if (builder.isNotEmpty()) {
+            return builder.toString()
         }
-    }
 
-    private fun buildNestedType(type: FieldType): JSONObject {
-        return when (type) {
-            FieldType.StringType, FieldType.DateType -> JSONObject().put("type", "string")
-            FieldType.NumberType -> JSONObject().put("type", "number")
-            FieldType.BooleanType -> JSONObject().put("type", "boolean")
-            is FieldType.EnumType -> JSONObject().apply {
-                put("type", "string")
-                put("enum", JSONArray(type.allowedValues))
-            }
-            is FieldType.ArrayType -> JSONObject().apply {
-                put("type", "array")
-                put("items", buildNestedType(type.itemType))
-            }
-            is FieldType.ObjectType -> JSONObject().apply {
-                put("type", "object")
-                val nestedProps = JSONObject()
-                type.properties.values.forEach { nestedField ->
-                    nestedProps.put(nestedField.name, buildFieldSchema(nestedField))
-                }
-                put("properties", nestedProps)
-                val nestedRequired = type.properties.values.filter { it.required }
-                if (nestedRequired.isNotEmpty()) {
-                    put("required", JSONArray(nestedRequired.map { it.name }))
-                }
-                put("additionalProperties", false)
-            }
-            FieldType.NullableType -> JSONObject().put("type", JSONArray(listOf("null", "string")))
-        }
-    }
-
-    private fun baseSchema(typeName: String, field: SchemaField): JSONObject {
-        return JSONObject().apply {
-            put("type", typeName)
-            applyNullability(this, field)
-        }
-    }
-
-    private fun applyNullability(target: JSONObject, field: SchemaField) {
-        if (!field.required) {
-            val existing = target.opt("type")
-            when (existing) {
-                is JSONArray -> {
-                    val values = mutableListOf<String>()
-                    for (i in 0 until existing.length()) {
-                        values.add(existing.getString(i))
-                    }
-                    if (!values.contains("null")) {
-                        values.add("null")
-                    }
-                    target.put("type", JSONArray(values))
-                }
-                is String -> {
-                    target.put("type", JSONArray(listOf(existing, "null")))
-                }
-            }
-        }
+        return PromptGenerator.sanitizeOcrSnippet(processed.normalizedText, MAX_OCR_CHARS)
     }
 }

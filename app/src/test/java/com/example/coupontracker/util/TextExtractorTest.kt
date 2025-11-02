@@ -4,11 +4,63 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Locale
 
 class TextExtractorTest {
 
     private val extractor = TextExtractor()
+
+    private val samplePaytmOcr = """
+        8:19
+        Paytm
+        M
+        /oTTplay
+        PREMIUM
+        OTTplay
+        149*
+        LIONSGATS
+        aha
+        Code: TTPHONEBUFF
+        Offer Details
+        SUBSCRIBE NOW
+        About OTTplay
+        TELUGU
+        WIN,
+        Scratch card received on offer
+        Enjoy 30+ OTTs at Just 149*
+        SONY
+        Expires on 31 May, 2025, 11:59 PM
+        liv
+        +26
+        Enjoy 30+ OTTs at Just
+        More OTTS
+        Yo 5G36%
+        includes SonyLIV, ZEE5, Sun NXT and much more,
+        along with 500+ Live TV channels
+        SUN
+        NT
+        500+
+        Live Channels
+        ZEE5
+        COPY
+    """.trimIndent()
+
+    @Test
+    fun `extractCouponInfoSync should recover store code and expiry from Paytm OCR`() {
+        val result = extractor.extractCouponInfoSync(samplePaytmOcr)
+
+        assertEquals("Paytm", result.storeName)
+        assertEquals("TTPHONEBUFF", result.redeemCode)
+
+        val expiry = result.expiryDate
+        assertNotNull("Expected expiry date to be parsed", expiry)
+
+        val calendar = Calendar.getInstance(Locale.US).apply { time = expiry!! }
+        assertEquals(2025, calendar.get(Calendar.YEAR))
+        assertEquals(Calendar.MAY, calendar.get(Calendar.MONTH))
+        assertEquals(31, calendar.get(Calendar.DAY_OF_MONTH))
+    }
 
     @Test
     fun `extractDescription combines multi-line offer text`() {
@@ -106,3 +158,4 @@ class TextExtractorTest {
         assertEquals("2025-05-31", formatter.format(result!!))
     }
 }
+

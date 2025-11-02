@@ -43,6 +43,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withTimeout
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import java.util.Calendar
@@ -125,6 +126,23 @@ class LocalLlmOcrService(
             "GOOGLE",
             "ORDERED",
             "MINUTES"
+        )
+
+        private val STRING_SENTINELS = setOf(
+            "UNKNOWN",
+            "NOT AVAILABLE",
+            "NA",
+            "N/A",
+            "NONE",
+            "NULL",
+            "NO CODE",
+            "NO CODE NEEDED",
+            "NO_CODE_NEEDED",
+            "NOCO",
+            "NO VALUE",
+            "TBD",
+            "-",
+            "--"
         )
 
         fun cleanDescription(raw: String?): String {
@@ -372,8 +390,11 @@ class LocalLlmOcrService(
     )
 
     private suspend fun runTextWarmupPrompt(): WarmupPromptMetrics {
-        val warmupPrompt = "Extract a JSON object with storeName and code from the text. Respond with valid JSON only."
-        val warmupOcr = "Warmup coupon: Store WarmupCo offers 5% off with code WARMUP5 until 31 Dec 2025."
+        val warmupPrompt = """
+            Return exactly one JSON object with keys storeName, description, redeemCode, expiryDate, storeNameSource, storeNameEvidence, needsAttention.
+            Never output null or empty strings; use the literal string "unknown" only if the field is truly missing. Keep storeNameEvidence as an array with up to three short snippets (or [] when nothing reliable exists). needsAttention should only be true when the store looks uncertain.
+        """.trimIndent()
+        val warmupOcr = "WarmupCo weekend deal – 5% off everything. Redeem with code WARMUP5 before 31 Dec 2025."
 
         val start = System.currentTimeMillis()
         return try {
@@ -446,9 +467,8 @@ class LocalLlmOcrService(
         ensureModelWarm("jni_smoke", null)
 
         val smokePrompt = """
-            You are CouponTracker's local Qwen assistant. Read the coupon text and return a single JSON object with the keys
-            storeName, description, code, expiryDate. Put every savings, cashback, or amount detail into the description text.
-            Ensure the response is valid JSON without comments or markdown.
+            Return one JSON object with keys storeName, description, redeemCode, expiryDate, storeNameSource, storeNameEvidence, needsAttention.
+            Copy wording from the coupon text, never output null, and use the literal string "unknown" only if the value is truly missing. Keep storeNameEvidence as an array of up to three short snippets drawn from the text.
         """.trimIndent()
 
         val smokeOcr = """
@@ -1777,25 +1797,70 @@ class LocalLlmOcrService(
      * 
      * STRATEGY: Convert sentinel values to null BEFORE validation
      */
-    private fun sanitizeSentinelValues(json: org.json.JSONObject) {
+    private fun sanitizeSentinelValues(json: JSONObject) {
         try {
-            // 1. Sanitize redeemCode: "NULL", "null", "N/A", "NA" → null
-            if (json.has("redeemCode") && !json.isNull("redeemCode")) {
-                val code = json.optString("redeemCode", "")
-                val sentinelCodes = setOf("NULL", "null", "Null", "N/A", "NA", "n/a", "na", "NONE", "None", "none")
-                
-                if (code in sentinelCodes) {
-                    Log.w(TAG, "⚠️ Sanitizing sentinel redeemCode: '$code' → null")
-                    json.put("redeemCode", org.json.JSONObject.NULL)
-                }
-            }
-            
-            // 2. Sanitize description: "null", "NULL" → null (already handled in cleanDescription)
-            // No action needed here, cleanDescription handles it
-            
+            sanitizeStringField(json, "storeName", uppercase = true)
+            sanitizeStringField(json, "description")
+            sanitizeStringField(json, "redeemCode", uppercase = true)
+            sanitizeStringField(json, "expiryDate")
+            sanitizeStringField(json, "storeNameSource")
+            sanitizeEvidenceArray(json)
         } catch (e: Exception) {
             Log.w(TAG, "Error sanitizing sentinel values", e)
         }
+    }
+
+    private fun sanitizeStringField(json: JSONObject, key: String, uppercase: Boolean = false) {
+        if (!json.has(key) || json.isNull(key)) {
+            return
+        }
+
+        val raw = json.optString(key, "")
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty() || isSentinelValue(trimmed)) {
+            Log.w(TAG, "⚠️ Sanitizing sentinel $key: '$raw' → null")
+            json.put(key, JSONObject.NULL)
+            return
+        }
+
+        val normalized = if (uppercase) trimmed.uppercase(Locale.US) else trimmed
+        json.put(key, normalized)
+    }
+
+    private fun sanitizeEvidenceArray(json: JSONObject) {
+        if (!json.has("storeNameEvidence") || json.isNull("storeNameEvidence")) {
+            return
+        }
+
+        val originalArray = json.optJSONArray("storeNameEvidence") ?: return
+        val sanitized = JSONArray()
+        for (index in 0 until originalArray.length()) {
+            val entry = originalArray.optString(index, "").trim()
+            if (entry.isNotEmpty() && !isSentinelValue(entry)) {
+                sanitized.put(entry)
+            }
+            if (sanitized.length() >= 3) {
+                break
+            }
+        }
+        json.put("storeNameEvidence", sanitized)
+    }
+
+    private fun isSentinelValue(value: String?): Boolean {
+        if (value.isNullOrBlank()) {
+            return true
+        }
+
+        val normalized = value.trim().uppercase(Locale.US)
+        if (normalized in STRING_SENTINELS) {
+            return true
+        }
+
+        if (normalized.all { !it.isLetterOrDigit() }) {
+            return true
+        }
+
+        return false
     }
 
     private fun hasSavingsDetail(info: CouponInfo): Boolean {

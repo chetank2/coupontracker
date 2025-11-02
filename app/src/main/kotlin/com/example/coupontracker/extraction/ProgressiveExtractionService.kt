@@ -12,6 +12,7 @@ import com.example.coupontracker.util.CouponFixContext
 import com.example.coupontracker.util.CouponPostProcessor
 import com.example.coupontracker.util.ImageMetadataExtractor
 import com.example.coupontracker.util.IndianDateParser
+import com.example.coupontracker.util.GenericFieldHeuristics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -89,6 +90,21 @@ class ProgressiveExtractionService @Inject constructor(
             "TERMS",
             "CONDITIONS",
             "JUST"
+        )
+
+        private val PLACEHOLDER_VALUES = setOf(
+            "UNKNOWN",
+            "NA",
+            "N/A",
+            "NONE",
+            "NULL",
+            "NO CODE",
+            "NO_CODE_NEEDED",
+            "NO CODE NEEDED",
+            "NOCO",
+            "TBD",
+            "-",
+            "--"
         )
     }
     
@@ -356,15 +372,116 @@ class ProgressiveExtractionService @Inject constructor(
     ) {
         for ((fieldType, candidates) in source) {
             if (candidates.isEmpty()) continue
-            
+
             val bestCandidate = candidates.maxByOrNull { it.confidence } ?: continue
-            
-            if (fieldType !in target) {
-                target[fieldType] = bestCandidate
-            } else if (replaceIfBetter && bestCandidate.confidence > target[fieldType]!!.confidence) {
-                target[fieldType] = bestCandidate
-                Log.d(TAG, "Replaced $fieldType with better candidate (${bestCandidate.confidence} > ${target[fieldType]!!.confidence})")
+            if (isPlaceholderCandidate(fieldType, bestCandidate)) {
+                Log.d(TAG, "Skipping placeholder candidate for $fieldType from ${bestCandidate.source}: '${bestCandidate.value}'")
+                continue
             }
+
+            val current = target[fieldType]
+            if (current == null) {
+                target[fieldType] = bestCandidate
+                continue
+            }
+
+            if (shouldReplaceCandidate(fieldType, current, bestCandidate, replaceIfBetter)) {
+                Log.d(
+                    TAG,
+                    "Replacing $fieldType '${current.value}' (${current.confidence}) with '${bestCandidate.value}' from ${bestCandidate.source} (${bestCandidate.confidence})"
+                )
+                target[fieldType] = bestCandidate
+            }
+        }
+    }
+
+    private fun shouldReplaceCandidate(
+        fieldType: FieldType,
+        current: FieldCandidate,
+        replacement: FieldCandidate,
+        replaceIfBetter: Boolean
+    ): Boolean {
+        val currentPlaceholder = isPlaceholderCandidate(fieldType, current)
+        val replacementPlaceholder = isPlaceholderCandidate(fieldType, replacement)
+
+        if (currentPlaceholder && !replacementPlaceholder) {
+            return true
+        }
+        if (!currentPlaceholder && replacementPlaceholder) {
+            return false
+        }
+        if (currentPlaceholder && replacementPlaceholder) {
+            return replacement.confidence > current.confidence
+        }
+
+        if (replaceIfBetter) {
+            return replacement.confidence > current.confidence + 0.05f
+        }
+
+        val currentValue = current.value.trim()
+        val replacementValue = replacement.value.trim()
+
+        if (
+            fieldType == FieldType.STORE_NAME &&
+            !isValidStoreName(currentValue) &&
+            isValidStoreName(replacementValue)
+        ) {
+            return true
+        }
+
+        if (
+            fieldType == FieldType.DESCRIPTION &&
+            !GenericFieldHeuristics.isMeaningfulDescription(currentValue) &&
+            GenericFieldHeuristics.isMeaningfulDescription(replacementValue)
+        ) {
+            return true
+        }
+
+        if (
+            fieldType == FieldType.COUPON_CODE &&
+            (GenericFieldHeuristics.isGenericOrMissingCode(currentValue) || currentValue.length < 4) &&
+            !GenericFieldHeuristics.isGenericOrMissingCode(replacementValue)
+        ) {
+            return true
+        }
+
+        if (
+            fieldType == FieldType.EXPIRY_DATE &&
+            currentValue.length < 6 &&
+            replacementValue.length >= 6 &&
+            replacementValue.trim().uppercase(Locale.ROOT) !in PLACEHOLDER_VALUES
+        ) {
+            return true
+        }
+
+        if (replacement.confidence > current.confidence + 0.15f) {
+            return true
+        }
+
+        return replacementValue.length > currentValue.length + 6
+    }
+
+    private fun isPlaceholderCandidate(fieldType: FieldType, candidate: FieldCandidate?): Boolean {
+        if (candidate == null) {
+            return true
+        }
+
+        val value = candidate.value.trim()
+        if (value.isEmpty()) {
+            return true
+        }
+
+        val normalized = value.uppercase(Locale.ROOT)
+        if (normalized in PLACEHOLDER_VALUES) {
+            return true
+        }
+
+        return when (fieldType) {
+            FieldType.STORE_NAME -> !isValidStoreName(value)
+            FieldType.DESCRIPTION -> !GenericFieldHeuristics.isMeaningfulDescription(value)
+            FieldType.COUPON_CODE -> GenericFieldHeuristics.isGenericOrMissingCode(value) || value.length < 4
+            FieldType.EXPIRY_DATE -> normalized in PLACEHOLDER_VALUES || value.length < 4
+            else -> false
         }
     }
     

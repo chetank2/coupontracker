@@ -823,11 +823,9 @@ class CouponInputManager(
      * @return The loaded bitmap
      */
     private fun loadBitmapFromUri(uri: Uri): Bitmap {
-        val inputStream = contentResolver.openInputStream(uri)
-            ?: throw IOException("Could not open input stream for URI: $uri")
-
-        val bitmap = BitmapFactory.decodeStream(inputStream)
-        inputStream.close()
+        val bitmap = contentResolver.openInputStream(uri)?.use { inputStream ->
+            BitmapFactory.decodeStream(inputStream)
+        } ?: throw IOException("Could not open input stream for URI: $uri")
 
         if (bitmap == null) {
             throw IOException("Could not decode bitmap from URI: $uri")

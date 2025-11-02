@@ -28,12 +28,7 @@ class HybridCouponDetector(
     private val ocrEngine: OcrEngine
 ) {
     
-    private val twoStageDetector: TwoStageDetector? = runCatching {
-        TwoStageDetector(context, isDebugBuild = BuildConfig.DEBUG)
-    }.getOrElse { error ->
-        Log.w(TAG, "TwoStageDetector not available: ${error.message}", error)
-        null
-    }
+    private val twoStageDetector: TwoStageDetector? = createTwoStageDetector(context)
     
     private val ocrSegmenter: OcrAnchorSegmenter? = try {
         OcrAnchorSegmenter(ocrEngine)
@@ -50,6 +45,34 @@ class HybridCouponDetector(
         
         // Minimum overlap to consider regions as matching
         private const val MIN_OVERLAP_PERCENT = 0.4f
+
+        private const val STAGE1_MODEL_PATH = "models/multi_coupon/stage1_coupon_detector.tflite"
+        private const val STAGE2_MODEL_PATH = "models/multi_coupon/stage2_field_detector.tflite"
+        private const val MIN_STAGE1_MODEL_BYTES = 1_000_000L
+        private const val MIN_STAGE2_MODEL_BYTES = 500_000L
+    }
+
+    private fun createTwoStageDetector(context: Context): TwoStageDetector? {
+        if (!hasProductionAssets(context)) {
+            Log.w(TAG, "Two-stage detector assets missing or placeholder; disabling contour-based detection")
+            return null
+        }
+
+        return runCatching {
+            TwoStageDetector(context, isDebugBuild = BuildConfig.DEBUG)
+        }.getOrElse { error ->
+            Log.w(TAG, "TwoStageDetector not available: ${error.message}", error)
+            null
+        }
+    }
+
+    private fun hasProductionAssets(context: Context): Boolean {
+        return runCatching {
+            ModelAssetIntegrity.ensureAssetMinSize(context, STAGE1_MODEL_PATH, MIN_STAGE1_MODEL_BYTES, "stage1")
+            ModelAssetIntegrity.ensureAssetMinSize(context, STAGE2_MODEL_PATH, MIN_STAGE2_MODEL_BYTES, "stage2")
+        }.onFailure { error ->
+            Log.w(TAG, "Two-stage detector asset integrity check failed: ${error.message}")
+        }.isSuccess
     }
 
     fun isContourDetectorOperational(): Boolean = twoStageDetector?.isOperational() == true
