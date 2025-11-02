@@ -29,7 +29,7 @@ class PromptBuilder(
     )
 
     companion object {
-        private const val MAX_OCR_CHARS = 1_200
+        private const val MAX_OCR_CHARS = 800
     }
 
     fun build(rawOcrText: String, tiles: List<OcrTile> = emptyList()): Result {
@@ -52,6 +52,7 @@ class PromptBuilder(
     private fun buildSystemPrompt(processed: OcrResultProcessor.ProcessedOcrResult): String {
         val guardrails = buildJsonSchema(schema)
         val requiredFields = schema.getRequiredFields().joinToString { it.name }
+        val optionalFields = schema.getOptionalFields().joinToString { it.name }
         val confidenceSummary = String.format(
             Locale.US,
             "Average OCR confidence: %.2f | Unknown glyph rate: %.2f | Tiles: %d",
@@ -71,6 +72,9 @@ class PromptBuilder(
             appendLine()
             appendLine("Rules:")
             appendLine("- Required keys: $requiredFields")
+            if (optionalFields.isNotBlank()) {
+                appendLine("- Optional keys: $optionalFields (emit null when unavailable)")
+            }
             appendLine("- Use null (without quotes) when a field is absent.")
             appendLine("- Preserve wording verbatim; never add arithmetic or commentary.")
             appendLine("- Additional properties are forbidden (must not appear in output).")
@@ -114,7 +118,7 @@ class PromptBuilder(
             json.put("required", JSONArray(required.map { it.name }))
         }
 
-        return json.toString(2)
+        return json.toString()
     }
 
     private fun buildFieldSchema(field: SchemaField): JSONObject {

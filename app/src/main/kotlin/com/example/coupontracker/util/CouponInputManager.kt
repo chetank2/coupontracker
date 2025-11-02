@@ -210,7 +210,19 @@ class CouponInputManager(
         )
         .build()
 
-    private val barcodeScanner: BarcodeScanner = BarcodeScanning.getClient(barcodeOptions)
+    @Volatile
+    private var barcodeScanner: BarcodeScanner? = null
+
+    @Synchronized
+    private fun obtainBarcodeScanner(): BarcodeScanner {
+        val existing = barcodeScanner
+        if (existing != null) {
+            return existing
+        }
+        val fresh = BarcodeScanning.getClient(barcodeOptions)
+        barcodeScanner = fresh
+        return fresh
+    }
 
     /**
      * Process an image URI and extract coupon information
@@ -774,7 +786,9 @@ class CouponInputManager(
             try {
                 val image = InputImage.fromBitmap(bitmap, 0)
 
-                barcodeScanner.process(image)
+                val scanner = obtainBarcodeScanner()
+
+                scanner.process(image)
                     .addOnSuccessListener { barcodes ->
                         if (barcodes.isNotEmpty()) {
                             continuation.resume(barcodes[0])
@@ -784,6 +798,12 @@ class CouponInputManager(
                     }
                     .addOnFailureListener { e ->
                         Log.e(TAG, "Barcode scanning failed", e)
+                        if (e is com.google.mlkit.common.MlKitException && e.message?.contains("detector is already closed", ignoreCase = true) == true) {
+                            synchronized(this@CouponInputManager) {
+                                barcodeScanner?.close()
+                                barcodeScanner = null
+                            }
+                        }
                         continuation.resume(null)
                     }
 
@@ -936,7 +956,10 @@ class CouponInputManager(
      */
     fun cleanup() {
         stopScreenshotMonitoring()
-        barcodeScanner.close()
+        synchronized(this) {
+            barcodeScanner?.close()
+            barcodeScanner = null
+        }
         imageProcessor.cleanup()
     }
 }

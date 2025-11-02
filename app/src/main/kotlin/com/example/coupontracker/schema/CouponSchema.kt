@@ -104,12 +104,67 @@ object CouponSchema {
                         "Return null if no reliable expiry information is available"
                     )
                 )
+            ),
+            SchemaField(
+                name = "storeNameSource",
+                type = FieldType.StringType,
+                required = false,
+                metadata = FieldMetadata(
+                    description = "Short note indicating how the store name was inferred",
+                    examples = listOf("heading", "logo", "ocr_fallback"),
+                    hints = listOf(
+                        "Use concise labels such as heading, logo, url, ocr_fallback",
+                        "Return null when provenance is unclear",
+                        "Avoid full sentences"
+                    ),
+                    extractionHints = "Helps reviewers understand the provenance of the store name.",
+                    validationRules = listOf(
+                        "Length must be <= 32 characters",
+                        "Use lowercase snake-case tokens"
+                    )
+                )
+            ),
+            SchemaField(
+                name = "storeNameEvidence",
+                type = FieldType.ArrayType(FieldType.StringType),
+                required = false,
+                metadata = FieldMetadata(
+                    description = "Supporting snippets that justify the selected store name",
+                    examples = listOf("[\"PUMA\", \"Get Upto 50% Off\"]", "[\"AJIO\"]"),
+                    hints = listOf(
+                        "Provide up to three short evidence strings",
+                        "Use OCR fragments or reasoning phrases",
+                        "Return null when no evidence is available"
+                    ),
+                    extractionHints = "Use concise OCR snippets (<= 60 chars each).",
+                    validationRules = listOf(
+                        "Trim leading/trailing whitespace for every entry",
+                        "Avoid duplicate evidence strings"
+                    )
+                )
+            ),
+            SchemaField(
+                name = "needsAttention",
+                type = FieldType.BooleanType,
+                required = false,
+                metadata = FieldMetadata(
+                    description = "Flag indicating whether the extraction needs manual review",
+                    examples = listOf("true", "false"),
+                    hints = listOf(
+                        "Set true when the store name confidence is low or conflicting",
+                        "Use false when extraction is high confidence"
+                    ),
+                    extractionHints = "Downstream review tools rely on this to flag risky coupons.",
+                    validationRules = listOf(
+                        "Default to false when the store name is high confidence",
+                        "Set to true when storeNameEvidence is empty or ambiguous"
+                    )
+                )
             )
         ),
         globalRules = listOf(
-            "Output ONLY the keys: storeName, redeemCode, expiryDate, description",
-            "Use null for any field that cannot be confidently extracted",
-            "storeName must not be null when the OCR snippet includes any brand-like word, header text, or app name",
+            "Output ONLY the keys: storeName, description, redeemCode, expiryDate, storeNameSource, storeNameEvidence, needsAttention",
+            "storeName is required; all other keys may be null when unknown",
             "Preserve the offer description verbatim without arithmetic or rephrasing",
             "If the coupon only states it expires in N days and a capture timestamp is provided, convert it to an ISO date using that timestamp",
             "Do not hallucinate additional structured fields or metadata"

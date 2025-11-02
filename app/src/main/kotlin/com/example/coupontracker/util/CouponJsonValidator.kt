@@ -27,7 +27,10 @@ object CouponJsonValidator {
         "description",
         "redeemCode",
         "couponCode",
-        "expiryDate"
+        "expiryDate",
+        "storeNameSource",
+        "storeNameEvidence",
+        "needsAttention"
     )
     
     /**

@@ -37,7 +37,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         
         // Performance constants
         private const val MAX_MEMORY_MB = 3072
-        private const val MAX_TOKENS = 512
+        private const val MAX_TOKENS = 160
         private const val INFERENCE_TIMEOUT_MS = 30000L
         
         // Auto-unload after 5 minutes of inactivity
