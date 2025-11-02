@@ -8,7 +8,7 @@ import android.os.Parcelable
 import android.util.DisplayMetrics
 import android.util.Log
 import androidx.annotation.VisibleForTesting
-// BuildConfig import removed - using direct debug check
+import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.util.BitmapManager
 import com.example.coupontracker.util.CouponInstanceValidator
 import kotlinx.coroutines.runBlocking
@@ -38,7 +38,7 @@ import kotlinx.parcelize.Parcelize
  */
 class TwoStageDetector(
     private val context: Context,
-    private val isDebugBuild: Boolean = false, // Default to release mode
+    private val isDebugBuild: Boolean = BuildConfig.DEBUG,
     initializeOnCreate: Boolean = true
 ) {
     
@@ -74,6 +74,7 @@ class TwoStageDetector(
     private var modelManifest: JSONObject? = null
     private var stubMode: Boolean = false
     private var demoMode: Boolean = false
+    private var disabledReason: String? = null
     private val stage1Classes = arrayOf("coupon_complete", "coupon_partial_top", "coupon_partial_bottom")
     private val stage2Classes = arrayOf("code_region", "benefit_region", "expiry_region", "app_region", "terms_region")
     
@@ -99,6 +100,7 @@ class TwoStageDetector(
         loadModelManifest()
 
         if (stubMode) {
+            val detail = "manifest stub_mode=true"
             if (isDebugBuild) {
                 Log.w(
                     TAG,
@@ -111,9 +113,7 @@ class TwoStageDetector(
                 isInitialized = true
                 return
             } else {
-                val message = "Two-stage detector manifest is marked stub_mode=true; trained assets are required for production builds."
-                Log.e(TAG, message)
-                throw IllegalStateException(message)
+                disableDetector("manifest_stub_mode", detail)
             }
         }
 
@@ -226,6 +226,11 @@ class TwoStageDetector(
     }
 
     private fun fallbackToStubMode(reason: String, cause: Throwable? = null) {
+        if (!isDebugBuild) {
+            val detail = reason.ifBlank { "unknown_reason" }
+            disableDetector("asset_validation_failed", detail, cause)
+        }
+
         if (!stubMode) {
             Log.w(TAG, "Entering stub mode: $reason", cause)
         } else if (cause != null) {
@@ -238,6 +243,13 @@ class TwoStageDetector(
         stage2Interpreter = null
         initializeImageProcessors()
         isInitialized = true
+    }
+
+    private fun disableDetector(reasonCode: String, details: String, cause: Throwable? = null): Nothing {
+        disabledReason = reasonCode
+        val message = "Multi-coupon detector disabled: $details (reason=$reasonCode)"
+        Log.w(TAG, message, cause)
+        throw MultiCouponDetectorDisabledException(reasonCode, message, cause)
     }
     
     private fun initializeImageProcessors() {
@@ -858,6 +870,12 @@ class TwoStageDetector(
         return bitmapManager.getMemoryStats()
     }
 }
+
+class MultiCouponDetectorDisabledException(
+    val reasonCode: String,
+    message: String,
+    cause: Throwable? = null
+) : IllegalStateException(message, cause)
 
 /**
  * Data classes for detection results

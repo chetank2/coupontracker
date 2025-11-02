@@ -85,6 +85,8 @@ class LocalLlmOcrService(
         private const val TELEMETRY_PASS_ONE_SUCCESS = "PassOneSuccess"
         private const val TELEMETRY_FALLBACK_MOCK = "FallbackDueToMock"
         private const val TELEMETRY_FALLBACK_LOW_OCR = "FallbackDueToLowOcr"
+        private const val TELEMETRY_LLM_SKIPPED_UNAVAILABLE = "LlmSkippedUnavailable"
+        private const val TELEMETRY_LLM_TIMEOUT_RETRY = "LlmTimeoutRetry"
         
         private const val USE_SCHEMA_VALIDATION = true
 
@@ -325,6 +327,13 @@ class LocalLlmOcrService(
                     progressCallback = progressCallback
                 )
             } catch (error: PassOneUnavailableException) {
+                telemetryClient.incrementCounter(
+                    TELEMETRY_LLM_SKIPPED_UNAVAILABLE,
+                    mapOf(
+                        "reason" to (error.message ?: "unknown"),
+                        "phase" to reason
+                    )
+                )
                 notifyProgress(
                     stage = LlmProgressStage.FAILED,
                     percent = 100,
@@ -333,6 +342,14 @@ class LocalLlmOcrService(
                 )
                 throw error
             } catch (error: Exception) {
+                telemetryClient.incrementCounter(
+                    TELEMETRY_LLM_SKIPPED_UNAVAILABLE,
+                    mapOf(
+                        "reason" to (error.message ?: "unknown_exception"),
+                        "phase" to reason,
+                        "exception" to error::class.simpleName
+                    )
+                )
                 val unavailable = PassOneUnavailableException(
                     "Failed to warm up LLM model ($reason)",
                     error
@@ -519,6 +536,16 @@ class LocalLlmOcrService(
                 TAG,
                 "LLM inference ${reason} (attempt ${attempt + 1}/$MAX_LLM_ATTEMPTS)"
             )
+
+            if (timedOut) {
+                telemetryClient.incrementCounter(
+                    TELEMETRY_LLM_TIMEOUT_RETRY,
+                    mapOf(
+                        "attempt" to (attempt + 1),
+                        "maxAttempts" to MAX_LLM_ATTEMPTS
+                    )
+                )
+            }
 
             modelPinned = false
 
@@ -850,10 +877,17 @@ class LocalLlmOcrService(
 
         } catch (e: Exception) {
             Log.e(TAG, "LLM processing failed: ${e.message}", e)
+            val allowFallback = shouldFallbackToLegacy(e)
+            val failureMessage = when {
+                e is PassOneUnavailableException -> "AI unavailable – showing OCR results"
+                e.message?.contains("timeout", ignoreCase = true) == true -> "AI timed out – showing OCR results"
+                allowFallback -> "AI response invalid – showing OCR results"
+                else -> "AI extraction failed – please retry"
+            }
             notifyProgress(
                 stage = LlmProgressStage.FAILED,
                 percent = 100,
-                message = "AI extraction failed – please retry",
+                message = failureMessage,
                 progressCallback = progressCallback
             )
 

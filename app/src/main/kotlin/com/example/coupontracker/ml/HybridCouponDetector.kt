@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Rect
 import android.graphics.RectF
 import android.util.Log
+import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.ocr.OcrEngine
 import com.example.coupontracker.util.MultiEngineOCR
 import kotlin.math.max
@@ -28,7 +29,7 @@ class HybridCouponDetector(
 ) {
     
     private val twoStageDetector: TwoStageDetector? = runCatching {
-        TwoStageDetector(context)
+        TwoStageDetector(context, isDebugBuild = BuildConfig.DEBUG)
     }.getOrElse { error ->
         Log.w(TAG, "TwoStageDetector not available: ${error.message}", error)
         null

@@ -166,6 +166,29 @@ class ExtractionTelemetryService @Inject constructor(
             }
         }
     }
+
+    fun trackMultiCouponDetectorState(
+        state: MultiCouponDetectorState,
+        reason: String? = null
+    ) {
+        telemetryScope.launch {
+            try {
+                val event = JSONObject().apply {
+                    put("event", "multi_coupon_detector_state")
+                    put("state", state.name)
+                    reason?.let { put("reason", it) }
+                    put("device_info", getDeviceInfo())
+                    put("timestamp", System.currentTimeMillis())
+                }
+
+                Log.i(TAG, "Multi-coupon detector state=$state reason=${reason ?: "none"}")
+
+                // analyticsService.track(event)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error tracking multi-coupon detector state", e)
+            }
+        }
+    }
     
     /**
      * Get device information for telemetry stratification
@@ -197,4 +220,10 @@ enum class NativeState {
     REAL,      // Native library loaded and functional
     MOCK,      // Using mock implementation (library not available)
     MISSING    // Library completely missing
+}
+
+enum class MultiCouponDetectorState {
+    ENABLED,
+    DISABLED,
+    STUB
 }

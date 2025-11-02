@@ -20,7 +20,7 @@ class TwoStageDetectorPaddingTest {
     @Before
     fun setUp() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
-        detector = TwoStageDetector(context, initializeOnCreate = false)
+        detector = TwoStageDetector(context, isDebugBuild = true, initializeOnCreate = false)
     }
 
     @After

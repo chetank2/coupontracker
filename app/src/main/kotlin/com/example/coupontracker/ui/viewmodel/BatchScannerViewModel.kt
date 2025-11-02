@@ -7,12 +7,16 @@ import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.AnalyticsTracker
 import com.example.coupontracker.util.CouponInputManager
 import com.example.coupontracker.util.GenericFieldHeuristics
+import com.example.coupontracker.ml.MultiCouponDetectorDisabledException
+import com.example.coupontracker.util.ExtractionTelemetryService
+import com.example.coupontracker.util.MultiCouponDetectorState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.async
@@ -36,7 +40,8 @@ class BatchScannerViewModel @Inject constructor(
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Bitmap memory management
     private val localLlmOcrService: com.example.coupontracker.util.LocalLlmOcrService,  // V2: LLM service
     private val universalExtractionService: com.example.coupontracker.universal.UniversalExtractionService,  // V2: Universal extraction
-    private val analyticsTracker: AnalyticsTracker
+    private val analyticsTracker: AnalyticsTracker,
+    private val telemetryService: ExtractionTelemetryService
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(BatchScannerUiState())
@@ -64,14 +69,26 @@ class BatchScannerViewModel @Inject constructor(
 
     private fun initializeTwoStageDetector(): DetectorInitializationResult {
         return try {
-            DetectorInitializationResult(com.example.coupontracker.ml.TwoStageDetector(context), null, null)
+            val detector = com.example.coupontracker.ml.TwoStageDetector(
+                context,
+                isDebugBuild = BuildConfig.DEBUG
+            )
+            telemetryService.trackMultiCouponDetectorState(MultiCouponDetectorState.ENABLED)
+            DetectorInitializationResult(detector, null, null)
+        } catch (disabled: MultiCouponDetectorDisabledException) {
+            val message = disabled.message ?: "Multi-coupon detector is disabled."
+            telemetryService.trackMultiCouponDetectorState(MultiCouponDetectorState.DISABLED, disabled.reasonCode)
+            Log.w(TAG, "TwoStageDetector disabled: ${disabled.reasonCode}")
+            DetectorInitializationResult(null, message, disabled)
         } catch (e: IllegalStateException) {
             val message = e.message ?: "Multi-coupon detector assets are not available for this build."
             Log.e(TAG, "TwoStageDetector initialization blocked", e)
+            telemetryService.trackMultiCouponDetectorState(MultiCouponDetectorState.DISABLED, "illegal_state_exception")
             DetectorInitializationResult(null, message, e)
         } catch (e: Exception) {
             val message = e.message ?: "Failed to initialize multi-coupon detector."
             Log.e(TAG, "TwoStageDetector initialization failed", e)
+            telemetryService.trackMultiCouponDetectorState(MultiCouponDetectorState.DISABLED, "unexpected_initialization_error")
             DetectorInitializationResult(null, message, e)
         }
     }
@@ -95,6 +112,12 @@ class BatchScannerViewModel @Inject constructor(
                     "$message - falling back to OCR anchor segmentation for batch scanning",
                     detectorInitializationResult.exception
                 )
+                updateState { current ->
+                    current.copy(
+                        error = null,
+                        notice = message
+                    )
+                }
             } else {
                 Log.e(TAG, message, detectorInitializationResult.exception)
                 updateState { it.copy(error = message) }
@@ -232,10 +255,23 @@ class BatchScannerViewModel @Inject constructor(
                 if (twoStageDetector == null && !hybridDetector.isPartiallyAvailable()) {
                     val message = detectorInitErrorMessage ?: "Multi-coupon detector is unavailable."
                     Log.e(TAG, "Batch: No detector or fallback available - aborting processing")
+                    telemetryService.trackMultiCouponDetectorState(
+                        MultiCouponDetectorState.DISABLED,
+                        "no_detector_or_fallback"
+                    )
                     updateState { it.copy(isProcessing = false, error = message) }
                     return@launch
                 } else if (twoStageDetector == null) {
                     Log.w(TAG, "Batch: TwoStageDetector unavailable - using OCR anchor fallback")
+                    telemetryService.trackMultiCouponDetectorState(
+                        MultiCouponDetectorState.STUB,
+                        "ocr_anchor_fallback"
+                    )
+                    updateState {
+                        it.copy(
+                            notice = "Multi-coupon detection disabled – using OCR anchor fallback"
+                        )
+                    }
                 }
 
                 updateState {
@@ -1403,7 +1439,8 @@ data class BatchScannerUiState(
     val processedCount: Int = 0,
     val error: String? = null,
     val imageProcessingStatuses: List<ImageProcessingStatus> = emptyList(),
-    val currentlyProcessingImage: SelectedImage? = null
+    val currentlyProcessingImage: SelectedImage? = null,
+    val notice: String? = null
 )
 
 data class SelectedImage(

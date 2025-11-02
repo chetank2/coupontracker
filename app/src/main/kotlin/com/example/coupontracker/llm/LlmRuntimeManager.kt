@@ -660,9 +660,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 configFile = configPath,
                 tokenizerFile = tokenizerPath,
                 maxTokens = MAX_TOKENS
-            ).also { engine ->
-                runVisionWarmupPrompt(engine)
-            }
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to create MLC engine", e)
             null

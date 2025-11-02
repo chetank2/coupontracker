@@ -9,6 +9,7 @@ import android.util.Log
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.data.model.CashbackInfo
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
@@ -24,6 +25,7 @@ import com.example.coupontracker.util.ExtractionPerformanceMonitor
 import com.example.coupontracker.util.ExtractionMethod
 import com.example.coupontracker.util.FeedbackType
 import com.example.coupontracker.data.util.CouponDedupUtils
+import com.example.coupontracker.ml.MultiCouponDetectorDisabledException
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
 import com.example.coupontracker.util.AnalyticsTracker
@@ -40,6 +42,8 @@ import com.example.coupontracker.feedback.ValidatorFeedbackRecorder
 import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.util.IndianCurrencyParser
 import com.example.coupontracker.util.LocalLlmOcrService
+import com.example.coupontracker.util.LlmProgressStage
+import com.example.coupontracker.util.MultiCouponDetectorState
 import com.example.coupontracker.util.MultiEngineOCR
 import com.example.coupontracker.util.RunPath
 import com.example.coupontracker.util.UriPersistenceManager
@@ -202,7 +206,14 @@ class ScannerViewModel @Inject constructor(
 
     private fun initializeTwoStageDetector(): DetectorInitializationResult {
         return try {
-            DetectorInitializationResult(TwoStageDetector(context), null, null)
+            val detector = TwoStageDetector(context, isDebugBuild = BuildConfig.DEBUG)
+            telemetryService.trackMultiCouponDetectorState(MultiCouponDetectorState.ENABLED)
+            DetectorInitializationResult(detector, null, null)
+        } catch (disabled: MultiCouponDetectorDisabledException) {
+            val message = disabled.message ?: "Multi-coupon detector is disabled."
+            telemetryService.trackMultiCouponDetectorState(MultiCouponDetectorState.DISABLED, disabled.reasonCode)
+            Log.w(TAG, "TwoStageDetector disabled: ${disabled.reasonCode}")
+            DetectorInitializationResult(null, message, disabled)
         } catch (e: IllegalStateException) {
             val message = e.message ?: "Multi-coupon detector assets are not available for this build."
             Log.e(TAG, "TwoStageDetector initialization blocked", e)
@@ -217,6 +228,7 @@ class ScannerViewModel @Inject constructor(
                     reasons = mutableListOf("stub_mode_manifest")
                 )
             )
+            telemetryService.trackMultiCouponDetectorState(MultiCouponDetectorState.DISABLED, "illegal_state_exception")
             DetectorInitializationResult(null, message, e)
         } catch (e: Exception) {
             val message = e.message ?: "Failed to initialize multi-coupon detector."
@@ -232,6 +244,7 @@ class ScannerViewModel @Inject constructor(
                     reasons = mutableListOf("unexpected_initialization_error")
                 )
             )
+            telemetryService.trackMultiCouponDetectorState(MultiCouponDetectorState.DISABLED, "unexpected_initialization_error")
             DetectorInitializationResult(null, message, e)
         }
     }
@@ -243,8 +256,7 @@ class ScannerViewModel @Inject constructor(
         // Surface detector initialization status
         detectorInitErrorMessage?.let { error ->
             val message = "Multi-coupon detection unavailable: $error"
-            Log.e(TAG, message, detectorInitializationResult.exception)
-            _uiState.value = ScannerUiState.Error(message)
+            Log.w(TAG, message, detectorInitializationResult.exception)
         } ?: run {
             val modelInfo = twoStageDetector?.getModelInfo()
             Log.d(TAG, "TwoStageDetector initialized: $modelInfo")
@@ -345,8 +357,15 @@ class ScannerViewModel @Inject constructor(
 
         val detector = twoStageDetector ?: run {
             val message = detectorInitErrorMessage ?: "Multi-coupon detector is unavailable."
-            Log.e(TAG, "LEGACY path unavailable: $message")
-            _uiState.value = ScannerUiState.Error(message)
+            Log.w(TAG, "LEGACY path unavailable: $message – falling back to single-coupon flow")
+            emitLlmProgress(
+                LlmProgressUpdate(
+                    stage = LlmProgressStage.PREPARING,
+                    percent = 5,
+                    message = "Multi-coupon detection disabled – using single-coupon mode"
+                )
+            )
+            scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
             return
         }
 
@@ -915,8 +934,15 @@ class ScannerViewModel @Inject constructor(
 
                 val detector = twoStageDetector ?: run {
                     val message = detectorInitErrorMessage ?: "Multi-coupon detector is unavailable."
-                    Log.e(TAG, "Captured image processing blocked: $message")
-                    _uiState.value = ScannerUiState.Error(message)
+                    Log.w(TAG, "Captured image processing: $message – falling back to OCR-only mode")
+                    _uiState.value = ScannerUiState.Scanning(
+                        LlmProgressUpdate(
+                            stage = LlmProgressStage.PREPARING,
+                            percent = 5,
+                            message = "Multi-coupon detection disabled – using single-coupon mode"
+                        )
+                    )
+                    fallbackToTraditionalOCRBitmap(bitmap, imageUri)
                     return@launch
                 }
 
