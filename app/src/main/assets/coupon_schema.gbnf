@@ -19,5 +19,5 @@ evidenceItems ::= string (ws "," ws string)*
 
 string ::= "\"" stringBody "\""
 stringBody ::= (stringChar | escape)*
-stringChar ::= [a-zA-Z0-9 ,.?!@#$%&*()_\-+=/:;'{}]
-escape ::= "\\\"" | "\\\\" | "\\/" | "\\b" | "\\f" | "\\n" | "\\r" | "\\t"
+stringChar ::= [a-zA-Z0-9 ,.?!@#$%&*()_\-+=/:;{}]
+escape ::= "\\\"" | "\\\\" | "\\/" | "\\b" | "\\f" | "\\n" | "\\r" | "\\t" | "\\'"
