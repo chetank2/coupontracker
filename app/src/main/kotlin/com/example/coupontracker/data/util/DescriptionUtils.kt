@@ -125,11 +125,7 @@ object DescriptionUtils {
             .firstOrNull { line -> savingsPrefixRegex.containsMatchIn(line) }
     }
 
-    private fun determineSavingsLabel(normalized: String): String {
-        return when {
-            normalized.contains("cashback") || normalized.contains("cash back") -> "Cashback"
-            normalized.contains("discount") || normalized.contains("off") || normalized.contains("save") -> "Discount"
-            else -> "Savings"
-        }
+    private fun determineSavingsLabel(@Suppress("UNUSED_PARAMETER") normalized: String): String {
+        return "Cashback"
     }
 }
