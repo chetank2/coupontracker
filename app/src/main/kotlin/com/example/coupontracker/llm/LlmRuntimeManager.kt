@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -12,6 +13,8 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.LazyThreadSafetyMode
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 /**
  * Singleton manager for the on-device Qwen2.5 LLM runtime (with legacy MiniCPM hooks preserved).
@@ -37,7 +40,9 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         
         // Performance constants
         private const val MAX_MEMORY_MB = 3072
-        private const val MAX_TOKENS = 96
+        private const val MAX_TOKENS = 224
+        private const val MIN_TOKEN_BUDGET = 140
+        private const val TOKEN_PROMPT_DIVISOR = 2
         private const val INFERENCE_TIMEOUT_MS = 30000L
         
         // Auto-unload after 5 minutes of inactivity
@@ -55,11 +60,17 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         return candidate.trimEnd()
     }
 
-    private fun estimateMaxTokens(ocrLength: Int): Int {
-        val baseTokens = 72
-        val bonusSteps = (ocrLength / 200).coerceAtMost(3)
-        val dynamicTokens = baseTokens + (bonusSteps * 6)
-        return dynamicTokens.coerceIn(56, MAX_TOKENS)
+    @VisibleForTesting
+    internal fun estimateMaxTokens(ocrLength: Int, promptLength: Int): Int {
+        val promptTokenEstimate = ceil(promptLength / 4.2).roundToInt().coerceAtLeast(120)
+        val baseBudget = (promptTokenEstimate / TOKEN_PROMPT_DIVISOR).coerceAtLeast(MIN_TOKEN_BUDGET)
+        val ocrBonus = ((ocrLength / 180.0).roundToInt() * 8).coerceAtLeast(0)
+        val requestedBudget = baseBudget + ocrBonus
+        val clampedBudget = requestedBudget.coerceIn(MIN_TOKEN_BUDGET, MAX_TOKENS)
+        if (clampedBudget >= MAX_TOKENS - 4) {
+            Log.w(TAG, "Token budget hit ceiling (requested=$requestedBudget, applied=$clampedBudget, max=$MAX_TOKENS)")
+        }
+        return clampedBudget
     }
 
     private fun findJsonObjectEnd(text: String): Int {
@@ -537,7 +548,11 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 // CRITICAL: Lock to prevent concurrent inference (llama.cpp is not thread-safe)
                 val rawResponse = inferenceMutex.withLock {
                     Log.d(TAG, "🔒 Acquired inference lock (text-only)")
-                    val dynamicMaxTokens = maxTokensOverride ?: estimateMaxTokens(ocrText.length)
+                    val estimatedBudget = estimateMaxTokens(ocrText.length, prompt.length)
+                    val dynamicMaxTokens = when (maxTokensOverride) {
+                        null -> estimatedBudget
+                        else -> maxTokensOverride.coerceIn(MIN_TOKEN_BUDGET, MAX_TOKENS)
+                    }
                     nativeInterface.setInferenceParams(
                         currentHandle,
                         temperature = 0.1f,
@@ -546,8 +561,11 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                     )
                     if (maxTokensOverride != null) {
                         Log.d(TAG, "Configuring inference params: maxTokens=$dynamicMaxTokens (override)")
+                        if (dynamicMaxTokens < estimatedBudget) {
+                            Log.w(TAG, "Override token budget $dynamicMaxTokens below estimate $estimatedBudget; using override as requested")
+                        }
                     } else {
-                        Log.d(TAG, "Configuring inference params: maxTokens=$dynamicMaxTokens")
+                        Log.d(TAG, "Configuring inference params: maxTokens=$dynamicMaxTokens (estimated $estimatedBudget)")
                     }
                     // Run text inference through native interface
                     nativeInterface.runTextInference(

@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.RectF
 import android.util.Log
+import androidx.annotation.VisibleForTesting
 import com.example.coupontracker.analytics.TelemetryClient
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.ExtractionContext
@@ -93,7 +94,7 @@ class LocalLlmOcrService(
 
         private const val MAX_LLM_ATTEMPTS = 2
 
-        private const val COMPACT_TOKEN_BUDGET = 88
+        private const val EXPANDED_TOKEN_BUDGET = 196
 
         private val CTA_SUFFIXES = listOf(
             "copy",
@@ -116,6 +117,93 @@ class LocalLlmOcrService(
             "redeem",
             "copy coupon"
         )
+
+        @VisibleForTesting
+        internal data class JsonRepairResult(
+            val repairedJson: String,
+            val wasTruncated: Boolean
+        )
+
+        @VisibleForTesting
+        internal fun repairIncompleteJson(jsonStr: String): JsonRepairResult {
+            var repaired = jsonStr.trim()
+            var wasTruncated = false
+
+            if (hasDanglingQuote(repaired)) {
+                repaired += "\""
+                wasTruncated = true
+            }
+
+            val openBrackets = repaired.count { it == '[' }
+            val closeBrackets = repaired.count { it == ']' }
+            if (openBrackets > closeBrackets) {
+                repeat(openBrackets - closeBrackets) {
+                    repaired += "]"
+                }
+                wasTruncated = true
+            }
+
+            val openBraces = repaired.count { it == '{' }
+            val closeBraces = repaired.count { it == '}' }
+            if (openBraces > closeBraces) {
+                repeat(openBraces - closeBraces) {
+                    repaired += "}"
+                }
+                wasTruncated = true
+            }
+
+            val lastCommaIndex = repaired.lastIndexOf(',')
+            if (lastCommaIndex != -1) {
+                val tail = repaired.substring(lastCommaIndex + 1)
+                val trimmedTail = tail.trimStart()
+                if (trimmedTail.startsWith('"') && !trimmedTail.contains(':')) {
+                    val closingSuffix = trimmedTail.dropWhile { it != '}' && it != ']' }
+                    repaired = repaired.substring(0, lastCommaIndex) + closingSuffix
+                    wasTruncated = true
+                }
+            }
+
+            var cleaned = repaired.replace(Regex(",\\s*(?=[}])"), "")
+            cleaned = cleaned.replace(Regex(",\\s*(?=])"), "")
+
+            return JsonRepairResult(cleaned, wasTruncated)
+        }
+
+        @VisibleForTesting
+        internal fun isLikelyTruncatedJson(raw: String): Boolean {
+            val trimmed = raw.trim()
+            if (trimmed.isEmpty()) return false
+
+            if (hasDanglingQuote(trimmed)) return true
+
+            val openBraces = trimmed.count { it == '{' }
+            val closeBraces = trimmed.count { it == '}' }
+            if (openBraces > closeBraces) return true
+
+            val openBrackets = trimmed.count { it == '[' }
+            val closeBrackets = trimmed.count { it == ']' }
+            if (openBrackets > closeBrackets) return true
+
+            if (!trimmed.endsWith("}")) return true
+
+            val truncatedFieldPattern = Regex("\"[A-Za-z0-9_]+\"\\s*:\\s*\"[^\"]*$")
+            if (truncatedFieldPattern.containsMatchIn(trimmed)) return true
+
+            return false
+        }
+
+        private fun hasDanglingQuote(candidate: String): Boolean {
+            var escaped = false
+            var quoteCount = 0
+            candidate.forEach { ch ->
+                when {
+                    escaped -> escaped = false
+                    ch == '\\' -> escaped = true
+                    ch == '"' -> quoteCount++
+                }
+            }
+            return quoteCount % 2 != 0
+        }
 
         private val STORE_CONTEXT_ANCHORS = listOf(
             "Claim Now",
@@ -824,7 +912,7 @@ class LocalLlmOcrService(
                         prompt = promptResult.prompt,
                         captureTimestamp = captureTimestamp,
                         structuredCandidates = structuredCandidates,
-                        allowCompactRetry = true,
+                        allowTokenExpansion = true,
                         progressCallback = progressCallback
                     )
                 } catch (schemaError: IllegalArgumentException) {
@@ -1074,7 +1162,7 @@ class LocalLlmOcrService(
                 prompt = promptResult.prompt,
                 captureTimestamp = captureTimestamp,
                 structuredCandidates = structuredCandidates,
-                allowCompactRetry = true,
+                allowTokenExpansion = true,
                 progressCallback = null
             )
 
@@ -1347,8 +1435,11 @@ class LocalLlmOcrService(
             
             val jsonCandidate = extractJsonSlice(cleanResponse)
                 ?: throw IllegalStateException("No JSON object found in LLM output")
-            val repairedCandidate = repairIncompleteJson(jsonCandidate)
-            val sanitizedJsonCandidate = enforceCanonicalFields(repairedCandidate)
+            val repairResult = repairIncompleteJson(jsonCandidate)
+            if (repairResult.wasTruncated) {
+                Log.w(TAG, "Detected truncated JSON payload from LLM; applied minimal repair before parsing")
+            }
+            val sanitizedJsonCandidate = enforceCanonicalFields(repairResult.repairedJson)
             val baseJson = try {
                 JSONObject(sanitizedJsonCandidate)
             } catch (jsonException: JSONException) {
@@ -1785,58 +1876,6 @@ class LocalLlmOcrService(
     }
     
     /**
-     * Repair incomplete JSON that was truncated due to token limits
-     * Adds missing closing braces and quotes to make it parseable
-     */
-    private fun repairIncompleteJson(jsonStr: String): String {
-        var repaired = jsonStr.trim()
-        
-        // Count opening and closing braces
-        val openBraces = repaired.count { it == '{' }
-        val closeBraces = repaired.count { it == '}' }
-        val openBrackets = repaired.count { it == '[' }
-        val closeBrackets = repaired.count { it == ']' }
-        
-        // Check if JSON is incomplete
-        if (openBraces > closeBraces || openBrackets > closeBrackets) {
-            Log.w(TAG, "⚠️ Incomplete JSON detected: { open=$openBraces, close=$closeBraces }")
-            
-            // Close any unclosed strings
-            val quoteCount = repaired.count { it == '"' && (repaired.indexOf(it) == 0 || repaired[repaired.indexOf(it) - 1] != '\\') }
-            if (quoteCount % 2 != 0) {
-                repaired += "\""
-                Log.d(TAG, "  → Added closing quote")
-            }
-            
-            // Close any unclosed arrays
-            repeat(openBrackets - closeBrackets) {
-                repaired += "]"
-                Log.d(TAG, "  → Added closing bracket")
-            }
-            
-            // Close any unclosed objects
-            repeat(openBraces - closeBraces) {
-                repaired += "}"
-                Log.d(TAG, "  → Added closing brace")
-            }
-            
-            Log.i(TAG, "✅ Repaired JSON: $repaired")
-        }
-
-        // Remove trailing partial fields like ,"store
-        val trailingFieldPattern = Regex(",\\s*\"[^\"]*$")
-        if (trailingFieldPattern.containsMatchIn(repaired)) {
-            repaired = trailingFieldPattern.replace(repaired, "")
-        }
-
-        // Drop dangling commas before closing braces or brackets
-        repaired = repaired.replace(Regex(",\\s*(?=[}])"), "")
-        repaired = repaired.replace(Regex(",\\s*(?=])"), "")
-        
-        return repaired
-    }
-    
-    /**
      * CRITICAL FIX: Sanitize sentinel values that LLM uses as "missing data" placeholders
      * 
      * PROBLEMS:
@@ -1926,14 +1965,26 @@ class LocalLlmOcrService(
         prompt: String,
         captureTimestamp: Date?,
         structuredCandidates: Map<FieldType, List<FieldCandidate>>,
-        allowCompactRetry: Boolean,
+        allowTokenExpansion: Boolean,
         progressCallback: ((LlmProgressUpdate) -> Unit)?
     ): ParsedLlmResult {
         var outcome = initialOutcome
-        var compactRetryAvailable = allowCompactRetry
+        var tokenExpansionAvailable = allowTokenExpansion
 
         while (true) {
             val response = outcome.response ?: throw Exception("LLM inference timed out or returned null")
+
+            if (tokenExpansionAvailable && isLikelyTruncatedJson(response)) {
+                Log.w(TAG, "LLM response appears truncated; rerunning with expanded token budget")
+                tokenExpansionAvailable = false
+                outcome = runLlmInferenceWithRetry(
+                    rawOcrText = normalizedOcr,
+                    prompt = prompt,
+                    progressCallback = progressCallback,
+                    maxTokensOverride = EXPANDED_TOKEN_BUDGET
+                )
+                continue
+            }
 
             try {
                 val couponInfo = parseLlmResponseToCouponInfo(
@@ -1944,27 +1995,27 @@ class LocalLlmOcrService(
                 )
                 return ParsedLlmResult(couponInfo, outcome)
             } catch (schemaError: IllegalArgumentException) {
-                if (compactRetryAvailable && shouldRetryWithCompactTokens(schemaError.message)) {
-                    Log.w(TAG, "Retrying LLM parse with compact token budget due to schema error: ${schemaError.message}")
-                    compactRetryAvailable = false
+                if (tokenExpansionAvailable && shouldRetryWithExpandedTokens(schemaError.message)) {
+                    Log.w(TAG, "Retrying LLM parse with expanded token budget due to schema error: ${schemaError.message}")
+                    tokenExpansionAvailable = false
                     outcome = runLlmInferenceWithRetry(
                         rawOcrText = normalizedOcr,
                         prompt = prompt,
                         progressCallback = progressCallback,
-                        maxTokensOverride = COMPACT_TOKEN_BUDGET
+                        maxTokensOverride = EXPANDED_TOKEN_BUDGET
                     )
                     continue
                 }
                 throw schemaError
             } catch (jsonError: IllegalStateException) {
-                if (compactRetryAvailable && shouldRetryWithCompactTokens(jsonError.message)) {
-                    Log.w(TAG, "Retrying LLM parse with compact token budget due to JSON error: ${jsonError.message}")
-                    compactRetryAvailable = false
+                if (tokenExpansionAvailable && shouldRetryWithExpandedTokens(jsonError.message)) {
+                    Log.w(TAG, "Retrying LLM parse with expanded token budget due to JSON error: ${jsonError.message}")
+                    tokenExpansionAvailable = false
                     outcome = runLlmInferenceWithRetry(
                         rawOcrText = normalizedOcr,
                         prompt = prompt,
                         progressCallback = progressCallback,
-                        maxTokensOverride = COMPACT_TOKEN_BUDGET
+                        maxTokensOverride = EXPANDED_TOKEN_BUDGET
                     )
                     continue
                 }
@@ -1973,12 +2024,13 @@ class LocalLlmOcrService(
         }
     }
 
-    private fun shouldRetryWithCompactTokens(message: String?): Boolean {
+    private fun shouldRetryWithExpandedTokens(message: String?): Boolean {
         if (message.isNullOrBlank()) return false
         val lowered = message.lowercase(Locale.US)
         return lowered.contains("invalid json") ||
             lowered.contains("unterminated string") ||
-            (lowered.contains("invalid") && lowered.contains("schema"))
+            lowered.contains("unterminated object") ||
+            lowered.contains("unterminated")
     }
 
     private fun stripCtaSuffixes(value: String): String {
