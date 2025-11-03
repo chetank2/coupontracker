@@ -27,6 +27,30 @@ object OcrTextCleaner {
         "limited time", "for you", "recommended", "trending", "popular",
         "I'll use it later", "remind me", "not interested"
     ).map { it.lowercase() }
+
+    private val CTA_LINE_PATTERNS = listOf(
+        Regex("""^copy$""", RegexOption.IGNORE_CASE),
+        Regex("""^tap to copy$""", RegexOption.IGNORE_CASE),
+        Regex("""^(?:avail|apply|subscribe|redeem|claim|grab|shop|buy) now$""", RegexOption.IGNORE_CASE),
+        Regex("""^use now$""", RegexOption.IGNORE_CASE),
+        Regex("""^get deal$""", RegexOption.IGNORE_CASE)
+    )
+
+    private val CTA_SUFFIXES = listOf(
+        "copy",
+        "copy code",
+        "tap to copy",
+        "avail now",
+        "apply now",
+        "subscribe now",
+        "redeem now",
+        "claim now",
+        "grab deal",
+        "shop now",
+        "buy now",
+        "get offer",
+        "get deal"
+    )
     
     // UI chrome patterns (status bar, navigation, etc.)
     private val UI_NOISE_PATTERNS = listOf(
@@ -241,14 +265,36 @@ object OcrTextCleaner {
         
         // Step 1: Remove UI chrome and banner labels
         val lines = text.lines()
-        val cleanedLines = lines.filter { line ->
+        val cleanedLines = mutableListOf<String>()
+        for (line in lines) {
             val trimmed = line.trim()
+            if (trimmed.isEmpty()) {
+                continue
+            }
+
             if (isUiChrome(trimmed)) {
                 removedPatterns.add("UI_CHROME: $trimmed")
-                false
-            } else {
-                true
+                continue
             }
+
+            if (CTA_LINE_PATTERNS.any { it.containsMatchIn(trimmed) }) {
+                removedPatterns.add("CTA_LINE: $trimmed")
+                continue
+            }
+
+            val stripped = stripCtaSuffixes(trimmed)
+            if (stripped.isBlank()) {
+                removedPatterns.add("CTA_STRIP: $trimmed")
+                continue
+            }
+
+            val sanitized = sanitizeInlineCtaTokens(stripped)
+            if (sanitized.isBlank()) {
+                removedPatterns.add("CTA_INLINE: $trimmed")
+                continue
+            }
+
+            cleanedLines += sanitized
         }
         
         var cleanedText = cleanedLines.joinToString("\n").trim()
@@ -272,6 +318,45 @@ object OcrTextCleaner {
             metadata = metadata,
             removedPatterns = removedPatterns
         )
+    }
+
+    private fun stripCtaSuffixes(line: String): String {
+        var result = line
+        var changed: Boolean
+        do {
+            changed = false
+            for (suffix in CTA_SUFFIXES) {
+                val newValue = result.removeCaseInsensitiveSuffix(" $suffix")
+                if (newValue.length != result.length) {
+                    result = newValue
+                    changed = true
+                } else {
+                    val alt = result.removeCaseInsensitiveSuffix(suffix)
+                    if (alt.length != result.length) {
+                        result = alt
+                        changed = true
+                    }
+                }
+            }
+        } while (changed)
+
+        return result.trim()
+    }
+
+    private fun sanitizeInlineCtaTokens(line: String): String {
+        var result = line.replace(Regex("""(\b[A-Z0-9]{3,})(\s+(?:copy|copy code|tap to copy))\b""", RegexOption.IGNORE_CASE), "$1")
+        result = result.replace(Regex("""\b(?:copy|copy code|tap to copy|apply code|use now)\b""", RegexOption.IGNORE_CASE), " ")
+        return result.replace(Regex("\\s{2,}"), " ").trim()
+    }
+}
+
+private fun String.removeCaseInsensitiveSuffix(suffix: String): String {
+    if (this.length < suffix.length) return this
+    val end = this.substring(this.length - suffix.length)
+    return if (end.equals(suffix, ignoreCase = true)) {
+        this.substring(0, this.length - suffix.length).trimEnd()
+    } else {
+        this
     }
 }
 

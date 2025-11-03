@@ -1,7 +1,25 @@
 package com.example.coupontracker.util
 
+import java.util.Locale
+
 object RedeemCodeSanitizer {
     private val whitespaceRegex = "\\s+".toRegex()
+    private val CTA_TOKENS = setOf(
+        "COPY",
+        "COPYCODE",
+        "COPY-CODE",
+        "COPYNOW",
+        "APPLY",
+        "APPLYNOW",
+        "APPLYCODE",
+        "USE",
+        "USECODE",
+        "USENOW",
+        "TAPTOCOPY",
+        "NOW",
+        "CLICK",
+        "CLICKHERE"
+    )
 
     fun sanitize(raw: String?): String? {
         return sanitizeInternal(raw, preserveInterior = false)
@@ -22,9 +40,11 @@ object RedeemCodeSanitizer {
 
         val cleanedTokens = tokens.map { token -> token.trim { !it.isLetterOrDigit() } }
 
-        val prunedTokens = cleanedTokens.dropLastWhile { token ->
-            token.isBlank() || (!preserveInterior && token.any { !it.isLetterOrDigit() }) || token.length < 2
-        }
+        val prunedTokens = cleanedTokens
+            .dropLastWhile { token ->
+                val upper = token.uppercase(Locale.US)
+                upper.isBlank() || CTA_TOKENS.contains(upper) || (!preserveInterior && token.any { !it.isLetterOrDigit() }) || token.length < 2
+            }
 
         val baseTokens = if (prunedTokens.isNotEmpty()) prunedTokens else cleanedTokens
 

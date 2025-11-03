@@ -37,7 +37,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         
         // Performance constants
         private const val MAX_MEMORY_MB = 3072
-        private const val MAX_TOKENS = 112
+        private const val MAX_TOKENS = 96
         private const val INFERENCE_TIMEOUT_MS = 30000L
         
         // Auto-unload after 5 minutes of inactivity
@@ -56,10 +56,10 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     }
 
     private fun estimateMaxTokens(ocrLength: Int): Int {
-        val baseTokens = 80
-        val bonusSteps = (ocrLength / 180).coerceAtMost(3)
-        val dynamicTokens = baseTokens + (bonusSteps * 8)
-        return dynamicTokens.coerceIn(64, MAX_TOKENS)
+        val baseTokens = 72
+        val bonusSteps = (ocrLength / 200).coerceAtMost(3)
+        val dynamicTokens = baseTokens + (bonusSteps * 6)
+        return dynamicTokens.coerceIn(56, MAX_TOKENS)
     }
 
     private fun findJsonObjectEnd(text: String): Int {
@@ -516,7 +516,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
     suspend fun runTextInference(
         ocrText: String,
         prompt: String,
-        keepLoaded: Boolean = false
+        keepLoaded: Boolean = false,
+        maxTokensOverride: Int? = null
     ): String? = withContext(Dispatchers.IO) {
         try {
             var releaseAfter = false
@@ -536,14 +537,18 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 // CRITICAL: Lock to prevent concurrent inference (llama.cpp is not thread-safe)
                 val rawResponse = inferenceMutex.withLock {
                     Log.d(TAG, "🔒 Acquired inference lock (text-only)")
-                    val dynamicMaxTokens = estimateMaxTokens(ocrText.length)
+                    val dynamicMaxTokens = maxTokensOverride ?: estimateMaxTokens(ocrText.length)
                     nativeInterface.setInferenceParams(
                         currentHandle,
                         temperature = 0.1f,
                         maxTokens = dynamicMaxTokens,
                         topP = 0.85f
                     )
-                    Log.d(TAG, "Configuring inference params: maxTokens=$dynamicMaxTokens")
+                    if (maxTokensOverride != null) {
+                        Log.d(TAG, "Configuring inference params: maxTokens=$dynamicMaxTokens (override)")
+                    } else {
+                        Log.d(TAG, "Configuring inference params: maxTokens=$dynamicMaxTokens")
+                    }
                     // Run text inference through native interface
                     nativeInterface.runTextInference(
                         currentHandle,

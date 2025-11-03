@@ -121,7 +121,8 @@ class MultiCouponExtractionService @Inject constructor(
     suspend fun extractMultipleCoupons(
         bitmap: Bitmap,
         imageUri: String? = null,
-        captureTimestamp: Date? = null
+        captureTimestamp: Date? = null,
+        allowProgressiveFallback: Boolean = true
     ): MultiCouponResult = withContext(Dispatchers.Default) {
 
         Log.d(TAG, "========================================")
@@ -133,6 +134,17 @@ class MultiCouponExtractionService @Inject constructor(
             val bootstrap = bootstrapExtraction(bitmap)
 
             if (bootstrap is BootstrapOutcome.NeedsFallback) {
+                if (!allowProgressiveFallback) {
+                    Log.w(TAG, "Skipping progressive fallback (disabled) after bootstrap failure: ${bootstrap.reason}")
+                    return@withContext MultiCouponResult(
+                        coupons = emptyList(),
+                        screenshotType = ScreenshotClassifier.ScreenshotType.SINGLE_SCREENSHOT,
+                        totalDetected = 0,
+                        totalExtracted = 0,
+                        totalFiltered = 0
+                    )
+                }
+
                 return@withContext fallbackToProgressiveExtraction(
                     bitmap = bitmap,
                     imageUri = imageUri,
@@ -193,7 +205,17 @@ class MultiCouponExtractionService @Inject constructor(
             }
 
             if (dedupedCoupons.isEmpty()) {
-                Log.w(TAG, "All regions filtered out; invoking progressive fallback")
+                Log.w(TAG, "All regions filtered out after multi-coupon extraction")
+                if (!allowProgressiveFallback) {
+                    return@withContext MultiCouponResult(
+                        coupons = emptyList(),
+                        screenshotType = classification.type,
+                        totalDetected = regionCandidates.size,
+                        totalExtracted = 0,
+                        totalFiltered = filteredCount
+                    )
+                }
+
                 return@withContext fallbackToProgressiveExtraction(
                     bitmap = bitmap,
                     imageUri = imageUri,

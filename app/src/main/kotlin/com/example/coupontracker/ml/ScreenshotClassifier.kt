@@ -41,8 +41,9 @@ class ScreenshotClassifier {
         private val MULTI_COUPON_INDICATORS = listOf(
             "collect now", "get offer", "claim", "redeem",
             "save now", "grab deal", "avail offer",
-            "% off", "cashback", "discount", "offer"
-        ).map { it.lowercase() }
+            "% off", "cashback", "discount",
+            "limited time", "exclusive", "hot deal"
+        )
         
         // Screenshot metadata indicators
         private val SCREENSHOT_PATTERNS = listOf(
@@ -91,8 +92,10 @@ class ScreenshotClassifier {
         val indicators = mutableMapOf<String, Any>()
         
         // Check 1: Multiple coupon indicators
-        val couponIndicatorCount = countMultipleCouponIndicators(normalizedText)
-        indicators["couponIndicatorCount"] = couponIndicatorCount
+        val couponIndicatorStats = analyzeCouponIndicators(normalizedText)
+        indicators["couponIndicatorCount"] = couponIndicatorStats.totalCount
+        indicators["couponIndicatorUniqueCount"] = couponIndicatorStats.uniqueCount
+        indicators["couponIndicatorMatches"] = couponIndicatorStats.matchedIndicators
         
         // Check 2: App identifier presence
         val appIdentified = identifyApp(normalizedText)
@@ -113,35 +116,62 @@ class ScreenshotClassifier {
         indicators["hasHighDensity"] = hasHighDensity
         
         // Classification logic
-        val (type, confidence) = when {
-            // Multi-coupon app screenshot: multiple indicators + app name + portrait
-            couponIndicatorCount >= 3 && appIdentified != null && isPortrait -> {
-                Pair(ScreenshotType.MULTI_COUPON_APP, 0.9f)
+        val strongCouponSignals = couponIndicatorStats.uniqueCount >= 5 && couponIndicatorStats.totalCount >= 7
+        val moderateCouponSignals = couponIndicatorStats.uniqueCount >= 4 && couponIndicatorStats.totalCount >= 6
+        val hasKnownApp = appIdentified != null && appIdentified != "unknown"
+
+        val singleCouponSignals = collectSingleCouponSignals(ocrText)
+        indicators["codeCount"] = singleCouponSignals.codeMatches
+        indicators["sectionMarkerCount"] = singleCouponSignals.sectionMarkers
+        indicators["ctaTokenCount"] = singleCouponSignals.ctaTokens
+        indicators["uniqueCodeCount"] = singleCouponSignals.uniqueCodes
+
+        var (type, confidence) = when {
+            // Multi-coupon app screenshot: multiple unique indicators + known app + portrait
+            strongCouponSignals && hasKnownApp && isPortrait -> {
+                Pair(ScreenshotType.MULTI_COUPON_APP, 0.92f)
             }
-            
-            // Strong multi-coupon indicators even without app name
-            couponIndicatorCount >= 4 && hasScreenshotMetadata -> {
-                Pair(ScreenshotType.MULTI_COUPON_APP, 0.85f)
+
+            // Strong coupon signals with screenshot metadata (even without app name)
+            strongCouponSignals && hasScreenshotMetadata && isPortrait -> {
+                Pair(ScreenshotType.MULTI_COUPON_APP, 0.88f)
             }
-            
-            // Single screenshot: has metadata + portrait but fewer coupons
-            (hasScreenshotMetadata || appIdentified != null) && isPortrait -> {
+
+            // Known app + moderate signals + metadata
+            moderateCouponSignals && hasKnownApp && hasScreenshotMetadata && isPortrait -> {
+                Pair(ScreenshotType.MULTI_COUPON_APP, 0.86f)
+            }
+
+            // Single screenshot: typical screenshot characteristics but limited coupon signals
+            (hasScreenshotMetadata || hasKnownApp) && isPortrait -> {
                 Pair(ScreenshotType.SINGLE_SCREENSHOT, 0.8f)
             }
-            
+
             // Screenshot characteristics without strong coupon signals
             hasScreenshotMetadata && hasHighDensity -> {
                 Pair(ScreenshotType.SINGLE_SCREENSHOT, 0.7f)
             }
-            
+
             // Camera capture: landscape or missing screenshot markers
-            !isPortrait || (!hasScreenshotMetadata && appIdentified == null) -> {
+            !isPortrait || (!hasScreenshotMetadata && !hasKnownApp) -> {
                 Pair(ScreenshotType.CAMERA_CAPTURE, 0.75f)
             }
-            
+
             // Default to single screenshot with low confidence
             else -> {
                 Pair(ScreenshotType.SINGLE_SCREENSHOT, 0.5f)
+            }
+        }
+
+        if (type == ScreenshotType.MULTI_COUPON_APP) {
+            val insufficientIndicators = couponIndicatorStats.uniqueCount < 4 || couponIndicatorStats.totalCount < 7
+            val strongSingleSignals = singleCouponSignals.codeMatches <= 1 &&
+                singleCouponSignals.sectionMarkers <= 2 &&
+                singleCouponSignals.ctaTokens >= 1
+
+            if (insufficientIndicators || strongSingleSignals || isLikelySingleCoupon(ocrText)) {
+                type = ScreenshotType.SINGLE_SCREENSHOT
+                confidence = 0.7f
             }
         }
         
@@ -154,16 +184,24 @@ class ScreenshotClassifier {
     /**
      * Count occurrences of multi-coupon indicators
      */
-    private fun countMultipleCouponIndicators(text: String): Int {
-        var count = 0
+    private fun analyzeCouponIndicators(text: String): IndicatorStats {
+        var total = 0
+        val matched = mutableSetOf<String>()
+
         for (indicator in MULTI_COUPON_INDICATORS) {
-            val pattern = Regex("""\b$indicator\b""", RegexOption.IGNORE_CASE)
+            val pattern = Regex("""\b${Regex.escape(indicator)}\b""", RegexOption.IGNORE_CASE)
             val matches = pattern.findAll(text).count()
             if (matches > 0) {
-                count += matches
+                matched += indicator.lowercase()
+                total += matches
             }
         }
-        return count
+
+        return IndicatorStats(
+            uniqueCount = matched.size,
+            totalCount = total,
+            matchedIndicators = matched
+        )
     }
     
     /**
@@ -191,8 +229,87 @@ class ScreenshotClassifier {
      * Quick check if text suggests multiple coupons (for fast filtering)
      */
     fun hasMultipleCouponIndicators(text: String): Boolean {
-        val count = countMultipleCouponIndicators(text.lowercase())
-        return count >= 3
+        val stats = analyzeCouponIndicators(text.lowercase())
+        return stats.uniqueCount >= 4 && stats.totalCount >= 6
+    }
+
+    /**
+     * Heuristic to detect a single prominent coupon so we can bypass multi-coupon flows.
+     */
+    fun isLikelySingleCoupon(ocrText: String): Boolean {
+        if (ocrText.isBlank()) {
+            return true
+        }
+
+        val normalized = ocrText.lowercase()
+        val indicatorStats = analyzeCouponIndicators(normalized)
+        val signals = collectSingleCouponSignals(ocrText)
+
+        if (signals.uniqueCodes > 1 || signals.codeMatches > 1) {
+            return false
+        }
+
+        if (indicatorStats.uniqueCount >= 5 && indicatorStats.totalCount >= 9) {
+            return false
+        }
+
+        val looksLikeCouponList = signals.sectionMarkers >= 3 || signals.shortOfferHeadings >= 3
+        if (looksLikeCouponList) {
+            return false
+        }
+
+        if (signals.ctaTokens >= 1 && indicatorStats.totalCount <= 10) {
+            return true
+        }
+
+        return signals.emphasisTokens <= 3 && indicatorStats.totalCount <= 8
+    }
+
+    private data class IndicatorStats(
+        val uniqueCount: Int,
+        val totalCount: Int,
+        val matchedIndicators: Set<String>
+    )
+
+    private data class SingleCouponSignals(
+        val codeMatches: Int,
+        val uniqueCodes: Int,
+        val emphasisTokens: Int,
+        val sectionMarkers: Int,
+        val ctaTokens: Int,
+        val shortOfferHeadings: Int
+    )
+
+    private fun collectSingleCouponSignals(text: String): SingleCouponSignals {
+        val codePattern = Regex("""\bcode\s*[:\-]\s*([A-Z0-9]{3,})\b""", RegexOption.IGNORE_CASE)
+        val codeMatches = codePattern.findAll(text).toList()
+        val codes = codeMatches.mapNotNull { it.groupValues.getOrNull(1)?.uppercase()?.trim() }.toSet()
+        val codeCount = codes.size
+        val totalCodeMatches = codeMatches.size
+
+        val emphasisTokens = Regex("""\b(?:flat\s+\d+%|\d+%\s+off|cashback|save\s+\d+|copy\s+code|apply\s+code|use\s+code)\b""",
+            RegexOption.IGNORE_CASE)
+            .findAll(text).count()
+
+        val sectionMarkers = Regex("""\b(?:offer details|about\s+\w+|terms\s+and\s+conditions)\b""", RegexOption.IGNORE_CASE)
+            .findAll(text).count()
+
+        val ctaTokens = Regex("""\b(?:copy|copy code|avail now|subscribe now|scratch card|tap to copy|tap to apply)\b""", RegexOption.IGNORE_CASE)
+            .findAll(text).count()
+
+        val shortOfferHeadings = text.lines()
+            .map { it.trim() }
+            .count { it.isNotEmpty() && it.length <= 24 && it.contains("offer", ignoreCase = true) }
+
+        return SingleCouponSignals(
+            codeMatches = totalCodeMatches,
+            uniqueCodes = codeCount,
+            emphasisTokens = emphasisTokens,
+            sectionMarkers = sectionMarkers,
+            ctaTokens = ctaTokens,
+            shortOfferHeadings = shortOfferHeadings
+        )
     }
 }
+
 

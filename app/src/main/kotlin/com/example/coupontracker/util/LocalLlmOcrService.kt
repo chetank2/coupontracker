@@ -93,6 +93,30 @@ class LocalLlmOcrService(
 
         private const val MAX_LLM_ATTEMPTS = 2
 
+        private const val COMPACT_TOKEN_BUDGET = 88
+
+        private val CTA_SUFFIXES = listOf(
+            "copy",
+            "copy code",
+            "tap to copy",
+            "avail now",
+            "apply now",
+            "apply code",
+            "subscribe now",
+            "redeem now",
+            "claim now",
+            "grab deal",
+            "shop now",
+            "buy now",
+            "get offer",
+            "get deal",
+            "use now",
+            "use code",
+            "apply",
+            "redeem",
+            "copy coupon"
+        )
+
         private val STORE_CONTEXT_ANCHORS = listOf(
             "Claim Now",
             "Use Code",
@@ -136,13 +160,20 @@ class LocalLlmOcrService(
             "NONE",
             "NULL",
             "NO CODE",
-            "NO CODE NEEDED",
             "NO_CODE_NEEDED",
+            "NO CODE NEEDED",
             "NOCO",
             "NO VALUE",
             "TBD",
             "-",
             "--"
+        )
+
+        private val CTA_SUFFIX_REGEX = listOf(
+            Regex("""\s*(?:copy|tap to copy)$""", RegexOption.IGNORE_CASE),
+            Regex("""\s*(?:copy code|copy coupon)$""", RegexOption.IGNORE_CASE),
+            Regex("""\s*(?:avail now|apply now|subscribe now|redeem now|claim now|grab deal|shop now|buy now|get offer|get deal)$""",
+                RegexOption.IGNORE_CASE)
         )
 
         fun cleanDescription(raw: String?): String {
@@ -508,7 +539,8 @@ class LocalLlmOcrService(
     private suspend fun runLlmInferenceWithRetry(
         rawOcrText: String,
         prompt: String,
-        progressCallback: ((LlmProgressUpdate) -> Unit)?
+        progressCallback: ((LlmProgressUpdate) -> Unit)?,
+        maxTokensOverride: Int? = null
     ): LlmInferenceOutcome {
         var attempt = 0
         var lastMemoryUsage = 0L
@@ -521,7 +553,7 @@ class LocalLlmOcrService(
             var timedOut = false
             val candidateResponse = try {
                 withTimeout(INFERENCE_TIMEOUT_MS) {
-                    llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned)
+                    llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned, maxTokensOverride = maxTokensOverride)
                 }
             } catch (timeout: TimeoutCancellationException) {
                 timedOut = true
@@ -764,7 +796,6 @@ class LocalLlmOcrService(
                 progressCallback = progressCallback
             )
             val llmOutcome = runLlmInferenceWithRetry(normalizedOcr, promptResult.prompt, progressCallback)
-            memoryUsage = llmOutcome.memoryUsageMb
             val llmResponse = llmOutcome.response
 
             // Step 5: Parse and validate response
@@ -785,12 +816,16 @@ class LocalLlmOcrService(
                         Log.w(TAG, "Structured extraction failed: ${error.message}", error)
                     }
                     .getOrElse { emptyMap() }
-                val couponInfo = try {
-                    parseLlmResponseToCouponInfo(
-                        llmResponse,
-                        rawOcrText,
-                        captureTimestamp,
-                        structuredCandidates
+                val parsedResult = try {
+                    parseWithOptionalRetry(
+                        initialOutcome = llmOutcome,
+                        normalizedOcr = normalizedOcr,
+                        rawOcrText = rawOcrText,
+                        prompt = promptResult.prompt,
+                        captureTimestamp = captureTimestamp,
+                        structuredCandidates = structuredCandidates,
+                        allowCompactRetry = true,
+                        progressCallback = progressCallback
                     )
                 } catch (schemaError: IllegalArgumentException) {
                     if (schemaError.message?.contains("invalid json schema", ignoreCase = true) == true) {
@@ -821,6 +856,8 @@ class LocalLlmOcrService(
                     }
                     throw jsonError
                 }
+                memoryUsage = parsedResult.outcome.memoryUsageMb
+                val couponInfo = parsedResult.couponInfo
 
                 // CRITICAL: Detect mock responses and reject them
                 if (MockLlmResponseDetector.isMockResponse(couponInfo)) {
@@ -1023,46 +1060,43 @@ class LocalLlmOcrService(
             Log.d(TAG, "⏳ Please wait... (max ${INFERENCE_TIMEOUT_MS / 1000}s)")
             Log.d(TAG, "========================================")
             val inferenceStartTime = System.currentTimeMillis()
-            val llmOutcome = runLlmInferenceWithRetry(normalizedOcr, promptResult.prompt, progressCallback = null)
+            val initialOutcome = runLlmInferenceWithRetry(normalizedOcr, promptResult.prompt, progressCallback = null)
+            val structuredCandidates = runCatching { structuredCandidatesDeferred.await() }
+                .onFailure { error ->
+                    Log.w(TAG, "Structured extraction failed: ${error.message}", error)
+                }
+                .getOrElse { emptyMap() }
+
+            val parsedResult = parseWithOptionalRetry(
+                initialOutcome = initialOutcome,
+                normalizedOcr = normalizedOcr,
+                rawOcrText = rawOcrText,
+                prompt = promptResult.prompt,
+                captureTimestamp = captureTimestamp,
+                structuredCandidates = structuredCandidates,
+                allowCompactRetry = true,
+                progressCallback = null
+            )
+
             val inferenceElapsed = System.currentTimeMillis() - inferenceStartTime
-            memoryUsage = llmOutcome.memoryUsageMb
-            val llmResponse = llmOutcome.response
+            memoryUsage = parsedResult.outcome.memoryUsageMb
             Log.d(TAG, "⏱️  Inference completed in ${inferenceElapsed / 1000}s")
 
-            val couponInfo = if (llmResponse != null) {
-                val structuredCandidates = runCatching { structuredCandidatesDeferred.await() }
-                    .onFailure { error ->
-                        Log.w(TAG, "Structured extraction failed: ${error.message}", error)
-                    }
-                    .getOrElse { emptyMap() }
+            val couponInfo = parsedResult.couponInfo
 
-                val parsedInfo = parseLlmResponseToCouponInfo(
-                    llmResponse,
-                    rawOcrText,
-                    captureTimestamp,
-                    structuredCandidates
-                )
-
-                if (MockLlmResponseDetector.isMockResponse(parsedInfo)) {
-                    Log.w(TAG, "Mock response signature: store='${parsedInfo.storeName}', code='${parsedInfo.redeemCode}', desc='${parsedInfo.description}'")
-                    Log.w(TAG, "⚠️ MOCK LLM RESPONSE DETECTED - Falling back to OCR")
-                    telemetryClient.incrementCounter(
-                        TELEMETRY_FALLBACK_MOCK,
-                        mapOf(
-                            "entry" to "typed",
-                            "avgConfidence" to metrics.averageConfidence,
-                            "unknownRate" to metrics.unknownGlyphRate,
-                            "tiles" to metrics.tileCount
-                        )
+            if (MockLlmResponseDetector.isMockResponse(couponInfo)) {
+                Log.w(TAG, "Mock response signature: store='${couponInfo.storeName}', code='${couponInfo.redeemCode}', desc='${couponInfo.description}'")
+                Log.w(TAG, "⚠️ MOCK LLM RESPONSE DETECTED - Falling back to OCR")
+                telemetryClient.incrementCounter(
+                    TELEMETRY_FALLBACK_MOCK,
+                    mapOf(
+                        "entry" to "typed",
+                        "avgConfidence" to metrics.averageConfidence,
+                        "unknownRate" to metrics.unknownGlyphRate,
+                        "tiles" to metrics.tileCount
                     )
-                    throw IllegalStateException("Mock LLM response detected (placeholder runtime output)")
-                }
-
-                parsedInfo
-            } else {
-                val duration = System.currentTimeMillis() - startTime
-                telemetryService.recordTimeout(duration, memoryUsage)
-                throw Exception("LLM inference timed out or returned null")
+                )
+                throw IllegalStateException("Mock LLM response detected (placeholder runtime output)")
             }
 
             validateExtractionQuality(couponInfo)
@@ -1303,6 +1337,9 @@ class LocalLlmOcrService(
             if (!cleanResponse.trim().endsWith("}")) {
                 cleanResponse = cleanResponse.trim() + "}"
             }
+
+            // Collapse raw newlines/tabs to spaces so JSON strings remain parseable
+            cleanResponse = cleanResponse.replace("\r", " ").replace("\n", " ")
             
             if (cleanResponse.length < 20) {
                 throw IllegalStateException("LLM response too short to contain JSON (got ${cleanResponse.length} chars)")
@@ -1310,7 +1347,8 @@ class LocalLlmOcrService(
             
             val jsonCandidate = extractJsonSlice(cleanResponse)
                 ?: throw IllegalStateException("No JSON object found in LLM output")
-            val sanitizedJsonCandidate = enforceCanonicalFields(jsonCandidate)
+            val repairedCandidate = repairIncompleteJson(jsonCandidate)
+            val sanitizedJsonCandidate = enforceCanonicalFields(repairedCandidate)
             val baseJson = try {
                 JSONObject(sanitizedJsonCandidate)
             } catch (jsonException: JSONException) {
@@ -1784,6 +1822,16 @@ class LocalLlmOcrService(
             
             Log.i(TAG, "✅ Repaired JSON: $repaired")
         }
+
+        // Remove trailing partial fields like ,"store
+        val trailingFieldPattern = Regex(",\\s*\"[^\"]*$")
+        if (trailingFieldPattern.containsMatchIn(repaired)) {
+            repaired = trailingFieldPattern.replace(repaired, "")
+        }
+
+        // Drop dangling commas before closing braces or brackets
+        repaired = repaired.replace(Regex(",\\s*(?=[}])"), "")
+        repaired = repaired.replace(Regex(",\\s*(?=])"), "")
         
         return repaired
     }
@@ -1810,20 +1858,27 @@ class LocalLlmOcrService(
         }
     }
 
+    private data class ParsedLlmResult(
+        val couponInfo: CouponInfo,
+        val outcome: LlmInferenceOutcome
+    )
+
     private fun sanitizeStringField(json: JSONObject, key: String, uppercase: Boolean = false) {
         if (!json.has(key) || json.isNull(key)) {
             return
         }
 
         val raw = json.optString(key, "")
-        val trimmed = raw.trim()
-        if (trimmed.isEmpty() || isSentinelValue(trimmed)) {
+        val stripped = stripCtaSuffixes(raw)
+        val normalizedWhitespace = stripped.replace("\\s+".toRegex(), " ").trim()
+
+        if (normalizedWhitespace.isEmpty() || isSentinelValue(normalizedWhitespace)) {
             Log.w(TAG, "⚠️ Sanitizing sentinel $key: '$raw' → null")
             json.put(key, JSONObject.NULL)
             return
         }
 
-        val normalized = if (uppercase) trimmed.uppercase(Locale.US) else trimmed
+        val normalized = if (uppercase) normalizedWhitespace.uppercase(Locale.US) else normalizedWhitespace
         json.put(key, normalized)
     }
 
@@ -1835,9 +1890,10 @@ class LocalLlmOcrService(
         val originalArray = json.optJSONArray("storeNameEvidence") ?: return
         val sanitized = JSONArray()
         for (index in 0 until originalArray.length()) {
-            val entry = originalArray.optString(index, "").trim()
-            if (entry.isNotEmpty() && !isSentinelValue(entry)) {
-                sanitized.put(entry)
+            val entry = stripCtaSuffixes(originalArray.optString(index, ""))
+            val normalized = entry.replace("\\s+".toRegex(), " ").trim()
+            if (normalized.isNotEmpty() && !isSentinelValue(normalized)) {
+                sanitized.put(normalized)
             }
             if (sanitized.length() >= 3) {
                 break
@@ -1861,6 +1917,102 @@ class LocalLlmOcrService(
         }
 
         return false
+    }
+
+    private suspend fun parseWithOptionalRetry(
+        initialOutcome: LlmInferenceOutcome,
+        normalizedOcr: String,
+        rawOcrText: String,
+        prompt: String,
+        captureTimestamp: Date?,
+        structuredCandidates: Map<FieldType, List<FieldCandidate>>,
+        allowCompactRetry: Boolean,
+        progressCallback: ((LlmProgressUpdate) -> Unit)?
+    ): ParsedLlmResult {
+        var outcome = initialOutcome
+        var compactRetryAvailable = allowCompactRetry
+
+        while (true) {
+            val response = outcome.response ?: throw Exception("LLM inference timed out or returned null")
+
+            try {
+                val couponInfo = parseLlmResponseToCouponInfo(
+                    response,
+                    rawOcrText,
+                    captureTimestamp,
+                    structuredCandidates
+                )
+                return ParsedLlmResult(couponInfo, outcome)
+            } catch (schemaError: IllegalArgumentException) {
+                if (compactRetryAvailable && shouldRetryWithCompactTokens(schemaError.message)) {
+                    Log.w(TAG, "Retrying LLM parse with compact token budget due to schema error: ${schemaError.message}")
+                    compactRetryAvailable = false
+                    outcome = runLlmInferenceWithRetry(
+                        rawOcrText = normalizedOcr,
+                        prompt = prompt,
+                        progressCallback = progressCallback,
+                        maxTokensOverride = COMPACT_TOKEN_BUDGET
+                    )
+                    continue
+                }
+                throw schemaError
+            } catch (jsonError: IllegalStateException) {
+                if (compactRetryAvailable && shouldRetryWithCompactTokens(jsonError.message)) {
+                    Log.w(TAG, "Retrying LLM parse with compact token budget due to JSON error: ${jsonError.message}")
+                    compactRetryAvailable = false
+                    outcome = runLlmInferenceWithRetry(
+                        rawOcrText = normalizedOcr,
+                        prompt = prompt,
+                        progressCallback = progressCallback,
+                        maxTokensOverride = COMPACT_TOKEN_BUDGET
+                    )
+                    continue
+                }
+                throw jsonError
+            }
+        }
+    }
+
+    private fun shouldRetryWithCompactTokens(message: String?): Boolean {
+        if (message.isNullOrBlank()) return false
+        val lowered = message.lowercase(Locale.US)
+        return lowered.contains("invalid json") ||
+            lowered.contains("unterminated string") ||
+            (lowered.contains("invalid") && lowered.contains("schema"))
+    }
+
+    private fun stripCtaSuffixes(value: String): String {
+        var result = value.trim()
+        var changed: Boolean
+        do {
+            changed = false
+            for (suffix in CTA_SUFFIXES) {
+                val updated = result.removeCaseInsensitiveSuffix(" $suffix")
+                if (updated.length != result.length) {
+                    result = updated
+                    changed = true
+                } else {
+                    val alt = result.removeCaseInsensitiveSuffix(suffix)
+                    if (alt.length != result.length) {
+                        result = alt
+                        changed = true
+                    }
+                }
+            }
+        } while (changed)
+
+        result = result.replace("\\s+".toRegex(), " ").trim()
+        return result
+    }
+
+    private fun String.removeCaseInsensitiveSuffix(suffix: String): String {
+        if (suffix.isBlank() || this.length < suffix.length) return this
+        val ending = this.substring(this.length - suffix.length)
+        return if (ending.equals(suffix, ignoreCase = true)) {
+            this.substring(0, this.length - suffix.length).trimEnd()
+        } else {
+            this
+        }
     }
 
     private fun hasSavingsDetail(info: CouponInfo): Boolean {

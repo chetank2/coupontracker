@@ -1,27 +1,23 @@
-root ::= object ws
+root ::= ws object ws
 ws ::= [ \t\n\r]*
 
 object ::= "{" ws storeNamePair ws "," ws descriptionPair ws "," ws redeemPair ws "," ws expiryPair ws "," ws storeNameSourcePair ws "," ws storeNameEvidencePair ws "," ws needsAttentionPair ws "}"
 
-storeNamePair ::= "\"storeName\"" ws ":" ws nonEmptyString
-descriptionPair ::= "\"description\"" ws ":" ws nonEmptyString
-redeemPair ::= "\"redeemCode\"" ws ":" ws nonEmptyString
-expiryPair ::= "\"expiryDate\"" ws ":" ws nonEmptyString
-storeNameSourcePair ::= "\"storeNameSource\"" ws ":" ws nonEmptyString
+storeNamePair ::= "\"storeName\"" ws ":" ws string
+descriptionPair ::= "\"description\"" ws ":" ws string
+redeemPair ::= "\"redeemCode\"" ws ":" ws string
+expiryPair ::= "\"expiryDate\"" ws ":" ws string
+storeNameSourcePair ::= "\"storeNameSource\"" ws ":" ws string
 storeNameEvidencePair ::= "\"storeNameEvidence\"" ws ":" ws evidenceArray
 needsAttentionPair ::= "\"needsAttention\"" ws ":" ws boolean
 
+evidenceArray ::= "[" ws evidenceList ws "]" | "[" ws "]"
+evidenceList ::= string evidenceListRest
+evidenceListRest ::= ws "," ws string evidenceListRest | ws
+
+string ::= "\"" stringBody "\""
+stringBody ::= stringChar stringBody | stringChar
+stringChar ::= [^"\\] | escape
+escape ::= "\\\"" | "\\\\" | "\\/" | "\\b" | "\\f" | "\\n" | "\\r" | "\\t"
+
 boolean ::= "true" | "false"
-
-evidenceArray ::= "[" ws evidenceEntries? ws "]"
-evidenceEntries ::= nonEmptyString evidenceTail?
-evidenceTail ::= ws "," ws nonEmptyString evidenceFinal?
-evidenceFinal ::= ws "," ws nonEmptyString
-
-nonEmptyString ::= "\"" stringHead stringTail "\""
-stringHead ::= safeNonSpace | escapeNonWhitespace
-stringTail ::= (safeChar | escape)*
-safeNonSpace ::= [^"\\ \t\n\r]
-safeChar ::= [^"\\]
-escape ::= "\\\"" | "\\\\" | "\\/" | "\\b" | "\\f" | "\\n" | "\\r" | "\\t" | "\\'"
-escapeNonWhitespace ::= "\\\"" | "\\\\" | "\\/" | "\\b" | "\\f" | "\\'"

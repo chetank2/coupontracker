@@ -5,6 +5,7 @@ import android.util.Log
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
+import kotlin.text.Charsets
 
 object GrammarAssetSynchronizer {
 
@@ -24,6 +25,9 @@ object GrammarAssetSynchronizer {
                 input.readBytes()
             }
             val assetHash = digest(assetBytes)
+            val assetText = assetBytes.toString(Charsets.UTF_8)
+
+            GrammarValidator.validateOrThrow(assetHash, assetText)
 
             val grammarFile = File(modelDir, GRAMMAR_FILE_NAME)
             val sentinelFile = File(modelDir, SENTINEL_FILE_NAME)
@@ -38,7 +42,7 @@ object GrammarAssetSynchronizer {
                     runCatching { digest(existing) }.getOrNull()
                 }
 
-            val needsCopy = when {
+            var needsCopy = when {
                 !grammarFile.exists() -> {
                     Log.d(TAG, "Grammar file missing – will deploy new copy")
                     true
@@ -60,6 +64,11 @@ object GrammarAssetSynchronizer {
                     true
                 }
                 else -> false
+            }
+
+            if (!needsCopy && fileHash != null && !GrammarValidator.isTrustedHash(fileHash)) {
+                Log.w(TAG, "Existing grammar hash $fileHash is not trusted – refreshing grammar asset")
+                needsCopy = true
             }
 
             if (!needsCopy) {

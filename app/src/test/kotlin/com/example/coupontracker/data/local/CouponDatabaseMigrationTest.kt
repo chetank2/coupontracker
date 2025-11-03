@@ -12,6 +12,8 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeFalse
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -24,6 +26,15 @@ class CouponDatabaseMigrationTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val dbName = "migration-test-db"
+
+    @Before
+    fun skipWhenSqliteNativeMissing() {
+        val arch = System.getProperty("os.arch", "").lowercase()
+        assumeFalse(
+            "Skipping Room migration tests on unsupported architecture: $arch",
+            arch.contains("aarch64") || arch.contains("arm64")
+        )
+    }
 
     @After
     fun tearDown() {

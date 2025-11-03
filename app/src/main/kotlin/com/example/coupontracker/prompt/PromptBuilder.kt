@@ -39,6 +39,29 @@ class PromptBuilder(
             "brand",
             "discount"
         )
+
+        private val CTA_LINE_PATTERNS = listOf(
+            Regex("""^copy$""", RegexOption.IGNORE_CASE),
+            Regex("""^tap to copy$""", RegexOption.IGNORE_CASE),
+            Regex("""^(?:avail|apply|subscribe|redeem|claim|grab|shop|buy) now$""", RegexOption.IGNORE_CASE),
+            Regex("""^get deal$""", RegexOption.IGNORE_CASE)
+        )
+
+        private val CTA_SUFFIXES = listOf(
+            "copy",
+            "copy code",
+            "tap to copy",
+            "avail now",
+            "apply now",
+            "subscribe now",
+            "redeem now",
+            "claim now",
+            "grab deal",
+            "shop now",
+            "buy now",
+            "get offer",
+            "get deal"
+        )
     }
 
     fun build(rawOcrText: String, tiles: List<OcrTile> = emptyList()): Result {
@@ -72,7 +95,7 @@ class PromptBuilder(
             appendLine("All string values must be trimmed and non-empty. Never output null, \"null\", \"NULL\", \"N/A\", or empty strings.")
             appendLine("If a field is truly missing, output the literal string \"unknown\".")
             appendLine("storeName must be the merchant or brand highlighted in the coupon.")
-            appendLine("redeemCode must match the coupon code text exactly; choose the most prominent if multiple exist.")
+            appendLine("redeemCode must match the coupon code text exactly, using uppercase letters/numbers only with no spaces or CTA text like COPY.")
             appendLine("expiryDate must repeat the date format found in the coupon (for example, \"31 May, 2025\").")
             appendLine("Keep storeNameEvidence to between zero and three short snippets copied from the OCR text.")
             append("<|im_end|>")
@@ -92,6 +115,7 @@ class PromptBuilder(
             appendLine("Structure the OCR excerpt into JSON (quality $metrics). Respond with JSON only.")
             appendLine("Prioritise extracting merchant/store name, coupon description, redeem code, and expiry date from the text below.")
             appendLine("If any of those are missing in the text, write \"unknown\" but do not invent new information.")
+            appendLine("Ensure the redeemCode contains only the actual coupon code characters (no words like COPY or APPLY).")
             appendLine("OCR excerpt:")
             appendLine(truncatedOcr)
             append("<|im_end|>")
@@ -100,7 +124,7 @@ class PromptBuilder(
 
     private fun buildOcrExcerpt(processed: OcrResultProcessor.ProcessedOcrResult): String {
         val prioritized = LinkedHashSet<String>()
-        val merged = processed.mergedLines.map { it.trim() }.filter { it.isNotEmpty() }
+        val merged = processed.mergedLines.mapNotNull { sanitizeLineForPrompt(it) }
         val highlight = merged.filter { line ->
             val lower = line.lowercase(Locale.US)
             HIGH_SIGNAL_KEYWORDS.any { keyword -> lower.contains(keyword) }
@@ -123,6 +147,48 @@ class PromptBuilder(
             return builder.toString()
         }
 
-        return PromptGenerator.sanitizeOcrSnippet(processed.normalizedText, MAX_OCR_CHARS)
+        val fallbackSnippet = PromptGenerator.sanitizeOcrSnippet(processed.normalizedText, MAX_OCR_CHARS)
+        val sanitizedFallback = fallbackSnippet
+            .lines()
+            .mapNotNull { sanitizeLineForPrompt(it) }
+            .joinToString(separator = "\n")
+        return sanitizedFallback.ifBlank { fallbackSnippet.trim() }
+    }
+
+    private fun sanitizeLineForPrompt(rawLine: String): String? {
+        var line = rawLine.trim()
+        if (line.isEmpty()) return null
+        if (CTA_LINE_PATTERNS.any { it.containsMatchIn(line) }) return null
+
+        var changed: Boolean
+        do {
+            changed = false
+            for (suffix in CTA_SUFFIXES) {
+                val updated = line.removeCaseInsensitiveSuffix(" $suffix")
+                if (updated.length != line.length) {
+                    line = updated
+                    changed = true
+                } else {
+                    val alt = line.removeCaseInsensitiveSuffix(suffix)
+                    if (alt.length != line.length) {
+                        line = alt
+                        changed = true
+                    }
+                }
+            }
+        } while (changed)
+
+        val collapsed = line.replace("\\s+".toRegex(), " ").trim()
+        return collapsed.takeIf { it.isNotBlank() }
+    }
+}
+
+private fun String.removeCaseInsensitiveSuffix(suffix: String): String {
+    if (suffix.isBlank() || this.length < suffix.length) return this
+    val ending = this.substring(this.length - suffix.length)
+    return if (ending.equals(suffix, ignoreCase = true)) {
+        this.substring(0, this.length - suffix.length).trimEnd()
+    } else {
+        this
     }
 }
