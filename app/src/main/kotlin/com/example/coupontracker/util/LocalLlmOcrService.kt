@@ -119,6 +119,23 @@ class LocalLlmOcrService(
         )
 
         @VisibleForTesting
+        internal fun enforceCanonicalFieldsForTest(json: String): String {
+            return try {
+                val obj = org.json.JSONObject(json)
+                val allowed = com.example.coupontracker.llm.CouponSchemaKeys.ALLOWED_SET + "couponCode"
+                val remove = obj.keys().asSequence().filter { it !in allowed }.toList()
+                remove.forEach { obj.remove(it) }
+                if (obj.has("couponCode") && !obj.has("redeemCode")) {
+                    obj.put("redeemCode", obj.get("couponCode"))
+                }
+                obj.remove("couponCode")
+                obj.toString()
+            } catch (e: org.json.JSONException) {
+                json
+            }
+        }
+
+        @VisibleForTesting
         internal data class JsonRepairResult(
             val repairedJson: String,
             val wasTruncated: Boolean
@@ -1343,16 +1360,7 @@ class LocalLlmOcrService(
     private fun enforceCanonicalFields(jsonString: String): String {
         return try {
             val jsonObject = JSONObject(jsonString)
-            val allowedKeys = setOf(
-                "storeName",
-                "description",
-                "redeemCode",
-                "couponCode",
-                "expiryDate",
-                "storeNameSource",
-                "storeNameEvidence",
-                "needsAttention"
-            )
+            val allowedKeys = com.example.coupontracker.llm.CouponSchemaKeys.ALLOWED_SET + "couponCode"
             val keysToRemove = jsonObject.keys().asSequence()
                 .filter { it !in allowedKeys }
                 .toList()

@@ -54,4 +54,22 @@ class JniFallbackContractTest {
             assertTrue("missing canonical key `$key`", json.has(key))
         }
     }
+
+    @Test
+    fun `fallback json passes through enforceCanonicalFields unchanged`() {
+        val input = JniFallbackFixtures.CANONICAL_FALLBACK_JSON
+        val output = com.example.coupontracker.util.LocalLlmOcrService
+            .enforceCanonicalFieldsForTest(input)
+
+        // Round-trip through JSONObject to compare semantically (key order
+        // inside JSONObject is implementation-defined across platforms).
+        val before = JSONObject(input)
+        val after = JSONObject(output)
+
+        assertEquals(before.keys().asSequence().toSet(), after.keys().asSequence().toSet())
+        CouponSchemaKeys.CANONICAL_ORDER.forEach { key ->
+            assertEquals("value for `$key` should round-trip",
+                before.get(key).toString(), after.get(key).toString())
+        }
+    }
 }
