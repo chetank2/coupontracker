@@ -167,6 +167,39 @@ class ExtractionTelemetryService @Inject constructor(
         }
     }
 
+    /**
+     * Track an OCR fallback decision. `triggered=true` means Tesseract ran;
+     * `false` means MLKit alone was sufficient.
+     */
+    fun recordOcrFallback(reason: String, triggered: Boolean) {
+        telemetryScope.launch {
+            try {
+                val event = JSONObject().apply {
+                    put("event", "ocr_fallback")
+                    put("reason", reason)
+                    put("triggered", triggered)
+                }
+                Log.d(TAG, "OCR fallback: reason=$reason triggered=$triggered")
+                // Event emission to the real sink would happen here if wired.
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to record OCR fallback", e)
+            }
+        }
+    }
+
+    /**
+     * Track an OCR fallback engine failure.
+     */
+    fun recordOcrFallbackFailure(reason: String, exceptionName: String) {
+        telemetryScope.launch {
+            try {
+                Log.w(TAG, "OCR fallback failed: reason=$reason ex=$exceptionName")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to record OCR fallback failure", e)
+            }
+        }
+    }
+
     fun trackMultiCouponDetectorState(
         state: MultiCouponDetectorState,
         reason: String? = null
