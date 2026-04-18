@@ -1,0 +1,9 @@
+{
+  "storeName": "unknown",
+  "description": "SAVE NOW limited time",
+  "redeemCode": "ABC123",
+  "expiryDate": "unknown",
+  "storeNameSource": "fallback",
+  "storeNameEvidence": [],
+  "needsAttention": true
+}

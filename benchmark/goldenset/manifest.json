@@ -1,0 +1,85 @@
+[
+  {
+    "id": "ajio_flat50_clean",
+    "image": "images/ajio_flat50_clean.png",
+    "brand": "AJIO",
+    "imageSha256": "86216d2b3e1ac6d91cb379c7d5aa1d8d67b6a94c7b5bc32e163a0df4f671487a",
+    "expected": {
+      "storeName": "AJIO",
+      "description": "Flat 50% off",
+      "redeemCode": "SAVE50",
+      "expiryDate": "2026-06-01",
+      "storeNameSource": "ocr",
+      "storeNameEvidence": [
+        "AJIO"
+      ],
+      "needsAttention": false
+    }
+  },
+  {
+    "id": "flipkart_big_saving",
+    "image": "images/flipkart_big_saving.png",
+    "brand": "Flipkart",
+    "imageSha256": "8cbe34b346ddc88241a22f6f21164691aa95f14ce24a1a3418f4d69ca1104092",
+    "expected": {
+      "storeName": "Flipkart",
+      "description": "Big Saving Days",
+      "redeemCode": "FLIPBIG100",
+      "expiryDate": "2026-08-15",
+      "storeNameSource": "ocr",
+      "storeNameEvidence": [
+        "Flipkart"
+      ],
+      "needsAttention": false
+    }
+  },
+  {
+    "id": "myntra_no_code",
+    "image": "images/myntra_no_code.png",
+    "brand": "Myntra",
+    "imageSha256": "9d74e482a332c7ad8dfd7a39483da3b566456a1a3201489d37b1ced7a09a2168",
+    "expected": {
+      "storeName": "Myntra",
+      "description": "End of Reason Sale",
+      "redeemCode": "unknown",
+      "expiryDate": "2026-09-30",
+      "storeNameSource": "ocr",
+      "storeNameEvidence": [
+        "Myntra"
+      ],
+      "needsAttention": true
+    }
+  },
+  {
+    "id": "zomato_gold_cashback",
+    "image": "images/zomato_gold_cashback.png",
+    "brand": "Zomato",
+    "imageSha256": "c35eaf012c80abe7a92e296017ee066a64cd1cc9a042465cc609c2b2b7d3b0be",
+    "expected": {
+      "storeName": "Zomato",
+      "description": "Flat 20% cashback on dining",
+      "redeemCode": "ZGOLD20",
+      "expiryDate": "2026-12-31",
+      "storeNameSource": "ocr",
+      "storeNameEvidence": [
+        "Zomato Gold"
+      ],
+      "needsAttention": false
+    }
+  },
+  {
+    "id": "ambiguous_low_signal",
+    "image": "images/ambiguous_low_signal.png",
+    "brand": "unknown",
+    "imageSha256": "e16f6d585082f4d928bff5954b22a1693854ae4578572aad4b8938b93caf5a9f",
+    "expected": {
+      "storeName": "unknown",
+      "description": "SAVE NOW limited time",
+      "redeemCode": "ABC123",
+      "expiryDate": "unknown",
+      "storeNameSource": "fallback",
+      "storeNameEvidence": [],
+      "needsAttention": true
+    }
+  }
+]

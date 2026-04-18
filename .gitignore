@@ -70,3 +70,4 @@ models/
 *.dylib
 *.so
 *.dll
+benchmark/goldenset/images/_local/

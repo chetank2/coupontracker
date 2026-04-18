@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "coupon-golden-set-manifest",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "image", "brand", "expected", "imageSha256"],
+    "additionalProperties": false,
+    "properties": {
+      "id": {"type": "string", "pattern": "^[a-z0-9_-]+$"},
+      "image": {"type": "string"},
+      "brand": {"type": "string"},
+      "notes": {"type": "string"},
+      "imageSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+      "expected": {
+        "type": "object",
+        "required": ["storeName", "description", "redeemCode", "expiryDate",
+                     "storeNameSource", "storeNameEvidence", "needsAttention"],
+        "properties": {
+          "storeName": {"type": "string"},
+          "description": {"type": "string"},
+          "redeemCode": {"type": "string"},
+          "expiryDate": {"type": "string"},
+          "storeNameSource": {"type": "string"},
+          "storeNameEvidence": {"type": "array", "items": {"type": "string"}},
+          "needsAttention": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}
