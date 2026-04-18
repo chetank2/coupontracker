@@ -129,7 +129,7 @@ class LocalLlmOcrService(
         internal fun enforceCanonicalFieldsForTest(json: String): String {
             return try {
                 val obj = org.json.JSONObject(json)
-                val allowed = com.example.coupontracker.llm.CouponSchemaKeys.ALLOWED_SET + "couponCode"
+                val allowed = com.example.coupontracker.contract.CouponJsonContract.RECOGNIZED_KEYS
                 val remove = obj.keys().asSequence().filter { it !in allowed }.toList()
                 remove.forEach { obj.remove(it) }
                 if (obj.has("couponCode") && !obj.has("redeemCode")) {
@@ -1367,7 +1367,7 @@ class LocalLlmOcrService(
     private fun enforceCanonicalFields(jsonString: String): String {
         return try {
             val jsonObject = JSONObject(jsonString)
-            val allowedKeys = com.example.coupontracker.llm.CouponSchemaKeys.ALLOWED_SET + "couponCode"
+            val allowedKeys = com.example.coupontracker.contract.CouponJsonContract.RECOGNIZED_KEYS
             val keysToRemove = jsonObject.keys().asSequence()
                 .filter { it !in allowedKeys }
                 .toList()
