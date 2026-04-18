@@ -84,4 +84,29 @@ class CouponJsonContractTest {
         val report = CouponJsonContract.validate(withAlias)
         assertTrue(report.unknownKeys.isEmpty())
     }
+
+    @Test
+    fun `enforce strips unknown keys`() {
+        val input = """{"storeName":"AJIO","description":"","redeemCode":"X","expiryDate":"u","storeNameSource":"ocr","storeNameEvidence":[],"needsAttention":false,"status":"fallback"}"""
+        val cleaned = CouponJsonContract.enforce(input)
+        val report = CouponJsonContract.validate(cleaned)
+        assertTrue(report.valid)
+        assertTrue(report.unknownKeys.isEmpty())
+    }
+
+    @Test
+    fun `enforce remaps couponCode to redeemCode`() {
+        val input = """{"storeName":"AJIO","description":"","couponCode":"X","expiryDate":"u","storeNameSource":"ocr","storeNameEvidence":[],"needsAttention":true}"""
+        val cleaned = CouponJsonContract.enforce(input)
+        val report = CouponJsonContract.validate(cleaned)
+        assertTrue(report.valid)
+        assertFalse(cleaned.contains("couponCode"))
+        assertTrue(cleaned.contains("\"redeemCode\":\"X\""))
+    }
+
+    @Test
+    fun `enforce returns input unchanged on parse failure`() {
+        val garbage = "not json"
+        assertEquals(garbage, CouponJsonContract.enforce(garbage))
+    }
 }

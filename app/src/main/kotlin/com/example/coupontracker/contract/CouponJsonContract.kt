@@ -64,4 +64,25 @@ object CouponJsonContract {
             structuralErrors = errors
         )
     }
+
+    /**
+     * Strip unknown keys, remap the `couponCode` alias to `redeemCode`, and
+     * return the canonical JSON string. If the input does not parse, returns
+     * the input unchanged — callers that need strict validation should invoke
+     * `validate()` separately.
+     */
+    fun enforce(jsonText: String): String {
+        val obj = try {
+            JSONObject(jsonText)
+        } catch (e: JSONException) {
+            return jsonText
+        }
+        val removable = obj.keys().asSequence().filter { it !in RECOGNIZED_KEYS }.toList()
+        removable.forEach { obj.remove(it) }
+        if (obj.has("couponCode") && !obj.has(CouponSchemaKeys.REDEEM_CODE)) {
+            obj.put(CouponSchemaKeys.REDEEM_CODE, obj.get("couponCode"))
+        }
+        obj.remove("couponCode")
+        return obj.toString()
+    }
 }
