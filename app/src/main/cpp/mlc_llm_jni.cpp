@@ -184,19 +184,23 @@ struct StreamAggregator {
     }
 };
 
-std::string BuildFallbackResponse(const std::string& prompt, bool vision) {
+// Fallback payload returned when native inference fails.
+// Must contain ONLY the seven canonical coupon-grammar keys, in canonical
+// order, with no diagnostic metadata. Diagnostics belong in android_log output,
+// not in the JSON payload — the JVM parser treats unknown keys as contract
+// drift and we don't want to rely on key stripping to hide it.
+//
+// Any change here must be mirrored in JniFallbackFixtures.CANONICAL_FALLBACK_JSON.
+std::string BuildFallbackResponse() {
     std::ostringstream oss;
     oss << "{";
-    oss << "\"status\":\"fallback\",";
-    oss << "\"mode\":\"" << (vision ? "vision" : "text") << "\",";
-    oss << "\"promptPreview\":\"" << EscapeJson(prompt.substr(0, 120)) << "\"";
-    if (vision) {
-        oss << ",\"storeName\":\"Demo Store\"";
-        oss << ",\"description\":\"Fallback result from JNI\"";
-        oss << ",\"code\":\"DEMO50\"";
-    } else {
-        oss << ",\"rawEcho\":\"" << EscapeJson(prompt.substr(0, 160)) << "\"";
-    }
+    oss << "\"storeName\":\"unknown\",";
+    oss << "\"description\":\"unknown\",";
+    oss << "\"redeemCode\":\"unknown\",";
+    oss << "\"expiryDate\":\"unknown\",";
+    oss << "\"storeNameSource\":\"fallback\",";
+    oss << "\"storeNameEvidence\":[],";
+    oss << "\"needsAttention\":true";
     oss << "}";
     return oss.str();
 }
@@ -314,7 +318,9 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runTextInference(
     ctx->last_progress.store(1.0f);
 
     if (!success) {
-        const std::string fallback = BuildFallbackResponse(prompt, false);
+        LOGW("runTextInference: engine reported failure; returning schema-pure fallback (prompt prefix=\"%.160s\")",
+             prompt.c_str());
+        const std::string fallback = BuildFallbackResponse();
         return env->NewStringUTF(fallback.c_str());
     }
 
@@ -357,7 +363,9 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
     ctx->last_progress.store(1.0f);
 
     if (!success) {
-        const std::string fallback = BuildFallbackResponse(prompt, true);
+        LOGW("runVisionInference: engine reported failure; returning schema-pure fallback (width=%d height=%d prompt prefix=\"%.160s\")",
+             static_cast<int>(width), static_cast<int>(height), prompt.c_str());
+        const std::string fallback = BuildFallbackResponse();
         return env->NewStringUTF(fallback.c_str());
     }
 
