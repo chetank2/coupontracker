@@ -1,6 +1,7 @@
 package com.example.coupontracker.di
 
 import com.example.coupontracker.extraction.model.CouponExtractionModel
+import com.example.coupontracker.extraction.model.GemmaTextCouponModel
 import com.example.coupontracker.extraction.model.QwenTextCouponModel
 import dagger.Binds
 import dagger.Module
@@ -27,4 +28,8 @@ abstract class ModelModule {
     @Binds
     @IntoSet
     abstract fun bindQwenText(impl: QwenTextCouponModel): CouponExtractionModel
+
+    @Binds
+    @IntoSet
+    abstract fun bindGemmaText(impl: GemmaTextCouponModel): CouponExtractionModel
 }
