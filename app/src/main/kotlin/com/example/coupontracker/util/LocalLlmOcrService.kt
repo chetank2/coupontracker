@@ -118,6 +118,13 @@ class LocalLlmOcrService(
             "copy coupon"
         )
 
+        /**
+         * Static mirror of the instance `enforceCanonicalFields` happy path,
+         * used by JVM tests that cannot construct `LocalLlmOcrService`
+         * (which needs an Android Context). Unlike the instance method, the
+         * catch branch returns the input unchanged instead of applying regex
+         * repair — valid-JSON coverage only.
+         */
         @VisibleForTesting
         internal fun enforceCanonicalFieldsForTest(json: String): String {
             return try {
