@@ -23,6 +23,12 @@ class QwenTextCouponModel @Inject constructor(
 
     override val mode: ModelMode = ModelMode.TEXT_QWEN
 
+    /**
+     * `grammar` is intentionally ignored here: the MLC runtime applies the
+     * coupon grammar at init-time (loaded from bundled assets by
+     * `LlmRuntimeManager`), not per inference call. Adapters for backends
+     * that accept per-call grammar should thread the parameter through.
+     */
     override suspend fun extractFromText(
         ocrText: String,
         prompt: String,
