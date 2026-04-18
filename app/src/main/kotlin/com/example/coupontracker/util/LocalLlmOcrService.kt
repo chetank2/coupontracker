@@ -64,7 +64,8 @@ class LocalLlmOcrService(
     private val customOcrTextProvider: (suspend (Bitmap) -> String?)? = null,
     private val validatorFeedbackRecorder: ValidatorFeedbackRecorder? = null,
     private val injectedPromptBuilder: PromptBuilder? = null,
-    private val injectedTelemetryClient: TelemetryClient? = null
+    private val injectedTelemetryClient: TelemetryClient? = null,
+    private val injectedModelSelector: com.example.coupontracker.extraction.model.ModelSelector? = null
 ) {
     
     companion object {
@@ -665,7 +666,7 @@ class LocalLlmOcrService(
             var timedOut = false
             val candidateResponse = try {
                 withTimeout(INFERENCE_TIMEOUT_MS) {
-                    llmRuntime.runTextInference(rawOcrText, prompt, keepLoaded = modelPinned, maxTokensOverride = maxTokensOverride)
+                    runDefaultTextExtraction(rawOcrText, prompt, modelPinned, maxTokensOverride)
                 }
             } catch (timeout: TimeoutCancellationException) {
                 timedOut = true
@@ -734,6 +735,38 @@ class LocalLlmOcrService(
         }
 
         return LlmInferenceOutcome(response, lastMemoryUsage)
+    }
+
+    private suspend fun runDefaultTextExtraction(
+        rawOcrText: String,
+        prompt: String,
+        keepLoaded: Boolean,
+        maxTokensOverride: Int?
+    ): String? {
+        val selector = injectedModelSelector
+        if (selector == null) {
+            // No ModelSelector available (test/legacy construction) — preserve old path.
+            return llmRuntime.runTextInference(
+                rawOcrText,
+                prompt,
+                keepLoaded = keepLoaded,
+                maxTokensOverride = maxTokensOverride
+            )
+        }
+        val adapter = selector.select(com.example.coupontracker.extraction.model.ModelRole.DEFAULT)
+        return try {
+            adapter.extractFromText(
+                ocrText = rawOcrText,
+                prompt = prompt,
+                grammar = null
+            ).canonicalJson
+        } catch (e: IllegalStateException) {
+            // QwenTextCouponModel throws ISE when the underlying runtime returns null.
+            // Preserve the retry-loop's null-means-retry semantic instead of escaping
+            // the surrounding try/catch.
+            Log.w(TAG, "Default adapter produced no response", e)
+            null
+        }
     }
 
     private suspend fun delaySafe(millis: Long) {
