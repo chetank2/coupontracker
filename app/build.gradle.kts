@@ -169,6 +169,7 @@ android {
         getByName("test") {
             java.srcDir("tests")
             resources.srcDir("tests/fixtures")
+            resources.srcDir("${rootDir}/benchmark/goldenset")
         }
     }
 
