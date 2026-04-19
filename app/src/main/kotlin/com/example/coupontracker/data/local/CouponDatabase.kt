@@ -15,7 +15,7 @@ import com.example.coupontracker.data.util.CouponDedupUtils
         ExtractionFeedback::class,      // V2: Feedback & telemetry
         ValidatorFeedbackRecord::class  // Validator override & correction dataset
     ],
-    version = 13,
+    version = 14,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -723,6 +723,18 @@ abstract class CouponDatabase : RoomDatabase() {
                         updateStatement.close()
                     }
                 }
+            }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                // Schema v2: additive optional columns. All nullable TEXT so
+                // existing rows survive untouched and writes only happen when
+                // SchemaVersionFlag.isV2Enabled() is true.
+                database.execSQL("ALTER TABLE coupons ADD COLUMN redeemCodes TEXT")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN primaryRedeemCode TEXT")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN storeUrl TEXT")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN offerType TEXT")
             }
         }
     }

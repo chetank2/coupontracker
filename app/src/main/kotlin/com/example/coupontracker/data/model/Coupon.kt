@@ -48,7 +48,13 @@ data class Coupon(
     // Provenance metadata
     val needsAttention: Boolean = false,
     val storeNameSource: String? = null,
-    val storeNameEvidence: List<String> = emptyList()
+    val storeNameEvidence: List<String> = emptyList(),
+
+    // Schema v2 (additive; populated only when SchemaVersionFlag.isV2Enabled())
+    val redeemCodes: String? = null,        // JSON-encoded array of strings
+    val primaryRedeemCode: String? = null,
+    val storeUrl: String? = null,
+    val offerType: String? = null           // one of: cashback, discount, freebie, points, unknown
 ) {
     fun withAdditionalDetails(vararg details: String?): Coupon {
         val mergedDescription = DescriptionUtils.appendDetails(description, *details)
