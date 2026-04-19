@@ -2,6 +2,7 @@ package com.example.coupontracker.di
 
 import com.example.coupontracker.extraction.model.CouponExtractionModel
 import com.example.coupontracker.extraction.model.GemmaTextCouponModel
+import com.example.coupontracker.extraction.model.MiniCpmVlmCouponModel
 import com.example.coupontracker.extraction.model.QwenTextCouponModel
 import com.example.coupontracker.extraction.model.QwenVlmCouponModel
 import dagger.Binds
@@ -37,4 +38,8 @@ abstract class ModelModule {
     @Binds
     @IntoSet
     abstract fun bindQwenVlm(impl: QwenVlmCouponModel): CouponExtractionModel
+
+    @Binds
+    @IntoSet
+    abstract fun bindMiniCpmVlm(impl: MiniCpmVlmCouponModel): CouponExtractionModel
 }
