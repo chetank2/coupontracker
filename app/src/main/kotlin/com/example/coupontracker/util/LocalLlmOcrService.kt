@@ -65,7 +65,8 @@ class LocalLlmOcrService(
     private val validatorFeedbackRecorder: ValidatorFeedbackRecorder? = null,
     private val injectedPromptBuilder: PromptBuilder? = null,
     private val injectedTelemetryClient: TelemetryClient? = null,
-    private val injectedModelSelector: com.example.coupontracker.extraction.model.ModelSelector? = null
+    private val injectedModelSelector: com.example.coupontracker.extraction.model.ModelSelector? = null,
+    private val injectedVlmRetryRunner: com.example.coupontracker.extraction.retry.VlmRetryRunner? = null
 ) {
     
     companion object {
