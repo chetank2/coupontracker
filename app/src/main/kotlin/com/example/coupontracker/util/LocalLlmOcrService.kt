@@ -67,7 +67,8 @@ class LocalLlmOcrService(
     private val injectedPromptBuilder: PromptBuilder? = null,
     private val injectedTelemetryClient: TelemetryClient? = null,
     private val injectedModelSelector: com.example.coupontracker.extraction.model.ModelSelector? = null,
-    private val injectedVlmRetryRunner: com.example.coupontracker.extraction.retry.VlmRetryRunner? = null
+    private val injectedVlmRetryRunner: com.example.coupontracker.extraction.retry.VlmRetryRunner? = null,
+    private val injectedSchemaVersionFlag: com.example.coupontracker.extraction.SchemaVersionFlag? = null
 ) {
     
     companion object {
@@ -1409,7 +1410,11 @@ class LocalLlmOcrService(
     private fun enforceCanonicalFields(jsonString: String): String {
         return try {
             val jsonObject = JSONObject(jsonString)
-            val allowedKeys = com.example.coupontracker.contract.CouponJsonContract.RECOGNIZED_KEYS
+            val allowedKeys = if (injectedSchemaVersionFlag?.isV2Enabled() == true) {
+                com.example.coupontracker.contract.CouponJsonContractV2.RECOGNIZED_KEYS
+            } else {
+                com.example.coupontracker.contract.CouponJsonContract.RECOGNIZED_KEYS
+            }
             val keysToRemove = jsonObject.keys().asSequence()
                 .filter { it !in allowedKeys }
                 .toList()
