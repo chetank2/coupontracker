@@ -17,6 +17,7 @@ import com.example.coupontracker.extraction.validation.FieldValidationIssue
 import com.example.coupontracker.extraction.validation.FieldValueBundle
 import com.example.coupontracker.extraction.validation.StoreNameResolver
 import com.example.coupontracker.extraction.validation.StoreNameValidator
+import com.example.coupontracker.extraction.retry.toCanonicalJsonString
 import com.example.coupontracker.extraction.validation.ValidationEventLogger
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.LlmTelemetryService
@@ -1228,7 +1229,14 @@ class LocalLlmOcrService(
             memoryUsage = parsedResult.outcome.memoryUsageMb
             Log.d(TAG, "⏱️  Inference completed in ${inferenceElapsed / 1000}s")
 
-            val couponInfo = parsedResult.couponInfo
+            val couponInfo = maybeApplyVlmRetry(
+                couponInfo = parsedResult.couponInfo,
+                bitmap = bitmap,
+                rawOcrText = rawOcrText,
+                prompt = promptResult.prompt,
+                captureTimestamp = captureTimestamp,
+                structuredCandidates = structuredCandidates
+            )
 
             if (MockLlmResponseDetector.isMockResponse(couponInfo)) {
                 Log.w(TAG, "Mock response signature: store='${couponInfo.storeName}', code='${couponInfo.redeemCode}', desc='${couponInfo.description}'")
@@ -2005,6 +2013,39 @@ class LocalLlmOcrService(
         }
 
         return false
+    }
+
+    private suspend fun maybeApplyVlmRetry(
+        couponInfo: CouponInfo,
+        bitmap: Bitmap,
+        rawOcrText: String,
+        prompt: String,
+        captureTimestamp: Date?,
+        structuredCandidates: Map<FieldType, List<FieldCandidate>>
+    ): CouponInfo {
+        val runner = injectedVlmRetryRunner ?: return couponInfo
+        val canonicalJson = couponInfo.toCanonicalJsonString()
+        val (mergedJson, triggers) = try {
+            runner.maybeRetry(canonicalJson, bitmap, rawOcrText, prompt)
+        } catch (e: Exception) {
+            Log.w(TAG, "VlmRetryRunner threw; preserving default extraction", e)
+            return couponInfo
+        }
+        if (triggers.isEmpty() || mergedJson == canonicalJson) {
+            return couponInfo
+        }
+        Log.i(TAG, "VLM retry produced merged payload; triggers=$triggers")
+        return try {
+            parseLlmResponseToCouponInfo(
+                mergedJson,
+                rawOcrText,
+                captureTimestamp,
+                structuredCandidates
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Re-parse of VLM-merged JSON failed; preserving default extraction", e)
+            couponInfo
+        }
     }
 
     private suspend fun parseWithOptionalRetry(
