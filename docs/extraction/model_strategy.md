@@ -52,3 +52,30 @@ multi-region extraction through `CouponRegionPipeline`.
   applies dedup + the `MAX_COUPONS_PER_SCREENSHOT` cap), maps each
   canonical JSON to a `Coupon` via `JsonToCouponConverter`. Falls back to
   the per-region loop if the pipeline yields zero coupons.
+
+## Schema-v2 feature flag
+
+`SchemaVersionFlag` (`com.example.coupontracker.extraction`) controls
+end-to-end v2 enablement. Default: `false`.
+
+When enabled (`schemaVersionFlag.setV2Enabled(true)`):
+
+- `PromptBuilder` lists v2 fields as optional and relaxes "no extra keys".
+- `LocalLlmOcrService.enforceCanonicalFields` permits v2 keys via
+  `CouponJsonContract.enforceWithV2`.
+- `parseLlmResponseToCouponInfo` populates `category`, `paymentMethod`,
+  `minimumPurchase`, `maximumDiscount` onto `CouponInfo` via `applyV2Fields`.
+- New `Coupon` columns from `MIGRATION_13_14` (`redeemCodes`,
+  `primaryRedeemCode`, `storeUrl`, `offerType`) are available for write
+  once an upstream consumer maps them — that mapping is out of this
+  plan's scope.
+
+Disable to roll back instantly; v2 fields persist on rows already written
+but the flag-off path stops emitting them.
+
+PromptBuilder receives the flag through its third constructor parameter
+(default `null`). `LocalLlmOcrService` does not yet thread its injected
+flag into the PromptBuilder it constructs — so v2-aware prompting only
+fires today when a caller constructs PromptBuilder directly with the
+flag. Wiring through `LocalLlmOcrService.preparePrompt` is a small
+follow-up.
