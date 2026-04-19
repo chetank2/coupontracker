@@ -9,6 +9,9 @@ import androidx.work.Configuration
 import androidx.work.WorkManager
 import com.example.coupontracker.R
 import com.example.coupontracker.analytics.StoreNameMetricsTracker
+import com.example.coupontracker.extraction.model.ModelStrategyConfig
+import com.example.coupontracker.runtime.DeviceCapabilityProbe
+import com.example.coupontracker.runtime.DeviceTierPolicy
 import com.example.coupontracker.util.ExtractionConfig
 import com.example.coupontracker.feedback.FeedbackFeatureToggle
 import com.example.coupontracker.worker.OfflineRetrainingWorker
@@ -22,6 +25,12 @@ class CouponTrackerApplication : Application(), Configuration.Provider {
 
     @Inject
     lateinit var feedbackFeatureToggle: FeedbackFeatureToggle
+
+    @Inject
+    lateinit var deviceCapabilityProbe: DeviceCapabilityProbe
+
+    @Inject
+    lateinit var modelStrategyConfig: ModelStrategyConfig
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -43,6 +52,8 @@ class CouponTrackerApplication : Application(), Configuration.Provider {
             // Initialize WorkManager-backed tasks
             initializeWorkers()
 
+            applyDeviceTier()
+
             Log.d("CouponTracker", "Application onCreate completed successfully")
         } catch (e: Exception) {
             Log.e("CouponTracker", "Error in Application onCreate", e)
@@ -62,6 +73,19 @@ class CouponTrackerApplication : Application(), Configuration.Provider {
             }
         } catch (e: Exception) {
             Log.e("CouponTracker", "Error scheduling reminder worker", e)
+        }
+    }
+
+    private fun applyDeviceTier() {
+        try {
+            val capability = deviceCapabilityProbe.probe()
+            DeviceTierPolicy.apply(capability, modelStrategyConfig)
+            Log.i(
+                "CouponTracker",
+                "Device tier applied: ${DeviceTierPolicy.tierFor(capability)} capability=$capability"
+            )
+        } catch (e: Exception) {
+            Log.w("CouponTracker", "Failed to apply device tier; using strategy defaults", e)
         }
     }
 
