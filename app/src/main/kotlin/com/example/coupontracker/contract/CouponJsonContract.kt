@@ -85,4 +85,25 @@ object CouponJsonContract {
         obj.remove("couponCode")
         return obj.toString()
     }
+
+    /**
+     * Strip unknown keys against the v2 allowlist (v1 keys + v2 optional
+     * keys + couponCode alias). Same alias remap as `enforce`. Used only
+     * when SchemaVersionFlag.isV2Enabled() is true; otherwise call `enforce`.
+     */
+    fun enforceWithV2(jsonText: String): String {
+        val obj = try {
+            JSONObject(jsonText)
+        } catch (e: JSONException) {
+            return jsonText
+        }
+        val allowed = CouponJsonContractV2.RECOGNIZED_KEYS
+        val removable = obj.keys().asSequence().filter { it !in allowed }.toList()
+        removable.forEach { obj.remove(it) }
+        if (obj.has("couponCode") && !obj.has(CouponSchemaKeys.REDEEM_CODE)) {
+            obj.put(CouponSchemaKeys.REDEEM_CODE, obj.get("couponCode"))
+        }
+        obj.remove("couponCode")
+        return obj.toString()
+    }
 }
