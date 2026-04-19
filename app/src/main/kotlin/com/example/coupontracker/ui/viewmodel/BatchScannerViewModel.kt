@@ -41,7 +41,9 @@ class BatchScannerViewModel @Inject constructor(
     private val localLlmOcrService: com.example.coupontracker.util.LocalLlmOcrService,  // V2: LLM service
     private val universalExtractionService: com.example.coupontracker.universal.UniversalExtractionService,  // V2: Universal extraction
     private val analyticsTracker: AnalyticsTracker,
-    private val telemetryService: ExtractionTelemetryService
+    private val telemetryService: ExtractionTelemetryService,
+    private val regionPipeline: com.example.coupontracker.extraction.multi.CouponRegionPipeline,
+    private val batchPipelineFlag: com.example.coupontracker.extraction.multi.BatchPipelineFeatureFlag
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(BatchScannerUiState())
