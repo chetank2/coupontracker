@@ -26,4 +26,27 @@ object CouponSchemaKeys {
     )
 
     val ALLOWED_SET: Set<String> = CANONICAL_ORDER.toSet()
+
+    // --- Schema v2 (additive) ---
+    const val REDEEM_CODES = "redeemCodes"
+    const val PRIMARY_REDEEM_CODE = "primaryRedeemCode"
+    const val CATEGORY = "category"
+    const val STORE_URL = "storeUrl"
+    const val PAYMENT_METHOD = "paymentMethod"
+    const val MINIMUM_PURCHASE = "minimumPurchase"
+    const val MAXIMUM_DISCOUNT = "maximumDiscount"
+    const val OFFER_TYPE = "offerType"
+
+    val V2_OPTIONAL_KEYS: Set<String> = setOf(
+        REDEEM_CODES,
+        PRIMARY_REDEEM_CODE,
+        CATEGORY,
+        STORE_URL,
+        PAYMENT_METHOD,
+        MINIMUM_PURCHASE,
+        MAXIMUM_DISCOUNT,
+        OFFER_TYPE
+    )
+
+    val ALLOWED_SET_V2: Set<String> = ALLOWED_SET + V2_OPTIONAL_KEYS
 }
