@@ -25,9 +25,9 @@ If all three key fields are known after merge, `needsAttention` clears to false.
 
 | mode | adapter | runtime | status |
 |---|---|---|---|
-| VLM_QWEN | QwenVlmCouponModel | MLC LLM (existing) | shipped |
-| VLM_MINICPM | MiniCpmVlmCouponModel | n/a | not yet built — needs concrete MiniCpmRuntime |
-| VLM_GEMMA | GemmaVisionCouponModel | MediaPipe GenAI | not yet built — needs API verification |
+| VLM_QWEN | QwenVlmCouponModel | MLC LLM `runInference` | shipped |
+| VLM_MINICPM | MiniCpmVlmCouponModel | MLC LLM `runInference` (legacy MiniCPM weights when loaded) | shipped |
+| VLM_GEMMA | GemmaVisionCouponModel | MediaPipe GenAI multimodal session | shipped (pinned to tasks-genai 0.10.14 API) |
 
 Select which candidate runs in the retry slot with:
 ```
@@ -36,19 +36,32 @@ modelStrategyConfig.setModeFor(ModelRole.LOW_CONFIDENCE_RETRY, ModelMode.VLM_QWE
 
 ## Pipeline integration status
 
-Plan 5 shipped the building blocks (`VlmRetryEvaluator`, `VlmMerger`,
-`QwenVlmCouponModel`) but did NOT wire the retry into
-`LocalLlmOcrService.processCouponImage`. That integration is a follow-up.
-The pieces compose like this:
+`VlmRetryRunner` (in `extraction.retry`) wraps the evaluator + selector +
+merger into a single Hilt-injectable entry point. It is fully unit-tested
+(see `VlmRetryRunnerTest`) but not yet called from
+`LocalLlmOcrService.processCouponImage`. To adopt:
+
+1. Field-inject `vlmRetryRunner: VlmRetryRunner` into `LocalLlmOcrService`.
+2. After `parseWithOptionalRetry` produces a `CouponInfo` (around line 1224
+   in `processCouponImageTyped`), wrap with:
 
 ```kotlin
-val triggers = vlmRetryEvaluator.evaluate(canonicalObj, ocrText, ocrSpansCount)
-if (triggers.isNotEmpty()) {
-    val vlmAdapter = modelSelector.select(ModelRole.LOW_CONFIDENCE_RETRY)
-    val vlmJson = vlmAdapter.extractFromImage(bitmap, ocrText, prompt).canonicalJson
-    canonicalObj = VlmMerger.merge(canonicalObj, JSONObject(vlmJson), ocrText)
-}
+val (mergedJson, triggers) = vlmRetryRunner.maybeRetry(
+    canonicalJson = couponInfo.toCanonicalJsonString(),
+    bitmap = bitmap,
+    ocrText = rawOcrText,
+    prompt = promptResult.prompt
+)
+val finalCouponInfo = if (triggers.isEmpty()) couponInfo
+    else parseLlmResponseToCouponInfo(mergedJson, rawOcrText, captureTimestamp, structuredCandidates)
 ```
+
+3. Implement `CouponInfo.toCanonicalJsonString()` as a simple
+   `JSONObject` round-trip emitting the seven canonical keys.
+
+The runner returns the original JSON unchanged on any internal failure
+(unconfigured adapter, VLM exception, invalid VLM JSON), so the wiring is
+fail-safe: production behaviour cannot regress because of retry plumbing.
 
 ## Shipping a candidate as retry
 
