@@ -348,7 +348,17 @@ class LocalLlmOcrService(
         val prompt: PromptBuilder.Result
     )
 
-    private fun CouponInfo.toCanonicalContract(): CouponInfo {
+    private fun CouponInfo.toCanonicalContract(includeV2: Boolean = false): CouponInfo {
+        if (includeV2) {
+            // v2: preserve category, paymentMethod, minimumPurchase, maximumDiscount;
+            // null only the truly-non-v2 fields.
+            return copy(
+                rating = null,
+                status = null,
+                platformType = null,
+                usageLimit = null
+            )
+        }
         return copy(
             category = null,
             rating = null,
@@ -358,6 +368,24 @@ class LocalLlmOcrService(
             paymentMethod = null,
             platformType = null,
             usageLimit = null
+        )
+    }
+
+    private fun applyV2Fields(
+        info: CouponInfo,
+        json: JSONObject
+    ): CouponInfo {
+        return info.copy(
+            category = json.optString(com.example.coupontracker.llm.CouponSchemaKeys.CATEGORY)
+                .takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) },
+            paymentMethod = json.optString(com.example.coupontracker.llm.CouponSchemaKeys.PAYMENT_METHOD)
+                .takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) },
+            minimumPurchase = json.optString(com.example.coupontracker.llm.CouponSchemaKeys.MINIMUM_PURCHASE)
+                .takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) }
+                ?.toDoubleOrNull(),
+            maximumDiscount = json.optString(com.example.coupontracker.llm.CouponSchemaKeys.MAXIMUM_DISCOUNT)
+                .takeIf { it.isNotBlank() && !it.equals("unknown", ignoreCase = true) }
+                ?.toDoubleOrNull()
         )
     }
 
@@ -1660,7 +1688,7 @@ class LocalLlmOcrService(
             val resolvedExpiry = parsedExpiryDate
                 ?: resolveRelativeExpiry(rawOcrText, description, captureTimestamp)
 
-            return CouponInfo(
+            val baseInfo = CouponInfo(
                 storeName = finalStoreName,
                 description = description,
                 expiryDate = resolvedExpiry,
@@ -1671,6 +1699,11 @@ class LocalLlmOcrService(
                 storeNameEvidence = storeEvidence,
                 minimumPurchase = null
             )
+            return if (injectedSchemaVersionFlag?.isV2Enabled() == true) {
+                applyV2Fields(baseInfo, baseJson)
+            } else {
+                baseInfo
+            }
 
         } catch (e: JSONException) {
             Log.e(TAG, "Failed to parse LLM JSON response: $response", e)
