@@ -3,6 +3,7 @@ package com.example.coupontracker.di
 import com.example.coupontracker.extraction.model.CouponExtractionModel
 import com.example.coupontracker.extraction.model.GemmaTextCouponModel
 import com.example.coupontracker.extraction.model.QwenTextCouponModel
+import com.example.coupontracker.extraction.model.QwenVlmCouponModel
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -32,4 +33,8 @@ abstract class ModelModule {
     @Binds
     @IntoSet
     abstract fun bindGemmaText(impl: GemmaTextCouponModel): CouponExtractionModel
+
+    @Binds
+    @IntoSet
+    abstract fun bindQwenVlm(impl: QwenVlmCouponModel): CouponExtractionModel
 }
