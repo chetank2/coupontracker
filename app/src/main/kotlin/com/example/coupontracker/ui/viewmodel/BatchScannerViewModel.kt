@@ -1213,42 +1213,17 @@ class BatchScannerViewModel @Inject constructor(
             }
             
             // Step 4: Extract each detected coupon region
-            val extractedCoupons = mutableListOf<Coupon>()
-            
-            for ((regionIndex, region) in couponRegions.withIndex()) {
-                try {
-                    Log.d(TAG, "Extracting coupon region ${regionIndex + 1}/${couponRegions.size}")
-                    
-                    // Crop bitmap to region
-                    val regionBitmap = cropBitmapToRegion(bitmap, region.boundingBox)
-                    
-                    if (regionBitmap == null) {
-                        Log.w(TAG, "Failed to crop region ${regionIndex + 1}, skipping")
-                        continue
-                    }
-                    
-                    bitmapManager.trackBitmap(regionBitmap)
-                    
-                    try {
-                        // Extract coupon from cropped region
-                        val coupon = extractCouponFromRegion(
-                            regionBitmap = regionBitmap,
-                            region = region,
-                            strategy = strategy,
-                            uri = uri
-                        )
-                        
-                        extractedCoupons.add(coupon)
-                        Log.d(TAG, "Successfully extracted coupon ${regionIndex + 1}: store='${coupon.storeName}', code='${coupon.redeemCode}'")
-                        
-                    } finally {
-                        bitmapManager.releaseBitmap(regionBitmap)
-                    }
-                    
-                } catch (e: Exception) {
-                    Log.e(TAG, "Error extracting region ${regionIndex + 1}", e)
-                    // Continue with next region
+            val extractedCoupons: List<Coupon> = if (batchPipelineFlag.isEnabled()) {
+                val viaPipeline = extractViaCouponRegionPipeline(bitmap, couponRegions, uri)
+                if (viaPipeline.isNotEmpty()) {
+                    Log.d(TAG, "Pipeline extraction yielded ${viaPipeline.size} coupon(s)")
+                    viaPipeline
+                } else {
+                    Log.w(TAG, "Pipeline yielded zero coupons; falling back to per-region loop")
+                    extractCouponsViaPerRegionLoop(bitmap, couponRegions, uri, strategy)
                 }
+            } else {
+                extractCouponsViaPerRegionLoop(bitmap, couponRegions, uri, strategy)
             }
             
             // If no coupons extracted from regions, fallback to single coupon
@@ -1337,7 +1312,75 @@ class BatchScannerViewModel @Inject constructor(
         // Fallback: extract using standard strategy path
         return extractSingleCoupon(uri, regionBitmap, strategy)
     }
-    
+
+    /**
+     * Original per-region extraction loop (lifted into a method so the flag
+     * branch in `detectMultipleCoupons` is readable). Behaviour byte-equivalent
+     * to the pre-rewire code.
+     */
+    private suspend fun extractCouponsViaPerRegionLoop(
+        bitmap: android.graphics.Bitmap,
+        couponRegions: List<com.example.coupontracker.ml.HybridCouponDetector.CouponRegion>,
+        uri: android.net.Uri,
+        strategy: com.example.coupontracker.util.ExtractionStrategy
+    ): List<com.example.coupontracker.data.model.Coupon> {
+        val extractedCoupons = mutableListOf<com.example.coupontracker.data.model.Coupon>()
+        for ((regionIndex, region) in couponRegions.withIndex()) {
+            try {
+                Log.d(TAG, "Extracting coupon region ${regionIndex + 1}/${couponRegions.size}")
+                val regionBitmap = cropBitmapToRegion(bitmap, region.boundingBox)
+                if (regionBitmap == null) {
+                    Log.w(TAG, "Failed to crop region ${regionIndex + 1}, skipping")
+                    continue
+                }
+                bitmapManager.trackBitmap(regionBitmap)
+                try {
+                    val coupon = extractCouponFromRegion(
+                        regionBitmap = regionBitmap,
+                        region = region,
+                        strategy = strategy,
+                        uri = uri
+                    )
+                    extractedCoupons.add(coupon)
+                    Log.d(TAG, "Successfully extracted coupon ${regionIndex + 1}: store='${coupon.storeName}', code='${coupon.redeemCode}'")
+                } finally {
+                    bitmapManager.releaseBitmap(regionBitmap)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error extracting region ${regionIndex + 1}", e)
+            }
+        }
+        return extractedCoupons
+    }
+
+    /**
+     * Pipeline-backed batch extraction. Crops each detected region, runs
+     * the unified per-region OCR + extraction pipeline, then converts each
+     * canonical JSON result into a `Coupon`. Dedup + cap are applied by
+     * the pipeline.
+     */
+    private suspend fun extractViaCouponRegionPipeline(
+        bitmap: android.graphics.Bitmap,
+        couponRegions: List<com.example.coupontracker.ml.HybridCouponDetector.CouponRegion>,
+        uri: android.net.Uri
+    ): List<com.example.coupontracker.data.model.Coupon> {
+        val crops = mutableListOf<android.graphics.Bitmap>()
+        for (region in couponRegions) {
+            val crop = cropBitmapToRegion(bitmap, region.boundingBox) ?: continue
+            bitmapManager.trackBitmap(crop)
+            crops += crop
+        }
+        if (crops.isEmpty()) return emptyList()
+        return try {
+            val canonicalJsons = regionPipeline.extractFromCrops(crops)
+            canonicalJsons.map { json ->
+                com.example.coupontracker.extraction.multi.JsonToCouponConverter.convert(json, uri)
+            }
+        } finally {
+            crops.forEach { bitmapManager.releaseBitmap(it) }
+        }
+    }
+
     /**
      * Crop bitmap to region bounds
      */
