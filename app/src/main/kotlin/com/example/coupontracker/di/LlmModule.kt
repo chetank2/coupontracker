@@ -68,7 +68,8 @@ object LlmModule {
         llmRuntimeManager: LlmRuntimeManager,
         validatorFeedbackRecorder: ValidatorFeedbackRecorder,
         telemetryClient: TelemetryClient,
-        modelSelector: com.example.coupontracker.extraction.model.ModelSelector
+        modelSelector: com.example.coupontracker.extraction.model.ModelSelector,
+        vlmRetryRunner: com.example.coupontracker.extraction.retry.VlmRetryRunner
     ): LocalLlmOcrService {
         return LocalLlmOcrService(
             context = context,
@@ -76,7 +77,8 @@ object LlmModule {
             injectedLlmRuntimeManager = llmRuntimeManager,
             validatorFeedbackRecorder = validatorFeedbackRecorder,
             injectedTelemetryClient = telemetryClient,
-            injectedModelSelector = modelSelector
+            injectedModelSelector = modelSelector,
+            injectedVlmRetryRunner = vlmRetryRunner
         )
     }
 
