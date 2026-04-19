@@ -35,3 +35,20 @@ in one place.
 4. `ModelSelectorInstrumentedTest` will fail if the new adapter conflicts
    (duplicate mode) or if a role resolves to an unregistered mode in prod
    configuration.
+
+## Batch pipeline feature flag
+
+`BatchPipelineFeatureFlag` (`com.example.coupontracker.extraction.multi`)
+controls whether `BatchScannerViewModel.detectMultipleCoupons` routes
+multi-region extraction through `CouponRegionPipeline`.
+
+- Default: `false` (existing per-region loop runs).
+- Enable in a debug build with:
+  ```kotlin
+  batchPipelineFlag.setEnabled(true)
+  ```
+  Persists in `SharedPreferences("coupon_batch_pipeline_flag")`.
+- The pipeline path: crops every region, runs `extractFromCrops` (which
+  applies dedup + the `MAX_COUPONS_PER_SCREENSHOT` cap), maps each
+  canonical JSON to a `Coupon` via `JsonToCouponConverter`. Falls back to
+  the per-region loop if the pipeline yields zero coupons.
