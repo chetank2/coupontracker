@@ -1,0 +1,120 @@
+[
+  {
+    "id": "two_coupon_ajio_flipkart",
+    "image": "images/two_coupon_ajio_flipkart.png",
+    "imageSha256": "946b263799a363b3f9d41d568815509c26377cf48a077a997b3bb06890e55fd7",
+    "expected": [
+      {
+        "storeName": "AJIO",
+        "description": "Flat 50% off",
+        "redeemCode": "SAVE50",
+        "expiryDate": "2026-06-01",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "AJIO"
+        ],
+        "needsAttention": false
+      },
+      {
+        "storeName": "Flipkart",
+        "description": "Big Saving",
+        "redeemCode": "FLIP100",
+        "expiryDate": "2026-08-15",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "Flipkart"
+        ],
+        "needsAttention": false
+      }
+    ]
+  },
+  {
+    "id": "three_coupon_mixed",
+    "image": "images/three_coupon_mixed.png",
+    "imageSha256": "2cf609415181943bb28f6bef2b6aa06a81cf3ea29ca4d299369cab78c31a6b15",
+    "expected": [
+      {
+        "storeName": "Myntra",
+        "description": "End of Reason Sale",
+        "redeemCode": "MYNTRA20",
+        "expiryDate": "2026-08-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "Myntra"
+        ],
+        "needsAttention": false
+      },
+      {
+        "storeName": "Zomato",
+        "description": "20% cashback",
+        "redeemCode": "ZGOLD20",
+        "expiryDate": "2026-12-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "Zomato Gold"
+        ],
+        "needsAttention": false
+      },
+      {
+        "storeName": "Swiggy",
+        "description": "Free delivery",
+        "redeemCode": "SWIGGYFREE",
+        "expiryDate": "2026-09-30",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "Swiggy"
+        ],
+        "needsAttention": false
+      }
+    ]
+  },
+  {
+    "id": "four_coupon_diverse",
+    "image": "images/four_coupon_diverse.png",
+    "imageSha256": "33774149ca38f50d0c8224be3411b12a70ffa72cbf247f9fb22538526947e1b6",
+    "expected": [
+      {
+        "storeName": "Amazon",
+        "description": "10% off electronics",
+        "redeemCode": "AMZ10ELEC",
+        "expiryDate": "2026-11-30",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "Amazon"
+        ],
+        "needsAttention": false
+      },
+      {
+        "storeName": "CRED",
+        "description": "Pay bill cashback",
+        "redeemCode": "CREDPAY",
+        "expiryDate": "2026-10-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "CRED"
+        ],
+        "needsAttention": false
+      },
+      {
+        "storeName": "PhonePe",
+        "description": "Wallet topup",
+        "redeemCode": "PPWALLET",
+        "expiryDate": "2026-12-01",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "PhonePe"
+        ],
+        "needsAttention": false
+      },
+      {
+        "storeName": "unknown",
+        "description": "Generic offer no brand limited time",
+        "redeemCode": "GEN50",
+        "expiryDate": "unknown",
+        "storeNameSource": "fallback",
+        "storeNameEvidence": [],
+        "needsAttention": true
+      }
+    ]
+  }
+]

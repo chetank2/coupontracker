@@ -1,0 +1,35 @@
+[
+  {
+    "storeName": "Myntra",
+    "description": "End of Reason Sale",
+    "redeemCode": "MYNTRA20",
+    "expiryDate": "2026-08-31",
+    "storeNameSource": "ocr",
+    "storeNameEvidence": [
+      "Myntra"
+    ],
+    "needsAttention": false
+  },
+  {
+    "storeName": "Zomato",
+    "description": "20% cashback",
+    "redeemCode": "ZGOLD20",
+    "expiryDate": "2026-12-31",
+    "storeNameSource": "ocr",
+    "storeNameEvidence": [
+      "Zomato Gold"
+    ],
+    "needsAttention": false
+  },
+  {
+    "storeName": "Swiggy",
+    "description": "Free delivery",
+    "redeemCode": "SWIGGYFREE",
+    "expiryDate": "2026-09-30",
+    "storeNameSource": "ocr",
+    "storeNameEvidence": [
+      "Swiggy"
+    ],
+    "needsAttention": false
+  }
+]

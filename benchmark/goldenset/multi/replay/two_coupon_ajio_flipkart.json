@@ -1,0 +1,24 @@
+[
+  {
+    "storeName": "AJIO",
+    "description": "Flat 50% off",
+    "redeemCode": "SAVE50",
+    "expiryDate": "2026-06-01",
+    "storeNameSource": "ocr",
+    "storeNameEvidence": [
+      "AJIO"
+    ],
+    "needsAttention": false
+  },
+  {
+    "storeName": "Flipkart",
+    "description": "Big Saving",
+    "redeemCode": "FLIP100",
+    "expiryDate": "2026-08-15",
+    "storeNameSource": "ocr",
+    "storeNameEvidence": [
+      "Flipkart"
+    ],
+    "needsAttention": false
+  }
+]

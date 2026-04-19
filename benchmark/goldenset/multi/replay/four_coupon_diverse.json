@@ -1,0 +1,44 @@
+[
+  {
+    "storeName": "Amazon",
+    "description": "10% off electronics",
+    "redeemCode": "AMZ10ELEC",
+    "expiryDate": "2026-11-30",
+    "storeNameSource": "ocr",
+    "storeNameEvidence": [
+      "Amazon"
+    ],
+    "needsAttention": false
+  },
+  {
+    "storeName": "CRED",
+    "description": "Pay bill cashback",
+    "redeemCode": "CREDPAY",
+    "expiryDate": "2026-10-31",
+    "storeNameSource": "ocr",
+    "storeNameEvidence": [
+      "CRED"
+    ],
+    "needsAttention": false
+  },
+  {
+    "storeName": "PhonePe",
+    "description": "Wallet topup",
+    "redeemCode": "PPWALLET",
+    "expiryDate": "2026-12-01",
+    "storeNameSource": "ocr",
+    "storeNameEvidence": [
+      "PhonePe"
+    ],
+    "needsAttention": false
+  },
+  {
+    "storeName": "unknown",
+    "description": "Generic offer no brand limited time",
+    "redeemCode": "GEN50",
+    "expiryDate": "unknown",
+    "storeNameSource": "fallback",
+    "storeNameEvidence": [],
+    "needsAttention": true
+  }
+]
