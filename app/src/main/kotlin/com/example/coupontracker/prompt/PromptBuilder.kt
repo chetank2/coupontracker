@@ -12,7 +12,8 @@ import java.util.Locale
  */
 class PromptBuilder(
     private val schema: Schema = CouponSchema.SCHEMA,
-    private val ocrResultProcessor: OcrResultProcessor = OcrResultProcessor()
+    private val ocrResultProcessor: OcrResultProcessor = OcrResultProcessor(),
+    private val schemaVersionFlag: com.example.coupontracker.extraction.SchemaVersionFlag? = null
 ) {
 
     data class Result(
@@ -88,10 +89,24 @@ class PromptBuilder(
             appendLine("<|im_start|>system")
             appendLine("You return exactly one compact JSON object and nothing else.")
             appendLine("Required keys: $requiredFields")
-            if (optionalFields.isNotBlank()) {
-                appendLine("Optional keys (use the string \"unknown\" when unavailable): $optionalFields")
+            val v2Enabled = schemaVersionFlag?.isV2Enabled() == true
+            val effectiveOptional = if (v2Enabled) {
+                listOfNotNull(
+                    optionalFields.takeIf { it.isNotBlank() },
+                    "category, storeUrl, paymentMethod, minimumPurchase, maximumDiscount, " +
+                        "redeemCodes, primaryRedeemCode, offerType"
+                ).joinToString(", ")
+            } else {
+                optionalFields
             }
-            appendLine("Rules: no markdown, no comments, no extra keys, preserve coupon text verbatim.")
+            if (effectiveOptional.isNotBlank()) {
+                appendLine("Optional keys (use the string \"unknown\" when unavailable): $effectiveOptional")
+            }
+            val extraKeysClause = if (v2Enabled)
+                "no markdown, no comments, preserve coupon text verbatim"
+            else
+                "no markdown, no comments, no extra keys, preserve coupon text verbatim"
+            appendLine("Rules: $extraKeysClause.")
             appendLine("All string values must be trimmed and non-empty. Never output null, \"null\", \"NULL\", \"N/A\", or empty strings.")
             appendLine("If a field is truly missing, output the literal string \"unknown\".")
             appendLine("storeName must be the merchant or brand highlighted in the coupon.")
