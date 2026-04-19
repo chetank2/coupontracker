@@ -1,0 +1,11 @@
+{
+  "storeName": "Myntra",
+  "description": "End of Reason Sale",
+  "redeemCode": "unknown",
+  "expiryDate": "2026-09-30",
+  "storeNameSource": "ocr",
+  "storeNameEvidence": [
+    "Myntra"
+  ],
+  "needsAttention": true
+}

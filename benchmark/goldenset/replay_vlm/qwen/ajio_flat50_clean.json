@@ -1,0 +1,11 @@
+{
+  "storeName": "AJIO",
+  "description": "Flat 50% off",
+  "redeemCode": "SAVE50",
+  "expiryDate": "2026-06-01",
+  "storeNameSource": "ocr",
+  "storeNameEvidence": [
+    "AJIO"
+  ],
+  "needsAttention": false
+}

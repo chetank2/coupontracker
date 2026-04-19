@@ -1,0 +1,11 @@
+{
+  "storeName": "Flipkart",
+  "description": "Big Saving Days",
+  "redeemCode": "FLIPBIG100",
+  "expiryDate": "2026-08-15",
+  "storeNameSource": "ocr",
+  "storeNameEvidence": [
+    "Flipkart"
+  ],
+  "needsAttention": false
+}

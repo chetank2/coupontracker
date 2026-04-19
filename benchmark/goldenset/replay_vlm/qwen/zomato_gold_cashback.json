@@ -1,0 +1,11 @@
+{
+  "storeName": "Zomato",
+  "description": "Flat 20% cashback on dining",
+  "redeemCode": "ZGOLD20",
+  "expiryDate": "2026-12-31",
+  "storeNameSource": "ocr",
+  "storeNameEvidence": [
+    "Zomato Gold"
+  ],
+  "needsAttention": false
+}
