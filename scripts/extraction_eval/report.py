@@ -7,6 +7,7 @@ import json
 import shutil
 
 from extraction_eval.diff import FieldDiff
+from extraction_eval.baseline import per_field_accuracy, ChangedField
 
 @dataclass(frozen=True)
 class SampleResult:
@@ -37,7 +38,7 @@ def _sample_to_dict(s: SampleResult) -> dict:
 def _run_to_dict(r: RunResult) -> dict:
     return {"timestamp": r.timestamp, "run_meta": r.run_meta, "samples": [_sample_to_dict(s) for s in r.samples]}
 
-def _render_md(r: RunResult) -> str:
+def _render_md(r: RunResult, *, eval_root: Path | None = None) -> str:
     lines = [
         f"# Extraction Eval — {r.timestamp}",
         "",
@@ -51,6 +52,39 @@ def _render_md(r: RunResult) -> str:
     for s in r.samples:
         failed = [d.field for d in s.field_diff if d.status.value != "match"]
         lines.append(f"| {s.id} | {'✅' if s.passed else '❌'} | {s.latency_ms} | {', '.join(failed) if failed else '-'} |")
+
+    # Per-field accuracy section
+    samples_as_dicts = [
+        {"field_diff": [{"field": d.field, "status": d.status.value} for d in s.field_diff]}
+        for s in r.samples
+    ]
+    acc = per_field_accuracy(samples_as_dicts)
+    lines += ["", "## Per-field accuracy", "", "| Field | Pass | Total |", "|---|---|---|"]
+    for field, (passed_count, total) in sorted(acc.items()):
+        lines.append(f"| {field} | {passed_count} | {total} |")
+
+    # Changed since baseline section (only if baseline.json exists)
+    if eval_root is not None:
+        baseline_path = eval_root / "baseline.json"
+        if baseline_path.exists():
+            base = {s["id"]: s for s in json.loads(baseline_path.read_text())["samples"]}
+            changes: list[ChangedField] = []
+            for s in r.samples:
+                if s.id not in base:
+                    continue
+                old = base[s.id].get("parsed", {})
+                new = s.parsed
+                for k in set(old) | set(new):
+                    if old.get(k) != new.get(k):
+                        changes.append(ChangedField(s.id, k, old.get(k), new.get(k)))
+            lines += ["", "## Changed since baseline", ""]
+            if changes:
+                lines += ["| Sample | Field | Baseline | Latest |", "|---|---|---|---|"]
+                for c in changes:
+                    lines.append(f"| {c.id} | {c.field} | {c.baseline} | {c.latest} |")
+            else:
+                lines.append("_No changes since baseline._")
+
     return "\n".join(lines) + "\n"
 
 def write_run(run: RunResult, *, eval_root: Path) -> Path:
@@ -59,7 +93,7 @@ def write_run(run: RunResult, *, eval_root: Path) -> Path:
     run_json = runs_dir / "run.json"
     run_md = runs_dir / "run.md"
     run_json.write_text(json.dumps(_run_to_dict(run), indent=2))
-    run_md.write_text(_render_md(run))
+    run_md.write_text(_render_md(run, eval_root=eval_root))
     shutil.copyfile(run_json, eval_root / "latest.json")
     shutil.copyfile(run_md, eval_root / "latest.md")
     failures = RunResult(
