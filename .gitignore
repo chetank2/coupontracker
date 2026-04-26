@@ -20,6 +20,7 @@ local.properties
 # Virtual Environment
 *_env/
 venv/
+.venv/
 env/
 ENV/
 india_coupon_env/
@@ -71,3 +72,8 @@ models/
 *.so
 *.dll
 benchmark/goldenset/images/_local/
+
+# Local signing files
+*.jks
+*.keystore
+keystore.properties
