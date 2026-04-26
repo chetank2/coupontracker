@@ -6,7 +6,6 @@ import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
-import android.graphics.RectF
 import android.util.Log
 import com.example.coupontracker.preprocessing.ImagePreprocessorCore
 import com.example.coupontracker.preprocessing.PreprocessConfig

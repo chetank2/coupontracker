@@ -72,15 +72,15 @@ class ImagePreprocessorCore(private val config: PreprocessConfig) {
         // Scale down large images (matches: if (width > MAX || height > MAX))
         if (w > config.maxDimension || h > config.maxDimension) {
             val scaleFactor = config.maxDimension.toFloat() / max(w, h)
-            newW = (w * scaleFactor).toInt()
-            newH = (h * scaleFactor).toInt()
+            newW = (w * scaleFactor).toInt().coerceAtLeast(1)
+            newH = (h * scaleFactor).toInt().coerceAtLeast(1)
         }
 
         // Scale up small images (matches: if (width < MIN && height < MIN))
         if (w < config.minDimension && h < config.minDimension) {
             val scaleFactor = config.minDimension.toFloat() / max(w, h)
-            newW = (w * scaleFactor).toInt()
-            newH = (h * scaleFactor).toInt()
+            newW = (w * scaleFactor).toInt().coerceAtLeast(1)
+            newH = (h * scaleFactor).toInt().coerceAtLeast(1)
         }
 
         return newW to newH
@@ -193,7 +193,7 @@ class ImagePreprocessorCore(private val config: PreprocessConfig) {
     // -------------------------------------------------------------------------
 
     private inline fun transform(channel: Int, scale: Float, translate: Float): Int =
-        (channel * scale + translate).toInt().coerceIn(0, 255)
+        (channel * scale + translate + 0.5f).toInt().coerceIn(0, 255)
 
     private inline fun bilinear(
         v00: Int, v10: Int, v01: Int, v11: Int,
