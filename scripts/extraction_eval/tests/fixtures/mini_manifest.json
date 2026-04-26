@@ -12,6 +12,11 @@
       "image": "images/sample_b.png",
       "imageSha256": "bbbb",
       "expected": {"storeName": "Beta", "redeemCode": "XYZ789", "expiryDate": null, "needsAttention": true}
+    },
+    {
+      "id": "pending_a",
+      "image": "images/pending_a.png",
+      "imageSha256": "ffff"
     }
   ]
 }

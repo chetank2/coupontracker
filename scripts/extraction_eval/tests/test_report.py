@@ -19,6 +19,22 @@ def make_sample(passed: bool) -> SampleResult:
         passed=passed,
     )
 
+def make_pending_sample() -> SampleResult:
+    return SampleResult(
+        id="pending_a",
+        image_sha256="ffff",
+        image_path="images/pending_a.png",
+        expected=None,
+        prompt_text="P",
+        raw_model_output='{"storeName": "Pending Corp"}',
+        parsed={"storeName": "Pending Corp"},
+        preprocessed_image_sha256="pppp",
+        latency_ms=99,
+        field_diff=[],
+        passed=False,
+        pending=True,
+    )
+
 def test_write_run_emits_run_json_and_md_and_failures(tmp_path):
     run = RunResult(
         timestamp="2026-04-26T20-00-00Z",
@@ -79,3 +95,31 @@ def test_run_md_changed_since_baseline_section(tmp_path):
     md = (runs[0] / "run.md").read_text()
     assert "## Changed since baseline" in md
     assert "redeemCode" in md
+
+
+def test_run_md_pending_section_and_accuracy_exclusion(tmp_path):
+    """Pending samples appear in ## Pending; they are excluded from counts and ## Per-field accuracy."""
+    run = RunResult(
+        timestamp="2026-04-26T23-00-00Z",
+        run_meta={"git": "0000"},
+        samples=[make_sample(True), make_sample(False), make_pending_sample()],
+    )
+    write_run(run, eval_root=tmp_path)
+    runs = sorted((tmp_path / "runs").iterdir())
+    md = (runs[0] / "run.md").read_text()
+
+    # ## Pending section must exist and contain the pending sample id
+    assert "## Pending" in md
+    assert "pending_a" in md
+
+    # The summary counts must reflect only the 2 evaluated samples (1 pass + 1 fail)
+    assert "- Total: 2" in md
+    assert "- Passed: 1" in md
+    assert "- Failed: 1" in md
+
+    # pending_a must NOT appear in ## Per-field accuracy (no field_diff)
+    # The per-field accuracy section should not reference pending_a at all
+    per_field_idx = md.index("## Per-field accuracy")
+    pending_idx = md.index("## Pending")
+    # pending_a id should only appear after the ## Pending header
+    assert md.index("pending_a") > pending_idx

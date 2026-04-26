@@ -36,20 +36,36 @@ def run_eval(
             prompt=prompt,
         )
         parsed = parse_model_output(llm.raw, jar=jar)
-        diffs = compare_fields(expected=s.expected, got=parsed)
-        passed = all(d.status == FieldStatus.MATCH for d in diffs if d.field in s.expected)
-        results.append(SampleResult(
-            id=s.id,
-            image_sha256=s.image_sha256,
-            image_path=str(s.image_path),
-            expected=s.expected,
-            prompt_text=prompt,
-            raw_model_output=llm.raw,
-            parsed=parsed,
-            preprocessed_image_sha256=pre.sha256,
-            latency_ms=llm.latency_ms,
-            field_diff=diffs,
-            passed=passed,
-        ))
+        if s.is_pending:
+            results.append(SampleResult(
+                id=s.id,
+                image_sha256=s.image_sha256,
+                image_path=str(s.image_path),
+                expected=None,
+                prompt_text=prompt,
+                raw_model_output=llm.raw,
+                parsed=parsed,
+                preprocessed_image_sha256=pre.sha256,
+                latency_ms=llm.latency_ms,
+                field_diff=[],
+                passed=False,
+                pending=True,
+            ))
+        else:
+            diffs = compare_fields(expected=s.expected, got=parsed)
+            passed = all(d.status == FieldStatus.MATCH for d in diffs if d.field in s.expected)
+            results.append(SampleResult(
+                id=s.id,
+                image_sha256=s.image_sha256,
+                image_path=str(s.image_path),
+                expected=s.expected,
+                prompt_text=prompt,
+                raw_model_output=llm.raw,
+                parsed=parsed,
+                preprocessed_image_sha256=pre.sha256,
+                latency_ms=llm.latency_ms,
+                field_diff=diffs,
+                passed=passed,
+            ))
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
     return write_run(RunResult(timestamp=timestamp, run_meta=meta, samples=results), eval_root=eval_root)
