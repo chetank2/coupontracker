@@ -72,3 +72,4 @@ models/
 *.so
 *.dll
 benchmark/goldenset/images/_local/
+build/extraction-eval/
