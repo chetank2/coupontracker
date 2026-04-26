@@ -1,7 +1,7 @@
 # Mac Extraction Harness — Design Spec
 
 **Date:** 2026-04-26
-**Status:** Draft, pending review
+**Status:** Approved, ready for implementation plan
 **Branch context:** `feature/qwen-multi-coupon-extraction`
 
 ## Problem
