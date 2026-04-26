@@ -23,4 +23,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Coupon Tracker"
 include(":app")
- 
+include(":extraction-tool")
