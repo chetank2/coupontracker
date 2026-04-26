@@ -72,8 +72,3 @@ models/
 *.so
 *.dll
 benchmark/goldenset/images/_local/
-
-# Local signing files
-*.jks
-*.keystore
-keystore.properties
