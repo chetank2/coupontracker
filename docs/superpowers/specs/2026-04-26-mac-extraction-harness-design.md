@@ -1,7 +1,7 @@
 # Mac Extraction Harness — Design Spec
 
 **Date:** 2026-04-26
-**Status:** Design approved, ready for implementation plan
+**Status:** Draft, pending review
 **Branch context:** `feature/qwen-multi-coupon-extraction`
 
 ## Problem
@@ -16,7 +16,7 @@ The current extraction debug loop is:
 
 This loop is slow, manual, and lossy. The screenshot strips out the prompt, the raw model output, and the parser intermediate state — exactly the information needed to diagnose extraction failures.
 
-The annotated ground truth already exists: `Coupons /manifest.json` lists 35+ samples keyed by `imageSha256`, each with an `expected` block (`storeName`, `description`, `redeemCode`, `expiryDate`, `storeNameSource`, `storeNameEvidence`, `needsAttention`).
+The annotated ground truth already exists: `Coupons /manifest.json` currently lists 35 annotated samples keyed by `imageSha256`, each with an `expected` block (`storeName`, `description`, `redeemCode`, `expiryDate`, `storeNameSource`, `storeNameEvidence`, `needsAttention`). The folder contains 41 image files total; the 6 unannotated images are non-gating until promoted via the pending-review flow below.
 
 ## Goal
 
@@ -47,11 +47,17 @@ Inputs:
 - Pinned Qwen GGUF + mmproj
 - Shared prompt template, schema, parser, preprocessor, normalization rules
 
-Outputs (under `build/extraction-eval/<timestamp>/`):
-- `latest.json` — full per-sample result (raw output + parsed + diff + timing + all hashes)
-- `latest.md` — human-readable summary table
-- `failures.json` — slice of `latest.json` containing only samples with field drift
-- `baseline.json` — last-run snapshot for regression detection (see Layer 1.5)
+Outputs:
+- Timestamped run artifacts under `build/extraction-eval/runs/<timestamp>/`:
+  - `run.json` — full per-sample result (raw output + parsed + diff + timing + all hashes)
+  - `run.md` — human-readable summary table
+- Stable pointers at `build/extraction-eval/`:
+  - `latest.json` — copy of (or symlink to) the most recent `run.json`
+  - `latest.md` — copy of (or symlink to) the most recent `run.md`
+  - `failures.json` — slice of `latest.json` containing only samples with field drift
+  - `baseline.json` — promoted snapshot for regression detection, written only via `--promote-baseline` (see Layer 1.5)
+
+The split keeps a stable path that downstream tools (UI, CI, the `failures.json` consumer) can rely on, while preserving every historical run for forensic comparison.
 
 CLI entry point: `./scripts/eval_extraction_mac.sh`
 
@@ -81,9 +87,11 @@ Mechanism:
 
 ### Layer 3 — Final Android smoke
 
-After Mac eval is green, Android is built and run only against:
-- Every sample the Mac eval flagged as failing
-- A fixed canary set (3 specific images, IDs hardcoded — never drifts)
+Android is built and run against, in order:
+
+1. **The fixed canary set** — 3 specific images, IDs hardcoded, never drifts. Always runs, regardless of Mac results.
+2. **Current Mac failures** — every sample the most recent Mac eval flagged as failing. Empty if Mac is green; the canary set still runs.
+3. **(Optional) Changed-since-baseline samples** — anything `latest.json` flags as drifted from `baseline.json` since the last promotion, even if still passing. Off by default; opt-in for higher-confidence release smoke.
 
 Latency is recorded and compared. Field drift is compared. If Android disagrees with Mac, the **phone wins** (see resolution rule).
 
