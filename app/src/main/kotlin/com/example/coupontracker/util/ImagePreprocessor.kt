@@ -8,6 +8,8 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.Log
+import com.example.coupontracker.preprocessing.ImagePreprocessorCore
+import com.example.coupontracker.preprocessing.PreprocessConfig
 import java.io.ByteArrayOutputStream
 import kotlin.math.max
 import kotlin.math.min
@@ -36,26 +38,23 @@ class ImagePreprocessor {
      * @return Preprocessed image optimized for OCR
      */
     fun preprocess(bitmap: Bitmap): Bitmap {
-        try {
+        return try {
             Log.d(TAG, "Preprocessing image: ${bitmap.width}x${bitmap.height}")
-            
-            // 1. Resize image to reasonable dimensions
-            var processedBitmap = resizeBitmap(bitmap)
-            
-            // 2. Apply enhanced processing
-            try {
-                processedBitmap = applyEnhancedProcessing(processedBitmap)
-            } catch (e: Exception) {
-                Log.w(TAG, "Enhanced processing failed, using standard processing", e)
-                // 3. Fall back to standard Android image processing
-                processedBitmap = applyStandardProcessing(processedBitmap)
-            }
-            
-            Log.d(TAG, "Image preprocessing complete: ${processedBitmap.width}x${processedBitmap.height}")
-            return processedBitmap
+
+            val w = bitmap.width
+            val h = bitmap.height
+            val src = IntArray(w * h)
+            bitmap.getPixels(src, 0, w, 0, 0, w, h)
+
+            val out = ImagePreprocessorCore(PreprocessConfig.DEFAULT).preprocess(src, w, h)
+            val result = Bitmap.createBitmap(out.width, out.height, Bitmap.Config.ARGB_8888)
+            result.setPixels(out.pixels, 0, out.width, 0, 0, out.width, out.height)
+
+            Log.d(TAG, "Image preprocessing complete: ${result.width}x${result.height}")
+            result
         } catch (e: Exception) {
             Log.e(TAG, "Error during image preprocessing, returning original", e)
-            return bitmap
+            bitmap
         }
     }
     
@@ -219,7 +218,11 @@ class ImagePreprocessor {
             }
             
             // Create output bitmap
-            val outputBitmap = Bitmap.createBitmap(width, height, bitmap.config)
+            val outputBitmap = Bitmap.createBitmap(
+                width,
+                height,
+                bitmap.config ?: Bitmap.Config.ARGB_8888
+            )
             outputBitmap.setPixels(outputPixels, 0, width, 0, 0, width, height)
             
             return outputBitmap
