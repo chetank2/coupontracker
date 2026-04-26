@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "samples": [
+    {
+      "id": "sample_a",
+      "image": "images/sample_a.png",
+      "imageSha256": "aaaa",
+      "expected": {"storeName": "Acme", "redeemCode": "ABC123", "expiryDate": "2025-12-31", "needsAttention": false}
+    },
+    {
+      "id": "sample_b",
+      "image": "images/sample_b.png",
+      "imageSha256": "bbbb",
+      "expected": {"storeName": "Beta", "redeemCode": "XYZ789", "expiryDate": null, "needsAttention": true}
+    }
+  ]
+}
