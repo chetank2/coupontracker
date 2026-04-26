@@ -10,16 +10,23 @@ application {
 sourceSets {
     main {
         kotlin {
-            // Source-share the pure-JVM preprocessing package from the app module.
-            // Both this module and :app compile the same .kt files; parity is by
-            // construction.
-            srcDir("../app/src/main/kotlin/com/example/coupontracker/preprocessing")
+            // Source-share only pure-JVM app code. Do not pull broad Android
+            // packages into this module; Android leakage here breaks the Mac tool.
+            srcDir("../app/src/main/kotlin")
             srcDir("src/main/kotlin")
+            include("com/example/coupontracker/preprocessing/*.kt")
+            include("com/example/coupontracker/llm/CouponSchemaKeys.kt")
+            include("com/example/coupontracker/contract/*.kt")
+            include("com/example/coupontracker/schema/SchemaDefinition.kt")
+            include("com/example/coupontracker/schema/CouponSchema.kt")
+            include("com/example/coupontracker/schema/PromptGenerator.kt")
+            include("com/example/coupontracker/tools/*.kt")
         }
     }
 }
 
 dependencies {
+    implementation("org.json:json:20231013")
     testImplementation("junit:junit:4.13.2")
 }
 

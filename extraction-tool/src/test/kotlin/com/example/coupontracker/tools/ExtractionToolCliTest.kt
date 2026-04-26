@@ -1,6 +1,7 @@
 package com.example.coupontracker.tools
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -29,5 +30,45 @@ class ExtractionToolCliTest {
         assert(json.contains("\"width\":800")) { "got: $json" }
         assert(json.contains("\"height\":800")) { "got: $json" }
         assert(json.contains("\"sha256\":")) { "got: $json" }
+    }
+
+    @Test
+    fun `parse subcommand returns canonical JSON for known model output`() {
+        val raw = """
+            prose before
+            {"storeName":"Acme","description":"Flat off","couponCode":"X1","expiryDate":"2025-01-01","storeNameSource":"ocr","storeNameEvidence":[],"needsAttention":false,"extra":"drop"}
+            prose after
+        """.trimIndent()
+
+        val out = ByteArrayOutputStream()
+        ExtractionToolCli.main(
+            args = arrayOf("parse", "--stdin"),
+            stdin = ByteArrayInputStream(raw.toByteArray()),
+            stdout = PrintStream(out),
+        )
+
+        val parsed = out.toString()
+        assert(parsed.contains("\"storeName\":\"Acme\"")) { "got: $parsed" }
+        assert(parsed.contains("\"redeemCode\":\"X1\"")) { "got: $parsed" }
+        assertFalse(parsed.contains("couponCode"))
+        assertFalse(parsed.contains("extra"))
+    }
+
+    @Test
+    fun `prompt subcommand renders deterministic text from given OCR JSON`() {
+        val ocrJson = """{"text":"GET 40% OFF on Acme","tiles":[]}"""
+
+        val out = ByteArrayOutputStream()
+        ExtractionToolCli.main(
+            args = arrayOf("prompt", "--stdin"),
+            stdin = ByteArrayInputStream(ocrJson.toByteArray()),
+            stdout = PrintStream(out),
+        )
+
+        val prompt = out.toString()
+        assert(prompt.isNotBlank())
+        assert(prompt.contains("Acme"))
+        assert(prompt.contains("<|im_start|>system"))
+        assert(prompt.contains("<|im_start|>assistant"))
     }
 }

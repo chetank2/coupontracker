@@ -1,11 +1,15 @@
 package com.example.coupontracker.tools
 
+import com.example.coupontracker.contract.CouponJsonContract
 import com.example.coupontracker.preprocessing.ImagePreprocessorCore
 import com.example.coupontracker.preprocessing.PreprocessConfig
+import com.example.coupontracker.schema.CouponSchema
+import com.example.coupontracker.schema.PromptGenerator
 import java.io.InputStream
 import java.io.PrintStream
 import java.security.MessageDigest
 import javax.imageio.ImageIO
+import org.json.JSONObject
 
 object ExtractionToolCli {
 
@@ -35,13 +39,17 @@ object ExtractionToolCli {
     }
 
     private fun parse(stdin: InputStream, stdout: PrintStream) {
-        // Wired in Task 1.5.
-        TODO("parse subcommand not yet implemented")
+        val raw = stdin.readBytes().toString(Charsets.UTF_8)
+        val json = extractJsonObject(raw) ?: raw.trim()
+        stdout.println(CouponJsonContract.enforce(json))
     }
 
     private fun renderPrompt(stdin: InputStream, stdout: PrintStream) {
-        // Wired in Task 1.5.
-        TODO("prompt subcommand not yet implemented")
+        val input = stdin.readBytes().toString(Charsets.UTF_8).trim()
+        val ocrText = runCatching {
+            JSONObject(input).optString("text")
+        }.getOrDefault(input)
+        stdout.print(PromptGenerator.generateCompletePrompt(CouponSchema.SCHEMA, ocrText))
     }
 
     private fun sha256OfPixels(pixels: IntArray): String {
@@ -50,5 +58,27 @@ object ExtractionToolCli {
         for (p in pixels) buf.putInt(p)
         md.update(buf.array())
         return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun extractJsonObject(text: String): String? {
+        val start = text.indexOf('{')
+        if (start < 0) return null
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (i in start until text.length) {
+            val ch = text[i]
+            when {
+                escaped -> escaped = false
+                ch == '\\' && inString -> escaped = true
+                ch == '"' -> inString = !inString
+                !inString && ch == '{' -> depth++
+                !inString && ch == '}' -> {
+                    depth--
+                    if (depth == 0) return text.substring(start, i + 1)
+                }
+            }
+        }
+        return null
     }
 }
