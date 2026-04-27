@@ -21,19 +21,26 @@ def run_llm(
     temp: float = 0.0,
     seed: int = 42,
     n_predict: int = 512,
+    grammar_file: str | None = "app/src/main/assets/coupon_schema.gbnf",
+    grammar_path: str | None = None,
 ) -> LlmResult:
     start = time.monotonic()
+    cmd = [
+        binary,
+        "-m", gguf,
+        "--mmproj", mmproj,
+        "--image", str(image),
+        "-p", prompt,
+        "--temp", str(temp),
+        "--seed", str(seed),
+        "-n", str(n_predict),
+    ]
+    # grammar_path (new, mirror-aware) takes precedence over legacy grammar_file.
+    effective_grammar = grammar_path if grammar_path is not None else grammar_file
+    if effective_grammar:
+        cmd.extend(["--grammar-file", effective_grammar])
     proc = subprocess.run(
-        [
-            binary,
-            "-m", gguf,
-            "--mmproj", mmproj,
-            "--image", str(image),
-            "-p", prompt,
-            "--temp", str(temp),
-            "--seed", str(seed),
-            "-n", str(n_predict),
-        ],
+        cmd,
         capture_output=True,
         check=False,
     )

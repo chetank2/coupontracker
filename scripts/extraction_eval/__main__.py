@@ -27,6 +27,7 @@ def main(argv: list[str] | None = None) -> int:
         binary=cfg["macBinary"],
         gguf=cfg["qwenGgufPath"],
         mmproj=cfg["mmprojPath"],
+        grammar_path=cfg.get("grammarPath"),
     )
     print(f"Run written to {out}")
     if args.promote_baseline:

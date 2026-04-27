@@ -21,6 +21,7 @@ def run_eval(
     binary: str,
     gguf: str,
     mmproj: str,
+    grammar_path: str | None = None,
 ) -> Path:
     samples = load_manifest(manifest_path, root=manifest_root)
     meta = collect_meta(runtime_config_path=runtime_config_path, repo_root=Path.cwd())
@@ -34,6 +35,7 @@ def run_eval(
             mmproj=mmproj,
             image=s.image_path,
             prompt=prompt,
+            grammar_path=grammar_path,
         )
         parsed = parse_model_output(llm.raw, jar=jar)
         if s.is_pending:

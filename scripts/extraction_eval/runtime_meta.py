@@ -13,12 +13,33 @@ def file_sha256(path: Path) -> str:
             h.update(chunk)
     return h.hexdigest()
 
+def _mirror_meta(cfg: dict, repo_root: Path) -> dict:
+    """Return mirror manifest SHA-256 and mirrored file entries, if manifest is configured."""
+    manifest_rel = cfg.get("mirrorManifest")
+    if not manifest_rel:
+        return {"mirrorManifestSha256": None, "mirroredFiles": None}
+    manifest_path = repo_root / manifest_rel
+    if not manifest_path.exists():
+        return {"mirrorManifestSha256": None, "mirroredFiles": None}
+    manifest_sha = file_sha256(manifest_path)
+    manifest_data = json.loads(manifest_path.read_text())
+    mirrored = [
+        {
+            "androidSource": rec["androidSource"],
+            "macPath": rec["macPath"],
+            "sha256": rec["sha256"],
+        }
+        for rec in manifest_data.get("files", [])
+    ]
+    return {"mirrorManifestSha256": manifest_sha, "mirroredFiles": mirrored}
+
+
 def collect_meta(*, runtime_config_path: Path, repo_root: Path) -> dict:
     cfg = json.loads(runtime_config_path.read_text())
     git_sha = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=repo_root
     ).decode().strip()
-    return {
+    meta = {
         "gitSha": git_sha,
         "host": f"{platform.system().lower()}-{platform.machine()}",
         "qwenGgufSha256": cfg["qwenGgufSha256"],
@@ -28,3 +49,5 @@ def collect_meta(*, runtime_config_path: Path, repo_root: Path) -> dict:
         "promptTemplateSha256": cfg.get("promptTemplateSha256"),
         "schemaSha256": cfg.get("schemaSha256"),
     }
+    meta.update(_mirror_meta(cfg, repo_root))
+    return meta

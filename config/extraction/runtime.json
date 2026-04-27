@@ -1,8 +1,8 @@
 {
   "_doc": "Pinned runtime metadata for the Mac extraction harness. Phase 0 fills in PENDING values. The harness fails fast if any PENDING remains when run end-to-end.",
 
-  "qwenGgufPath": "PENDING",
-  "qwenGgufSha256": "PENDING",
+  "qwenGgufPath": "models/extraction/android-mirror/ggml-model-Q4_K_M.gguf",
+  "qwenGgufSha256": "010ec3ba94cb5ad2d9c8f95f46f01c6d80f83deab9df0a0831334ea45afff3e2",
   "_qwenGgufHints": {
     "candidate_url": "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5-gguf/resolve/main/ggml-model-Q4_K_M.gguf",
     "fallback_url": "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main",
@@ -10,15 +10,15 @@
     "source": "app/src/main/kotlin/com/example/coupontracker/llm/ModelDownloadManager.kt:61,64"
   },
 
-  "mmprojPath": "PENDING",
-  "mmprojSha256": "PENDING",
+  "mmprojPath": "models/extraction/android-mirror/mmproj-model-f16.gguf",
+  "mmprojSha256": "2c2d773537faf6a7e093655d0d5e14801ef0b2121c6c3e1981ce094c2b62f4f9",
   "_mmprojHints": {
     "candidate_url": "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5-gguf/resolve/main/mmproj-model-f16.gguf",
     "expected_local_path_under": "models/extraction/",
     "source": "app/src/main/kotlin/com/example/coupontracker/llm/ModelDownloadManager.kt:65"
   },
 
-  "llamaCppCommit": "PENDING",
+  "llamaCppCommit": "f53577432541bb9edc1588c4ef45c66bf07e4468",
   "llamaCppBuildFlags": ["-DGGML_METAL=ON", "-DLLAMA_CURL=OFF"],
   "_llamaCppHints": {
     "instruction": "Pick a recent llama.cpp commit that documents Qwen2.5-VL or MiniCPM-V support, or align with whatever scripts/build_llama_cpp.sh pins for Android. Record the full 40-char SHA.",
@@ -27,10 +27,14 @@
 
   "macBinary": "build/llama_cpp_mac/bin/llama-mtmd-cli",
 
-  "promptTemplateSha256": "PENDING",
-  "schemaSha256": "PENDING",
+  "promptTemplateSha256": "7fc2e16b0a07b255b05669168c6f3ca31529363f1f191050362d11cd3fbbf3b1",
+  "schemaSha256": "b616496ee909c35621e7da6e170a82723e4334c434d9806af25a642ea6bfa258",
   "_assetHashHints": {
     "instruction": "Copy hashes from app/src/test/resources/asset_hashes.txt — the AssetHashDriftTest pins them. promptTemplateSha256 = hash of prompt_templates/coupon_extraction_prompt.txt; schemaSha256 = hash of coupon_schema.gbnf.",
     "source": "app/src/test/resources/asset_hashes.txt"
-  }
+  },
+
+  "grammarPath": "models/extraction/android-mirror/coupon_schema.gbnf",
+  "promptTemplatePath": "models/extraction/android-mirror/prompt_templates/coupon_extraction_prompt.txt",
+  "mirrorManifest": "config/extraction/android_mirror_manifest.json"
 }
