@@ -20,6 +20,11 @@ sourceSets {
             include("com/example/coupontracker/schema/SchemaDefinition.kt")
             include("com/example/coupontracker/schema/CouponSchema.kt")
             include("com/example/coupontracker/schema/PromptGenerator.kt")
+            include("com/example/coupontracker/ocr/BoundingBox.kt")
+            include("com/example/coupontracker/ocr/OcrResultProcessor.kt")
+            include("com/example/coupontracker/util/OcrTextCleaner.kt")
+            include("com/example/coupontracker/prompt/PromptFormatter.kt")
+            include("com/example/coupontracker/prompt/PromptBuilder.kt")
             include("com/example/coupontracker/tools/*.kt")
         }
     }

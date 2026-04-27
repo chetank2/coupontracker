@@ -393,7 +393,7 @@ class LocalLlmOcrService(
     private val llmRuntime = injectedLlmRuntimeManager ?: LlmRuntimeManager.getInstance(context)
     private val telemetryService = injectedTelemetryService ?: LlmTelemetryService.getInstance(context)
     private val promptBuilder = injectedPromptBuilder
-        ?: PromptBuilder(schemaVersionFlag = injectedSchemaVersionFlag)
+        ?: PromptBuilder(isV2Enabled = { injectedSchemaVersionFlag?.isV2Enabled() == true })
     private val telemetryClient = injectedTelemetryClient ?: TelemetryClient.getInstance(context)
     private val imagePreprocessor = ImagePreprocessor()
     private val textExtractor = TextExtractor() // Fallback
