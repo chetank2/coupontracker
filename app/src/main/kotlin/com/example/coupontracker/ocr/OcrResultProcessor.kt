@@ -1,8 +1,5 @@
 package com.example.coupontracker.ocr
 
-import android.graphics.Rect
-import android.graphics.RectF
-import android.util.Log
 import com.example.coupontracker.util.OcrTextCleaner
 import java.util.Locale
 import kotlin.math.abs
@@ -18,7 +15,7 @@ class OcrResultProcessor {
 
     data class OcrTile(
         val text: String,
-        val bounds: RectF?,
+        val bounds: BoundingBox?,
         val confidence: Float
     )
 
@@ -45,7 +42,6 @@ class OcrResultProcessor {
     }
 
     companion object {
-        private const val TAG = "OcrResultProcessor"
         private val UNKNOWN_GLYPH_PATTERN = Regex("[\\uFFFD\\u25A1?]")
     }
 
@@ -61,11 +57,10 @@ class OcrResultProcessor {
         val avgConfidence = calculateAverageConfidence(sanitizedTiles)
         val unknownGlyphRate = calculateUnknownGlyphRate(normalizedText)
 
-        Log.i(
-            TAG,
+        println(
             String.format(
                 Locale.US,
-                "ocr-quality avg_conf=%.3f unknown_rate=%.3f tiles=%d lines=%d removed_noise=%d raw_chars=%d normalized_chars=%d",
+                "OcrResultProcessor: ocr-quality avg_conf=%.3f unknown_rate=%.3f tiles=%d lines=%d removed_noise=%d raw_chars=%d normalized_chars=%d",
                 avgConfidence,
                 unknownGlyphRate,
                 sanitizedTiles.size,
@@ -93,8 +88,7 @@ class OcrResultProcessor {
             .filter { it.text.isNotBlank() }
             .map { tile ->
                 val clampedConfidence = tile.confidence.coerceIn(0f, 1f)
-                val bounds = tile.bounds ?: RectF()
-                tile.copy(text = tile.text.trim(), bounds = bounds, confidence = clampedConfidence)
+                tile.copy(text = tile.text.trim(), confidence = clampedConfidence)
             }
     }
 
@@ -109,8 +103,8 @@ class OcrResultProcessor {
         }
 
         val sortedTiles = tiles.sortedWith(
-            compareBy<OcrTile> { it.bounds?.centerY() ?: Float.MAX_VALUE }
-                .thenBy { it.bounds?.left ?: Float.MIN_VALUE }
+            compareBy<OcrTile> { it.bounds?.centerY ?: Float.MAX_VALUE }
+                .thenBy { it.bounds?.left ?: Int.MIN_VALUE }
         )
 
         val rows = mutableListOf<MutableList<OcrTile>>()
@@ -122,7 +116,7 @@ class OcrResultProcessor {
             }
 
             val currentCenter = averageCenterY(currentRow)
-            val targetCenter = tile.bounds?.centerY()
+            val targetCenter = tile.bounds?.centerY
             val threshold = rowMergeThreshold(currentRow, tile)
             if (currentCenter != null && targetCenter != null && abs(targetCenter - currentCenter) <= threshold) {
                 currentRow.add(tile)
@@ -132,7 +126,7 @@ class OcrResultProcessor {
         }
 
         val mergedLines = rows.map { row ->
-            row.sortedBy { it.bounds?.left ?: 0f }
+            row.sortedBy { it.bounds?.left ?: 0 }
                 .joinToString(separator = " ") { normalizeToken(it.text) }
                 .replace("  ", " ")
                 .trim()
@@ -144,14 +138,14 @@ class OcrResultProcessor {
     }
 
     private fun averageCenterY(row: List<OcrTile>): Float? {
-        val centers = row.mapNotNull { it.bounds?.centerY() }
+        val centers = row.mapNotNull { it.bounds?.centerY }
         if (centers.isEmpty()) return null
         return centers.average().toFloat()
     }
 
     private fun rowMergeThreshold(currentRow: List<OcrTile>, candidate: OcrTile): Float {
-        val heights = currentRow.mapNotNull { it.bounds?.height() }
-        val candidateHeight = candidate.bounds?.height()
+        val heights = currentRow.mapNotNull { it.bounds?.height?.toFloat() }
+        val candidateHeight = candidate.bounds?.height?.toFloat()
         val avgHeight = when {
             heights.isNotEmpty() -> heights.average().toFloat()
             candidateHeight != null -> candidateHeight
@@ -182,5 +176,3 @@ class OcrResultProcessor {
         return min(1f, unknownCount.toFloat() / text.length.toFloat())
     }
 }
-
-private fun Rect.toRectF(): RectF = RectF(this)

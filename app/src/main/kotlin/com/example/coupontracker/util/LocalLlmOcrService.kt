@@ -2,7 +2,6 @@ package com.example.coupontracker.util
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.RectF
 import android.util.Log
 import androidx.annotation.VisibleForTesting
 import com.example.coupontracker.analytics.TelemetryClient
@@ -22,6 +21,7 @@ import com.example.coupontracker.extraction.validation.ValidationEventLogger
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.llm.LlmTelemetryService
 import com.example.coupontracker.ocr.OcrEngine
+import com.example.coupontracker.ocr.BoundingBox
 import com.example.coupontracker.ocr.OcrResultProcessor
 import com.example.coupontracker.ocr.OcrResultProcessor.OcrTile
 import com.example.coupontracker.ocr.OcrTextSpan
@@ -1418,11 +1418,12 @@ class LocalLlmOcrService(
     }
 
     private fun OcrTextSpan.toPromptTile(): OcrTile {
-        val bounds = try {
-            RectF(boundingBox)
-        } catch (_: Throwable) {
-            RectF()
-        }
+        val bounds = BoundingBox(
+            left = boundingBox.left,
+            top = boundingBox.top,
+            right = boundingBox.right,
+            bottom = boundingBox.bottom
+        )
         return OcrTile(
             text = text,
             bounds = bounds,
