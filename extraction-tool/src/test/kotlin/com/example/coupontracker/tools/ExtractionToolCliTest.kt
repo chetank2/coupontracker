@@ -55,6 +55,26 @@ class ExtractionToolCliTest {
     }
 
     @Test
+    fun `parse subcommand unwraps first object from array output`() {
+        val raw = """
+            [{"storeName":"Kapiva","description":"Flat off","redeemCode":"KAPW1M3LAfAh5e","expiryDate":"2025-05-31","storeNameSource":"ocr","storeNameEvidence":["Kapiva"],"needsAttention":false,"extra":"drop"}]
+        """.trimIndent()
+
+        val out = ByteArrayOutputStream()
+        ExtractionToolCli.main(
+            args = arrayOf("parse", "--stdin"),
+            stdin = ByteArrayInputStream(raw.toByteArray()),
+            stdout = PrintStream(out),
+        )
+
+        val parsed = out.toString()
+        assert(parsed.contains("\"storeName\":\"Kapiva\"")) { "got: $parsed" }
+        assert(parsed.contains("\"redeemCode\":\"KAPW1M3LAfAh5e\"")) { "got: $parsed" }
+        assertFalse(parsed.contains("extra"))
+        assertFalse(parsed.trim().startsWith("["))
+    }
+
+    @Test
     fun `prompt subcommand renders deterministic text from given OCR JSON`() {
         val ocrJson = """{"text":"GET 40% OFF on Acme","tiles":[]}"""
 
@@ -67,8 +87,25 @@ class ExtractionToolCliTest {
 
         val prompt = out.toString()
         assert(prompt.isNotBlank())
-        assert(prompt.contains("Acme"))
+        assert(prompt.contains("Acme")) { "Expected 'Acme' in prompt, got: $prompt" }
         assert(prompt.contains("<|im_start|>system"))
         assert(prompt.contains("<|im_start|>assistant"))
+    }
+
+    @Test
+    fun `prompt subcommand threads OCR tile data through PromptBuilder`() {
+        val ocrJson = """{"text":"Kapiva","tiles":[{"text":"Kapiva","left":100,"top":50,"right":200,"bottom":80,"confidence":0.95}]}"""
+
+        val out = ByteArrayOutputStream()
+        ExtractionToolCli.main(
+            args = arrayOf("prompt", "--stdin"),
+            stdin = ByteArrayInputStream(ocrJson.toByteArray()),
+            stdout = PrintStream(out),
+        )
+
+        val prompt = out.toString()
+        assert(prompt.isNotBlank())
+        assert(prompt.contains("Kapiva")) { "Expected 'Kapiva' in prompt, got: $prompt" }
+        assert(prompt.contains("<|im_start|>system"))
     }
 }

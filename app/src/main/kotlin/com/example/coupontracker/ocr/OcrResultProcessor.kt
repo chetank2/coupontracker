@@ -57,7 +57,7 @@ class OcrResultProcessor {
         val avgConfidence = calculateAverageConfidence(sanitizedTiles)
         val unknownGlyphRate = calculateUnknownGlyphRate(normalizedText)
 
-        println(
+        System.err.println(
             String.format(
                 Locale.US,
                 "OcrResultProcessor: ocr-quality avg_conf=%.3f unknown_rate=%.3f tiles=%d lines=%d removed_noise=%d raw_chars=%d normalized_chars=%d",
