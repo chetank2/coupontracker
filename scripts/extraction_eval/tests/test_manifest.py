@@ -6,7 +6,7 @@ FIX = Path(__file__).parent / "fixtures" / "mini_manifest.json"
 
 def test_load_manifest_returns_samples():
     samples = load_manifest(FIX, root=Path("/tmp/notreal"))
-    assert len(samples) == 3
+    assert len(samples) == 4
     assert samples[0].id == "sample_a"
     assert samples[0].image_sha256 == "aaaa"
     assert samples[0].expected["storeName"] == "Acme"
@@ -37,3 +37,23 @@ def test_load_manifest_handles_samples_without_expected_block():
     assert samples[0].id == "sample_a"
     assert samples[0].expected is not None
     assert samples[0].is_pending is False
+
+def test_load_ocr_returns_sidecar_contents():
+    """Sample with an OCR sidecar returns the parsed sidecar JSON."""
+    samples = load_manifest(FIX, root=Path("/tmp/notreal"))
+    by_id = {s.id: s for s in samples}
+    sample = by_id["sample_ocr"]
+    assert sample.ocr_path is not None, "sample_ocr should have a sidecar"
+    ocr = sample.load_ocr()
+    assert "Kapiva" in ocr["text"]
+    assert len(ocr["tiles"]) == 3
+    assert ocr["tiles"][0]["text"] == "Kapiva"
+
+def test_load_ocr_returns_empty_when_no_sidecar():
+    """Sample without an OCR sidecar returns the empty payload."""
+    samples = load_manifest(FIX, root=Path("/tmp/notreal"))
+    by_id = {s.id: s for s in samples}
+    sample = by_id["sample_a"]
+    assert sample.ocr_path is None, "sample_a should not have a sidecar"
+    ocr = sample.load_ocr()
+    assert ocr == {"text": "", "tiles": []}

@@ -1,0 +1,8 @@
+{
+  "text": "Kapiva\nKAPIVA20\nExpires 30 Jun 2025",
+  "tiles": [
+    {"text": "Kapiva", "left": 100, "top": 50, "right": 200, "bottom": 80, "confidence": 0.95},
+    {"text": "KAPIVA20", "left": 100, "top": 100, "right": 250, "bottom": 130, "confidence": 0.99},
+    {"text": "Expires 30 Jun 2025", "left": 100, "top": 150, "right": 350, "bottom": 180, "confidence": 0.92}
+  ]
+}

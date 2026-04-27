@@ -22,13 +22,14 @@ def run_eval(
     gguf: str,
     mmproj: str,
     grammar_path: str | None = None,
+    llama_extra_args: list[str] | None = None,
 ) -> Path:
     samples = load_manifest(manifest_path, root=manifest_root)
     meta = collect_meta(runtime_config_path=runtime_config_path, repo_root=Path.cwd())
     results: list[SampleResult] = []
     for s in samples:
         pre = run_preprocess(s.image_path, jar=jar)
-        prompt = render_prompt({"text": "", "tiles": []}, jar=jar)
+        prompt = render_prompt(s.load_ocr(), jar=jar)
         llm = run_llm(
             binary=binary,
             gguf=gguf,
@@ -36,6 +37,7 @@ def run_eval(
             image=s.image_path,
             prompt=prompt,
             grammar_path=grammar_path,
+            extra_args=llama_extra_args,
         )
         parsed = parse_model_output(llm.raw, jar=jar)
         if s.is_pending:

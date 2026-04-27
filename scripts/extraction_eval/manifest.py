@@ -1,6 +1,14 @@
-"""Load and validate Coupons /manifest.json."""
+"""Load and validate Coupons /manifest.json.
+
+OCR sidecars: optional per-sample OCR input lives at
+``<manifest_root>/ocr/<sample_id>.json`` with shape::
+
+    {"text": str, "tiles": [{"text": str, "left": int, "top": int, "right": int, "bottom": int, "confidence": float}, ...]}
+
+If the sidecar file is absent, the sample runs with empty OCR.
+"""
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
 import json
@@ -16,26 +24,36 @@ class Sample:
     image_path: Path
     image_sha256: str
     expected: Optional[dict[str, Any]]
+    ocr_path: Optional[Path] = field(default=None)
 
     @property
     def is_pending(self) -> bool:
         """True when no expected block has been provided (awaiting human ground-truth review)."""
         return self.expected is None
 
+    def load_ocr(self) -> dict:
+        """Return OCR sidecar as dict, or empty payload if no sidecar exists."""
+        if self.ocr_path is not None:
+            return json.loads(self.ocr_path.read_text())
+        return {"text": "", "tiles": []}
+
 def load_manifest(manifest_path: Path, root: Path) -> list[Sample]:
     """Load manifest.json. `root` is the directory containing the `images/` subtree."""
+    manifest_root = Path(manifest_path).parent
     data = json.loads(Path(manifest_path).read_text())
     version = data.get("schemaVersion")
     if version not in SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError(f"Unsupported schemaVersion: {version}")
     samples = []
     for raw in data.get("samples", []):
+        ocr_path = manifest_root / "ocr" / f"{raw['id']}.json"
         samples.append(
             Sample(
                 id=raw["id"],
                 image_path=root / raw["image"],
                 image_sha256=raw["imageSha256"],
                 expected=raw.get("expected"),
+                ocr_path=ocr_path if ocr_path.is_file() else None,
             )
         )
     return samples

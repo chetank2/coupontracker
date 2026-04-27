@@ -17,6 +17,12 @@
       "id": "pending_a",
       "image": "images/pending_a.png",
       "imageSha256": "ffff"
+    },
+    {
+      "id": "sample_ocr",
+      "image": "images/sample_ocr.png",
+      "imageSha256": "cccc",
+      "expected": {"storeName": "Kapiva", "redeemCode": "KAPIVA20", "expiryDate": "2025-06-30", "needsAttention": false}
     }
   ]
 }
