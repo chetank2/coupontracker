@@ -23,8 +23,9 @@ def run_eval(
     mmproj: str,
     grammar_path: str | None = None,
     llama_extra_args: list[str] | None = None,
+    ocr_root: Path | None = None,
 ) -> Path:
-    samples = load_manifest(manifest_path, root=manifest_root)
+    samples = load_manifest(manifest_path, root=manifest_root, ocr_root=ocr_root)
     meta = collect_meta(runtime_config_path=runtime_config_path, repo_root=Path.cwd())
     results: list[SampleResult] = []
     for s in samples:

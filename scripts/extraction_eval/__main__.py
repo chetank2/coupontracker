@@ -13,6 +13,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--eval-root", default="build/extraction-eval")
     p.add_argument("--jar", required=True)
     p.add_argument("--runtime-config", default="config/extraction/runtime.json")
+    p.add_argument("--ocr-root", default=None,
+                   help="Override directory for per-sample OCR sidecars. "
+                        "Defaults to <manifest-file-parent>/ocr. Use this to swap "
+                        "between manual, Mac-Tesseract, and Android-real captures.")
     p.add_argument("--promote-baseline", action="store_true",
                    help="After this run, copy latest.json to baseline.json. Manual gate; never auto-set in CI.")
     args = p.parse_args(argv)
@@ -28,6 +32,8 @@ def main(argv: list[str] | None = None) -> int:
         gguf=cfg["qwenGgufPath"],
         mmproj=cfg["mmprojPath"],
         grammar_path=cfg.get("grammarPath"),
+        llama_extra_args=cfg.get("llamaExtraArgs"),
+        ocr_root=Path(args.ocr_root) if args.ocr_root else None,
     )
     print(f"Run written to {out}")
     if args.promote_baseline:

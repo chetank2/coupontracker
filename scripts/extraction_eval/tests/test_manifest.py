@@ -57,3 +57,25 @@ def test_load_ocr_returns_empty_when_no_sidecar():
     assert sample.ocr_path is None, "sample_a should not have a sidecar"
     ocr = sample.load_ocr()
     assert ocr == {"text": "", "tiles": []}
+
+def test_load_manifest_honors_explicit_ocr_root(tmp_path):
+    """Passing ocr_root= switches the sidecar lookup directory.
+
+    Lets callers swap between manual / Mac-Tesseract / Android-real
+    sidecar sources without copying files.
+    """
+    custom_ocr = tmp_path / "custom_ocr"
+    custom_ocr.mkdir()
+    (custom_ocr / "sample_a.json").write_text('{"text": "from-custom-root", "tiles": []}')
+
+    samples = load_manifest(FIX, root=Path("/tmp/notreal"), ocr_root=custom_ocr)
+    by_id = {s.id: s for s in samples}
+
+    # sample_a now resolves a sidecar from the custom root
+    assert by_id["sample_a"].ocr_path == custom_ocr / "sample_a.json"
+    assert by_id["sample_a"].load_ocr()["text"] == "from-custom-root"
+
+    # sample_ocr (which has a sidecar in the default fixtures/ocr/ root) no
+    # longer resolves one — the custom root has nothing for it.
+    assert by_id["sample_ocr"].ocr_path is None
+    assert by_id["sample_ocr"].load_ocr() == {"text": "", "tiles": []}

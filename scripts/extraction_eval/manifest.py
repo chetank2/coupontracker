@@ -1,11 +1,14 @@
 """Load and validate Coupons /manifest.json.
 
 OCR sidecars: optional per-sample OCR input lives at
-``<manifest_root>/ocr/<sample_id>.json`` with shape::
+``<ocr_root>/<sample_id>.json`` with shape::
 
     {"text": str, "tiles": [{"text": str, "left": int, "top": int, "right": int, "bottom": int, "confidence": float}, ...]}
 
-If the sidecar file is absent, the sample runs with empty OCR.
+By default, ``ocr_root`` is ``<manifest-file-parent>/ocr``. Pass
+``ocr_root=`` to ``load_manifest`` to switch sidecar sources (e.g. between
+manual, Mac-Tesseract, and Android-real captures). If the sidecar file is
+absent, the sample runs with empty OCR.
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -37,16 +40,26 @@ class Sample:
             return json.loads(self.ocr_path.read_text())
         return {"text": "", "tiles": []}
 
-def load_manifest(manifest_path: Path, root: Path) -> list[Sample]:
-    """Load manifest.json. `root` is the directory containing the `images/` subtree."""
-    manifest_root = Path(manifest_path).parent
+def load_manifest(
+    manifest_path: Path,
+    root: Path,
+    ocr_root: Optional[Path] = None,
+) -> list[Sample]:
+    """Load manifest.json.
+
+    `root` is the directory containing the `images/` subtree.
+    `ocr_root` is where per-sample OCR sidecars live; defaults to
+    ``<manifest_path>.parent / "ocr"``.
+    """
+    if ocr_root is None:
+        ocr_root = Path(manifest_path).parent / "ocr"
     data = json.loads(Path(manifest_path).read_text())
     version = data.get("schemaVersion")
     if version not in SUPPORTED_SCHEMA_VERSIONS:
         raise ValueError(f"Unsupported schemaVersion: {version}")
     samples = []
     for raw in data.get("samples", []):
-        ocr_path = manifest_root / "ocr" / f"{raw['id']}.json"
+        ocr_path = ocr_root / f"{raw['id']}.json"
         samples.append(
             Sample(
                 id=raw["id"],
