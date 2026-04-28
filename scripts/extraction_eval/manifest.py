@@ -35,10 +35,19 @@ class Sample:
         return self.expected is None
 
     def load_ocr(self) -> dict:
-        """Return OCR sidecar as dict, or empty payload if no sidecar exists."""
+        """Return OCR sidecar as dict, or empty payload if no sidecar exists.
+
+        The returned dict may carry a top-level ``_source`` field tagging the
+        OCR pipeline that produced it. See runtime.json's ``_ocrSourceLabels``
+        for canonical values; ``"manual"`` if absent. Only
+        ``"android-mlkit-tesseract"`` is considered Android parity — other
+        sources are test fixtures.
+        """
         if self.ocr_path is not None:
-            return json.loads(self.ocr_path.read_text())
-        return {"text": "", "tiles": []}
+            data = json.loads(self.ocr_path.read_text())
+            data.setdefault("_source", "manual")
+            return data
+        return {"text": "", "tiles": [], "_source": "none"}
 
 def load_manifest(
     manifest_path: Path,

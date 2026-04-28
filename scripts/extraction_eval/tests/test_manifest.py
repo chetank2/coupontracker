@@ -50,13 +50,35 @@ def test_load_ocr_returns_sidecar_contents():
     assert ocr["tiles"][0]["text"] == "Kapiva"
 
 def test_load_ocr_returns_empty_when_no_sidecar():
-    """Sample without an OCR sidecar returns the empty payload."""
+    """Sample without an OCR sidecar returns the empty payload tagged _source=none."""
     samples = load_manifest(FIX, root=Path("/tmp/notreal"))
     by_id = {s.id: s for s in samples}
     sample = by_id["sample_a"]
     assert sample.ocr_path is None, "sample_a should not have a sidecar"
     ocr = sample.load_ocr()
-    assert ocr == {"text": "", "tiles": []}
+    assert ocr == {"text": "", "tiles": [], "_source": "none"}
+
+def test_load_ocr_defaults_source_to_manual_for_untagged_sidecar(tmp_path):
+    """A sidecar that omits _source is treated as manual (test fixture)."""
+    custom = tmp_path / "custom_ocr"
+    custom.mkdir()
+    (custom / "sample_a.json").write_text('{"text":"hi","tiles":[]}')
+    samples = load_manifest(FIX, root=Path("/tmp/notreal"), ocr_root=custom)
+    by_id = {s.id: s for s in samples}
+    ocr = by_id["sample_a"].load_ocr()
+    assert ocr["_source"] == "manual", "untagged sidecars are test fixtures by default"
+
+def test_load_ocr_preserves_explicit_source_label(tmp_path):
+    """A sidecar that declares _source=android-mlkit-tesseract keeps that label."""
+    custom = tmp_path / "real_ocr"
+    custom.mkdir()
+    (custom / "sample_a.json").write_text(
+        '{"_source":"android-mlkit-tesseract","text":"hi","tiles":[]}'
+    )
+    samples = load_manifest(FIX, root=Path("/tmp/notreal"), ocr_root=custom)
+    by_id = {s.id: s for s in samples}
+    ocr = by_id["sample_a"].load_ocr()
+    assert ocr["_source"] == "android-mlkit-tesseract"
 
 def test_load_manifest_honors_explicit_ocr_root(tmp_path):
     """Passing ocr_root= switches the sidecar lookup directory.
@@ -78,4 +100,4 @@ def test_load_manifest_honors_explicit_ocr_root(tmp_path):
     # sample_ocr (which has a sidecar in the default fixtures/ocr/ root) no
     # longer resolves one — the custom root has nothing for it.
     assert by_id["sample_ocr"].ocr_path is None
-    assert by_id["sample_ocr"].load_ocr() == {"text": "", "tiles": []}
+    assert by_id["sample_ocr"].load_ocr() == {"text": "", "tiles": [], "_source": "none"}
