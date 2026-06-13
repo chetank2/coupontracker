@@ -63,36 +63,14 @@ fun PrimaryButton(
     loading: Boolean = false,
     leadingIcon: ImageVector? = null
 ) {
-    Button(
+    BrandButton(
+        text = if (loading) "Loading..." else text,
         onClick = onClick,
         modifier = modifier,
         enabled = enabled && !loading,
-        shape = BrandShapes.ButtonShape,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
-            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.4f)
-        )
-    ) {
-        if (loading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
-                color = MaterialTheme.colorScheme.onPrimary,
-                strokeWidth = 2.dp
-            )
-        } else {
-            leadingIcon?.let {
-                Icon(
-                    imageVector = it,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            Text(text = text)
-        }
-    }
+        tier = BrandButtonTier.Primary,
+        leadingIcon = leadingIcon,
+    )
 }
 
 /**
@@ -107,36 +85,14 @@ fun SecondaryButton(
     loading: Boolean = false,
     leadingIcon: ImageVector? = null
 ) {
-    Button(
+    BrandButton(
+        text = if (loading) "Loading..." else text,
         onClick = onClick,
         modifier = modifier,
         enabled = enabled && !loading,
-        shape = BrandShapes.ButtonShape,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.secondary,
-            contentColor = MaterialTheme.colorScheme.onSecondary,
-            disabledContainerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
-            disabledContentColor = MaterialTheme.colorScheme.onSecondary.copy(alpha = 0.4f)
-        )
-    ) {
-        if (loading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
-                color = MaterialTheme.colorScheme.onSecondary,
-                strokeWidth = 2.dp
-            )
-        } else {
-            leadingIcon?.let {
-                Icon(
-                    imageVector = it,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            Text(text = text)
-        }
-    }
+        tier = BrandButtonTier.Secondary,
+        leadingIcon = leadingIcon,
+    )
 }
 
 /**

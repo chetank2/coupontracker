@@ -152,7 +152,7 @@ fun UnifiedCouponForm(
         )
 
         BrandButton(
-            text = "Copy log data",
+            text = "Copy diagnostic data",
             onClick = onCopyLogs,
             modifier = Modifier
                 .fillMaxWidth()

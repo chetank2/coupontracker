@@ -103,7 +103,7 @@ fun ApiTestScreen(
                     modifier = Modifier.padding(16.dp)
                 ) {
                     Text(
-                        text = "Mistral API Connection Test",
+                        text = "Diagnostics",
                         style = MaterialTheme.typography.titleMedium
                     )
 
@@ -112,7 +112,7 @@ fun ApiTestScreen(
                     OutlinedTextField(
                         value = apiKey,
                         onValueChange = { apiKey = it },
-                        label = { Text("API Key") },
+                        label = { Text("Access key") },
                         modifier = Modifier.fillMaxWidth(),
                         visualTransformation = if (isPasswordVisible) VisualTransformation.None
                                              else PasswordVisualTransformation(),
@@ -143,11 +143,11 @@ fun ApiTestScreen(
                                     SecurePreferencesManager.KEY_MISTRAL_API_KEY,
                                     apiKey
                                 )
-                                Toast.makeText(context, "API key saved", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Access key saved", Toast.LENGTH_SHORT).show()
                             },
                             enabled = apiKey.isNotBlank()
                         ) {
-                            Text("Save Key")
+                            Text("Save key")
                         }
 
                         // We've removed API-dependent OCR technologies as we're using on-device OCR only
@@ -160,10 +160,10 @@ fun ApiTestScreen(
                                     SecurePreferencesManager.KEY_MISTRAL_API_KEY,
                                     apiKey
                                 )
-                                Toast.makeText(context, "API key saved securely", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Access key saved securely", Toast.LENGTH_SHORT).show()
                             }
                         ) {
-                            Text("Save Key Securely")
+                            Text("Save securely")
                         }
                     }
                 }

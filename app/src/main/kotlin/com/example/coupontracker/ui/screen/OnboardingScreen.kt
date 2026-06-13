@@ -441,14 +441,14 @@ object OnboardingPages {
                 description = "Everything runs on this device. No cloud upload, no external AI calls.",
                 imageResId = R.drawable.onboarding_share,
                 bullets = listOf(
-                    "OCR + LLM stay offline – screenshots never leave your phone",
+                    "Offline scanning keeps screenshots on your phone",
                     "Encrypted backups use Android Keystore",
                     "You choose when to export or clear data"
                 )
             ),
             OnboardingPage(
                 title = "Faster with the on-device model",
-                description = "Download the Qwen2.5 reader once to unlock instant, private extraction.",
+                description = "Set up the offline coupon reader once for faster private scanning.",
                 imageResId = R.drawable.onboarding_scan,
                 bullets = listOf(
                     "~940 MB download, runs fully offline",

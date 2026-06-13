@@ -132,9 +132,9 @@ fun ManualEntryScreen(
                 },
                 onCopyLogs = {
                     val logText = ExtractionLogBuffer.getLogText().ifBlank { "No log data recorded yet." }
-                    val clip = ClipData.newPlainText("Coupon Extraction Log", logText)
+                    val clip = ClipData.newPlainText("Coupon diagnostics", logText)
                     clipboard.setPrimaryClip(clip)
-                    Toast.makeText(context, "Logcat data copied", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "Diagnostic data copied", Toast.LENGTH_SHORT).show()
                     ExtractionLogBuffer.appendInfo("ManualEntryScreen", "Log data copied to clipboard (${logText.length} chars)")
                 },
                 isSaving = uiState.isSaving,

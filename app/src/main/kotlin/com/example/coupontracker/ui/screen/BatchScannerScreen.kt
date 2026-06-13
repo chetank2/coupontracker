@@ -304,13 +304,13 @@ fun BatchScanningFallbackBanner(modifier: Modifier = Modifier) {
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "OCR Fallback Active",
+                    text = "Batch reader limited",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "YOLO multi-coupon models are unavailable in this build. We're using OCR anchor segmentation instead.",
+                    text = "Multi-coupon scanning is using the basic reader in this build. For best results, scan one coupon at a time.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer
                 )
@@ -365,12 +365,12 @@ fun BatchScanningUnavailableWarning(
                 modifier = Modifier.padding(16.dp)
             ) {
                 Text(
-                    text = "⚠️ Multi-coupon detection models not available",
+                    text = "Multi-coupon scanning is limited",
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "Batch scanning requires trained YOLO models (20-100 MB) that are not yet integrated. The current placeholder models cannot detect multiple coupons.",
+                    text = "This build can review one coupon most reliably. Use a clear single-coupon screenshot when possible.",
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -380,7 +380,7 @@ fun BatchScanningUnavailableWarning(
                     fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
                 )
                 Text(
-                    text = "• Single scan mode for individual coupons\n• OCR_FIRST strategy (recommended)\n• Manual entry for bulk addition",
+                    text = "• Scan individual coupons\n• Upload clear screenshots\n• Use manual entry for bulk additions",
                     style = MaterialTheme.typography.bodyMedium
                 )
             }

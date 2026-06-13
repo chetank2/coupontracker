@@ -194,7 +194,7 @@ class AddFragment : Fragment() {
                 // No need to reinstantiate - using injected instance
 
                 // Show a message to the user
-                Snackbar.make(binding.root, "Mistral API disabled. Using default text extraction.", Snackbar.LENGTH_SHORT).show()
+                Snackbar.make(binding.root, "Advanced reader disabled. Using the standard scanner.", Snackbar.LENGTH_SHORT).show()
             } else {
                 // If turning on and we have a saved key, reinitialize with it
                 val savedKey = sharedPreferences.getString(KEY_MISTRAL_API_KEY, null)
@@ -203,10 +203,10 @@ class AddFragment : Fragment() {
                     // No need to reinstantiate - using injected instance
 
                     // Show a message to the user
-                    Snackbar.make(binding.root, "Mistral API enabled with saved key.", Snackbar.LENGTH_SHORT).show()
+                    Snackbar.make(binding.root, "Advanced reader enabled with saved key.", Snackbar.LENGTH_SHORT).show()
                 } else {
                     // Prompt user to enter an API key
-                    Snackbar.make(binding.root, "Please enter a Mistral API key.", Snackbar.LENGTH_LONG).show()
+                    Snackbar.make(binding.root, "Please enter an access key.", Snackbar.LENGTH_LONG).show()
                 }
             }
         }
@@ -353,14 +353,14 @@ class AddFragment : Fragment() {
 
     private fun showMistralApiInfo() {
         MaterialAlertDialogBuilder(requireContext())
-            .setTitle("About Mistral OCR AI")
+            .setTitle("About the advanced reader")
             .setMessage(
-                "Mistral AI provides advanced OCR capabilities that can improve coupon text extraction. " +
+                "The advanced reader can improve coupon scanning when you choose to connect it. " +
                 "To use this feature, you need to:\n\n" +
-                "1. Create an account at mistral.ai\n" +
-                "2. Generate an API key\n" +
-                "3. Enter the API key here\n\n" +
-                "Note: Using the Mistral API may incur charges based on your usage."
+                "1. Create an account with the provider\n" +
+                "2. Generate an access key\n" +
+                "3. Enter the key here\n\n" +
+                "Note: The provider may charge based on usage."
             )
             .setPositiveButton("OK", null)
             .show()
@@ -492,26 +492,26 @@ class AddFragment : Fragment() {
                 )
             }
             modelStatus.isDownloaded && modelStatus.filesPresent -> {
-                binding.llmStatusText.text = "Model ready (${modelStatus.version})"
+                binding.llmStatusText.text = "Offline reader ready (${modelStatus.version})"
                 binding.llmSizeText.text = String.format("%.1f MB", modelStatus.sizeMB)
                 binding.llmDownloadButton.visibility = View.GONE
                 binding.llmDeleteButton.visibility = View.VISIBLE
                 binding.llmStatusText.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_green_dark))
             }
             modelStatus.isDownloaded && !modelStatus.filesPresent -> {
-                binding.llmStatusText.text = "Model corrupted - redownload required"
+                binding.llmStatusText.text = "Offline reader needs setup again"
                 binding.llmSizeText.text = ""
                 binding.llmDownloadButton.visibility = View.VISIBLE
                 binding.llmDeleteButton.visibility = View.VISIBLE
-                binding.llmDownloadButton.text = "Re-download Model"
+                binding.llmDownloadButton.text = "Set up again"
                 binding.llmStatusText.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.holo_red_dark))
             }
             else -> {
-                binding.llmStatusText.text = "Model not downloaded"
+                binding.llmStatusText.text = "Offline reader not set up"
                 binding.llmSizeText.text = "~2.4 GB required"
                 binding.llmDownloadButton.visibility = View.VISIBLE
                 binding.llmDeleteButton.visibility = View.GONE
-                binding.llmDownloadButton.text = "Download Model"
+                binding.llmDownloadButton.text = "Set up offline scanning"
                 binding.llmStatusText.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.darker_gray))
             }
         }
@@ -519,9 +519,9 @@ class AddFragment : Fragment() {
     
     private fun showLlmInfo() {
         MaterialAlertDialogBuilder(requireContext())
-            .setTitle("About Local AI OCR")
+            .setTitle("About offline scanning")
             .setMessage(
-                "Local AI OCR now uses the Qwen2.5 on-device text model for enhanced coupon extraction. This feature:\n\n" +
+                "The offline coupon reader improves scanning for complex coupon screenshots. This feature:\n\n" +
                 "• Works completely offline (no internet required)\n" +
                 "• Provides better accuracy for complex coupons\n" +
                 "• Understands context and layout\n" +
@@ -531,7 +531,7 @@ class AddFragment : Fragment() {
                 "• Android 8.0+ with 4GB+ RAM\n" +
                 "• ~2.4GB storage space\n" +
                 "• WiFi connection for initial download\n\n" +
-                "The model will be downloaded once and used offline for all future coupon scanning."
+                "The reader is downloaded once and used offline for future coupon scanning."
             )
             .setPositiveButton("OK", null)
             .show()
@@ -570,7 +570,7 @@ class AddFragment : Fragment() {
                             
                             Snackbar.make(
                                 binding.root,
-                                "Model downloaded successfully! (${String.format("%.1f", result.modelSizeMB)} MB)",
+                                "Offline reader downloaded successfully (${String.format("%.1f", result.modelSizeMB)} MB)",
                                 Snackbar.LENGTH_LONG
                             ).show()
                         }
@@ -580,12 +580,12 @@ class AddFragment : Fragment() {
                             binding.llmDownloadProgress.visibility = View.GONE
                             binding.llmProgressText.visibility = View.GONE
                             binding.llmDownloadButton.isEnabled = true
-                            binding.llmDownloadButton.text = "Download Model"
+                            binding.llmDownloadButton.text = "Set up offline scanning"
                             ExtractionLogBuffer.appendError(TAG, "LLM model download failed: ${result.message}")
                             
                             MaterialAlertDialogBuilder(requireContext())
-                                .setTitle("Download Failed")
-                                .setMessage("Failed to download model: ${result.message}")
+                                .setTitle("Download failed")
+                                .setMessage("Failed to download the offline reader: ${result.message}")
                                 .setPositiveButton("OK", null)
                                 .show()
                         }
@@ -598,7 +598,7 @@ class AddFragment : Fragment() {
                     binding.llmDownloadProgress.visibility = View.GONE
                     binding.llmProgressText.visibility = View.GONE
                     binding.llmDownloadButton.isEnabled = true
-                    binding.llmDownloadButton.text = "Download Model"
+                    binding.llmDownloadButton.text = "Set up offline scanning"
                     ExtractionLogBuffer.appendError(TAG, "LLM model download error", e)
                     
                     Snackbar.make(
@@ -613,11 +613,11 @@ class AddFragment : Fragment() {
     
     private fun deleteModel() {
         MaterialAlertDialogBuilder(requireContext())
-            .setTitle("Delete Model")
+            .setTitle("Delete offline reader")
             .setMessage(
-                "Are you sure you want to delete the Local AI OCR model?\n\n" +
+                "Are you sure you want to delete the offline coupon reader?\n\n" +
                 "This will free up ~2.4GB of storage space, but you'll need to download " +
-                "it again to use Local AI OCR features."
+                "it again to use offline scanning."
             )
             .setPositiveButton("Delete") { _, _ ->
                 val success = modelDownloadManager.deleteModel()
@@ -626,14 +626,14 @@ class AddFragment : Fragment() {
                     ExtractionLogBuffer.appendInfo(TAG, "LLM model deleted successfully")
                     Snackbar.make(
                         binding.root,
-                        "Model deleted successfully",
+                        "Offline reader deleted",
                         Snackbar.LENGTH_SHORT
                     ).show()
                 } else {
                     ExtractionLogBuffer.appendWarning(TAG, "Failed to delete LLM model")
                     Snackbar.make(
                         binding.root,
-                        "Failed to delete model",
+                        "Failed to delete offline reader",
                         Snackbar.LENGTH_SHORT
                     ).show()
                 }
@@ -786,9 +786,9 @@ class AddFragment : Fragment() {
                 if (useMistralApi && apiKey.isNullOrBlank()) {
                     Log.w(TAG, "Mistral API is enabled but no API key is set")
                     ExtractionLogBuffer.appendWarning(TAG, "Mistral API enabled but key missing")
-                    binding.errorText.text = "Please set a Mistral API key"
+                    binding.errorText.text = "Please set an access key"
                     binding.errorText.visibility = View.VISIBLE
-                    Toast.makeText(requireContext(), "Please set a Mistral API key", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(requireContext(), "Please set an access key", Toast.LENGTH_SHORT).show()
                     binding.processingIndicator.visibility = View.GONE
                     return@launch
                 }
@@ -994,9 +994,9 @@ class AddFragment : Fragment() {
     private fun copyExtractionLog() {
         val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val logText = ExtractionLogBuffer.getLogText().ifBlank { "No log data recorded yet." }
-        val clip = ClipData.newPlainText("Coupon Extraction Log", logText)
+        val clip = ClipData.newPlainText("Coupon diagnostics", logText)
         clipboard.setPrimaryClip(clip)
-        Toast.makeText(requireContext(), "Logcat data copied", Toast.LENGTH_SHORT).show()
+        Toast.makeText(requireContext(), "Diagnostic data copied", Toast.LENGTH_SHORT).show()
         ExtractionLogBuffer.appendInfo(TAG, "Log data copied to clipboard (${logText.length} chars)")
     }
 

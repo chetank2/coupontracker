@@ -6,17 +6,17 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
+import com.example.coupontracker.ui.theme.BrandTypography
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -44,7 +44,8 @@ fun ExtractionFeedbackDialog(
     Dialog(onDismissRequest = onDismiss) {
         Card(
             modifier = modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
+            shape = BrandShapes.Large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(
                 modifier = Modifier.padding(BrandSpacing.Large),
@@ -52,12 +53,12 @@ fun ExtractionFeedbackDialog(
             ) {
                 Text(
                     text = "How did we do?",
-                    style = MaterialTheme.typography.headlineSmall,
+                    style = BrandTypography.TitleLarge,
                     fontWeight = FontWeight.Bold
                 )
                 
                 Text(
-                    text = "Help us improve by confirming if this extraction is correct:",
+                    text = "Help improve future scans by confirming these coupon details.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -90,23 +91,18 @@ fun ExtractionFeedbackDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
                     ) {
-                        OutlinedButton(
+                        BrandButton(
+                            text = "Needs correction",
                             onClick = { showCorrectionForm = true },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Edit, contentDescription = null)
-                            Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                            Text("Needs Correction")
-                        }
+                            modifier = Modifier.weight(1f),
+                            tier = BrandButtonTier.Secondary,
+                        )
                         
-                        Button(
+                        BrandButton(
+                            text = "Looks good",
                             onClick = onConfirmCorrect,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null)
-                            Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                            Text("Looks Good!")
-                        }
+                            modifier = Modifier.weight(1f),
+                        )
                     }
                 } else {
                     // Correction form
@@ -116,32 +112,32 @@ fun ExtractionFeedbackDialog(
                         fontWeight = FontWeight.Medium
                     )
 
-                    OutlinedTextField(
+                    BrandTextField(
                         value = correctedStoreName,
                         onValueChange = { correctedStoreName = it },
-                        label = { Text("Store Name") },
+                        label = "Store name",
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
+                    BrandTextField(
                         value = correctedCode,
                         onValueChange = { correctedCode = it },
-                        label = { Text("Coupon Code (leave empty if none)") },
+                        label = "Coupon code (optional)",
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
+                    BrandTextField(
                         value = correctedSavingsDetail,
                         onValueChange = { correctedSavingsDetail = it },
-                        label = { Text("Savings Detail (e.g., Cashback: ₹500 off)") },
+                        label = "Savings detail",
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    OutlinedTextField(
+                    BrandTextField(
                         value = correctedExpiry,
                         onValueChange = { correctedExpiry = it },
-                        label = { Text("Expiry Date (DD/MM/YYYY)") },
-                        placeholder = { Text("31/12/2024") },
+                        label = "Expiry date",
+                        placeholder = "31/12/2026",
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -150,14 +146,15 @@ fun ExtractionFeedbackDialog(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
                     ) {
-                        OutlinedButton(
+                        BrandButton(
+                            text = "Cancel",
                             onClick = { showCorrectionForm = false },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Cancel")
-                        }
+                            modifier = Modifier.weight(1f),
+                            tier = BrandButtonTier.Secondary,
+                        )
                         
-                        Button(
+                        BrandButton(
+                            text = "Submit",
                             onClick = {
                                 val correction = CorrectedCoupon(
                                     storeName = correctedStoreName.takeIf { it.isNotBlank() },
@@ -168,9 +165,7 @@ fun ExtractionFeedbackDialog(
                                 onSubmitCorrection(correction)
                             },
                             modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Submit")
-                        }
+                        )
                     }
                 }
 
@@ -179,7 +174,7 @@ fun ExtractionFeedbackDialog(
                     onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Skip Feedback")
+                    Text("Skip")
                 }
             }
         }
