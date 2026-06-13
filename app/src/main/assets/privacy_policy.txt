@@ -1,0 +1,49 @@
+Coupon Tracker Privacy Policy
+
+Effective date: 2026-06-13
+
+Coupon Tracker is designed to process coupon screenshots and coupon metadata primarily on your device.
+
+What the app stores
+- Coupon details that you save, such as store name, offer description, coupon code, redeem code, expiry date, reminder state, and optional notes.
+- Local app preferences, such as theme, reminder settings, onboarding completion, and model download state.
+- Optional local logs or diagnostics that remain on device unless you export them yourself.
+
+What the app accesses
+- Camera, when you choose to scan a coupon.
+- Photos or files, when you choose to import an image or restore a backup.
+- Notifications, when you enable coupon expiry reminders.
+- Network, only when you choose to download an on-device model file or import supported remote assets. Coupon extraction itself is intended to run offline after model setup.
+
+How data is used
+- To extract coupon information from screenshots you provide.
+- To save coupons locally and remind you before expiry.
+- To download model files you explicitly request.
+
+Transparency and limitations
+- Coupon Tracker is a personal organization and reminder tool. It is not a financial service, payment service, gambling app, lending app, or investment app.
+- Coupon extraction uses OCR, rules, and optional on-device models. Results can be incomplete or wrong, so you should review coupon details before saving or redeeming them.
+- Coupon Tracker does not guarantee that a coupon is valid, redeemable, accepted by a merchant, or that it will produce any savings.
+- Coupon Tracker is not affiliated with the stores, brands, or coupon issuers that may appear in screenshots unless explicitly stated elsewhere.
+
+How data is shared
+- Coupon Tracker does not send your coupon images or coupon contents to our servers as part of normal on-device extraction.
+- If you use export or backup features, data is only shared to the destination you choose.
+- If you choose to download a model, the app contacts approved model-hosting endpoints to fetch model files.
+
+Security
+- Network downloads are restricted to approved hosts and HTTPS.
+- Backup/export flows are intended to use encrypted formats where supported by the app configuration.
+
+Data retention and deletion
+- Your coupon data stays on your device until you delete individual coupons, clear app data, uninstall the app, or overwrite a restore target.
+- Downloaded model files remain on device until you delete them from the app settings or uninstall the app.
+
+Children
+- Coupon Tracker is not intended for children and does not knowingly collect personal data from children.
+
+Contact
+- Developer: Chetan K / chetank2.
+- Developer and grievance officer email: mymailchetan25@gmail.com
+- Support link: https://github.com/chetank2/coupontracker/issues
+- Hosted privacy policy: https://chetank2.github.io/coupontracker/privacy.html

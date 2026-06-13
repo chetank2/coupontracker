@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "samples": [
+    {
+      "id": "cred_kapiva_strength_stamina_40off",
+      "image": "Screenshot_20250502-201815.png",
+      "brand": "Kapiva",
+      "imageSha256": "0d119d81e6fb79f4fc6d0a950759a5fea0b0c56e13a8e43797d6daa17438ac77",
+      "expected": {
+        "storeName": "Kapiva",
+        "description": "Get Upto 40% Off* on Kapiva's \"Strength and Stamina Range\"",
+        "redeemCode": "KAPW1M3LAfAhSe",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "Kapiva",
+          "About Kapiva"
+        ],
+        "needsAttention": false
+      }
+    }
+  ]
+}

@@ -2,6 +2,7 @@ package com.example.coupontracker.ui
 
 import androidx.core.os.bundleOf
 import androidx.navigation.NavController
+import androidx.navigation.testing.TestNavHostController
 import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.action.ViewActions.closeSoftKeyboard
@@ -47,7 +48,6 @@ class EditCouponFlowTest {
                 Coupon(
                     storeName = "Test Store",
                     description = "Save 10%",
-                    cashbackAmount = 10.0,
                     redeemCode = "CODE10",
                     imageUri = null,
                     status = "Active"
@@ -60,7 +60,7 @@ class EditCouponFlowTest {
 
         launchFragmentInHiltContainer<AddFragment>(fragmentArgs = args) { controller ->
             navController = controller
-            controller.setCurrentDestination(R.id.addFragment, args)
+            (controller as TestNavHostController).setCurrentDestination(R.id.addFragment, args)
         }
 
         onView(withId(R.id.storeNameInput)).check(matches(withText("Test Store")))
@@ -77,7 +77,10 @@ class EditCouponFlowTest {
         assertThat(updatedCoupon?.description).isEqualTo(updatedDescription)
 
         launchFragmentInHiltContainer<DetailFragment>(fragmentArgs = bundleOf("couponId" to couponId)) { controller ->
-            controller.setCurrentDestination(R.id.detailFragment, bundleOf("couponId" to couponId))
+            (controller as TestNavHostController).setCurrentDestination(
+                R.id.detailFragment,
+                bundleOf("couponId" to couponId)
+            )
         }
 
         onView(withId(R.id.description)).check(matches(withText(updatedDescription)))

@@ -4,9 +4,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
-JAR="${PROJECT_ROOT}/app/build/libs/extraction-tool.jar"
+JAR="${PROJECT_ROOT}/extraction-tool/build/libs/extraction-tool.jar"
 if [ ! -f "${JAR}" ]; then
-  ./gradlew :app:extractionToolJar
+  ./gradlew :extraction-tool:extractionToolJar
 fi
 
 if [ ! -f "build/llama_cpp_mac/bin/llama-mtmd-cli" ]; then
@@ -19,5 +19,4 @@ source "${PROJECT_ROOT}/scripts/.venv/bin/activate" 2>/dev/null || {
   pip install -r "${PROJECT_ROOT}/scripts/extraction_eval/requirements.txt"
 }
 
-cd "${PROJECT_ROOT}/scripts"
-python -m extraction_eval --jar "${JAR}" "$@"
+PYTHONPATH="${PROJECT_ROOT}/scripts" python -m extraction_eval --jar "${JAR}" "$@"

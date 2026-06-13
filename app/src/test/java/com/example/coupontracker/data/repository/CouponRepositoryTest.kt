@@ -157,6 +157,58 @@ class CouponRepositoryTest {
     }
 
     @Test
+    fun `saveOrMergeCoupon reuses reliable redeem code when text differs`() = runBlocking {
+        val existing = Coupon(
+            id = 7,
+            storeName = "Trubebasics Flat",
+            description = "Flat 150 off TRUEBASICS CLEAN YEAST PROTEIN",
+            normalizedDescription = CouponDedupUtils.normalizeDescription("Flat 150 off TRUEBASICS CLEAN YEAST PROTEIN"),
+            expiryDate = Date(),
+            redeemCode = "PHTB2ATAQQ2DCY",
+            imageUri = null,
+            category = "Test",
+            createdAt = Date(0),
+            updatedAt = Date(0)
+        )
+        val incomingDescription = "GY071%\nCashback: ₹150 off"
+        val incoming = existing.copy(
+            id = 0,
+            storeName = "TRUE BASICS",
+            description = incomingDescription,
+            normalizedDescription = null,
+            createdAt = Date(),
+            updatedAt = Date()
+        )
+        val normalized = CouponDedupUtils.normalizeDescription(incomingDescription)
+
+        coEvery {
+            couponDao.findByStoreAndDescription(
+                storeName = incoming.storeName,
+                normalizedDescription = normalized,
+                imagePhash = null,
+                imageSignature = null
+            )
+        } returns null
+        coEvery { couponDao.findByRedeemCode("PHTB2ATAQQ2DCY") } returns existing
+        coEvery { couponDao.updateCoupon(any()) } returns Unit
+
+        val result = repositoryImpl.saveOrMergeCoupon(incoming, normalized, null, null)
+
+        assert(result == existing.id)
+        coVerify(exactly = 0) { couponDao.insertCoupon(any()) }
+        coVerify {
+            couponDao.updateCoupon(
+                match {
+                    it.id == existing.id &&
+                        it.storeName == incoming.storeName &&
+                        it.redeemCode == "PHTB2ATAQQ2DCY" &&
+                        it.createdAt == existing.createdAt
+                }
+            )
+        }
+    }
+
+    @Test
     fun `insertCoupon schedules reminder when enabled`() = runBlocking {
         val expiry = Date(System.currentTimeMillis() + 48 * 60 * 60 * 1000)
         val coupon = Coupon(

@@ -20,8 +20,8 @@ data class PromptParts(
 )
 
 object PromptFormatter {
-    private const val MAX_OCR_CHARS = 360
-    private const val MAX_OCR_LINES = 18
+    private const val MAX_OCR_CHARS = 300
+    private const val MAX_OCR_LINES = 12
     private val HIGH_SIGNAL_KEYWORDS = listOf(
         "code",
         "coupon",
@@ -75,34 +75,14 @@ object PromptFormatter {
 
     private fun buildSystemPrompt(schema: Schema, v2Enabled: Boolean): String {
         val requiredFields = schema.getRequiredFields().joinToString { it.name }
-        val optionalFields = schema.getOptionalFields().joinToString { it.name }
         return buildString {
             appendLine("<|im_start|>system")
-            appendLine("You return exactly one compact JSON object and nothing else.")
-            appendLine("Required keys: $requiredFields")
-            val effectiveOptional = if (v2Enabled) {
-                listOfNotNull(
-                    optionalFields.takeIf { it.isNotBlank() },
-                    "category, storeUrl, paymentMethod, minimumPurchase, maximumDiscount, " +
-                        "redeemCodes, primaryRedeemCode, offerType"
-                ).joinToString(", ")
-            } else {
-                optionalFields
-            }
-            if (effectiveOptional.isNotBlank()) {
-                appendLine("Optional keys (use the string \"unknown\" when unavailable): $effectiveOptional")
-            }
-            val extraKeysClause = if (v2Enabled)
-                "no markdown, no comments, preserve coupon text verbatim"
-            else
-                "no markdown, no comments, no extra keys, preserve coupon text verbatim"
-            appendLine("Rules: $extraKeysClause.")
-            appendLine("All string values must be trimmed and non-empty. Never output null, \"null\", \"NULL\", \"N/A\", or empty strings.")
-            appendLine("If a field is truly missing, output the literal string \"unknown\".")
-            appendLine("storeName must be the merchant or brand highlighted in the coupon.")
-            appendLine("redeemCode must match the coupon code text exactly, using uppercase letters/numbers only with no spaces or CTA text like COPY.")
-            appendLine("expiryDate must repeat the date format found in the coupon (for example, \"31 May, 2025\").")
-            appendLine("Keep storeNameEvidence to between zero and three short snippets copied from the OCR text.")
+            appendLine("Return one minified JSON object only.")
+            appendLine("Keys: $requiredFields")
+            appendLine("No markdown, comments, nulls, empty strings, or extra keys. Use \"unknown\" if missing.")
+            appendLine("storeName=merchant/brand. redeemCode=actual code only, uppercase, no spaces/CTA.")
+            appendLine("description=main offer wording. expiryDate=expiry wording from OCR.")
+            appendLine("storeNameSource=ocr|logo|heading|vision|unknown. storeNameEvidence=1-2 exact OCR snippets.")
             append("<|im_end|>")
         }
     }
@@ -116,11 +96,7 @@ object PromptFormatter {
         )
         return buildString {
             appendLine("<|im_start|>user")
-            appendLine("Structure the OCR excerpt into JSON (quality $metrics). Respond with JSON only.")
-            appendLine("Prioritise extracting merchant/store name, coupon description, redeem code, and expiry date from the text below.")
-            appendLine("If any of those are missing in the text, write \"unknown\" but do not invent new information.")
-            appendLine("Ensure the redeemCode contains only the actual coupon code characters (no words like COPY or APPLY).")
-            appendLine("OCR excerpt:")
+            appendLine("Extract coupon fields from OCR ($metrics). Do not invent.")
             appendLine(truncatedOcr)
             append("<|im_end|>")
         }

@@ -74,7 +74,7 @@ fun CouponDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Coupon Details") },
+                title = { Text("Coupon details") },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -134,6 +134,14 @@ private fun CouponDetailContent(
     debugSnapshot: ExtractionDebugSnapshot?,
     isDebugBuild: Boolean
 ) {
+    val displayDescription = remember(coupon.description, coupon.storeName, coupon.redeemCode) {
+        DescriptionUtils.formatDisplayDescription(
+            description = coupon.description,
+            storeName = coupon.storeName,
+            redeemCode = coupon.redeemCode
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -211,41 +219,34 @@ private fun CouponDetailContent(
 
         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
-        // Description
         Text(
-            text = coupon.description,
-            style = MaterialTheme.typography.bodyLarge
+            text = "Offer",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-
-        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
-
-        CouponActionButtons(
-            onTrackUsageClick = {
-                onTrackUsage()
-                Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
-            },
-            onSetReminderClick = {
-                Toast.makeText(
-                    context,
-                    "Reminder functionality would be implemented here",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
+        Spacer(modifier = Modifier.height(BrandSpacing.Tiny))
+        Text(
+            text = displayDescription,
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.fillMaxWidth()
         )
-
-        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
-
-        ExtractionQualityCard(coupon = coupon)
 
         Spacer(modifier = Modifier.height(BrandSpacing.Large))
 
         // Coupon code
         if (!coupon.redeemCode.isNullOrEmpty()) {
+            Text(
+                text = "Code",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(BrandSpacing.Tiny))
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(16.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             ) {
                 Row(
@@ -273,10 +274,12 @@ private fun CouponDetailContent(
                 }
             }
 
-            Spacer(modifier = Modifier.height(BrandSpacing.Large))
+            Spacer(modifier = Modifier.height(BrandSpacing.Medium))
         }
 
         if (isDebugBuild && debugSnapshot != null) {
+            ExtractionQualityCard(coupon = coupon)
+            Spacer(modifier = Modifier.height(BrandSpacing.Medium))
             ExtractionDebugPanel(snapshot = debugSnapshot)
             Spacer(modifier = Modifier.height(BrandSpacing.Large))
         }
@@ -322,6 +325,22 @@ private fun CouponDetailContent(
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+        CouponActionButtons(
+            onTrackUsageClick = {
+                onTrackUsage()
+                Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
+            },
+            onSetReminderClick = {
+                Toast.makeText(
+                    context,
+                    "Reminder settings coming soon",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        )
 
         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 

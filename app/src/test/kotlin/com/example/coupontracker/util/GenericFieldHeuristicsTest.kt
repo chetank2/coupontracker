@@ -35,4 +35,19 @@ class GenericFieldHeuristicsTest {
     fun `fetch failure phrase description fails`() {
         assertFalse(GenericFieldHeuristics.isMeaningfulDescription("Description not fetched fully"))
     }
+
+    @Test
+    fun `standalone percent is not meaningful cashback`() {
+        assertFalse(GenericFieldHeuristics.hasMeaningfulCashback("82%"))
+    }
+
+    @Test
+    fun `percent with offer context is meaningful cashback`() {
+        assertTrue(GenericFieldHeuristics.hasMeaningfulCashback("82% off"))
+    }
+
+    @Test
+    fun `currency amount is meaningful cashback`() {
+        assertTrue(GenericFieldHeuristics.hasMeaningfulCashback("₹100"))
+    }
 }

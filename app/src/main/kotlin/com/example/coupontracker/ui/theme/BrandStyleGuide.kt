@@ -49,61 +49,61 @@ object BrandColors {
     )
 
     val Dark = Palette(
-        Primary = Color(0xFF0F1115),
-        PrimaryVariant = Color(0xFF1A1C21),
-        OnPrimary = Color(0xFFE0E0E0),
-        Accent = Color(0xFF2979FF),
-        AccentVariant = Color(0xFF1E5ED0),
+        Primary = Color(0xFF2563EB),
+        PrimaryVariant = Color(0xFF1D4ED8),
+        OnPrimary = Color(0xFFFFFFFF),
+        Accent = Color(0xFF2563EB),
+        AccentVariant = Color(0xFF1D4ED8),
         OnAccent = Color(0xFFFFFFFF),
-        Background = Color(0xFF0A0B0E),
-        Surface = Color(0xFF121418),
-        SurfaceVariant = Color(0xFF1C1F24),
-        SurfaceElevated = Color(0xFF22262D),
-        OnBackground = Color(0xFFE0E0E0),
-        OnSurface = Color(0xFFDBE1F5),
-        OnSurfaceVariant = Color(0xFFBDBDBD),
-        Muted = Color(0xFF9AA0AD),
-        Success = Color(0xFF4CAF50),
-        Warning = Color(0xFFFF9800),
-        Error = Color(0xFFF44336),
-        Info = Color(0xFF00BCD4),
-        PrimaryButton = Color(0xFF2979FF),
-        SecondaryButton = Color(0xFF2F323A),
-        OnSecondaryButton = Color(0xFFDBE1F5),
+        Background = Color(0xFF171717),
+        Surface = Color(0xFF242424),
+        SurfaceVariant = Color(0xFF2F2F2F),
+        SurfaceElevated = Color(0xFF303030),
+        OnBackground = Color(0xFFF5F5F5),
+        OnSurface = Color(0xFFF5F5F5),
+        OnSurfaceVariant = Color(0xFFC7C7C7),
+        Muted = Color(0xFFA3A3A3),
+        Success = Color(0xFF22C55E),
+        Warning = Color(0xFFF59E0B),
+        Error = Color(0xFFEF4444),
+        Info = Color(0xFF60A5FA),
+        PrimaryButton = Color(0xFF2563EB),
+        SecondaryButton = Color(0xFF333333),
+        OnSecondaryButton = Color(0xFFF5F5F5),
         TertiaryButton = Color.Transparent,
-        OnTertiaryButton = Color(0xFF2979FF),
-        Divider = Color(0xFF2C3038),
-        Stroke = Color(0xFF2A2E36),
-        Highlight = Color(0xFF1C263D),
+        OnTertiaryButton = Color(0xFF93C5FD),
+        Divider = Color(0xFF404040),
+        Stroke = Color(0xFF525252),
+        Highlight = Color(0xFF1E3A8A),
     )
 
     val Light = Palette(
-        Primary = Color(0xFF1976D2),
-        PrimaryVariant = Color(0xFF1565C0),
+        Primary = Color(0xFF2563EB),
+        PrimaryVariant = Color(0xFF1D4ED8),
         OnPrimary = Color(0xFFFFFFFF),
-        Accent = Color(0xFF2979FF),
-        AccentVariant = Color(0xFF1E5ED0),
+        Accent = Color(0xFF2563EB),
+        AccentVariant = Color(0xFF1D4ED8),
         OnAccent = Color(0xFFFFFFFF),
-        Background = Color(0xFFFAFAFA),
+        Background = Color(0xFFF7F7F7),
         Surface = Color(0xFFFFFFFF),
-        SurfaceVariant = Color(0xFFF1F3F4),
+        SurfaceVariant = Color(0xFFFFFFFF),
         SurfaceElevated = Color(0xFFFFFFFF),
-        OnBackground = Color(0xFF000000),
-        OnSurface = Color(0xFF1F1F1F),
-        OnSurfaceVariant = Color(0xFF5F6368),
-        Muted = Color(0xFF757575),
-        Success = Color(0xFF4CAF50),
-        Warning = Color(0xFFFF9800),
-        Error = Color(0xFFF44336),
-        Info = Color(0xFF2196F3),
-        PrimaryButton = Color(0xFF2979FF),
-        SecondaryButton = Color(0xFFE0E0E0),
-        OnSecondaryButton = Color(0xFF1F1F1F),
+        OnBackground = Color(0xFF222222),
+        OnSurface = Color(0xFF222222),
+        OnSurfaceVariant = Color(0xFF717171),
+        Muted = Color(0xFF717171),
+        Success = Color(0xFF16A34A),
+        Warning = Color(0xFFD97706),
+        Error = Color(0xFFDC2626),
+        Info = Color(0xFF2563EB),
+        PrimaryButton = Color(0xFF2563EB),
+        SecondaryButton = Color(0xFFFFFFFF),
+        OnSecondaryButton = Color(0xFF222222),
         TertiaryButton = Color.Transparent,
-        OnTertiaryButton = Color(0xFF2979FF),
-        Divider = Color(0xFFE0E0E0),
-        Stroke = Color(0xFFD0D5DD),
-        Highlight = Color(0xFFE3F2FD),
+        OnTertiaryButton = Color(0xFF2563EB),
+        Divider = Color(0xFFDDDDDD),
+        Stroke = Color(0xFFDDDDDD),
+        Highlight = Color(0xFFEFF6FF),
     )
 
     // Legacy properties used throughout the UI default to the dark palette for backward compatibility.
@@ -185,24 +185,24 @@ object BrandTypography {
 
     // Title styles
     val TitleLarge = TextStyle(
-        fontWeight = FontWeight.Medium,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
+        fontWeight = FontWeight.Bold,
+        fontSize = 28.sp,
+        lineHeight = 34.sp,
         letterSpacing = 0.sp
     )
 
     val TitleMedium = TextStyle(
         fontWeight = FontWeight.SemiBold,
         fontSize = 18.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.1.sp
+        lineHeight = 24.sp,
+        letterSpacing = 0.sp
     )
 
     val TitleSmall = TextStyle(
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.05.sp
+        letterSpacing = 0.sp
     )
 
     // Body styles
@@ -210,21 +210,21 @@ object BrandTypography {
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
-        letterSpacing = 0.15.sp
+        letterSpacing = 0.sp
     )
 
     val BodyMedium = TextStyle(
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
-        letterSpacing = 0.1.sp
+        letterSpacing = 0.sp
     )
 
     val BodySmall = TextStyle(
         fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
+        fontSize = 13.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.1.sp
+        letterSpacing = 0.sp
     )
 
     // Label styles
@@ -232,21 +232,21 @@ object BrandTypography {
         fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
         lineHeight = 22.sp,
-        letterSpacing = 0.05.sp
+        letterSpacing = 0.sp
     )
 
     val LabelMedium = TextStyle(
         fontWeight = FontWeight.Medium,
         fontSize = 13.sp,
         lineHeight = 18.sp,
-        letterSpacing = 0.1.sp
+        letterSpacing = 0.sp
     )
 
     val LabelSmall = TextStyle(
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.1.sp
+        letterSpacing = 0.sp
     )
 }
 
@@ -255,21 +255,21 @@ object BrandTypography {
  */
 object BrandShapes {
     // Corner shapes
-    val SmallCornerShape = RoundedCornerShape(4.dp)
-    val MediumCornerShape = RoundedCornerShape(8.dp)
-    val LargeCornerShape = RoundedCornerShape(12.dp)
+    val SmallCornerShape = RoundedCornerShape(8.dp)
+    val MediumCornerShape = RoundedCornerShape(12.dp)
+    val LargeCornerShape = RoundedCornerShape(16.dp)
     val ExtraLargeCornerShape = RoundedCornerShape(16.dp)
 
     // Button shapes
-    val ButtonShape = RoundedCornerShape(8.dp)
+    val ButtonShape = RoundedCornerShape(14.dp)
     val PillShape = RoundedCornerShape(50)
 
     // Card shapes
-    val CardShape = RoundedCornerShape(12.dp)
-    val CardShapeSmall = RoundedCornerShape(8.dp)
+    val CardShape = RoundedCornerShape(16.dp)
+    val CardShapeSmall = RoundedCornerShape(12.dp)
 
     // Input shapes
-    val InputShape = RoundedCornerShape(8.dp)
+    val InputShape = RoundedCornerShape(12.dp)
 
     // Dialog shapes
     val DialogShape = RoundedCornerShape(16.dp)
@@ -291,7 +291,7 @@ object BrandSpacing {
     val Giant = 64.dp
 
     // Specific spacing
-    val ContentPadding = Medium
+    val ContentPadding = Large
     val CardPadding = Medium
     val ButtonPadding = Small
     val ListItemSpacing = ExtraSmall

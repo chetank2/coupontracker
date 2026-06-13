@@ -24,6 +24,8 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -82,20 +84,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleSharedContent(intent)
     }
 
     private fun handleSharedContent(intent: Intent) {
         when (intent.action) {
             Intent.ACTION_SEND -> {
-                if (intent.type?.startsWith("image/") == true) {
+                if (intent.isImageLikeShare()) {
                     handleSharedImage(intent)
                 } else if (intent.type == "text/plain") {
                     handleSharedText(intent)
                 }
             }
             Intent.ACTION_SEND_MULTIPLE -> {
-                if (intent.type?.startsWith("image/") == true) {
+                if (intent.isImageLikeShare()) {
                     handleMultipleSharedImages(intent)
                 }
             }
@@ -107,10 +110,12 @@ class MainActivity : ComponentActivity() {
             val imageUri = intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
             if (imageUri != null) {
                 Log.d(TAG, "Received shared image: $imageUri")
+                persistReadPermissionIfAvailable(intent, imageUri)
+                val scannerUri = copySharedImageToCache(imageUri) ?: imageUri
 
                 // Store the URI in a temporary location for the scanner to access
                 val sharedPrefs = getSharedPreferences("coupon_tracker_prefs", MODE_PRIVATE)
-                sharedPrefs.edit().putString("shared_image_uri", imageUri.toString()).apply()
+                sharedPrefs.edit().putString("shared_image_uri", scannerUri.toString()).apply()
 
                 // Navigate to the scanner screen
                 navControllerRef?.navigate(Screen.Scanner.route)
@@ -128,11 +133,14 @@ class MainActivity : ComponentActivity() {
 
                 // Store the URIs as a JSON string for the batch scanner to access
                 val gson = com.google.gson.Gson()
-                val uriStrings = imageUris.map { it.toString() }
+                val uriStrings = imageUris.map { uri ->
+                    persistReadPermissionIfAvailable(intent, uri)
+                    (copySharedImageToCache(uri) ?: uri).toString()
+                }
                 val uriJson = gson.toJson(uriStrings)
 
                 val sharedPrefs = getSharedPreferences("coupon_tracker_prefs", MODE_PRIVATE)
-            sharedPrefs.edit().putString("shared_image_uris", uriJson).apply()
+                sharedPrefs.edit().putString("shared_image_uris", uriJson).apply()
 
                 // Navigate to the batch scanner screen
                 navControllerRef?.navigate(Screen.BatchScanner.route)
@@ -163,6 +171,56 @@ class MainActivity : ComponentActivity() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error handling shared text", e)
+        }
+    }
+
+    private fun copySharedImageToCache(uri: Uri): Uri? {
+        return try {
+            val sharedDir = File(cacheDir, "shared_images").apply { mkdirs() }
+            val extension = when {
+                contentResolver.getType(uri)?.contains("png", ignoreCase = true) == true -> "png"
+                contentResolver.getType(uri)?.contains("webp", ignoreCase = true) == true -> "webp"
+                else -> "jpg"
+            }
+            val outputFile = File(sharedDir, "shared_${System.currentTimeMillis()}.$extension")
+
+            contentResolver.openInputStream(uri)?.use { input ->
+                FileOutputStream(outputFile).use { output ->
+                    input.copyTo(output)
+                }
+            } ?: return null
+
+            val cachedUri = Uri.fromFile(outputFile)
+            Log.d(TAG, "Copied shared image to cache: $cachedUri")
+            cachedUri
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not copy shared image into app cache: $uri", e)
+            null
+        }
+    }
+
+    private fun Intent.isImageLikeShare(): Boolean {
+        return type?.startsWith("image/") == true || type == "application/octet-stream"
+    }
+
+    private fun persistReadPermissionIfAvailable(intent: Intent, uri: Uri) {
+        val readFlag = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        if (intent.flags and readFlag == 0) {
+            return
+        }
+
+        if (intent.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION == 0) {
+            Log.d(TAG, "Shared URI has transient read permission only: $uri")
+            return
+        }
+
+        try {
+            contentResolver.takePersistableUriPermission(uri, readFlag)
+            Log.d(TAG, "Persisted read permission for shared URI: $uri")
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Could not persist read permission for shared URI: $uri", e)
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "Shared URI does not support persistable permission: $uri", e)
         }
     }
 }

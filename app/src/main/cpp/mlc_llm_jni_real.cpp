@@ -1,7 +1,6 @@
 #include <jni.h>
 #include <string>
 #include <android/log.h>
-#include <android/bitmap.h>  // ⭐ NEW: For Bitmap handling
 #include <memory>
 #include <unordered_map>
 #include <mutex>
@@ -11,8 +10,6 @@
 
 // Include llama.cpp headers
 #include "llama/llama.h"
-#include "tools/mtmd/clip.h"      // ⭐ NEW: CLIP/MTMD vision library
-#include "tools/mtmd/clip-impl.h" // ⭐ NEW: CLIP implementation (for struct definitions)
 
 #define LOG_TAG "MLC_LLM_JNI_REAL"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -25,10 +22,8 @@ struct ModelContext {
     llama_model* model = nullptr;
     llama_context* ctx = nullptr;
     llama_sampler* sampler = nullptr;
-    clip_ctx* vision_ctx = nullptr;  // ⭐ UPDATED: CLIP vision context (was llama_model*)
     bool has_vision = false;
     std::string model_path;
-    std::string mmproj_path;  // Path to mmproj file
     std::string grammar_str;     // ⭐ NEW: Loaded grammar string
     bool use_grammar = false;    // ⭐ NEW: Whether grammar enforcement is enabled
     int max_tokens = 512;
@@ -100,37 +95,12 @@ void destroy_model_context(ModelContext* ctx) {
         ctx->ctx = nullptr;
     }
 
-    if (ctx->vision_ctx) {
-        clip_free(ctx->vision_ctx);
-        ctx->vision_ctx = nullptr;
-    }
-
     if (ctx->model) {
         llama_model_free(ctx->model);
         ctx->model = nullptr;
     }
 
     delete ctx;
-}
-
-// ⭐ Phase 2: Convert Android Bitmap to RGB pixels for CLIP
-std::vector<uint8_t> bitmapToRGB(JNIEnv* env, jbyteArray image_data, jint width, jint height) {
-    jbyte* image_bytes = env->GetByteArrayElements(image_data, nullptr);
-    jsize image_size = env->GetArrayLength(image_data);
-    
-    std::vector<uint8_t> rgb_pixels(width * height * 3);
-    
-    // Assume input is RGB or RGBA, convert to RGB
-    int bytes_per_pixel = image_size / (width * height);
-    
-    for (int i = 0; i < width * height; i++) {
-        rgb_pixels[i * 3 + 0] = image_bytes[i * bytes_per_pixel + 0]; // R
-        rgb_pixels[i * 3 + 1] = image_bytes[i * bytes_per_pixel + 1]; // G
-        rgb_pixels[i * 3 + 2] = image_bytes[i * bytes_per_pixel + 2]; // B
-    }
-    
-    env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
-    return rgb_pixels;
 }
 
 extern "C" {
@@ -354,67 +324,9 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         
         LOGI("✅ Model loaded successfully!");
         
-        // Check if model has vision/encoder capabilities (built-in)
-        LOGI("Step 4: Checking vision capabilities...");
-        ctx->has_vision = llama_model_has_encoder(ctx->model);
-        LOGI("  - Has encoder: %s", ctx->has_vision ? "YES" : "NO");
-        
-        // Detect explicit opt-out for vision (text-only sentinel)
-        bool skip_mmproj = false;
-        if (!ctx->has_vision) {
-            std::string text_only_flag = model_path_str.substr(0, model_path_str.find_last_of("/")) + "/.text_only";
-            FILE* sentinel = fopen(text_only_flag.c_str(), "rb");
-            if (sentinel) {
-                fclose(sentinel);
-                skip_mmproj = true;
-                LOGI("Text-only sentinel detected (%s) – skipping mmproj probing", text_only_flag.c_str());
-            }
-        }
-
-        // NEW: Try to load mmproj file for vision support
-        if (!ctx->has_vision && !skip_mmproj) {
-            LOGI("Step 4b: Attempting to load mmproj (vision projector)...");
-            
-            // Extract model directory from model path
-            std::string model_dir = model_path_str.substr(0, model_path_str.find_last_of("/"));
-            std::string mmproj_path = model_dir + "/mmproj-model-f16.gguf";
-            
-            LOGI("  - Looking for: %s", mmproj_path.c_str());
-            
-            // Check if mmproj file exists
-            FILE* test_file = fopen(mmproj_path.c_str(), "rb");
-            if (test_file) {
-                fclose(test_file);
-                
-                LOGI("  - Found mmproj file, loading with CLIP...");
-                
-                // ⭐ Use clip_init() to load vision projector (new API with params)
-                clip_context_params clip_params;
-                clip_params.verbosity = GGML_LOG_LEVEL_INFO;  // Enable logging
-                clip_init_result clip_result = clip_init(mmproj_path.c_str(), clip_params);
-                ctx->vision_ctx = clip_result.ctx_v;  // Get vision context
-                
-                if (ctx->vision_ctx) {
-                    ctx->mmproj_path = mmproj_path;
-                    ctx->has_vision = true;  // Enable vision support
-                    LOGI("✅ Vision projector (mmproj) loaded with CLIP!");
-                    LOGI("✅ VISION ENABLED - Ready for multimodal inference");
-                } else {
-                    LOGE("❌ Failed to load mmproj with clip_init()");
-                    LOGW("⚠️  Falling back to text-only mode");
-                }
-            } else {
-                LOGW("⚠️  mmproj file not found at: %s", mmproj_path.c_str());
-                LOGW("⚠️  Model will operate in text-only mode");
-                LOGW("⚠️  Download mmproj-model-f16.gguf for vision support");
-            }
-        } else if (ctx->has_vision) {
-            LOGI("✅ Model has BUILT-IN vision encoder!");
-        }
-
-        if (skip_mmproj) {
-            LOGI("Vision: DISABLED (text-only model)");
-        }
+        LOGI("Step 4: Configuring text-only Qwen runtime...");
+        ctx->has_vision = false;
+        LOGI("Vision: DISABLED (Qwen2.5 text-only model)");
         
         // Get model metadata
         int32_t n_params = llama_model_n_params(ctx->model);
@@ -548,10 +460,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_initializeModel(
         LOGI("========================================");
         LOGI("Handle: %lld", (long long)handle);
         LOGI("Status: READY FOR INFERENCE");
-        const char* vision_status = ctx->has_vision
-            ? "ENABLED"
-            : (skip_mmproj ? "DISABLED (text-only model)" : "DISABLED (need mmproj)");
-        LOGI("Vision: %s", vision_status);
+        LOGI("Vision: DISABLED (text-only Qwen runtime)");
         LOGI("========================================");
         
         return handle;
@@ -569,6 +478,11 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
     JNIEnv* env, jobject /* this */, jlong model_handle, jbyteArray image_data,
     jint width, jint height, jstring prompt) {
     
+    (void)image_data;
+    (void)width;
+    (void)height;
+    (void)prompt;
+
     std::lock_guard<std::mutex> lock(g_model_mutex);
     
     auto it = g_model_handles.find(model_handle);
@@ -576,249 +490,9 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
         LOGE("❌ Invalid model handle: %lld", (long long)model_handle);
         return nullptr;
     }
-    
-    ModelContext* ctx = it->second;
-    std::string prompt_str = jstring_to_string(env, prompt);
-    
-    // Get image data
-    jbyte* image_bytes = env->GetByteArrayElements(image_data, nullptr);
-    jsize image_size = env->GetArrayLength(image_data);
-    
-    LOGI("========================================");
-    LOGI("🖼️  VISION INFERENCE REQUEST");
-    LOGI("========================================");
-    LOGD("Image: %dx%d (%d bytes)", width, height, image_size);
-    LOGD("Prompt: %.100s...", prompt_str.c_str());
-    LOGD("Has vision: %s", ctx->has_vision ? "YES" : "NO");
-    LOGI("========================================");
-    
-    try {
-        std::stringstream result;
-        
-        if (ctx->has_vision && ctx->vision_ctx) {
-            // ⭐ PHASE 2: FULL CLIP VISION INFERENCE
-            LOGI("✅ Vision context loaded - Running full CLIP inference");
-            
-            // Step 1: Convert byte array to RGB pixels
-            LOGI("Step 1: Converting image to RGB...");
-            std::vector<uint8_t> rgb_pixels = bitmapToRGB(env, image_data, width, height);
-            LOGI("  ✅ Converted %dx%d image to RGB (%zu bytes)", width, height, rgb_pixels.size());
-            
-            // Step 2: Initialize CLIP image structure
-            LOGI("Step 2: Initializing CLIP image structure...");
-            clip_image_u8* img = clip_image_u8_init();
-            if (!img) {
-                LOGE("❌ Failed to initialize clip_image_u8");
-                env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
-                return string_to_jstring(env, "{\"error\": \"Failed to initialize CLIP image\"}");
-            }
-            
-            // Step 3: Build image from RGB pixels
-            LOGI("Step 3: Building CLIP image from pixels...");
-            clip_build_img_from_pixels(rgb_pixels.data(), width, height, img);
-            LOGI("  ✅ CLIP image built");
-            
-            // Step 4: Initialize preprocessing batch
-            LOGI("Step 4: Preprocessing image...");
-            clip_image_f32_batch* batch = clip_image_f32_batch_init();
-            if (!batch) {
-                LOGE("❌ Failed to initialize clip_image_f32_batch");
-                clip_image_u8_free(img);
-                env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
-                return string_to_jstring(env, "{\"error\": \"Failed to initialize preprocessing batch\"}");
-            }
-            
-            // Step 5: Preprocess image (resize, normalize, etc.)
-            bool preprocess_ok = clip_image_preprocess(ctx->vision_ctx, img, batch);
-            clip_image_u8_free(img); // Free u8 image after preprocessing
-            
-            if (!preprocess_ok) {
-                LOGE("❌ Failed to preprocess image");
-                clip_image_f32_batch_free(batch);
-                env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
-                return string_to_jstring(env, "{\"error\": \"Image preprocessing failed\"}");
-            }
-            
-            size_t n_images = clip_image_f32_batch_n_images(batch);
-            LOGI("  ✅ Preprocessed into %zu image(s)", n_images);
-            
-            // Step 6: Encode images with CLIP to get embeddings
-            LOGI("Step 5: Encoding images with CLIP...");
-            int embd_size = clip_n_mmproj_embd(ctx->vision_ctx);
-            LOGI("  - Embedding size: %d dimensions", embd_size);
-            LOGI("  - Number of images: %zu", n_images);
-            LOGI("  - Total embedding buffer: %d floats", embd_size * (int)n_images);
-            
-            std::vector<float> image_embeddings(embd_size * n_images);
-            
-            // ⚠️ WARNING: CLIP encoding is VERY slow on CPU (minutes per image)
-            // For now, skip vision encoding to avoid app freeze
-            // TODO: Implement async encoding or use text-only inference
-            LOGW("⚠️  CLIP vision encoding is extremely slow on CPU");
-            LOGW("⚠️  Skipping vision encoding to prevent app freeze");
-            LOGW("⚠️  Falling back to text-only inference with OCR");
-            
-            bool encode_ok = false;  // Force fallback to text-only
-            
-            // Uncomment below to enable SLOW vision encoding (5-30 min per image):
-            /*
-            bool encode_ok = true;
-            for (size_t i = 0; i < n_images && encode_ok; i++) {
-                LOGI("  - Encoding image %zu/%zu... (this may take 5-30 minutes)", i + 1, n_images);
-                struct clip_image_f32* single_img = clip_image_f32_get_img(batch, i);
-                
-                if (!single_img) {
-                    LOGE("❌ Failed to get image %zu from batch", i);
-                    encode_ok = false;
-                    break;
-                }
-                
-                float* embd_ptr = image_embeddings.data() + (i * embd_size);
-                auto start = std::chrono::high_resolution_clock::now();
-                encode_ok = clip_image_encode(ctx->vision_ctx, 4, single_img, embd_ptr);
-                auto end = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start).count();
-                
-                if (!encode_ok) {
-                    LOGE("❌ Failed to encode image %zu", i);
-                    break;
-                }
-                LOGI("  ✅ Image %zu encoded in %ld seconds", i + 1, duration);
-            }
-            */
-            
-            clip_image_f32_batch_free(batch); // Free batch after encoding
-            
-            if (!encode_ok) {
-                LOGW("⚠️  Vision encoding skipped (too slow on mobile CPU)");
-                LOGI("→ Using text-only MiniCPM inference with OCR text");
-                env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
-                
-                // Return status indicating we need GPU or should use text-only mode
-                result << "{";
-                result << "\"storeName\": \"Text Mode\",";
-                result << "\"description\": \"Vision encoding requires GPU acceleration. Using OCR-based extraction.\",";
-                result << "\"redeemCode\": \"\",";
-                result << "\"expiryDate\": \"\",";
-                result << "\"storeNameSource\": \"system\",";
-                result << "\"storeNameEvidence\": [\"Text Mode\"],";
-                result << "\"needsAttention\": true,";
-                result << "\"status\": \"VISION_TOO_SLOW\",";
-                result << "\"note\": \"CLIP encoding takes 5-30 min on CPU. Consider GPU device or use OCR-only mode.\"";
-                result << "}";
-                
-                std::string result_str = result.str();
-                return string_to_jstring(env, result_str);
-            }
-            
-            LOGI("  ✅ All images encoded to %d-dimensional embeddings", embd_size);
-            LOGI("========================================");
-            LOGI("✅ CLIP VISION ENCODING COMPLETE!");
-            LOGI("========================================");
-            
-            // Step 7: Build multimodal prompt
-            // For MiniCPM-V, the format is typically: <image>prompt
-            std::string full_prompt = prompt_str;  // Embeddings are handled separately
-            LOGI("Step 6: Running multimodal LLM inference...");
-            LOGD("  Prompt: %.100s...", full_prompt.c_str());
-            
-            // Step 8: Tokenize and run inference (simplified - production needs image token injection)
-            const llama_vocab* vocab = llama_model_get_vocab(ctx->model);
-            std::vector<llama_token> tokens;
-            tokens.resize(full_prompt.size() + 512);
-            
-            int n_tokens = llama_tokenize(
-                vocab,
-                full_prompt.c_str(),
-                full_prompt.size(),
-                tokens.data(),
-                tokens.size(),
-                true,  // add_bos
-                true   // special tokens
-            );
-            
-            if (n_tokens < 0) {
-                tokens.resize(-n_tokens);
-                n_tokens = llama_tokenize(vocab, full_prompt.c_str(), full_prompt.size(),
-                                         tokens.data(), tokens.size(), true, true);
-            }
-            tokens.resize(n_tokens);
-            
-            LOGI("  ✅ Tokenized: %d tokens", n_tokens);
-            
-            // Step 9: Run inference
-            llama_batch llm_batch = llama_batch_get_one(tokens.data(), n_tokens);
-            llama_decode(ctx->ctx, llm_batch);
-            
-            // Step 10: Generate response
-            LOGI("Step 7: Generating response...");
-            std::vector<llama_token> output_tokens;
-            int max_tokens = 512;  // Increased for detailed coupon info
-            llama_token eos_token = llama_vocab_eos(vocab);
-            llama_token new_token = llama_sampler_sample(ctx->sampler, ctx->ctx, -1);
-            
-            for (int i = 0; i < max_tokens && new_token != eos_token; i++) {
-                output_tokens.push_back(new_token);
-                llama_batch next_batch = llama_batch_get_one(&new_token, 1);
-                llama_decode(ctx->ctx, next_batch);
-                new_token = llama_sampler_sample(ctx->sampler, ctx->ctx, -1);
-            }
-            
-            // Step 11: Detokenize response
-            std::string response_text;
-            response_text.resize(output_tokens.size() * 8);
-            int text_len = llama_detokenize(
-                vocab,
-                output_tokens.data(),
-                output_tokens.size(),
-                &response_text[0],
-                response_text.size(),
-                false,
-                false
-            );
-            response_text.resize(text_len > 0 ? text_len : 0);
-            
-            LOGI("========================================");
-            LOGI("✅ MULTIMODAL INFERENCE COMPLETE!");
-            LOGI("========================================");
-            LOGI("Response (%zu chars): %.300s...", response_text.length(), response_text.c_str());
-            
-            // Return LLM response (should be JSON from MiniCPM)
-            result << response_text;
-            
-        } else {
-            // Model doesn't have vision encoder - need mmproj
-            LOGW("⚠️  Vision context not available");
-            LOGW("⚠️  Need to download mmproj file");
-            
-            result << "{";
-            result << "\"storeName\": \"Model Loaded\",";
-            result << "\"description\": \"Text model loaded. Download mmproj file for vision support.\",";
-            result << "\"redeemCode\": \"\",";
-            result << "\"expiryDate\": \"\",";
-            result << "\"storeNameSource\": \"system\",";
-            result << "\"storeNameEvidence\": [\"Model Loaded\"],";
-            result << "\"needsAttention\": true,";
-            result << "\"status\": \"NEED_MMPROJ\",";
-            result << "\"note\": \"Download mmproj-model-f16.gguf from Settings\"";
-            result << "}";
-        }
-        
-        env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
-        
-        std::string result_str = result.str();
-        LOGI("✅ Vision inference complete");
-        LOGI("========================================");
-        
-        return string_to_jstring(env, result_str);
-        
-    } catch (const std::exception& e) {
-        env->ReleaseByteArrayElements(image_data, image_bytes, JNI_ABORT);
-        LOGE("========================================");
-        LOGE("❌ Vision inference failed: %s", e.what());
-        LOGE("========================================");
-        return nullptr;
-    }
+    LOGW("Vision inference is disabled in the Qwen2.5 text-only backend");
+    return string_to_jstring(env,
+        "{\"error\":\"vision_disabled\",\"message\":\"Use OCR plus runTextInference for Qwen2.5\"}");
 }
 
 JNIEXPORT jstring JNICALL
@@ -879,7 +553,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_getMemoryUsage(
     return static_cast<jlong>(mem_size);
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jboolean JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_warmupModel(
     JNIEnv* env, jobject /* this */, jlong model_handle) {
     
@@ -890,13 +564,14 @@ Java_com_example_coupontracker_llm_MlcLlmNative_warmupModel(
     auto it = g_model_handles.find(model_handle);
     if (it == g_model_handles.end()) {
         LOGE("Invalid model handle: %lld", (long long)model_handle);
-        return;
+        return JNI_FALSE;
     }
     
     LOGI("Model warmup - context is ready");
+    return JNI_TRUE;
 }
 
-JNIEXPORT void JNICALL
+JNIEXPORT jboolean JNICALL
 Java_com_example_coupontracker_llm_MlcLlmNative_setInferenceParams(
     JNIEnv* env, jobject /* this */, jlong model_handle,
     jfloat temperature, jint max_tokens, jfloat top_p) {
@@ -908,7 +583,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_setInferenceParams(
     auto it = g_model_handles.find(model_handle);
     if (it == g_model_handles.end()) {
         LOGE("Invalid model handle: %lld", (long long)model_handle);
-        return;
+        return JNI_FALSE;
     }
 
     ModelContext* ctx = it->second;
@@ -920,6 +595,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_setInferenceParams(
 
     LOGI("Inference params set: temp=%.2f, max_tokens=%d, top_p=%.2f",
          ctx->temperature, ctx->max_tokens, ctx->top_p);
+    return JNI_TRUE;
 }
 
 JNIEXPORT void JNICALL
@@ -992,12 +668,6 @@ Java_com_example_coupontracker_llm_MlcLlmNative_releaseModel(
     if (ctx->ctx) {
         llama_free(ctx->ctx);
         LOGI("✅ Context freed");
-    }
-    
-    // ⭐ Free CLIP vision context (mmproj)
-    if (ctx->vision_ctx) {
-        clip_free(ctx->vision_ctx);
-        LOGI("✅ Vision projector (CLIP) freed");
     }
     
     // Free model

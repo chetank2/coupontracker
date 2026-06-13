@@ -6,15 +6,16 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(USE_MLC_RUNTIME "Build JNI bridge against the MLC runtime" OFF)
-option(USE_LLAMACPP_RUNTIME "Build JNI bridge against llama.cpp runtime" ON)
+option(USE_LLAMACPP_RUNTIME "Build JNI bridge against llama.cpp runtime" OFF)
 
 if(USE_MLC_RUNTIME AND USE_LLAMACPP_RUNTIME)
     message(FATAL_ERROR "Select only one backend: USE_MLC_RUNTIME or USE_LLAMACPP_RUNTIME")
 endif()
 
 if(NOT USE_MLC_RUNTIME AND NOT USE_LLAMACPP_RUNTIME)
-    message(STATUS "No backend explicitly selected, defaulting to llama.cpp runtime")
-    set(USE_LLAMACPP_RUNTIME ON)
+    message(STATUS "No backend explicitly selected; building MLC/dynamic bridge fallback")
+    message(STATUS "Pass -DUSE_LLAMACPP_RUNTIME=ON to require the llama.cpp bridge")
+    set(USE_MLC_RUNTIME ON)
 endif()
 
 find_library(log-lib log)

@@ -54,5 +54,17 @@ class CouponCashbackInfoTest {
         assertEquals(CashbackType.TEXT, info.type)
         assertTrue(info.getDisplayText().isNotEmpty())
     }
-}
 
+    @Test
+    fun `coupon cashback display ignores zero savings text`() {
+        val coupon = Coupon(
+            storeName = "Domino's",
+            description = "Get 33% off on Domino's\nCashback: 0.0 cashback 0.0",
+            redeemCode = null,
+            imageUri = null
+        )
+
+        assertEquals("", coupon.getCashbackDisplayText())
+        assertEquals(0.0, coupon.getCashbackNumericValue(), 0.0)
+    }
+}

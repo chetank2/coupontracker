@@ -61,6 +61,9 @@ class VlmRetryRunner @Inject constructor(
 
         val vlmJson = try {
             adapter.extractFromImage(bitmap, ocrText, prompt).canonicalJson
+        } catch (e: UnsupportedOperationException) {
+            Log.i(TAG, "Selected retry model does not support image retry; preserving default JSON")
+            return canonicalJson to triggerCodes
         } catch (e: Exception) {
             Log.w(TAG, "VLM retry threw; preserving default JSON", e)
             return canonicalJson to triggerCodes

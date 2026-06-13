@@ -1,0 +1,77 @@
+{
+  "text": "Kapiva\nGet Upto 40% Off*\non Kapiva's \"Strength and Stamina Range\"\nCode: KAPW1M3LAfAhSe\nCOPY\nBUY NOW\nExpires on 31 May, 2025, 11:59 PM\nOffer Details\nAbout Kapiva\nScratch card received on offer\nGet Upto 40% Off*",
+  "tiles": [
+    {
+      "text": "Kapiva",
+      "left": 116,
+      "top": 464,
+      "right": 250,
+      "bottom": 501,
+      "confidence": 0.95
+    },
+    {
+      "text": "Get Upto 40% Off*",
+      "left": 59,
+      "top": 794,
+      "right": 741,
+      "bottom": 859,
+      "confidence": 0.95
+    },
+    {
+      "text": "on Kapiva's \"Strength and Stamina Range\"",
+      "left": 58,
+      "top": 908,
+      "right": 812,
+      "bottom": 950,
+      "confidence": 0.95
+    },
+    {
+      "text": "Code: KAPW1M3LAfAhSe",
+      "left": 190,
+      "top": 1035,
+      "right": 630,
+      "bottom": 1075,
+      "confidence": 0.95
+    },
+    {
+      "text": "COPY",
+      "left": 895,
+      "top": 1035,
+      "right": 980,
+      "bottom": 1075,
+      "confidence": 0.95
+    },
+    {
+      "text": "BUY NOW",
+      "left": 454,
+      "top": 1195,
+      "right": 620,
+      "bottom": 1235,
+      "confidence": 0.95
+    },
+    {
+      "text": "Expires on 31 May, 2025, 11:59 PM",
+      "left": 200,
+      "top": 1395,
+      "right": 715,
+      "bottom": 1435,
+      "confidence": 0.95
+    },
+    {
+      "text": "Offer Details",
+      "left": 200,
+      "top": 1535,
+      "right": 405,
+      "bottom": 1575,
+      "confidence": 0.95
+    },
+    {
+      "text": "About Kapiva",
+      "left": 200,
+      "top": 1675,
+      "right": 395,
+      "bottom": 1715,
+      "confidence": 0.95
+    }
+  ]
+}

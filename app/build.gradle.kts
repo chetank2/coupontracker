@@ -4,16 +4,54 @@ import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import org.gradle.api.Action
 import com.example.build.VersionInfo
 import com.example.build.Versioning
+import java.util.Properties
 
 val versionInfo = rootProject.extra["appVersionInfo"] as VersionInfo
+val keystoreProperties = Properties().apply {
+    val keystorePropertiesFile = rootProject.file("keystore.properties")
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use(::load)
+    }
+}
 
 fun parseBooleanProperty(value: String?): Boolean = value?.equals("true", ignoreCase = true) == true
+
+fun stringPropertyOrEnv(name: String, defaultValue: String = ""): String {
+    return (project.findProperty(name) as? String)
+        ?: (keystoreProperties.getProperty(name) as? String)
+        ?: System.getenv(name)
+        ?: defaultValue
+}
+
+fun escapeBuildConfigString(value: String): String {
+    return value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+}
 
 val includeGitHash = parseBooleanProperty(project.findProperty("includeGitHash") as? String)
     || parseBooleanProperty(System.getenv("INCLUDE_GIT_HASH"))
 val gitHash = if (includeGitHash) Versioning.currentGitHash(project) else null
 val resolvedVersionName = versionInfo.formatted(versionInfo.metadata, gitHash)
 val sanitizedVersionName = Versioning.sanitizeForFilename(resolvedVersionName)
+val websiteUrl = stringPropertyOrEnv(
+    "WEBSITE_URL",
+    "https://chetank2.github.io/coupontracker/"
+)
+val privacyPolicyUrl = stringPropertyOrEnv(
+    "PRIVACY_POLICY_URL",
+    "https://chetank2.github.io/coupontracker/privacy.html"
+)
+val nativeCmakeArguments = stringPropertyOrEnv("android.externalNativeBuild.cmake.arguments")
+val resolvedNativeCmakeArguments = nativeCmakeArguments
+    .split(';')
+    .map { it.trim() }
+    .filter { it.isNotEmpty() }
+val llmBackend = when {
+    nativeCmakeArguments.contains("-DUSE_LLAMACPP_RUNTIME=ON") -> "llama.cpp"
+    nativeCmakeArguments.contains("-DUSE_MLC_RUNTIME=ON") -> "MLC"
+    else -> "llama.cpp"
+}
 
 plugins {
     id("com.android.application")
@@ -26,17 +64,24 @@ plugins {
 
 android {
     namespace = "com.example.coupontracker"
-    compileSdk = 34
+    compileSdk = 36
 
-    val supportedAbis = listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+    val supportedAbis = if (llmBackend == "llama.cpp") {
+        listOf("arm64-v8a")
+    } else {
+        listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+    }
 
     defaultConfig {
         applicationId = "com.example.coupontracker"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = 36
         versionCode = versionInfo.versionCode()
         versionName = resolvedVersionName
         buildConfigField("String", "APP_VERSION", "\"$resolvedVersionName\"")
+        buildConfigField("String", "WEBSITE_URL", "\"${escapeBuildConfigString(websiteUrl)}\"")
+        buildConfigField("String", "PRIVACY_POLICY_URL", "\"${escapeBuildConfigString(privacyPolicyUrl)}\"")
+        buildConfigField("String", "LLM_BACKEND", "\"${escapeBuildConfigString(llmBackend)}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -57,6 +102,10 @@ android {
                     // Works in simplified mode without llama.cpp (for development)
                     // Add libllama.so to app/src/main/jniLibs/ for full inference
                 )
+                if (resolvedNativeCmakeArguments.isEmpty()) {
+                    arguments += "-DUSE_LLAMACPP_RUNTIME=ON"
+                }
+                arguments += resolvedNativeCmakeArguments
             }
         }
 
@@ -93,28 +142,28 @@ android {
             keyPassword = "android"
         }
 
-        val releaseKeystorePath = project.findProperty("RELEASE_KEYSTORE_PATH") as? String
-        val releaseKeystorePassword = project.findProperty("RELEASE_KEYSTORE_PASSWORD") as? String
-        val releaseKeyAlias = project.findProperty("RELEASE_KEY_ALIAS") as? String
-        val releaseKeyPassword = project.findProperty("RELEASE_KEY_PASSWORD") as? String
+        val releaseKeystorePath = stringPropertyOrEnv("RELEASE_KEYSTORE_PATH")
+        val releaseKeystorePassword = stringPropertyOrEnv("RELEASE_KEYSTORE_PASSWORD")
+        val releaseKeyAlias = stringPropertyOrEnv("RELEASE_KEY_ALIAS")
+        val releaseKeyPassword = stringPropertyOrEnv("RELEASE_KEY_PASSWORD")
 
         val releaseSigningConfigured = listOf(
             releaseKeystorePath,
             releaseKeystorePassword,
             releaseKeyAlias,
             releaseKeyPassword
-        ).all { !it.isNullOrBlank() }
+        ).all { it.isNotBlank() }
 
         if (releaseSigningConfigured) {
             create("release") {
-                val keystoreFile = file(releaseKeystorePath!!)
+                val keystoreFile = file(releaseKeystorePath)
                 if (!keystoreFile.exists()) {
                     project.logger.warn("Release keystore file does not exist at $keystoreFile – release build will fail until corrected.")
                 }
                 storeFile = keystoreFile
-                storePassword = releaseKeystorePassword!!
-                keyAlias = releaseKeyAlias!!
-                keyPassword = releaseKeyPassword!!
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
                 enableV1Signing = true
                 enableV2Signing = true
                 enableV3Signing = true
@@ -346,10 +395,12 @@ dependencies {
     androidTestImplementation("androidx.arch.core:core-testing:2.2.0")
     androidTestImplementation("androidx.test:runner:1.5.2")
     androidTestImplementation("androidx.test:rules:1.5.0")
+    androidTestImplementation("androidx.navigation:navigation-testing:2.7.7")
     androidTestImplementation("androidx.room:room-testing:2.6.1")
     androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     androidTestImplementation("io.mockk:mockk-android:1.13.9")
     androidTestImplementation("app.cash.turbine:turbine:1.0.0")
+    androidTestImplementation("com.google.truth:truth:1.1.5")
     androidTestImplementation("com.google.dagger:hilt-android-testing:2.50")
     kaptAndroidTest("com.google.dagger:hilt-android-compiler:2.50")
     androidTestImplementation("androidx.work:work-testing:2.9.0")

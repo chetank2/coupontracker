@@ -1,47 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!--
-        Network Security Configuration
-        
-        PRIVACY GUARANTEE:
-        - Enforces HTTPS for all network connections
-        - Blocks cleartext (HTTP) traffic
-        - Only model downloads allowed (enforced by interceptors)
-        - No user data ever leaves device
-    -->
-    
-    <!-- Default configuration for all domains -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
-            <!-- Trust system certificate authorities -->
             <certificates src="system" />
         </trust-anchors>
     </base-config>
-    
-    <!-- Allowlisted model download hosts -->
+
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">github.com</domain>
         <domain includeSubdomains="true">githubusercontent.com</domain>
         <domain includeSubdomains="true">huggingface.co</domain>
-        
-        <!-- 
-            Optional: Add certificate pinning for extra security
-            Uncomment and add your pins if you want to prevent MITM attacks
-        
-        <pin-set expiration="2026-01-01">
-            <pin digest="SHA-256">AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=</pin>
-        </pin-set>
-        -->
-    </domain-config>
-    
-    <!-- 
-        Debug configuration (remove in production)
-        Allows localhost for testing
-    -->
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">localhost</domain>
-        <domain includeSubdomains="true">127.0.0.1</domain>
-        <domain includeSubdomains="true">10.0.2.2</domain>
     </domain-config>
 </network-security-config>
-

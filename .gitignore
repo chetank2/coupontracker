@@ -17,6 +17,10 @@ local.properties
 /coupontracker
 /app/.idea/
 
+# Local signing material
+keystore.properties
+*.jks
+
 # Virtual Environment
 *_env/
 venv/

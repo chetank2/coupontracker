@@ -1,0 +1,1212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Saver — Sheet A-101 · Yield Elevation</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@300;500;700;800&family=IBM+Plex+Mono:wght@300;400;500&family=Geist:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+  /* =====================================================================
+     Saver — DASHBOARD A-101 "Yield Elevation"
+     Aesthetic: architect's drafting sheet on a midnight blueprint.
+     Mint ink, dimension lines, leader callouts, title blocks. No glass.
+     ===================================================================== */
+
+  :root {
+    --paper:    #0a1426;     /* drafting paper, deep blueprint navy */
+    --paper-2:  #0d1a2f;     /* alternating panel band */
+    --paper-3:  #07101e;     /* darkest void */
+    --ink:      #5EEAD4;     /* primary draft ink */
+    --ink-bold: #7FFFD4;     /* highlight ink */
+    --ink-soft: rgba(94, 234, 212, 0.35);
+    --ink-faint:rgba(94, 234, 212, 0.16);
+    --ink-trace:rgba(94, 234, 212, 0.07);
+    --cyan:     #93D1E6;     /* cool measurement labels */
+    --amber:    #E9B872;     /* RFI / warning */
+    --red:      #F47878;
+
+    --text:     #EFF6F4;
+    --text-2:   rgba(239, 246, 244, 0.62);
+    --text-3:   rgba(239, 246, 244, 0.34);
+    --text-4:   rgba(239, 246, 244, 0.14);
+
+    --display: "Big Shoulders Display", "Helvetica Neue", sans-serif;
+    --mono:    "IBM Plex Mono", "SF Mono", Menlo, monospace;
+    --sans:    "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+
+  body {
+    font-family: var(--sans);
+    color: var(--text);
+    background:
+      radial-gradient(900px 700px at 110% 110%, rgba(34, 80, 130, 0.30), transparent 55%),
+      radial-gradient(800px 600px at -10% -10%, rgba(94, 234, 212, 0.05), transparent 60%),
+      linear-gradient(180deg, #02060f 0%, #050d1c 50%, #02060f 100%);
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    display: grid;
+    place-items: center;
+    padding: 56px 24px;
+    overflow-x: hidden;
+    min-height: 100%;
+  }
+
+  /* Subtle grain over everything (paper noise). */
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.7  0 0 0 0 0.95  0 0 0 0 0.9  0 0 0 0.045 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    opacity: 0.6;
+    mix-blend-mode: overlay;
+  }
+
+  .stage-label {
+    position: fixed;
+    top: 18px; left: 24px;
+    font: 500 10px/1 var(--sans);
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    z-index: 10;
+  }
+  .stage-label::before {
+    content: "";
+    display: inline-block;
+    width: 22px; height: 1px;
+    background: var(--ink);
+    vertical-align: middle;
+    margin-right: 10px;
+    transform: translateY(-1px);
+  }
+  .stage-label .sub { color: var(--text-4); margin-left: 12px; letter-spacing: 0.22em; }
+
+  /* =====================================================================
+     Phone frame
+     ===================================================================== */
+  .phone {
+    position: relative;
+    width: 412px;
+    height: 868px;
+    border-radius: 56px;
+    background: var(--paper);
+    box-shadow:
+      0 0 0 1px rgba(255,255,255,0.05),
+      0 0 0 12px rgba(255,255,255,0.025),
+      0 0 0 13px rgba(0,0,0,0.6),
+      0 70px 100px -40px rgba(0,0,0,0.85),
+      0 30px 60px -10px rgba(94, 234, 212, 0.05);
+    overflow: hidden;
+    z-index: 1;
+  }
+
+  /* Drafting paper grid — 8px minor + 64px major */
+  .phone::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+      linear-gradient(to right,  var(--ink-trace) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--ink-trace) 1px, transparent 1px),
+      linear-gradient(to right,  rgba(94,234,212,0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(94,234,212,0.04) 1px, transparent 1px);
+    background-size: 64px 64px, 64px 64px, 8px 8px, 8px 8px;
+    background-position: 0 0, 0 0, 0 0, 0 0;
+    opacity: 0.85;
+    mask-image: radial-gradient(closest-side, #000 70%, transparent 100%);
+  }
+
+  /* Atmospheric vignette around the edges of the phone */
+  .phone::after {
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(420px 280px at 18% 14%, rgba(94, 234, 212, 0.06), transparent 60%),
+      radial-gradient(560px 380px at 90% 78%, rgba(28, 64, 104, 0.30), transparent 60%),
+      linear-gradient(180deg, transparent 60%, rgba(0,0,0,0.45) 100%);
+    z-index: 0;
+  }
+
+  .punch {
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    width: 11px; height: 11px;
+    border-radius: 50%;
+    background: #000;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1);
+    z-index: 50;
+  }
+
+  /* Status bar */
+  .statusbar {
+    position: relative;
+    z-index: 30;
+    height: 44px;
+    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--text);
+    font: 500 13px/1 var(--mono);
+  }
+  .statusbar .icons { display: flex; gap: 8px; align-items: center; color: var(--text-2); }
+  .statusbar svg { width: 14px; height: 14px; }
+
+  /* =====================================================================
+     Sheet canvas
+     ===================================================================== */
+  .sheet {
+    position: relative;
+    z-index: 2;
+    height: calc(100% - 44px);
+    display: flex;
+    flex-direction: column;
+    padding: 0 16px 100px;
+  }
+
+  /* =====================================================================
+     Title block (architectural sheet header)
+     ===================================================================== */
+  .titleblock {
+    position: relative;
+    margin-top: 4px;
+    padding: 14px 16px 14px;
+    border: 1px solid var(--ink-faint);
+    border-bottom: 1.5px solid var(--ink);
+    background: var(--paper-3);
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr;
+    gap: 0;
+    opacity: 0;
+    animation: rise 600ms 60ms cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  .titleblock .cell { padding-right: 14px; border-right: 1px dashed rgba(94,234,212,0.18); }
+  .titleblock .cell:last-child { border-right: 0; padding-right: 0; padding-left: 14px; text-align: right; }
+  .titleblock .cell:nth-child(2) { padding-left: 14px; }
+
+  .titleblock .k {
+    font: 500 8px/1 var(--mono);
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 6px;
+  }
+  .titleblock .v {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: 16px;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    color: var(--text);
+    text-transform: uppercase;
+  }
+  .titleblock .v small {
+    font-family: var(--mono);
+    font-weight: 400;
+    font-size: 10px;
+    color: var(--text-3);
+    letter-spacing: 0.04em;
+    margin-left: 6px;
+    text-transform: none;
+  }
+
+  .titleblock .stamp {
+    position: absolute;
+    top: -10px; right: 14px;
+    background: var(--paper);
+    padding: 0 8px;
+    font: 500 9px/1 var(--mono);
+    letter-spacing: 0.30em;
+    color: var(--ink);
+    text-transform: uppercase;
+  }
+
+  /* Revision triangle */
+  .revtri {
+    position: absolute;
+    bottom: -8px; left: 14px;
+    width: 16px; height: 16px;
+    background: var(--paper);
+    color: var(--ink);
+    display: grid; place-items: center;
+    font: 500 9px/1 var(--mono);
+  }
+  .revtri::before {
+    content: "";
+    position: absolute; inset: 0;
+    border: 1px solid var(--ink);
+    transform: rotate(45deg);
+  }
+  .revtri span { position: relative; z-index: 1; }
+
+  /* =====================================================================
+     Hero card — Yield Curve drawing
+     ===================================================================== */
+  .hero {
+    position: relative;
+    margin-top: 12px;
+    border: 1px solid var(--ink-faint);
+    background: linear-gradient(180deg, rgba(13, 26, 47, 0.5) 0%, rgba(7, 16, 30, 0.85) 100%);
+    padding: 22px 16px 18px;
+    opacity: 0;
+    transform: translateY(10px);
+    animation: rise 700ms 160ms cubic-bezier(.2,.7,.2,1) forwards;
+  }
+
+  .hero .drawing-head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed rgba(94, 234, 212, 0.18);
+    margin-bottom: 8px;
+  }
+  .hero .drawing-head .left .name {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 22px;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .hero .drawing-head .left .name .quiet { color: var(--text-3); font-weight: 300; }
+  .hero .drawing-head .left .sub {
+    margin-top: 6px;
+    font: 400 10px/1 var(--mono);
+    color: var(--text-3);
+    letter-spacing: 0.06em;
+  }
+  .hero .drawing-head .left .sub b {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .hero .drawing-head .right {
+    text-align: right;
+    font: 400 9.5px/1.4 var(--mono);
+    color: var(--text-3);
+    letter-spacing: 0.04em;
+  }
+  .hero .drawing-head .right strong {
+    display: block;
+    font-weight: 500;
+    color: var(--ink);
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+  }
+
+  /* Drawing area */
+  .draw {
+    position: relative;
+    height: 250px;
+    margin: 4px -8px 4px;
+  }
+  .draw svg { display: block; width: 100%; height: 100%; }
+
+  /* Centred overlay text on the dial */
+  .draw .center {
+    position: absolute;
+    inset: 0;
+    display: grid; place-items: center;
+    text-align: center;
+    pointer-events: none;
+  }
+  .draw .center .num {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 64px;
+    line-height: 0.85;
+    letter-spacing: 0.01em;
+    color: var(--text);
+    text-shadow: 0 0 30px rgba(94, 234, 212, 0.18);
+  }
+  .draw .center .num .ccy {
+    font-weight: 300;
+    font-size: 24px;
+    color: var(--text-2);
+    vertical-align: 28px;
+    margin-right: 4px;
+    letter-spacing: 0;
+  }
+  .draw .center .cap {
+    margin-top: 6px;
+    font: 500 9px/1 var(--mono);
+    letter-spacing: 0.30em;
+    color: var(--text-3);
+    text-transform: uppercase;
+  }
+  .draw .center .cap b {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  /* Cardinal callouts (number-in-circle leader labels) */
+  .callout {
+    position: absolute;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font: 500 9px/1 var(--mono);
+    color: var(--text);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .callout .num {
+    width: 17px; height: 17px;
+    border-radius: 50%;
+    border: 1px solid var(--ink);
+    color: var(--ink);
+    display: grid; place-items: center;
+    font: 500 9px/1 var(--mono);
+    background: var(--paper);
+    flex: 0 0 17px;
+  }
+  .callout .who {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: 12px;
+    color: var(--text);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1;
+  }
+  .callout .amt {
+    font-family: var(--mono);
+    font-weight: 500;
+    font-size: 11px;
+    color: var(--text-2);
+    margin-left: 2px;
+  }
+  .callout.tl { top: 26px;  left: 8px;  }
+  .callout.tr { top: 26px;  right: 8px; flex-direction: row-reverse; }
+  .callout.bl { bottom: 12px; left: 8px;  }
+  .callout.br { bottom: 12px; right: 8px; flex-direction: row-reverse; }
+
+  .callout.tr .who, .callout.br .who { text-align: right; }
+
+  /* Bottom strip — scale bar + status */
+  .scale-row {
+    position: relative;
+    margin-top: 8px;
+    padding-top: 12px;
+    border-top: 1px dashed rgba(94, 234, 212, 0.18);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: end;
+  }
+  .scale-bar {
+    position: relative;
+    height: 32px;
+  }
+  .scale-bar .label {
+    font: 500 8px/1 var(--mono);
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 4px;
+  }
+  .scale-bar .track {
+    position: relative;
+    height: 8px;
+    border: 1px solid var(--ink-soft);
+    background:
+      repeating-linear-gradient(90deg,
+        transparent 0 calc(10% - 1px),
+        var(--ink-faint) calc(10% - 1px) 10%);
+  }
+  .scale-bar .fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    background: var(--ink);
+    width: 0;
+    box-shadow: 0 0 10px var(--ink-faint);
+  }
+  .scale-bar .endpoints {
+    position: relative;
+    display: flex; justify-content: space-between;
+    margin-top: 4px;
+    font: 400 9px/1 var(--mono);
+    color: var(--text-3);
+  }
+  .scale-bar .endpoints b {
+    color: var(--ink);
+    font-weight: 500;
+  }
+
+  .scale-row .status {
+    text-align: right;
+  }
+  .scale-row .status .v {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 26px;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+  }
+  .scale-row .status .v .sm { color: var(--text-2); font-weight: 300; font-size: 14px; }
+  .scale-row .status .k {
+    margin-top: 4px;
+    font: 500 8px/1 var(--mono);
+    letter-spacing: 0.20em;
+    color: var(--text-3);
+    text-transform: uppercase;
+  }
+
+  /* =====================================================================
+     Bill of quantities — three cells
+     ===================================================================== */
+  .boq {
+    margin-top: 12px;
+    border: 1px solid var(--ink-faint);
+    background: rgba(7, 16, 30, 0.7);
+    display: grid;
+    grid-template-columns: 1fr;
+    opacity: 0;
+    transform: translateY(10px);
+    animation: rise 700ms 280ms cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  .boq-head {
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--ink-faint);
+    background: var(--paper-2);
+  }
+  .boq-head .seq {
+    font: 500 9px/1 var(--mono);
+    color: var(--ink);
+    letter-spacing: 0.04em;
+  }
+  .boq-head .name {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .boq-head .meta {
+    font: 400 9px/1 var(--mono);
+    color: var(--text-3);
+    letter-spacing: 0.04em;
+  }
+  .boq-head .meta b { color: var(--ink); font-weight: 500; }
+
+  .boq-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .boq-cell {
+    padding: 14px 14px;
+    border-right: 1px dashed rgba(94, 234, 212, 0.14);
+    position: relative;
+  }
+  .boq-cell:last-child { border-right: 0; }
+  .boq-cell .item {
+    font: 500 8px/1 var(--mono);
+    letter-spacing: 0.20em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+  .boq-cell .qty {
+    margin-top: 8px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 30px;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+  .boq-cell .qty .u {
+    font-weight: 300;
+    font-size: 12px;
+    color: var(--text-2);
+    letter-spacing: 0.04em;
+    margin-left: 4px;
+  }
+  .boq-cell .spec {
+    margin-top: 6px;
+    font: 400 9.5px/1.3 var(--mono);
+    color: var(--text-3);
+    letter-spacing: 0.02em;
+  }
+  .boq-cell .spec b { color: var(--ink); font-weight: 500; }
+
+  /* small index marker top-right of each cell */
+  .boq-cell::after {
+    content: attr(data-idx);
+    position: absolute;
+    top: 6px; right: 8px;
+    font: 500 8px/1 var(--mono);
+    color: var(--text-4);
+    letter-spacing: 0.04em;
+  }
+
+  /* =====================================================================
+     Build log — live wire as construction journal
+     ===================================================================== */
+  .log {
+    margin-top: 12px;
+    border: 1px solid var(--ink-faint);
+    background: rgba(7, 16, 30, 0.85);
+    opacity: 0;
+    transform: translateY(10px);
+    animation: rise 700ms 400ms cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  .log-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--ink-faint);
+    background: var(--paper-2);
+  }
+  .log-head .l {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .log-head .l .pulse {
+    width: 7px; height: 7px;
+    background: var(--ink);
+    box-shadow: 0 0 0 0 var(--ink-soft);
+    animation: pulse 1.8s ease-out infinite;
+  }
+  .log-head .l .name {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .log-head .l .name small {
+    color: var(--text-3);
+    font-weight: 300;
+    margin-left: 8px;
+    letter-spacing: 0.10em;
+  }
+  .log-head .meta {
+    font: 400 9px/1 var(--mono);
+    color: var(--text-3);
+    letter-spacing: 0.04em;
+  }
+  .log-head .meta b { color: var(--ink); font-weight: 500; }
+
+  .log-row {
+    display: grid;
+    grid-template-columns: 50px 70px 1fr auto;
+    gap: 10px;
+    align-items: baseline;
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(94, 234, 212, 0.06);
+  }
+  .log-row:last-child { border-bottom: 0; }
+  .log-row .seq {
+    font: 500 9px/1 var(--mono);
+    color: var(--ink);
+    letter-spacing: 0.04em;
+  }
+  .log-row .ts {
+    font: 400 10px/1 var(--mono);
+    color: var(--text-3);
+    letter-spacing: 0.02em;
+  }
+  .log-row .body .who {
+    font-family: var(--display);
+    font-weight: 500;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+  .log-row .body .what {
+    margin-top: 3px;
+    font: 400 10.5px/1.35 var(--sans);
+    color: var(--text-2);
+  }
+  .log-row .body .what code {
+    font-family: var(--mono);
+    color: var(--ink);
+    font-size: 10px;
+    background: rgba(94, 234, 212, 0.06);
+    padding: 1px 5px;
+    border: 1px solid var(--ink-faint);
+    margin: 0 2px;
+  }
+  .log-row .amt {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 18px;
+    line-height: 1;
+    color: var(--text);
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    text-align: right;
+  }
+  .log-row .amt .sm { color: var(--text-2); font-weight: 300; font-size: 11px; margin-right: 1px; }
+  .log-row .amt.amber { color: var(--amber); }
+
+  /* tiny status code at the right of body */
+  .log-row .body .code {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 2px 6px 3px;
+    font: 500 8.5px/1 var(--mono);
+    letter-spacing: 0.20em;
+    color: var(--ink);
+    border: 1px solid var(--ink-faint);
+    text-transform: uppercase;
+  }
+  .log-row .body .code.amber { color: var(--amber); border-color: rgba(233, 184, 114, 0.35); }
+
+  /* =====================================================================
+     Bottom: sheet tabs + survey instrument FAB
+     ===================================================================== */
+  .tabs {
+    position: absolute;
+    z-index: 4;
+    bottom: 14px;
+    left: 14px; right: 14px;
+    height: 64px;
+    background: var(--paper-3);
+    border: 1px solid var(--ink-faint);
+    border-bottom: 1.5px solid var(--ink);
+    display: grid;
+    grid-template-columns: 1fr 1fr 100px 1fr 1fr;
+    align-items: stretch;
+    opacity: 0;
+    animation: rise 700ms 540ms cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  .tabs::before {
+    /* "SHEETS" stamp on the left edge */
+    content: "SHEETS · 04";
+    position: absolute;
+    top: -10px; left: 14px;
+    background: var(--paper);
+    padding: 0 8px;
+    font: 500 9px/1 var(--mono);
+    letter-spacing: 0.30em;
+    color: var(--ink);
+  }
+
+  .tab {
+    display: grid;
+    place-items: center;
+    gap: 4px;
+    padding: 10px 0 8px;
+    cursor: pointer;
+    color: var(--text-3);
+    border-right: 1px dashed rgba(94, 234, 212, 0.12);
+    text-align: center;
+    transition: color 200ms ease;
+  }
+  .tab:last-child { border-right: 0; }
+  .tab .num {
+    font: 500 8px/1 var(--mono);
+    letter-spacing: 0.10em;
+    color: var(--text-3);
+  }
+  .tab .lbl {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .tab.active {
+    color: var(--ink);
+  }
+  .tab.active .lbl { color: var(--text); }
+  .tab.active .num { color: var(--ink); }
+  .tab.active::after {
+    content: "";
+    width: 18px; height: 1.5px;
+    background: var(--ink);
+    margin-top: 2px;
+  }
+
+  /* center cell holds the survey instrument */
+  .tab-perch {
+    border-right: 1px dashed rgba(94, 234, 212, 0.12);
+    border-left: 1px dashed rgba(94, 234, 212, 0.12);
+    position: relative;
+    padding: 0;
+  }
+
+  .instrument {
+    position: absolute;
+    z-index: 6;
+    bottom: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #16334a 0%, #061525 65%, #02080f 100%);
+    display: grid;
+    place-items: center;
+    color: var(--ink);
+    cursor: pointer;
+    box-shadow:
+      0 0 0 1px var(--ink),
+      0 0 0 5px var(--paper),
+      0 0 0 6px var(--ink-faint),
+      0 14px 30px -10px rgba(0,0,0,0.7),
+      0 0 60px -10px var(--ink-soft);
+    transition: transform 280ms cubic-bezier(.2,.7,.2,1);
+  }
+  .instrument::before {
+    /* outer ranging ring */
+    content: "";
+    position: absolute; inset: -14px;
+    border-radius: 50%;
+    border: 1px dashed var(--ink-faint);
+    animation: spin-slow 30s linear infinite;
+  }
+  .instrument::after {
+    /* inner reticle pings */
+    content: "";
+    position: absolute; inset: -3px;
+    border-radius: 50%;
+    border: 1px solid var(--ink-soft);
+    animation: ping 4s ease-out infinite;
+  }
+  .instrument:hover { transform: translateX(-50%) scale(1.04); }
+
+  /* Theodolite reticle SVG */
+  .reticle { position: relative; width: 38px; height: 38px; }
+  .reticle svg { display: block; width: 100%; height: 100%; stroke: var(--ink); stroke-width: 1.2; fill: none; }
+
+  /* tag above the instrument */
+  .inst-tag {
+    position: absolute;
+    z-index: 5;
+    bottom: 142px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 10px 5px;
+    background: var(--paper-3);
+    border: 1px solid var(--ink-faint);
+    font: 500 9px/1 var(--mono);
+    letter-spacing: 0.30em;
+    color: var(--ink);
+    text-transform: uppercase;
+    opacity: 0;
+    animation: rise 600ms 660ms cubic-bezier(.2,.7,.2,1) forwards;
+  }
+
+  /* =====================================================================
+     Animations
+     ===================================================================== */
+  @keyframes rise { to { opacity: 1; transform: translateY(0); } }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0   rgba(94, 234, 212, 0.55); }
+    70%  { box-shadow: 0 0 0 10px rgba(94, 234, 212, 0); }
+    100% { box-shadow: 0 0 0 0   rgba(94, 234, 212, 0); }
+  }
+  @keyframes ping {
+    0%   { transform: scale(1);    opacity: 0.55; }
+    80%  { transform: scale(1.40); opacity: 0;   }
+    100% { transform: scale(1.40); opacity: 0;   }
+  }
+  @keyframes spin-slow { to { transform: rotate(360deg); } }
+  @keyframes draw {
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes fillbar {
+    to { width: var(--w); }
+  }
+
+  @media (max-width: 480px) {
+    body { padding: 16px; }
+    .phone { transform: scale(0.92); transform-origin: top center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="stage-label">Saver — sheet a-101 · yield elevation <span class="sub">redesign · drafting</span></div>
+
+<div class="phone" role="img" aria-label="Saver dashboard — drafting sheet">
+  <div class="punch"></div>
+
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="icons" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M2 18 L6 14 L10 16 L14 10 L18 12 L22 6"/>
+      </svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+        <path d="M5 9.5 a14 14 0 0 1 14 0"/>
+        <path d="M8 13 a9 9 0 0 1 8 0"/>
+        <circle cx="12" cy="17" r="1.2" fill="currentColor"/>
+      </svg>
+      <svg viewBox="0 0 28 12" fill="none" stroke="currentColor" stroke-width="1.4">
+        <rect x="0.7" y="0.7" width="22" height="10.6" rx="2"/>
+        <rect x="2.5" y="2.5" width="14" height="7" rx="1" fill="currentColor" opacity="0.85" stroke="none"/>
+        <rect x="24" y="3.5" width="2.5" height="5" rx="1" fill="currentColor"/>
+      </svg>
+    </span>
+  </div>
+
+  <div class="sheet">
+
+    <!-- ========== TITLE BLOCK ========== -->
+    <div class="titleblock">
+      <span class="stamp">SHEET</span>
+      <span class="revtri"><span>1</span></span>
+
+      <div class="cell">
+        <div class="k">Project · Owner</div>
+        <div class="v">Chetan K <small>FY26 Savings</small></div>
+      </div>
+      <div class="cell">
+        <div class="k">Sheet · Drwg</div>
+        <div class="v">A-101 <small>1 of 04</small></div>
+      </div>
+      <div class="cell">
+        <div class="k">Issued · Rev</div>
+        <div class="v">19·APR <small>R1</small></div>
+      </div>
+    </div>
+
+    <!-- ========== HERO: YIELD CURVE DRAWING ========== -->
+    <section class="hero">
+      <div class="drawing-head">
+        <div class="left">
+          <div class="name">Yield Curve <span class="quiet">— FY 2026</span></div>
+          <div class="sub">Period <b>01 APR — 19 APR</b> · Reference goal <b>₹65,000</b></div>
+        </div>
+        <div class="right">
+          <strong>Ø 100%</strong>
+          NTS · OZN
+        </div>
+      </div>
+
+      <div class="draw">
+        <svg viewBox="0 0 380 250" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse" markerUnits="strokeWidth">
+              <path d="M0,0 L8,5 L0,10 z" fill="#5EEAD4"/>
+            </marker>
+            <marker id="arrowSm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse" markerUnits="strokeWidth">
+              <path d="M0,0 L8,5 L0,10 z" fill="#5EEAD4"/>
+            </marker>
+          </defs>
+
+          <!-- BG fine grid that bleeds into the drawing area -->
+          <g stroke="rgba(94,234,212,0.05)" stroke-width="1">
+            <path d="M0 0 H380 M0 50 H380 M0 100 H380 M0 150 H380 M0 200 H380 M0 250 H380"/>
+            <path d="M0 0 V250 M50 0 V250 M100 0 V250 M150 0 V250 M200 0 V250 M250 0 V250 M300 0 V250 M350 0 V250 M380 0 V250"/>
+          </g>
+
+          <!-- Center: dial -->
+          <g transform="translate(190 125)">
+            <!-- 60 ticks rim -->
+            <g id="ticksHost"></g>
+
+            <!-- Outer track -->
+            <circle r="100" fill="none" stroke="rgba(94,234,212,0.18)" stroke-width="1.2"/>
+
+            <!-- Progress arc -->
+            <circle id="progArc" r="100" fill="none"
+                    stroke="#5EEAD4" stroke-width="2.4"
+                    stroke-linecap="butt"
+                    transform="rotate(-90)"
+                    pathLength="100"
+                    stroke-dasharray="100"
+                    stroke-dashoffset="100"/>
+
+            <!-- Inner instrument hairlines -->
+            <circle r="76" fill="none" stroke="rgba(94,234,212,0.25)" stroke-width="0.8"/>
+            <circle r="72" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="0.8" stroke-dasharray="2 4"/>
+
+            <!-- Cardinal hairmarks -->
+            <g stroke="#5EEAD4" stroke-width="1">
+              <line x1="0"   y1="-104" x2="0"   y2="-94"/>
+              <line x1="104" y1="0"    x2="94"  y2="0"/>
+              <line x1="0"   y1="104"  x2="0"   y2="94"/>
+              <line x1="-104" y1="0"   x2="-94" y2="0"/>
+            </g>
+
+            <!-- Diameter dimension line OUTSIDE the dial -->
+            <g stroke="#5EEAD4" stroke-width="0.8" opacity="0.85">
+              <!-- extension lines -->
+              <line x1="-100" y1="100" x2="-130" y2="125"/>
+              <line x1="100" y1="100" x2="130" y2="125"/>
+              <!-- dimension line with arrows -->
+              <line x1="-128" y1="124" x2="128" y2="124"
+                    marker-start="url(#arrowSm)" marker-end="url(#arrowSm)"/>
+            </g>
+
+            <!-- Leader lines from cardinal points to outer callouts -->
+            <g stroke="#5EEAD4" stroke-width="0.7" opacity="0.7" fill="none">
+              <!-- TL -->
+              <path d="M -75 -75 L -130 -100"/>
+              <!-- TR -->
+              <path d="M 75 -75 L 130 -100"/>
+              <!-- BL -->
+              <path d="M -75 75 L -130 100"/>
+              <!-- BR -->
+              <path d="M 75 75 L 130 100"/>
+            </g>
+          </g>
+        </svg>
+
+        <!-- Center number -->
+        <div class="center">
+          <div>
+            <div class="num"><span class="ccy">₹</span><span id="bigNum">47,820</span></div>
+            <div class="cap"><b>73%</b> · ₹65,000 GOAL</div>
+          </div>
+        </div>
+
+        <!-- Cardinal callouts (number-in-circle leader labels) -->
+        <div class="callout tl">
+          <div class="num">1</div>
+          <div>
+            <div class="who">Food</div>
+            <div class="amt">₹14,200</div>
+          </div>
+        </div>
+        <div class="callout tr">
+          <div class="num">2</div>
+          <div>
+            <div class="who">Shopping</div>
+            <div class="amt">₹19,140</div>
+          </div>
+        </div>
+        <div class="callout bl">
+          <div class="num">3</div>
+          <div>
+            <div class="who">Bills</div>
+            <div class="amt">₹6,800</div>
+          </div>
+        </div>
+        <div class="callout br">
+          <div class="num">4</div>
+          <div>
+            <div class="who">Travel</div>
+            <div class="amt">₹7,680</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scale bar -->
+      <div class="scale-row">
+        <div class="scale-bar">
+          <div class="label">Scale · 0 ↔ goal</div>
+          <div class="track"><div class="fill" id="scaleFill" style="--w: 73%;"></div></div>
+          <div class="endpoints">
+            <span>0</span>
+            <span><b>₹47,820</b> · 73%</span>
+            <span>₹65,000</span>
+          </div>
+        </div>
+        <div class="status">
+          <div class="v">+₹4.21<span class="sm">k</span></div>
+          <div class="k">Δ 7-day</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== BILL OF QUANTITIES (stat trio) ========== -->
+    <section class="boq">
+      <div class="boq-head">
+        <span class="seq">02</span>
+        <span class="name">Bill of Quantities</span>
+        <span class="meta">As-of · <b>SAT 19·APR · 21:38 IST</b></span>
+      </div>
+      <div class="boq-grid">
+        <div class="boq-cell" data-idx="2.01">
+          <div class="item">Coupons used</div>
+          <div class="qty">184<span class="u">no.</span></div>
+          <div class="spec">Avg <b>₹260</b> / claim · 38-day streak</div>
+        </div>
+        <div class="boq-cell" data-idx="2.02">
+          <div class="item">Auto-redeem rate</div>
+          <div class="qty">62<span class="u">%</span></div>
+          <div class="spec">Of <b>297</b> eligible · ▲12 mom</div>
+        </div>
+        <div class="boq-cell" data-idx="2.03">
+          <div class="item">Pending unlock</div>
+          <div class="qty">18.6<span class="u">k</span></div>
+          <div class="spec">Locked · ETA <b>≤ 30d</b></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== BUILD LOG (live wire) ========== -->
+    <section class="log">
+      <div class="log-head">
+        <div class="l">
+          <span class="pulse"></span>
+          <span class="name">Build Log <small>— savings agent · live</small></span>
+        </div>
+        <div class="meta">Scouts <b>×4</b></div>
+      </div>
+
+      <div class="log-row">
+        <span class="seq">4801</span>
+        <span class="ts">21:38</span>
+        <div class="body">
+          <div class="who">CRED · Bill Pay</div>
+          <div class="what">Cashback on Axis CC · auto-applied at <code>checkout</code>.</div>
+          <span class="code amber">Auto-redeem</span>
+        </div>
+        <div class="amt amber"><span class="sm">₹</span>240</div>
+      </div>
+
+      <div class="log-row">
+        <span class="seq">4800</span>
+        <span class="ts">21:14</span>
+        <div class="body">
+          <div class="who">PhonePe · Recharge</div>
+          <div class="what">Jio prepaid <code>₹239</code> plan · agent matched stacked offer.</div>
+          <span class="code">Stack</span>
+        </div>
+        <div class="amt"><span class="sm">₹</span>95</div>
+      </div>
+
+      <div class="log-row">
+        <span class="seq">4799</span>
+        <span class="ts">19:42</span>
+        <div class="body">
+          <div class="who">Zomato · Gold</div>
+          <div class="what">20% cashback at The Bombay Canteen · in-flight reservation.</div>
+          <span class="code">In-flight</span>
+        </div>
+        <div class="amt"><span class="sm">₹</span>418</div>
+      </div>
+
+      <div class="log-row">
+        <span class="seq">4798</span>
+        <span class="ts">17:01</span>
+        <div class="body">
+          <div class="who">AJIO · Spring Drop</div>
+          <div class="what">Flat 50% off on first order · code <code>SAVE50</code> · held for review.</div>
+          <span class="code">RFI</span>
+        </div>
+        <div class="amt"><span class="sm">₹</span>1,260</div>
+      </div>
+    </section>
+
+  </div><!-- /.sheet -->
+
+  <!-- Survey Instrument FAB -->
+  <div class="inst-tag">Smart Scanner</div>
+
+  <button class="instrument" aria-label="Smart Scanner">
+    <span class="reticle" aria-hidden="true">
+      <svg viewBox="0 0 38 38">
+        <circle cx="19" cy="19" r="17"/>
+        <circle cx="19" cy="19" r="11" stroke-dasharray="2 3"/>
+        <circle cx="19" cy="19" r="3"/>
+        <line x1="19" y1="0"  x2="19" y2="11"/>
+        <line x1="19" y1="27" x2="19" y2="38"/>
+        <line x1="0"  y1="19" x2="11" y2="19"/>
+        <line x1="27" y1="19" x2="38" y2="19"/>
+      </svg>
+    </span>
+  </button>
+
+  <!-- Sheet tabs (bottom navigation) -->
+  <nav class="tabs" aria-label="Sheets">
+    <div class="tab active">
+      <span class="num">A-101</span>
+      <span class="lbl">Elev</span>
+    </div>
+    <div class="tab">
+      <span class="num">A-102</span>
+      <span class="lbl">Wallet</span>
+    </div>
+    <div class="tab-perch" aria-hidden="true"></div>
+    <div class="tab">
+      <span class="num">A-103</span>
+      <span class="lbl">Insight</span>
+    </div>
+    <div class="tab">
+      <span class="num">A-104</span>
+      <span class="lbl">Profile</span>
+    </div>
+  </nav>
+
+</div><!-- /.phone -->
+
+<script>
+  // === Rim ticks for the dial ===
+  (function ticks() {
+    const host = document.getElementById('ticksHost');
+    if (!host) return;
+    const N = 60;
+    const Rin = 110, Rout = 116;
+    let s = "";
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * Math.PI * 2 - Math.PI / 2;
+      const major = (i % 5) === 0;
+      const r1 = major ? Rin - 4 : Rin;
+      const r2 = Rout;
+      const op = major ? 0.55 : 0.18;
+      const x1 = Math.cos(a) * r1, y1 = Math.sin(a) * r1;
+      const x2 = Math.cos(a) * r2, y2 = Math.sin(a) * r2;
+      s += `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="rgba(127,232,200,${op})" stroke-width="${major ? 1 : 0.7}"/>`;
+    }
+    host.innerHTML = s;
+  })();
+
+  // === Sweep the progress arc (73%) after a beat ===
+  (function sweep() {
+    const arc = document.getElementById('progArc');
+    if (!arc) return;
+    const target = 100 - 73;
+    requestAnimationFrame(() => {
+      arc.style.transition = 'stroke-dashoffset 1500ms cubic-bezier(.2,.7,.2,1)';
+      arc.style.transitionDelay = '420ms';
+      arc.style.strokeDashoffset = String(target);
+    });
+  })();
+
+  // === Animate the scale bar fill ===
+  (function fill() {
+    const el = document.getElementById('scaleFill');
+    if (!el) return;
+    const w = el.style.getPropertyValue('--w') || '73%';
+    el.style.width = '0';
+    requestAnimationFrame(() => {
+      el.style.transition = 'width 1500ms cubic-bezier(.2,.7,.2,1)';
+      el.style.transitionDelay = '500ms';
+      el.style.width = w;
+    });
+  })();
+
+  // === Count-up the big number ===
+  (function countUp() {
+    const el = document.getElementById('bigNum');
+    if (!el) return;
+    const target = 47820;
+    const start = performance.now();
+    const dur = 1500;
+    const fmt = (n) => n.toLocaleString('en-IN');
+    function step(t) {
+      const k = Math.min(1, (t - start) / dur);
+      const ease = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmt(Math.round(target * ease));
+      if (k < 1) requestAnimationFrame(step);
+    }
+    setTimeout(() => requestAnimationFrame(step), 480);
+  })();
+</script>
+
+</body>
+</html>

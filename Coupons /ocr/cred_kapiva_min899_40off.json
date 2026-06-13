@@ -1,0 +1,77 @@
+{
+  "text": "Kapiva\nGet Upto 40% Off*\non Minimum Purchase of ₹899 on Kapiva Website\nCode: KAPn1T5p\nCOPY\nSHOP NOW\nExpires on 09 May, 2025, 11:59 PM\nOffer Details\nAbout Kapiva\nScratch card received on offer\nGet Upto 40% Off*",
+  "tiles": [
+    {
+      "text": "Kapiva",
+      "left": 155,
+      "top": 585,
+      "right": 285,
+      "bottom": 625,
+      "confidence": 0.95
+    },
+    {
+      "text": "Get Upto 40% Off*",
+      "left": 58,
+      "top": 800,
+      "right": 740,
+      "bottom": 860,
+      "confidence": 0.95
+    },
+    {
+      "text": "on Minimum Purchase of ₹899 on Kapiva Website",
+      "left": 59,
+      "top": 908,
+      "right": 948,
+      "bottom": 952,
+      "confidence": 0.95
+    },
+    {
+      "text": "Code: KAPn1T5p",
+      "left": 190,
+      "top": 1035,
+      "right": 475,
+      "bottom": 1075,
+      "confidence": 0.95
+    },
+    {
+      "text": "COPY",
+      "left": 895,
+      "top": 1035,
+      "right": 980,
+      "bottom": 1075,
+      "confidence": 0.95
+    },
+    {
+      "text": "SHOP NOW",
+      "left": 443,
+      "top": 1195,
+      "right": 635,
+      "bottom": 1235,
+      "confidence": 0.95
+    },
+    {
+      "text": "Expires on 09 May, 2025, 11:59 PM",
+      "left": 200,
+      "top": 1395,
+      "right": 715,
+      "bottom": 1435,
+      "confidence": 0.95
+    },
+    {
+      "text": "Offer Details",
+      "left": 200,
+      "top": 1535,
+      "right": 405,
+      "bottom": 1575,
+      "confidence": 0.95
+    },
+    {
+      "text": "About Kapiva",
+      "left": 200,
+      "top": 1675,
+      "right": 395,
+      "bottom": 1715,
+      "confidence": 0.95
+    }
+  ]
+}

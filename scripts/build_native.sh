@@ -67,11 +67,11 @@ cd "$ROOT_DIR"
 if [ "$BACKEND" = "mlc" ]; then
     echo "📦 Building with MLC-LLM backend (vision-capable)..."
     ./gradlew :app:clean :app:assembleDebug \
-        -Pandroid.externalNativeBuild.cmake.arguments="-DUSE_MLC=ON"
+        -Pandroid.externalNativeBuild.cmake.arguments="-DUSE_MLC_RUNTIME=ON;-DUSE_LLAMACPP_RUNTIME=OFF"
 else
     echo "📦 Building with llama.cpp backend (text-only, vision TODO)..."
     ./gradlew :app:clean :app:assembleDebug \
-        -Pandroid.externalNativeBuild.cmake.arguments="-DUSE_LLAMA=ON"
+        -Pandroid.externalNativeBuild.cmake.arguments="-DUSE_MLC_RUNTIME=OFF;-DUSE_LLAMACPP_RUNTIME=ON"
 fi
 
 echo ""
@@ -105,4 +105,3 @@ echo "   2. Import model (with runtime if using MLC backend)"
 echo "   3. Test inference"
 echo "   4. Check logs: adb logcat | grep MlcLlmNativeBridge"
 echo ""
-

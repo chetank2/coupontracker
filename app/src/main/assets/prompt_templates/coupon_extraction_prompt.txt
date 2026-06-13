@@ -11,7 +11,7 @@ JSON schema to emit:
 {
   "storeName": string,
   "description": string,
-  "code": string,
+  "redeemCode": string,
   "expiryDate": string,
   "storeNameSource": string,
   "storeNameEvidence": [string],

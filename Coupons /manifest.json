@@ -1,0 +1,563 @@
+{
+  "schemaVersion": 1,
+  "notes": "Golden set built from 40 CRED voucher screenshots captured 2025-05-02 IST. Real screenshots routed under images/_local/ per redistribution rule (status bar + CRED account surface may carry PII). storeNameEvidence quotes are exact substrings visible in the screenshot; codes are copied character-for-character preserving case. Relative expiries anchored to capture timestamp, not today.",
+  "samples": [
+    {
+      "id": "cred_kapiva_strength_stamina_40off",
+      "image": "images/_local/cred_kapiva_strength_stamina_40off.png",
+      "brand": "Kapiva",
+      "imageSha256": "0d119d81e6fb79f4fc6d0a950759a5fea0b0c56e13a8e43797d6daa17438ac77",
+      "expected": {
+        "storeName": "Kapiva",
+        "description": "Get Upto 40% Off* on Kapiva's \"Strength and Stamina Range\"",
+        "redeemCode": "KAPW1M3LAfAhSe",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Kapiva", "About Kapiva"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_kapiva_min899_40off",
+      "image": "images/_local/cred_kapiva_min899_40off.png",
+      "brand": "Kapiva",
+      "imageSha256": "713967d7a09cdacbe81a119de02ba28d45fa8c5edb058f7e455b3251a6439170",
+      "expected": {
+        "storeName": "Kapiva",
+        "description": "Get Upto 40% Off* on Minimum Purchase of ₹899 on Kapiva Website",
+        "redeemCode": "KAPn1T5p",
+        "expiryDate": "2025-05-09",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Kapiva", "About Kapiva"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_lenskart_goldmax_1year_free",
+      "image": "images/_local/cred_lenskart_goldmax_1year_free.png",
+      "brand": "Lenskart",
+      "imageSha256": "fd0521c44bc3ee3de47ab5c3ebca70b3d3dbcf46376c17eecee5df2aba6f6fcb",
+      "expected": {
+        "storeName": "Lenskart",
+        "description": "Free* Gold Max Membership for 1 year on Lenskart Website",
+        "redeemCode": "AFFLPHG-UFPJ-TDOAB",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Lenskart", "About Lenskart"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_puma_prowl_fest_50plus33",
+      "image": "images/_local/cred_puma_prowl_fest_50plus33.png",
+      "brand": "PUMA",
+      "imageSha256": "110276c58eff8250a19f505fddb3d57610d1aede28ad1add00cf2056737a4f1f",
+      "expected": {
+        "storeName": "PUMA",
+        "description": "Get Upto 50% Off* + Extra 33% Off at PUMA",
+        "redeemCode": "KQSKLBLBIR",
+        "expiryDate": "2025-05-05",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["PUMA", "About PUMA"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_fastrack_tees_flat60",
+      "image": "images/_local/cred_fastrack_tees_flat60.png",
+      "brand": "Fastrack Eyewear",
+      "imageSha256": "75a77c82b5e10bed7b1d8d29110bab7ca3c1c8da656bd00273f16be7673b81aa",
+      "expected": {
+        "storeName": "Fastrack Eyewear",
+        "description": "Flat 60% Off* on Tees By Fastrack Sunglasses",
+        "redeemCode": "FLAT60",
+        "expiryDate": "2025-05-20",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Fastrack Eyewear", "About  Fastrack Eyewear"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_audible_2mo_premium_plus",
+      "image": "images/_local/cred_audible_2mo_premium_plus.png",
+      "brand": "Audible",
+      "imageSha256": "e93aac24bdec495007fb80b8a348b6b18bfe97df0a483fee967747a3e36b5cc1",
+      "expected": {
+        "storeName": "Audible",
+        "description": "Get 2 Months Audible Premium Plus* on Audible Website",
+        "redeemCode": "FRHJ-M6QR9U-VGK7B8",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Audible", "About Audible"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_acwo_earbuds_flat75",
+      "image": "images/_local/cred_acwo_earbuds_flat75.png",
+      "brand": "ACwO",
+      "imageSha256": "8414c1c56ff605e4d43d2588afe28e83b7b9fe4bb21759c83475067549bfbdf3",
+      "expected": {
+        "storeName": "ACwO",
+        "description": "Flat 75% Off* on purchase of ACwO Earbuds and BT-Calling Smartwatches",
+        "redeemCode": "APR25PPM2OP6ZZ",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["ACwO", "About ACwO"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_aha_telugu_flat20",
+      "image": "images/_local/cred_aha_telugu_flat20.png",
+      "brand": "aha",
+      "imageSha256": "b2064aa5b167a95cbcad8f325e0b217a76f1ffdfbecac9bd6ed60e19fbbc20bd",
+      "expected": {
+        "storeName": "aha",
+        "description": "Get Flat 20% Off* on purchase of any aha Telugu Annual Plan of ₹499, ₹699 or ₹999",
+        "redeemCode": "ahappe20",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["aha", "About aha"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_ottplay_30otts_149",
+      "image": "images/_local/cred_ottplay_30otts_149.png",
+      "brand": "OTTplay",
+      "imageSha256": "551d489c4d801b1b2265bdc93e93944ca5f1c84200560a93f19aa0694e82f211",
+      "expected": {
+        "storeName": "OTTplay",
+        "description": "Enjoy 30+ OTTs at Just ₹149* — includes SonyLIV, ZEE5, Sun NXT and much more, along with 500+ Live TV channels",
+        "redeemCode": "OTTPHONEBUFF",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["OTTplay", "About OTTplay"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_ajio_upto80_flat11",
+      "image": "images/_local/cred_ajio_upto80_flat11.png",
+      "brand": "AJIO",
+      "imageSha256": "50bcba4f543ccc2fe5c65db5d8a3efadab09cd9e63faddb955369d0d2330ce42",
+      "expected": {
+        "storeName": "AJIO",
+        "description": "Upto 80% + Flat 11% Off* on Minimum Order Value of ₹999 on AJIO",
+        "redeemCode": "TBNEIZNOL5FSUZY",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["AJIO", "About AJIO"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_themancompany_4at699",
+      "image": "images/_local/cred_themancompany_4at699.png",
+      "brand": "The Man Company",
+      "imageSha256": "d42f8ccaf170b8596444b1036ef6a4af16117b7a8b020d27fedbcd1dfcd054c0",
+      "expected": {
+        "storeName": "The Man Company",
+        "description": "Buy any 4 products at ₹699* from The Man Company website",
+        "redeemCode": "TMCPe6990425SQTJ",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["The Man Compa", "About The Man Company"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_zanducare_flat35",
+      "image": "images/_local/cred_zanducare_flat35.png",
+      "brand": "Zanducare",
+      "imageSha256": "1eaf4a38127d64f51391eb654efdb8d031c53f844312cbcf0905bf6051dc3379",
+      "expected": {
+        "storeName": "Zanducare",
+        "description": "Flat 35% Off* with no minimum order value on Zanducare Website",
+        "redeemCode": "ZANDUPP",
+        "expiryDate": "2025-05-21",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Zanducare", "About Zanducare"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_pilgrim_3at899",
+      "image": "images/_local/cred_pilgrim_3at899.png",
+      "brand": "Pilgrim",
+      "imageSha256": "a8360628e75b358ed1ebf69dc2da8ff73dc7f25fe9aeb3d2e0fa615eca2f9d42",
+      "expected": {
+        "storeName": "Pilgrim",
+        "description": "Buy any 3 at ₹899* on Pilgrim Website",
+        "redeemCode": "PPEB3899MAY25XWAY",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Pilgrim", "About Pilgrim"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_virgio_flat10",
+      "image": "images/_local/cred_virgio_flat10.png",
+      "brand": "Virgio",
+      "imageSha256": "ffef17c12f1bf1ba1acf6eb83787999f940d02f013bb21996a6b787b05645ee3",
+      "expected": {
+        "storeName": "Virgio",
+        "description": "Flat 10% Off* on purchase from Virgio Website",
+        "redeemCode": "PPVIRGIO",
+        "expiryDate": "2025-05-22",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Virgio", "About Virgio"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_foxtale_b2g2free_5foxcoins",
+      "image": "images/_local/cred_foxtale_b2g2free_5foxcoins.png",
+      "brand": "Foxtale",
+      "imageSha256": "78fddc3d15ec11a6700df4b6a0dc96aa0f5219d97635546402324b663226e5ac",
+      "expected": {
+        "storeName": "Foxtale",
+        "description": "Buy 2 Get 2 FREE* + Upto 5% Foxcoins on Prepaid Orders on Foxtale Skincare",
+        "redeemCode": "FOXPPB2G2BIY5W1V8",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Foxtale", "About Foxtale"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_minimalist_radiance_100off_50cb",
+      "image": "images/_local/cred_minimalist_radiance_100off_50cb.png",
+      "brand": "Minimalist",
+      "imageSha256": "e52e871385522273e8ba95e2ee30202a44efd09e4b650d06dbe300c852cd80a7",
+      "expected": {
+        "storeName": "Minimalist",
+        "description": "Flat ₹100 Off + ₹50 Cashback* on Radiance Kit from beminimalist.co",
+        "redeemCode": "MNPPRK100UAPR255QYSG7A",
+        "expiryDate": "2025-05-05",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Minimalist", "About Minimalist"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_nykaa_flat20_min1000",
+      "image": "images/_local/cred_nykaa_flat20_min1000.png",
+      "brand": "Nykaa Beauty",
+      "imageSha256": "749dabd2fe9b356cb931176e5b05ff542a11b191d8ad09668250beecf0931caf",
+      "expected": {
+        "storeName": "Nykaa Beauty",
+        "description": "Get Flat 20% Off* on minimum order value of ₹1000 from Nykaa",
+        "redeemCode": "NYKPEBL68N",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Nykaa Beauty", "About Nykaa"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_pokerbaazi_75k_first_deposit",
+      "image": "images/_local/cred_pokerbaazi_75k_first_deposit.png",
+      "brand": "PokerBaazi",
+      "imageSha256": "5071a3049f9b8127419110c9e796f29b0f9c58e839997c92622568f05c9f5283",
+      "expected": {
+        "storeName": "PokerBaazi",
+        "description": "you won 100% bonus up to ₹75,000 on your first deposit from PokerBaazi",
+        "redeemCode": "PBJP75",
+        "expiryDate": "2025-05-02",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["PokerBaazi"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_portronics_clamp_230",
+      "image": "images/_local/cred_portronics_clamp_230.png",
+      "brand": "Portronics",
+      "imageSha256": "b3673aa6ad95965c38f8cf9f3205cbf3fdf00904d5b96f642e16b48c54a07611",
+      "expected": {
+        "storeName": "Portronics",
+        "description": "you've won clamp at ₹230",
+        "redeemCode": "unknown",
+        "expiryDate": "2025-05-03",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Portronics"],
+        "needsAttention": true
+      }
+    },
+    {
+      "id": "cred_portronics_neckfan_1100",
+      "image": "images/_local/cred_portronics_neckfan_1100.png",
+      "brand": "Portronics",
+      "imageSha256": "00118f179653bc8b09619e1c683efb15b509659c107847f705a581645ccaa60b",
+      "expected": {
+        "storeName": "Portronics",
+        "description": "you've won neck fan at ₹1100",
+        "redeemCode": "unknown",
+        "expiryDate": "2025-05-03",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Portronics"],
+        "needsAttention": true
+      }
+    },
+    {
+      "id": "cred_skullcandy_80off",
+      "image": "images/_local/cred_skullcandy_80off.png",
+      "brand": "Skullcandy",
+      "imageSha256": "2b75927ddc93e4311be9d2bf02c632c2e3d6e22f977d5850788692ae8aff763e",
+      "expected": {
+        "storeName": "Skullcandy",
+        "description": "you won 80% off on Skullcandy",
+        "redeemCode": "CRSD",
+        "expiryDate": "2025-05-14",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Skullcandy"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_mamaearth_100cashback_skincare",
+      "image": "images/_local/cred_mamaearth_100cashback_skincare.png",
+      "brand": "Mamaearth",
+      "imageSha256": "dd3a494ffc2587984980da2da46fb2c13228b2a6b1803da70726435ccfa3dec6",
+      "expected": {
+        "storeName": "Mamaearth",
+        "description": "you won 100% cashback on skincare essentials from Mamaearth",
+        "redeemCode": "C1C4A129JPB7OBE",
+        "expiryDate": "2025-05-16",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Mamaearth"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_my11circle_6600_bonus",
+      "image": "images/_local/cred_my11circle_6600_bonus.png",
+      "brand": "My11Circle",
+      "imageSha256": "d565199e550934399b07cc8e6745fddc5d3e54a655062ca4d6eef5e0e2db0a32",
+      "expected": {
+        "storeName": "My11Circle",
+        "description": "you won ₹6,600 bonus cash from My11Circle",
+        "redeemCode": "CREDbc66",
+        "expiryDate": "2025-05-28",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["My11Circle"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_mpl_35000_bonus",
+      "image": "images/_local/cred_mpl_35000_bonus.png",
+      "brand": "mpl",
+      "imageSha256": "9b58d1dc99c17448b8ee3393e51e4237f52af6088d5bd97162e649cb454eedbe",
+      "expected": {
+        "storeName": "mpl",
+        "description": "you won bonus worth ₹35000",
+        "redeemCode": "MPLCRED",
+        "expiryDate": "2025-05-10",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["mpl", "MPL"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_ikea_10off_above4999",
+      "image": "images/_local/cred_ikea_10off_above4999.png",
+      "brand": "IKEA",
+      "imageSha256": "e97f7945d97aa532a32a3d9a4ae1081bbfd712a91aa5c2cc90632d516c270574",
+      "expected": {
+        "storeName": "IKEA",
+        "description": "you won a voucher for flat 10% off up to ₹2,000 on orders above ₹4,999 from IKEA",
+        "redeemCode": "563X9XFYDUR604GD",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["IKEA"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_uber_one_1month_membership",
+      "image": "images/_local/cred_uber_one_1month_membership.png",
+      "brand": "Uber",
+      "imageSha256": "51d1f4a7e03dcfd1dbb75cb8e6725872a5f8c2b0e3214e76faefd5389e0bc7d4",
+      "expected": {
+        "storeName": "Uber",
+        "description": "you won free Uber One membership for 1 month",
+        "redeemCode": "unknown",
+        "expiryDate": "2025-09-01",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Uber"],
+        "needsAttention": true
+      }
+    },
+    {
+      "id": "cred_themancompany_3at399",
+      "image": "images/_local/cred_themancompany_3at399.png",
+      "brand": "The Man Company",
+      "imageSha256": "640df81dabe4efe2c4f95b8b49003255a31035e4b5edc1ce0258c78d8b82a27e",
+      "expected": {
+        "storeName": "The Man Company",
+        "description": "you won 3 products at ₹399 on The Man Company",
+        "redeemCode": "CRED924399BV78",
+        "expiryDate": "2025-05-30",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["The Man Company"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_toothsi_16500_aligners",
+      "image": "images/_local/cred_toothsi_16500_aligners.png",
+      "brand": "Toothsi",
+      "imageSha256": "8434fdfa2b3f8ab74b5f06ae3b5d93e0fb5681f3a4c50acbf42ee01440023db0",
+      "expected": {
+        "storeName": "Toothsi",
+        "description": "you won ₹16,500 off on Toothsi aligners",
+        "redeemCode": "CREDJACKAPR252C1KQC",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Toothsi"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_axis_neo_lifetime_free",
+      "image": "images/_local/cred_axis_neo_lifetime_free.png",
+      "brand": "Axis Bank Credit Card",
+      "imageSha256": "b48ad43d32e7cb0bc4007f347bf41ffb0c779b4ec67f535d36f3e2260a8c405f",
+      "expected": {
+        "storeName": "Axis Bank Credit Card",
+        "description": "you won a chance to get a lifetime free Axis Bank Neo Credit Card",
+        "redeemCode": "unknown",
+        "expiryDate": "2025-05-30",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Axis Bank Credit Card", "Axis Bank Neo Credit Card"],
+        "needsAttention": true
+      }
+    },
+    {
+      "id": "cred_lenskart_goldmax_49",
+      "image": "images/_local/cred_lenskart_goldmax_49.png",
+      "brand": "Lenskart",
+      "imageSha256": "72664f80b592ed775dab99192068af8400cc2d25e0e820f1aeeb4cbc0355a424",
+      "expected": {
+        "storeName": "Lenskart",
+        "description": "you won Lenskart Gold Max membership at just ₹49",
+        "redeemCode": "AFFLCRDG-OKTYZX6-6TOZ",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Lenskart"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_pokerbaazi_110k_first_deposit",
+      "image": "images/_local/cred_pokerbaazi_110k_first_deposit.png",
+      "brand": "PokerBaazi",
+      "imageSha256": "a33bfebe0bb7e060c87949f90f1afb4483973635c36b0ee23b34dcbcb5b99bc6",
+      "expected": {
+        "storeName": "PokerBaazi",
+        "description": "you won a bonus up to ₹1,10,000 on your first PokerBaazi deposit",
+        "redeemCode": "PBXWOF110K",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["PokerBaazi"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_bigbasket_150off_above400",
+      "image": "images/_local/cred_bigbasket_150off_above400.png",
+      "brand": "bbnow",
+      "imageSha256": "029ee0a0440461de476c38c87ffd524caf8983da01fa650951f8b94e940a26f0",
+      "expected": {
+        "storeName": "bbnow",
+        "description": "you won flat ₹150 off on orders above ₹400 on Bigbasket",
+        "redeemCode": "BBNOWCRED3-GZGE7F7BAHEXFY",
+        "expiryDate": "2025-05-08",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["bbnow", "Bigbasket"],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_beardo_3grooming_499",
+      "image": "images/_local/cred_beardo_3grooming_499.png",
+      "brand": "Beardo",
+      "imageSha256": "d3347cd960c3d7d43663b71300ed98cae8c8ed105c0c0e34a55a41d8a86313b0",
+      "expected": {
+        "storeName": "Beardo",
+        "description": "you won 3 grooming products for ₹499 on Beardo",
+        "redeemCode": "unknown",
+        "expiryDate": "2025-05-15",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["Beardo"],
+        "needsAttention": true
+      }
+    },
+    {
+      "id": "swiggy_scratchwin_puma_extra33",
+      "image": "images/_local/swiggy_scratchwin_puma_extra33.png",
+      "brand": "PUMA",
+      "imageSha256": "379a74e10c5b2829031635e7190de8b5a2e9aba23dc4d622481d306f5cb4d269",
+      "expected": {
+        "storeName": "PUMA",
+        "description": "Extra 33% off",
+        "redeemCode": "RTCTCIRQQM",
+        "expiryDate": "2025-05-05",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["PUMA"],
+        "needsAttention": true
+      }
+    },
+    {
+      "id": "swiggy_scratchwin_timesprime_550off",
+      "image": "images/_local/swiggy_scratchwin_timesprime_550off.png",
+      "brand": "TIMES PRIME",
+      "imageSha256": "ae37ca30bd00940e7d5217820bfca25c8d906bea5cb40ba90301be979139d27d",
+      "expected": {
+        "storeName": "TIMES PRIME",
+        "description": "Flat Rs.550 Off",
+        "redeemCode": "SWG550",
+        "expiryDate": "unknown",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": ["TIMES PRIME"],
+        "needsAttention": true
+      }
+    }
+  ],
+  "excluded": [
+    {
+      "file": "IMG-20250502-WA0014.jpg",
+      "sha256": "ebf58f186cce0c2078e28855e185f4d7cc6eda1cbfd77b025e901a55488f2f7c",
+      "reason": "Google Forms confirmation page; not a coupon."
+    },
+    {
+      "file": "Screenshot_20250502-192634.png",
+      "sha256": "cea0afd8e982f597a128811c6483a7770577f60743750bba561bc75da75b5dd8",
+      "reason": "Vouchers list header + two partially visible cards; no complete card can be labeled from this frame alone."
+    },
+    {
+      "file": "Screenshot_20250502-192658.png",
+      "sha256": "affa41b55f26adfdd5a762648a19fc42e4273571bf26f50674217a8ed0484e5b",
+      "reason": "Scroll-position duplicate of the PokerBaazi ₹75,000 card already covered by cred_pokerbaazi_75k_first_deposit."
+    },
+    {
+      "file": "Screenshot_20250502-200524.png",
+      "sha256": "c3d5934073442055f4ccc04c609b81be9f56697b884cb97350a0e07ec33f34d6",
+      "reason": "Same IKEA voucher already covered by cred_ikea_10off_above4999; also shows a partial Uber/IDFC card without enough info."
+    },
+    {
+      "file": "Screenshot_20250502-200609.png",
+      "sha256": "59f5d893ecd503923788cd70f5c8981889878b35625a46cfb5988e049f24393e",
+      "reason": "Flipkart Axis Bank 5% cashback card: no redeemCode is visible in-frame (the visible code belongs to the Lenskart card above per scroll position). Rule 16: don't guess when code isn't clearly attributable — omit rather than mis-label."
+    },
+    {
+      "file": "Screenshot_20250502-201806.png",
+      "sha256": "85505dd5f06042d1593fbb689f161731c3430e037d3737d89ebd4c018188ed05",
+      "reason": "Rewards landing grid with multiple preview cards; no single coupon detail is fully visible."
+    }
+  ]
+}

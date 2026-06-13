@@ -1,0 +1,544 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 14,
+    "identityHash": "cf859e22fa279c07a7112d49df5b2c56",
+    "entities": [
+      {
+        "tableName": "coupons",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `storeName` TEXT NOT NULL, `description` TEXT NOT NULL, `normalizedDescription` TEXT, `expiryDate` INTEGER, `redeemCode` TEXT, `imageUri` TEXT, `imagePhash` TEXT, `imageSignature` TEXT, `category` TEXT, `status` TEXT, `minimumPurchase` REAL, `maximumDiscount` REAL, `isPriority` INTEGER NOT NULL, `paymentMethod` TEXT, `usageLimit` INTEGER, `usageCount` INTEGER NOT NULL, `reminderDate` INTEGER, `reminderLeadTimeMinutes` INTEGER, `platformType` TEXT, `extractionQualityScore` INTEGER, `extractionConfidenceBreakdown` TEXT NOT NULL, `extractionStage` TEXT, `extractionRunPath` TEXT, `extractionTimestamp` INTEGER, `rating` TEXT, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `needsAttention` INTEGER NOT NULL, `storeNameSource` TEXT, `storeNameEvidence` TEXT NOT NULL, `redeemCodes` TEXT, `primaryRedeemCode` TEXT, `storeUrl` TEXT, `offerType` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "storeName",
+            "columnName": "storeName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "normalizedDescription",
+            "columnName": "normalizedDescription",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "expiryDate",
+            "columnName": "expiryDate",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "redeemCode",
+            "columnName": "redeemCode",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "imageUri",
+            "columnName": "imageUri",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "imagePhash",
+            "columnName": "imagePhash",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "imageSignature",
+            "columnName": "imageSignature",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "category",
+            "columnName": "category",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "minimumPurchase",
+            "columnName": "minimumPurchase",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "maximumDiscount",
+            "columnName": "maximumDiscount",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isPriority",
+            "columnName": "isPriority",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "paymentMethod",
+            "columnName": "paymentMethod",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "usageLimit",
+            "columnName": "usageLimit",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "usageCount",
+            "columnName": "usageCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reminderDate",
+            "columnName": "reminderDate",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "reminderLeadTimeMinutes",
+            "columnName": "reminderLeadTimeMinutes",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "platformType",
+            "columnName": "platformType",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "extractionQualityScore",
+            "columnName": "extractionQualityScore",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "extractionConfidenceBreakdown",
+            "columnName": "extractionConfidenceBreakdown",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "extractionStage",
+            "columnName": "extractionStage",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "extractionRunPath",
+            "columnName": "extractionRunPath",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "extractionTimestamp",
+            "columnName": "extractionTimestamp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "rating",
+            "columnName": "rating",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "needsAttention",
+            "columnName": "needsAttention",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "storeNameSource",
+            "columnName": "storeNameSource",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "storeNameEvidence",
+            "columnName": "storeNameEvidence",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "redeemCodes",
+            "columnName": "redeemCodes",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "primaryRedeemCode",
+            "columnName": "primaryRedeemCode",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "storeUrl",
+            "columnName": "storeUrl",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "offerType",
+            "columnName": "offerType",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "learned_patterns_v1",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `brand` TEXT, `fieldType` TEXT NOT NULL, `regex` TEXT NOT NULL, `weight` REAL NOT NULL, `source` TEXT NOT NULL, `sampleValue` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `successCount` INTEGER NOT NULL, `attemptCount` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "brand",
+            "columnName": "brand",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "fieldType",
+            "columnName": "fieldType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "regex",
+            "columnName": "regex",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "weight",
+            "columnName": "weight",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sampleValue",
+            "columnName": "sampleValue",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "successCount",
+            "columnName": "successCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_learned_patterns_v1_fieldType",
+            "unique": false,
+            "columnNames": [
+              "fieldType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_learned_patterns_v1_fieldType` ON `${TABLE_NAME}` (`fieldType`)"
+          },
+          {
+            "name": "index_learned_patterns_v1_brand",
+            "unique": false,
+            "columnNames": [
+              "brand"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_learned_patterns_v1_brand` ON `${TABLE_NAME}` (`brand`)"
+          },
+          {
+            "name": "index_learned_patterns_v1_weight",
+            "unique": false,
+            "columnNames": [
+              "weight"
+            ],
+            "orders": [
+              "DESC"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_learned_patterns_v1_weight` ON `${TABLE_NAME}` (`weight` DESC)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "extraction_feedback_v1",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `couponId` INTEGER, `extractionStrategy` TEXT NOT NULL, `feedbackType` TEXT NOT NULL, `originalValues` TEXT NOT NULL, `correctedValues` TEXT, `signalsJson` TEXT NOT NULL, `runPathJson` TEXT NOT NULL, `deviceInfo` TEXT NOT NULL, `timestamp` INTEGER NOT NULL, `consentGiven` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "couponId",
+            "columnName": "couponId",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "extractionStrategy",
+            "columnName": "extractionStrategy",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "feedbackType",
+            "columnName": "feedbackType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "originalValues",
+            "columnName": "originalValues",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "correctedValues",
+            "columnName": "correctedValues",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "signalsJson",
+            "columnName": "signalsJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "runPathJson",
+            "columnName": "runPathJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "deviceInfo",
+            "columnName": "deviceInfo",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "consentGiven",
+            "columnName": "consentGiven",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_extraction_feedback_v1_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [
+              "DESC"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_extraction_feedback_v1_timestamp` ON `${TABLE_NAME}` (`timestamp` DESC)"
+          },
+          {
+            "name": "index_extraction_feedback_v1_extractionStrategy",
+            "unique": false,
+            "columnNames": [
+              "extractionStrategy"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_extraction_feedback_v1_extractionStrategy` ON `${TABLE_NAME}` (`extractionStrategy`)"
+          },
+          {
+            "name": "index_extraction_feedback_v1_feedbackType",
+            "unique": false,
+            "columnNames": [
+              "feedbackType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_extraction_feedback_v1_feedbackType` ON `${TABLE_NAME}` (`feedbackType`)"
+          },
+          {
+            "name": "index_extraction_feedback_v1_couponId",
+            "unique": false,
+            "columnNames": [
+              "couponId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_extraction_feedback_v1_couponId` ON `${TABLE_NAME}` (`couponId`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "validator_feedback_v1",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `eventType` TEXT NOT NULL, `fieldOutcomesJson` TEXT NOT NULL, `rationaleJson` TEXT NOT NULL, `metadataJson` TEXT NOT NULL, `ocrHash` TEXT, `ocrPreview` TEXT, `timestamp` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventType",
+            "columnName": "eventType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fieldOutcomesJson",
+            "columnName": "fieldOutcomesJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rationaleJson",
+            "columnName": "rationaleJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "metadataJson",
+            "columnName": "metadataJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ocrHash",
+            "columnName": "ocrHash",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "ocrPreview",
+            "columnName": "ocrPreview",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_validator_feedback_v1_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [
+              "DESC"
+            ],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_validator_feedback_v1_timestamp` ON `${TABLE_NAME}` (`timestamp` DESC)"
+          },
+          {
+            "name": "index_validator_feedback_v1_eventType",
+            "unique": false,
+            "columnNames": [
+              "eventType"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_validator_feedback_v1_eventType` ON `${TABLE_NAME}` (`eventType`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cf859e22fa279c07a7112d49df5b2c56')"
+    ]
+  }
+}

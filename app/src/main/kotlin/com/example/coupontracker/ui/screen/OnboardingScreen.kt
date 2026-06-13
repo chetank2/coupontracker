@@ -484,7 +484,13 @@ fun OnboardingScreen(
     val totalPages = pages.lastIndex
 
     if (showDataSafety) {
-        DataSafetyDialog(onDismiss = { showDataSafety = false })
+        DataSafetyDialog(
+            onDismiss = { showDataSafety = false },
+            onLearnMore = {
+                showDataSafety = false
+                navController.navigate(Screen.PrivacyPolicy.route)
+            }
+        )
     }
 
     CouponOnboardingLayout(

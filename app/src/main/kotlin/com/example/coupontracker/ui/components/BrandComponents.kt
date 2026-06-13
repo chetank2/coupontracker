@@ -597,10 +597,10 @@ fun EnhancedCouponCard(
     Card(
         modifier = modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .clickable(onClick = onClick),
         shape = BrandShapes.CardShape,
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -624,7 +624,7 @@ fun EnhancedCouponCard(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(RoundedCornerShape(topStart = 12.dp, bottomStart = 12.dp))
+                            .clip(RoundedCornerShape(topStart = 16.dp, bottomStart = 16.dp))
                     )
                 }
             }
@@ -643,7 +643,8 @@ fun EnhancedCouponCard(
                 ) {
                     Text(
                         text = storeName,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
@@ -657,16 +658,16 @@ fun EnhancedCouponCard(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Description
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Coupon code badge with copy action
                 if (!code.isNullOrBlank() && onCopyCode != null) {

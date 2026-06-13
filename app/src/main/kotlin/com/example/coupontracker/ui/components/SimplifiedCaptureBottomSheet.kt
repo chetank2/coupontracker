@@ -1,6 +1,7 @@
 package com.example.coupontracker.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,7 +71,7 @@ fun SimplifiedCaptureBottomSheet(
             Spacer(modifier = Modifier.height(BrandSpacing.Small))
 
             Text(
-                text = "Pick how you want to capture this offer.",
+                text = "Choose how you want to save this offer.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -78,8 +79,8 @@ fun SimplifiedCaptureBottomSheet(
             Spacer(modifier = Modifier.height(BrandSpacing.Large))
 
             CaptureOptionCard(
-                title = "Scan with camera",
-                subtitle = "Live detection highlights codes and expiry",
+                title = "Scan coupon",
+                subtitle = "Use your camera to save a coupon",
                 icon = Icons.Default.Camera,
                 accentColor = MaterialTheme.colorScheme.primary,
                 onClick = {
@@ -94,9 +95,9 @@ fun SimplifiedCaptureBottomSheet(
 
             CaptureOptionCard(
                 title = "Upload screenshot",
-                subtitle = "Instantly extract from your gallery",
+                subtitle = "Pick an image from your gallery",
                 icon = Icons.Default.Upload,
-                accentColor = MaterialTheme.colorScheme.secondary,
+                accentColor = MaterialTheme.colorScheme.primary,
                 onClick = {
                     onUpload()
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
@@ -107,29 +108,11 @@ fun SimplifiedCaptureBottomSheet(
 
             Spacer(modifier = Modifier.height(BrandSpacing.Medium))
             
-            // Optional: Multi-coupon screenshot upload (Phase 3 feature)
-            if (onScreenshotUpload != null) {
-                CaptureOptionCard(
-                    title = "Multi-coupon screenshot",
-                    subtitle = "Extract 3+ coupons from app screenshots",
-                    icon = Icons.Default.Collections,
-                    accentColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.8f),
-                    onClick = {
-                        onScreenshotUpload()
-                        scope.launch { sheetState.hide() }.invokeOnCompletion {
-                            if (!sheetState.isVisible) onDismiss()
-                        }
-                    }
-                )
-                
-                Spacer(modifier = Modifier.height(BrandSpacing.Medium))
-            }
-
             CaptureOptionCard(
-                title = "Type manually",
-                subtitle = "Enter code yourself when screenshots are messy",
+                title = "Enter manually",
+                subtitle = "Type the store, code, and expiry yourself",
                 icon = Icons.Default.Edit,
-                accentColor = MaterialTheme.colorScheme.tertiary,
+                accentColor = MaterialTheme.colorScheme.primary,
                 onClick = {
                     onManualEntry()
                     scope.launch { sheetState.hide() }.invokeOnCompletion {
@@ -154,8 +137,9 @@ private fun CaptureOptionCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = accentColor.copy(alpha = 0.08f)
+            containerColor = MaterialTheme.colorScheme.surface
         ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         onClick = onClick
     ) {
         Row(
@@ -183,15 +167,15 @@ private fun CaptureOptionCard(
                 modifier = Modifier
                     .size(44.dp)
                     .background(
-                        color = accentColor,
-                        shape = MaterialTheme.shapes.small
+                        color = accentColor.copy(alpha = 0.12f),
+                        shape = MaterialTheme.shapes.medium
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = accentColor,
                     modifier = Modifier.size(24.dp)
                 )
             }

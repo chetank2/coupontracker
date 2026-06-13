@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "samples": [
+    {
+      "id": "cred_kapiva_min899_40off",
+      "image": "Screenshot_20250502-201823.png",
+      "brand": "Kapiva",
+      "imageSha256": "713967d7a09cdacbe81a119de02ba28d45fa8c5edb058f7e455b3251a6439170",
+      "expected": {
+        "storeName": "Kapiva",
+        "description": "Get Upto 40% Off* on Minimum Purchase of ₹899 on Kapiva Website",
+        "redeemCode": "KAPn1T5p",
+        "expiryDate": "2025-05-09",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "Kapiva",
+          "About Kapiva"
+        ],
+        "needsAttention": false
+      }
+    }
+  ]
+}

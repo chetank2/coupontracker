@@ -40,8 +40,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         
         // Performance constants
         private const val MAX_MEMORY_MB = 3072
-        private const val MAX_TOKENS = 224
-        private const val MIN_TOKEN_BUDGET = 140
+        private const val MAX_TOKENS = 160
+        private const val MIN_TOKEN_BUDGET = 96
         private const val TOKEN_PROMPT_DIVISOR = 2
         private const val INFERENCE_TIMEOUT_MS = 30000L
         

@@ -77,4 +77,15 @@ interface CouponDao {
         imagePhash: String?,
         imageSignature: String?
     ): Coupon?
+
+    @Query(
+        """
+        SELECT * FROM coupons
+        WHERE redeemCode IS NOT NULL
+          AND UPPER(redeemCode) = UPPER(:redeemCode)
+        ORDER BY updatedAt DESC
+        LIMIT 1
+        """
+    )
+    suspend fun findByRedeemCode(redeemCode: String): Coupon?
 }

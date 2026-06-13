@@ -25,5 +25,14 @@ class PromptBuilderTest {
         assertFalse(excerpt.contains("COPY", ignoreCase = true))
         assertFalse(excerpt.contains("AVAIL NOW", ignoreCase = true))
     }
-}
 
+    @Test
+    fun `build includes canonical provenance and description guidance`() {
+        val result = builder.build(sampleOcr)
+
+        assertTrue(result.systemPrompt.contains("storeNameSource must be one lowercase provenance token"))
+        assertTrue(result.systemPrompt.contains("Use ocr when the store name is present in the OCR excerpt"))
+        assertTrue(result.userPrompt.contains("combine the main offer line with its following subtitle"))
+        assertTrue(result.userPrompt.contains("copy exact supporting lines"))
+    }
+}

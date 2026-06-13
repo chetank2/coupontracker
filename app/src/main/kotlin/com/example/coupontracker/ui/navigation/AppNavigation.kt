@@ -2,6 +2,7 @@ package com.example.coupontracker.ui.navigation
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
@@ -21,6 +22,7 @@ import com.example.coupontracker.ui.screen.ExtractionDashboardScreen
 import com.example.coupontracker.ui.screen.HomeScreen
 import com.example.coupontracker.ui.screen.ManualEntryScreen
 import com.example.coupontracker.ui.screen.OnboardingScreen
+import com.example.coupontracker.ui.screen.PrivacyPolicyScreen
 import com.example.coupontracker.ui.screen.QRScannerScreen
 import com.example.coupontracker.ui.screen.ScannerScreen
 import com.example.coupontracker.ui.screen.SettingsScreen
@@ -55,6 +57,7 @@ sealed class Screen(val route: String) {
     }
     object ApiTest : Screen("api_test")
     object Settings : Screen("settings")
+    object PrivacyPolicy : Screen("privacy_policy")
 
     object Analytics : Screen("analytics")
 
@@ -87,12 +90,33 @@ fun AppNavigation(
         if (onboardingCompleted) Screen.Home.route else Screen.Onboarding.route
     }
 
+    LaunchedEffect(navController, onboardingCompleted) {
+        if (!onboardingCompleted) return@LaunchedEffect
+
+        val pendingRoute = when {
+            sharedPreferences.getString("shared_image_uris", null) != null -> Screen.BatchScanner.route
+            sharedPreferences.getString("shared_image_uri", null) != null -> Screen.Scanner.route
+            sharedPreferences.getString("shared_url", null) != null -> Screen.ManualEntry.route
+            else -> null
+        }
+
+        pendingRoute?.let { route ->
+            navController.navigate(route) {
+                launchSingleTop = true
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = startDestination
     ) {
         composable(Screen.Onboarding.route) {
             OnboardingScreen(navController = navController)
+        }
+
+        composable(Screen.PrivacyPolicy.route) {
+            PrivacyPolicyScreen(navController = navController)
         }
 
         composable(Screen.Home.route) {

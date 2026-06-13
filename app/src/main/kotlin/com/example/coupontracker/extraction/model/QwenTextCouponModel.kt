@@ -58,7 +58,7 @@ class QwenTextCouponModel @Inject constructor(
         ocrText: String?,
         prompt: String
     ): ModelExtractionResult {
-        throw NotImplementedError(
+        throw UnsupportedOperationException(
             "QwenTextCouponModel does not support vision. See Plan 5 (VLM retry)."
         )
     }

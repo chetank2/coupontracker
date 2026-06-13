@@ -70,9 +70,9 @@
 
     <!-- Data safety dialog -->
     <string name="data_safety_title">Your data stays on this device</string>
-    <string name="data_safety_intro">Coupon Tracker processes coupons entirely offline. Screenshots never leave your phone unless you export a backup.</string>
+    <string name="data_safety_intro">Coupon Tracker processes coupon screenshots on device after setup. Screenshots never leave your phone unless you export a backup.</string>
     <string name="data_safety_bullet_ai_title">On-device AI</string>
-    <string name="data_safety_bullet_ai_desc">The Qwen2.5 model runs locally. It reads text from coupons without contacting cloud APIs.</string>
+    <string name="data_safety_bullet_ai_desc">The local model reads visible coupon text on device. Extraction can be incomplete, so review details before redeeming.</string>
     <string name="data_safety_bullet_backup_title">Encrypted backups</string>
     <string name="data_safety_bullet_backup_desc">Exports use Android Keystore and AES-256-GCM. Only you can decrypt them.</string>
     <string name="data_safety_bullet_tracking_title">No tracking</string>
@@ -84,7 +84,7 @@
 
     <!-- Settings data safety card -->
     <string name="settings_data_safety_title">Private by design</string>
-    <string name="settings_data_safety_summary">Screenshots never leave your device. Download the on-device reader for faster, offline extraction.</string>
+    <string name="settings_data_safety_summary">Screenshots stay on your device. Download the on-device reader for local extraction after setup.</string>
     <string name="settings_data_safety_button">View data safety details</string>
     <string name="settings_app_version_label">Version</string>
     <string name="settings_build_commit">Commit %1$s</string>

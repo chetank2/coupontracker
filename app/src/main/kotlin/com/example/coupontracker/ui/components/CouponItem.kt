@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -24,6 +26,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,6 +38,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.ui.theme.BrandColors
 import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
@@ -46,6 +51,14 @@ fun CouponItem(
     onClick: () -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
+    val descriptionExpanded = remember { mutableStateOf(false) }
+    val displayDescription = remember(coupon.description, coupon.storeName, coupon.redeemCode) {
+        DescriptionUtils.formatDisplayDescription(
+            description = coupon.description,
+            storeName = coupon.storeName,
+            redeemCode = coupon.redeemCode
+        )
+    }
 
     val status = DateFormatter.getExpiryStatus(coupon.expiryDate)
     val statusColor = when (status) {
@@ -121,13 +134,32 @@ fun CouponItem(
             Spacer(modifier = Modifier.height(BrandSpacing.Small))
 
             // Description
-            Text(
-                text = coupon.description,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                    text = displayDescription,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (descriptionExpanded.value) Int.MAX_VALUE else 2,
+                    overflow = if (descriptionExpanded.value) TextOverflow.Clip else TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { descriptionExpanded.value = !descriptionExpanded.value }
+                )
+
+                IconButton(
+                    onClick = { descriptionExpanded.value = !descriptionExpanded.value },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = if (descriptionExpanded.value) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (descriptionExpanded.value) "Collapse description" else "Expand description",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 

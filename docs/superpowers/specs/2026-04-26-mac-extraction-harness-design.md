@@ -66,7 +66,7 @@ CLI entry point: `./scripts/eval_extraction_mac.sh`
 After each run, diff `latest.json` against `baseline.json` and report:
 - Per-field accuracy (pass count / total)
 - Fields that **changed** since the last run, even if still wrong (catches silent regressions where one wrong value flips to a different wrong value)
-- Optional: write `latest.json` to `baseline.json` only on explicit promotion (`--promote-baseline`)
+- Write `latest.json` to `baseline.json` only on explicit manual promotion (`--promote-baseline`), after a human reviews the report. CI must never auto-promote the baseline.
 
 ### Layer 2 — Shared asset enforcement
 
@@ -103,7 +103,7 @@ When checking Mac vs Android equivalence, compare in this order:
 2. **Model asset hashes** — exact equality required (GGUF SHA-256, mmproj SHA-256).
 3. **Prompt text** — exact equality required (whitespace and all).
 4. **Raw model output** — exact equality only if the runtime is fully deterministic (temperature 0, fixed seed, identical sampler config). Otherwise skip this rung.
-5. **Parsed fields** — must show no material drift. "Material" = different value for any field in the manifest's `expected` set, after normalization.
+5. **Parsed fields** — must show no material drift. "Material" = different value for any field in the manifest's `expected` set after the harness's production normalization rules. This is normalization-equivalent exact equality, not fuzzy matching.
 
 If rungs 1–3 pass and rung 5 passes, parity is established. Rung 4 is a nice-to-have signal, not a gate.
 
@@ -183,7 +183,6 @@ Layer 0 must succeed before Layer 1 is trusted. If Layer 0 reveals deep divergen
 - Exact path for shared assets: keep `app/src/main/assets/` as canonical (harness reads from there) vs. move to `shared/extraction/`. Decide during Layer 2.
 - Whether the Mac harness invokes Kotlin parser via a JVM wrapper or reimplements in Python. Recommendation: JVM wrapper, since `PromptBuilder.kt` / `SchemaValidator.kt` already exist. Decide during Layer 1.
 - Which llama.cpp build to pin on Mac (project already has `scripts/build_llama_cpp.sh`). Decide during Layer 0.
-- Whether `--promote-baseline` is interactive or automatic on a passing run.
 
 ## Success criteria
 

@@ -85,9 +85,16 @@ fun SettingsScreen(
     }
     
     var showDataSafety by remember { mutableStateOf(false) }
+    var showAdvanced by remember { mutableStateOf(false) }
 
     if (showDataSafety) {
-        DataSafetyDialog(onDismiss = { showDataSafety = false })
+        DataSafetyDialog(
+            onDismiss = { showDataSafety = false },
+            onLearnMore = {
+                showDataSafety = false
+                navController.navigate(Screen.PrivacyPolicy.route)
+            }
+        )
     }
 
     // Use a lazy initialization to avoid ANR
@@ -149,9 +156,8 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.Top
         ) {
 
-            // APPEARANCE SECTION
             Text(
-                text = "APPEARANCE",
+                text = "Appearance",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
@@ -172,9 +178,8 @@ fun SettingsScreen(
                 )
             }
 
-            // PRIVACY SECTION
             Text(
-                text = "PRIVACY",
+                text = "Privacy",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
@@ -203,7 +208,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.width(8.dp))
                         
                         Text(
-                            text = "100% On-Device Processing",
+                            text = "Private by design",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -219,13 +224,28 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    TextButton(
+                        onClick = { navController.navigate(Screen.PrivacyPolicy.route) },
+                        modifier = Modifier.align(Alignment.End)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Privacy Policy")
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Recognition Status:",
+                            text = "Coupon reader:",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Bold
                         )
@@ -249,9 +269,8 @@ fun SettingsScreen(
                 }
             }
 
-            // AI MODEL SECTION
             Text(
-                text = "AI MODEL",
+                text = "Offline scanning",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
@@ -261,9 +280,8 @@ fun SettingsScreen(
             // Model Management (simplified)
             ModelManagementCard(ocrEngine = ocrEngine)
 
-            // DATA SECTION
             Text(
-                text = "DATA",
+                text = "Backup",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
@@ -315,67 +333,72 @@ fun SettingsScreen(
                 }
             }
 
-            // DEVELOPER SECTION
-            Text(
-                text = "DEVELOPER",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp, top = 8.dp)
-            )
-            
             Card(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    // Analytics Dashboard Link
+                Column(modifier = Modifier.padding(16.dp)) {
                     TextButton(
-                        onClick = { navController.navigate(Screen.Analytics.route) },
+                        onClick = { showAdvanced = !showAdvanced },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Analytics,
+                            imageVector = Icons.Default.ArrowDropDown,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Analytics Dashboard",
+                            text = "Advanced",
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.weight(1f)
                         )
                     }
-                    
-                    Divider(modifier = Modifier.padding(vertical = 4.dp))
-                    
-                    // Extraction Dashboard Link
-                    TextButton(
-                        onClick = { navController.navigate(Screen.ExtractionDashboard.route) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.School,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Extraction Learning",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f)
-                        )
+
+                    if (showAdvanced) {
+                        Divider(modifier = Modifier.padding(vertical = 4.dp))
+
+                        TextButton(
+                            onClick = { navController.navigate(Screen.Analytics.route) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Analytics,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Diagnostics",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        TextButton(
+                            onClick = { navController.navigate(Screen.ExtractionDashboard.route) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.School,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Reader learning",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                     }
                 }
             }
 
-            // ABOUT SECTION
             Text(
-                text = "ABOUT",
+                text = "About",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
@@ -444,7 +467,7 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = "Smart coupon tracking with offline AI-powered recognition",
+                        text = "A private wallet for saved coupon codes and expiry dates.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -511,13 +534,13 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
             // Header
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    imageVector = Icons.Default.Memory,
+                    imageVector = Icons.Default.CloudDownload,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSecondaryContainer
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Qwen2.5-1.5B Model",
+                    text = "Offline coupon reader",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -535,7 +558,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "✓ Model Installed",
+                            text = "Ready",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Color(0xFF4CAF50),
                             fontWeight = FontWeight.Bold
@@ -543,7 +566,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                         uiState.modelInfo?.let { info ->
                             val totalSizeMB = info.files.sumOf { it.size } / (1024 * 1024)
                             Text(
-                                text = "Version: ${info.version} • ${totalSizeMB} MB",
+                                text = "Private scanning setup is installed • ${totalSizeMB} MB",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                             )
@@ -553,19 +576,18 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                // Self-test result
                 uiState.selfTestResult?.let { result ->
                     when (result) {
                         is com.example.coupontracker.model.SelfTestResult.Success -> {
                             Text(
-                                text = "✓ Self-test passed (${result.durationMs}ms)",
+                                text = "Reader check passed",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Color(0xFF4CAF50)
                             )
                         }
                         is com.example.coupontracker.model.SelfTestResult.Failed -> {
                             Text(
-                                text = "✗ Self-test failed: ${result.reason}",
+                                text = "Reader check failed",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.error
                             )
@@ -574,7 +596,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                 }
             } else {
                 Text(
-                    text = "No model installed. Import a model to enable advanced extraction.",
+                    text = "Set up offline scanning to read coupon screenshots privately on this device.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                 )
@@ -624,7 +646,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                     ) {
                         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Download Qwen2.5 Model (940 MB)")
+                        Text("Set up offline scanning")
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))
@@ -638,7 +660,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                     ) {
                         Icon(imageVector = Icons.Default.Memory, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Import from File")
+                        Text("Import setup file")
                     }
                 }
             } else {
@@ -662,7 +684,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                             Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null)
                         }
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Test")
+                        Text("Check")
                     }
                     
                     // Delete Button
@@ -676,7 +698,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                     ) {
                         Icon(imageVector = Icons.Default.Error, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Delete")
+                        Text("Remove")
                     }
                 }
             }

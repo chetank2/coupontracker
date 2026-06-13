@@ -2203,40 +2203,43 @@ git commit -m "feat(extraction): Mac-vs-Android comparison report"
 
 ### Task 5.1: Pending sample handling
 
-**Files:**
-- Modify: `scripts/extraction_eval/manifest.py`
-- Modify: `scripts/extraction_eval/runner.py`
-- Modify: `scripts/extraction_eval/report.py`
-- Modify: `scripts/extraction_eval/tests/test_manifest.py`
+**Status: DONE** — commit `066941b3`
 
-- [ ] **Step 1: Update the test fixture**
+**Files modified:**
+- `scripts/extraction_eval/manifest.py`
+- `scripts/extraction_eval/runner.py`
+- `scripts/extraction_eval/report.py`
+- `scripts/extraction_eval/tests/fixtures/mini_manifest.json`
+- `scripts/extraction_eval/tests/test_manifest.py`
+- `scripts/extraction_eval/tests/test_report.py`
 
-Add to `scripts/extraction_eval/tests/fixtures/mini_manifest.json` a sample with no `expected` block, and a top-level `pending` array referencing image paths.
+- [x] **Step 1: Update the test fixture**
 
-- [ ] **Step 2: Add a failing test**
+Added `pending_a` sample (no `expected` key) to `mini_manifest.json`. Fixture now has 3 samples total.
 
-```python
-def test_load_manifest_returns_pending_samples_separately():
-    samples = load_manifest(FIX, root=Path("/tmp/notreal"))
-    pending = [s for s in samples if not s.expected]
-    assert any(s.id.startswith("pending_") for s in pending) or pending
+- [x] **Step 2: Add failing tests (red phase)**
+
+Added `test_load_manifest_handles_samples_without_expected_block` in `test_manifest.py` (verifies `expected is None` and `is_pending is True`). Added `test_run_md_pending_section_and_accuracy_exclusion` in `test_report.py`.
+
+- [x] **Step 3: Implement `Sample.is_pending` and make `expected` optional**
+
+`manifest.py`: Changed `expected: dict[str, Any]` to `Optional[dict[str, Any]]`. Updated `load_manifest` to use `raw.get("expected")` (no KeyError on missing key). Added `is_pending` property. Added docstring note on `frozen=True` hashability: `Sample` is immutable but not hashable because `dict | None` is unhashable — use `Sample.image_sha256` as dict key instead.
+
+`SampleResult` in `report.py`: Added `pending: bool = False` field. Updated `_sample_to_dict` to include `pending` in JSON output. Updated `failures.json` writer to exclude pending samples (filter `not s.passed and not s.pending`).
+
+`runner.py`: When `s.is_pending`, still runs full pipeline (preprocess → prompt → LLM → parse), then sets `field_diff=[]`, `passed=False`, `pending=True`. Diff step is only thing skipped.
+
+- [x] **Step 4: Add a `## Pending` section to `run.md`**
+
+`_render_md` now splits samples into `evaluated` and `pending_samples`. Summary counts (Total/Passed/Failed) and per-sample table use `evaluated` only. Per-field accuracy uses `evaluated` only. A `## Pending` section is appended listing each pending sample's id, image SHA256, and parsed JSON output.
+
+- [x] **Step 5: Run all harness tests, confirm pass**
+
+```
+21 passed in 0.04s
 ```
 
-(Adjust to match the fixture you wrote.)
-
-- [ ] **Step 3: Implement `Sample.is_pending` and skip pending samples in accuracy aggregation**
-
-Make `expected` optional (`dict | None`). In the runner, treat samples with `expected is None` as pending — still run the pipeline, still record raw output, but skip the diff and report them under a `pending` section.
-
-- [ ] **Step 4: Add a `## Pending` section to `run.md`**
-
-Render pending sample IDs and their parsed output, but exclude them from accuracy/passed counts.
-
-- [ ] **Step 5: Run all harness tests, confirm pass**
-
-```bash
-cd scripts && pytest extraction_eval -v
-```
+19 prior tests all green. 2 new tests (1 manifest + 1 report) = 21 total. No regressions.
 
 Expected: all PASS.
 

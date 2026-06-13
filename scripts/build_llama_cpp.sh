@@ -83,27 +83,30 @@ for abi in "${ABIS[@]}"; do
     mkdir -p "$BUILD_ABI_DIR"
     cd "$BUILD_ABI_DIR"
     
-    # Configure CMake
+    # Configure CMake. Examples are ON so mtmd (vision multimodal) builds.
     cmake .. \
         -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
         -DANDROID_ABI="$abi" \
         -DANDROID_PLATFORM="android-$ANDROID_PLATFORM" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DLLAMA_BUILD_EXAMPLES=OFF \
+        -DBUILD_SHARED_LIBS=ON \
+        -DLLAMA_BUILD_EXAMPLES=ON \
         -DLLAMA_BUILD_TESTS=OFF \
-        -DLLAMA_BUILD_SERVER=OFF
-    
-    # Build
-    make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4) llama
-    
-    # Copy to project
+        -DLLAMA_BUILD_SERVER=OFF \
+        -DLLAMA_CURL=OFF
+
+    # Build everything (llama depends on ggml-base + ggml-cpu; mtmd in examples/)
+    make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+
+    # Copy required libs to project jniLibs
     DEST_DIR="$PROJECT_ROOT/app/src/main/jniLibs/$abi"
     mkdir -p "$DEST_DIR"
-    cp libllama.so "$DEST_DIR/"
-    
-    # Get file size
-    SIZE=$(du -h "$DEST_DIR/libllama.so" | cut -f1)
-    echo "✅ Built $abi: $SIZE"
+    # Collect every .so the tree produced (covers libllama, libggml-base,
+    # libggml-cpu, libmtmd if built, plus any OMP runtime the NDK emitted).
+    find . -name "*.so" -type f -exec cp -v {} "$DEST_DIR/" \;
+
+    echo "✅ Installed $abi libs:"
+    ls -lh "$DEST_DIR" | awk '{print "    "$5"\t"$9}'
 done
 
 echo ""

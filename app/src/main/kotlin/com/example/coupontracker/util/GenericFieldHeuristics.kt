@@ -154,9 +154,13 @@ object GenericFieldHeuristics {
         val hasDigit = normalized.any { it.isDigit() }
         val hasPercent = normalized.contains('%')
         val hasCurrencySymbol = currencyRegex.containsMatchIn(normalized)
-        val hasQuantifier = hasDigit || hasPercent || hasCurrencySymbol
         val hasKeyword = descriptionKeywords.any { normalized.contains(it) }
-        if (hasQuantifier) return true
+        val standalonePercent = normalized.matches(Regex("""\d{1,3}(?:\.\d+)?%"""))
+
+        if (standalonePercent) return false
+        if (hasCurrencySymbol && hasDigit) return true
+        if (hasPercent && hasKeyword) return true
+        if (hasDigit && hasKeyword) return true
         return hasKeyword && normalized.contains("cashback")
     }
 }

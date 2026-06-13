@@ -11,13 +11,17 @@ import androidx.test.core.app.ApplicationProvider
 import com.example.coupontracker.HiltTestActivity
 import com.example.coupontracker.R
 
+@PublishedApi
+internal const val THEME_EXTRAS_BUNDLE_KEY =
+    "androidx.fragment.app.testing.FragmentScenario.EmptyFragmentActivity.THEME_EXTRAS_BUNDLE_KEY"
+
 inline fun <reified T : Fragment> launchFragmentInHiltContainer(
     fragmentArgs: Bundle? = null,
     @StyleRes themeResId: Int = R.style.Theme_CouponTracker,
     crossinline action: T.(NavController) -> Unit = {}
 ) {
     val startActivityIntent = Intent(ApplicationProvider.getApplicationContext(), HiltTestActivity::class.java).apply {
-        putExtra(FragmentActivity.THEME_EXTRAS_BUNDLE_KEY, themeResId)
+        putExtra(THEME_EXTRAS_BUNDLE_KEY, themeResId)
     }
 
     ActivityScenario.launch<HiltTestActivity>(startActivityIntent).onActivity { activity ->

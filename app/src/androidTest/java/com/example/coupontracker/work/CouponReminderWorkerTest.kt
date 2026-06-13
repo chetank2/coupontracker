@@ -50,7 +50,6 @@ class CouponReminderWorkerTest {
             storeName = "Integration Store",
             description = "10% off",
             expiryDate = expiry,
-            cashbackAmount = 5.0,
             redeemCode = null,
             imageUri = null,
             category = "Test",

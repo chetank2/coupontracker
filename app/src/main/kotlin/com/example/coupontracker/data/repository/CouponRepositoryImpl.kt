@@ -148,7 +148,9 @@ class CouponRepositoryImpl @Inject constructor(
             normalizedDescription = normalizedDescription,
             imagePhash = imagePhash,
             imageSignature = imageSignature
-        )
+        ) ?: normalizedCoupon.redeemCode
+            ?.takeIf(::isReliableDuplicateCode)
+            ?.let { code -> couponDao.findByRedeemCode(code) }
 
         return if (existing != null) {
             val merged = normalizeReminder(mergeCoupons(existing, normalizedCoupon))
@@ -214,6 +216,13 @@ class CouponRepositoryImpl @Inject constructor(
         }
     }
 
+    private fun isReliableDuplicateCode(code: String): Boolean {
+        val normalized = code.trim().uppercase()
+        if (normalized.length < 6) return false
+        if (normalized in unreliableDuplicateCodes) return false
+        return normalized.any { it.isDigit() } && normalized.any { it.isLetter() }
+    }
+
     private fun normalizeReminder(coupon: Coupon): Coupon {
         val leadTime = coupon.reminderLeadTimeMinutes
         val expiry = coupon.expiryDate
@@ -233,5 +242,17 @@ class CouponRepositoryImpl @Inject constructor(
         }
 
         return coupon.copy(reminderDate = computedReminder)
+    }
+
+    companion object {
+        private val unreliableDuplicateCodes = setOf(
+            "ACTIVE",
+            "COPY",
+            "CODE",
+            "COUPON",
+            "NEEDED",
+            "OFFER",
+            "VOUCHER"
+        )
     }
 }

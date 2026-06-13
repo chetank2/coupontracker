@@ -50,6 +50,13 @@
 -dontwarn com.sun.jna.win32.**
 -dontwarn edu.umd.cs.findbugs.annotations.**
 -dontwarn java.lang.instrument.**
+-dontwarn javax.lang.model.SourceVersion
+-dontwarn javax.lang.model.element.Element
+-dontwarn javax.lang.model.element.ElementKind
+-dontwarn javax.lang.model.element.Modifier
+-dontwarn javax.lang.model.type.TypeMirror
+-dontwarn javax.lang.model.type.TypeVisitor
+-dontwarn javax.lang.model.util.SimpleTypeVisitor8
 -dontwarn javax.tools.**
 -dontwarn org.apiguardian.api.**
 -dontwarn org.mockito.**

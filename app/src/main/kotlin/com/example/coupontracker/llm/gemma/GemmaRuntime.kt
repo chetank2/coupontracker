@@ -3,7 +3,6 @@ package com.example.coupontracker.llm.gemma
 import android.content.Context
 import android.util.Log
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
-import com.google.mediapipe.tasks.genai.llminference.LlmInferenceOptions
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -71,7 +70,7 @@ class GemmaRuntime @Inject constructor(
                 Log.w(TAG, "Gemma model not found at ${path.absolutePath}")
                 return null
             }
-            val options = LlmInferenceOptions.builder()
+            val options = LlmInference.LlmInferenceOptions.builder()
                 .setModelPath(path.absolutePath)
                 .setMaxTokens(DEFAULT_MAX_TOKENS)
                 .setTopK(1)

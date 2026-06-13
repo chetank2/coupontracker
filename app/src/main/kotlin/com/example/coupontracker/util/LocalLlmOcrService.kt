@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import androidx.annotation.VisibleForTesting
+import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.analytics.TelemetryClient
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.ExtractionContext
@@ -74,10 +75,9 @@ class LocalLlmOcrService(
     companion object {
         private const val TAG = "LocalLlmOcrService"
 
-        // Inference timeout (90 seconds - matches production SLA with warmup)
-        // First run: ~60s (model warmup), subsequent runs: ~10-20s
-        // Increased from 60s after observing 68s warmups; stays aligned with docs
-        private const val INFERENCE_TIMEOUT_MS = 90_000L
+        // Moto G82 CPU-only llama.cpp runs this 1.5B Qwen model at about 1.5-2 tok/s.
+        // Keep one generous attempt so a valid response is not discarded after native finishes.
+        private const val INFERENCE_TIMEOUT_MS = 180_000L
         private const val GRACE_PERIOD_AFTER_TIMEOUT_MS = 2_000L
 
         // Model version tracking
@@ -96,9 +96,9 @@ class LocalLlmOcrService(
         
         private const val USE_SCHEMA_VALIDATION = true
 
-        private const val MAX_LLM_ATTEMPTS = 2
+        private const val MAX_LLM_ATTEMPTS = 1
 
-        private const val EXPANDED_TOKEN_BUDGET = 196
+        private const val EXPANDED_TOKEN_BUDGET = 160
 
         private val CTA_SUFFIXES = listOf(
             "copy",
@@ -511,9 +511,8 @@ class LocalLlmOcrService(
                 )
 
                 val warmupDuration = warmUpModel()
-                val warmupMetrics = runTextWarmupPrompt()
 
-                val readyMessage = "AI model ready in ${(warmupDuration / 1000).coerceAtLeast(1)}s @ ${"%.2f".format(warmupMetrics.tokensPerSecond)} tok/s"
+                val readyMessage = "AI model loaded in ${(warmupDuration / 1000).coerceAtLeast(1)}s"
                 notifyProgress(
                     stage = LlmProgressStage.WARMING_UP,
                     percent = 25,
@@ -617,6 +616,9 @@ class LocalLlmOcrService(
     }
 
     private fun maybeScheduleNativeSmokeTest(modelInfo: ModelInfo) {
+        if (!BuildConfig.DEBUG) {
+            return
+        }
         if (!modelInfo.isAvailable) {
             return
         }

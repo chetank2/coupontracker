@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "samples": [
+    {
+      "id": "cred_kapiva_strength_stamina_40off",
+      "image": "images/_local/cred_kapiva_strength_stamina_40off.png",
+      "brand": "Kapiva",
+      "imageSha256": "0d119d81e6fb79f4fc6d0a950759a5fea0b0c56e13a8e43797d6daa17438ac77",
+      "expected": {
+        "storeName": "Kapiva",
+        "description": "Get Upto 40% Off* on Kapiva's \"Strength and Stamina Range\"",
+        "redeemCode": "KAPW1M3LAfAh5e",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "Kapiva",
+          "About Kapiva"
+        ],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "cred_lenskart_goldmax_1year_free",
+      "image": "images/_local/cred_lenskart_goldmax_1year_free.png",
+      "brand": "Lenskart",
+      "imageSha256": "fd0521c44bc3ee3de47ab5c3ebca70b3d3dbcf46376c17eecee5df2aba6f6fcb",
+      "expected": {
+        "storeName": "Lenskart",
+        "description": "Free* Gold Max Membership for 1 year on Lenskart Website",
+        "redeemCode": "AFFLPHG-UFPJ-TDOAB",
+        "expiryDate": "2025-05-31",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "Lenskart",
+          "About Lenskart"
+        ],
+        "needsAttention": false
+      }
+    },
+    {
+      "id": "swiggy_scratchwin_timesprime_550off",
+      "image": "images/_local/swiggy_scratchwin_timesprime_550off.png",
+      "brand": "TIMES PRIME",
+      "imageSha256": "ae37ca30bd00940e7d5217820bfca25c8d906bea5cb40ba90301be979139d27d",
+      "expected": {
+        "storeName": "TIMES PRIME",
+        "description": "Flat Rs.550 Off",
+        "redeemCode": "SWG550",
+        "expiryDate": "unknown",
+        "storeNameSource": "ocr",
+        "storeNameEvidence": [
+          "TIMES PRIME"
+        ],
+        "needsAttention": true
+      }
+    }
+  ]
+}

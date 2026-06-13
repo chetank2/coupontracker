@@ -69,6 +69,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.ui.components.EmptyState
 import com.example.coupontracker.ui.components.EnhancedCouponCard
 import com.example.coupontracker.ui.components.FilterSortBottomSheet
@@ -231,30 +232,6 @@ fun HomeScreen(
                     ),
                     modifier = Modifier.padding(vertical = BrandSpacing.Small)
                 )
-            } else {
-                ExtendedFloatingActionButton(
-                    onClick = { navController.navigate(Screen.Settings.route) },
-                    icon = {
-                        Icon(
-                            imageVector = Icons.Default.CloudDownload,
-                            contentDescription = null
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = "Download Model",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    },
-                    expanded = true,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    elevation = FloatingActionButtonDefaults.elevation(
-                        defaultElevation = 6.dp,
-                        pressedElevation = 8.dp
-                    ),
-                    modifier = Modifier.padding(vertical = BrandSpacing.Small)
-                )
             }
 
             // Show the simplified capture bottom sheet when the FAB is clicked
@@ -375,8 +352,8 @@ fun HomeScreen(
                         )
                     } else {
                         EmptyState(
-                            title = "No Coupons Yet",
-                            message = "Add your first coupon to start saving money. You can scan, import, or manually enter coupon details.",
+                            title = "Your coupon wallet is empty",
+                            message = "Save codes, expiry dates, and offer details in one private place.",
                             icon = Icons.Outlined.Info,
                             modifier = Modifier.fillMaxWidth(0.9f),
                             action = {
@@ -385,21 +362,18 @@ fun HomeScreen(
                                     modifier = Modifier.fillMaxWidth(0.7f)
                                 ) {
                                     PrimaryButton(
-                                        text = "Scan Coupon",
-                                        onClick = { navController.navigate(Screen.SmartCamera.route) },
-                                        leadingIcon = Icons.Default.CameraAlt,
+                                        text = if (isModelInstalled) "Add coupon" else "Set up offline scanning",
+                                        onClick = {
+                                            if (isModelInstalled) {
+                                                showCaptureBottomSheet = true
+                                            } else {
+                                                navController.navigate(Screen.Settings.route)
+                                            }
+                                        },
+                                        leadingIcon = if (isModelInstalled) Icons.Default.Add else Icons.Default.CloudDownload,
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(top = BrandSpacing.Medium)
-                                    )
-
-                                    Spacer(modifier = Modifier.height(BrandSpacing.Small))
-
-                                    SecondaryButton(
-                                        text = "Upload Image",
-                                        onClick = { imagePickerLauncher.launch("image/*") },
-                                        leadingIcon = Icons.Default.Upload,
-                                        modifier = Modifier.fillMaxWidth()
                                     )
                                 }
                             }
@@ -429,15 +403,22 @@ fun HomeScreen(
                     contentPadding = PaddingValues(
                         start = BrandSpacing.Medium,
                         end = BrandSpacing.Medium,
-                        bottom = BrandSpacing.ExtraLarge
+                        bottom = BrandSpacing.Giant
                     ),
                     verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
                 ) {
                     items(coupons) { coupon ->
                         val debugSnapshot = homeUiState.extractionDebug[coupon.id]
+                        val displayDescription = remember(coupon.description, coupon.storeName, coupon.redeemCode) {
+                            DescriptionUtils.formatDisplayDescription(
+                                description = coupon.description,
+                                storeName = coupon.storeName,
+                                redeemCode = coupon.redeemCode
+                            )
+                        }
                         EnhancedCouponCard(
                             storeName = coupon.storeName,
-                            description = coupon.description,
+                            description = displayDescription,
                             expiryDate = coupon.expiryDate,
                             amount = coupon.getCashbackNumericValue(),
                             code = coupon.redeemCode,
@@ -507,9 +488,9 @@ private fun ModelDownloadCard(
                 message
             } else {
                 when (status) {
-                    ModelAvailabilityStatus.NOT_INSTALLED -> "Download the on-device Qwen2.5 model to enable private, offline coupon scanning."
-                    ModelAvailabilityStatus.DOWNLOADING -> "Model download in progress. Keep the app open to finish installing the offline reader."
-                    ModelAvailabilityStatus.INSTALLED -> "Model installed."
+                    ModelAvailabilityStatus.NOT_INSTALLED -> "Set up the private coupon reader to scan screenshots on this device."
+                    ModelAvailabilityStatus.DOWNLOADING -> "Offline scanning setup is in progress. Keep the app open until it finishes."
+                    ModelAvailabilityStatus.INSTALLED -> "Offline scanning is ready."
                     ModelAvailabilityStatus.ERROR -> ""
                 }
             }
@@ -521,10 +502,10 @@ private fun ModelDownloadCard(
     }
 
     val primaryLabel = when (status) {
-        ModelAvailabilityStatus.NOT_INSTALLED -> "Download Model"
+        ModelAvailabilityStatus.NOT_INSTALLED -> "Set up offline scanning"
         ModelAvailabilityStatus.DOWNLOADING -> "View Progress"
-        ModelAvailabilityStatus.ERROR -> "Retry Download"
-        ModelAvailabilityStatus.INSTALLED -> "Manage Model"
+        ModelAvailabilityStatus.ERROR -> "Retry setup"
+        ModelAvailabilityStatus.INSTALLED -> "Manage"
     }
 
     Card(
@@ -554,11 +535,11 @@ private fun ModelDownloadCard(
                 Spacer(modifier = Modifier.width(BrandSpacing.Small))
                 Column {
                     Text(
-                        text = "Offline AI required",
+                        text = "Set up offline scanning",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = "Download Qwen2.5-1.5B to use instant coupon extraction.",
+                        text = "Private coupon reading happens on your phone.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -603,7 +584,7 @@ private fun ModelDownloadCard(
                 onClick = onOpenSettings,
                 modifier = Modifier.align(Alignment.End)
             ) {
-                Text("Open Settings")
+                Text("More options")
             }
         }
     }
