@@ -12,6 +12,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.components.ExtractionDashboard
 import com.example.coupontracker.ui.viewmodel.ExtractionDashboardViewModel
 import android.widget.Toast
@@ -46,13 +47,8 @@ fun ExtractionDashboardScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        text = "Extraction Performance",
-                        fontWeight = FontWeight.Bold
-                    )
-                },
+            BrandTopBar(
+                title = "Extraction performance",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back")

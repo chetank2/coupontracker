@@ -24,7 +24,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,6 +37,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.AnalyticsViewModel
 import com.example.coupontracker.util.AnalyticsTracker
@@ -71,8 +71,8 @@ fun AnalyticsScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Analytics") },
+            BrandTopBar(
+                title = "Analytics",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

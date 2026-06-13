@@ -17,7 +17,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coupontracker.BuildConfig
+import com.example.coupontracker.ui.components.BrandTopBar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -56,8 +56,8 @@ fun PrivacyPolicyScreen(navController: NavController) {
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Privacy Policy") },
+            BrandTopBar(
+                title = "Privacy policy",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
