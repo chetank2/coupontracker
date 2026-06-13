@@ -3,6 +3,7 @@ package com.example.coupontracker.ui.components
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,25 +15,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Category
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.DateRange
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Store
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -72,7 +63,8 @@ fun UnifiedCouponForm(
     onCopyLogs: () -> Unit,
     isSaving: Boolean = false,
     error: String? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    extraContentBeforeActions: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     
@@ -107,95 +99,66 @@ fun UnifiedCouponForm(
             }
         }
         
-        // Store name field
-        OutlinedTextField(
+        BrandTextField(
             value = storeName,
             onValueChange = onStoreNameChange,
-            label = { Text("Store Name") },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = {
-                Icon(Icons.Default.Store, contentDescription = null)
-            }
+            label = "Store name",
+            modifier = Modifier.fillMaxWidth()
         )
         
-        // Description field
-        OutlinedTextField(
+        BrandTextField(
             value = description,
             onValueChange = onDescriptionChange,
-            label = { Text("Description") },
+            label = "Description",
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = {
-                Icon(Icons.Default.Description, contentDescription = null)
-            }
+            singleLine = false,
         )
         
-        // Code field
-        OutlinedTextField(
+        BrandTextField(
             value = code,
             onValueChange = onCodeChange,
-            label = { Text("Redeem Code") },
-            modifier = Modifier.fillMaxWidth(),
-            leadingIcon = {
-                Icon(Icons.Default.Code, contentDescription = null)
-            }
+            label = "Redeem code",
+            modifier = Modifier.fillMaxWidth()
         )
         
-        // Expiry date field
-        OutlinedTextField(
+        BrandTextField(
             value = expiryDateString,
             onValueChange = onExpiryDateStringChange,
-            label = { Text("Expiry Date (MM/DD/YYYY)") },
+            label = "Expiry date (MM/DD/YYYY)",
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = {
-                Icon(Icons.Default.CalendarMonth, contentDescription = null)
-            },
-            trailingIcon = {
-                IconButton(onClick = { showDatePicker = true }) {
-                    Icon(Icons.Default.DateRange, contentDescription = "Select Date")
-                }
-            },
             readOnly = true
         )
-        
-        // Category field
-        OutlinedTextField(
-            value = category,
-            onValueChange = onCategoryChange,
-            label = { Text("Category (Optional)") },
+        BrandButton(
+            text = "Select expiry date",
+            onClick = { showDatePicker = true },
             modifier = Modifier.fillMaxWidth(),
-            leadingIcon = {
-                Icon(Icons.Default.Category, contentDescription = null)
-            }
+            tier = BrandButtonTier.Secondary,
         )
         
-        // Save button
-        Button(
+        BrandTextField(
+            value = category,
+            onValueChange = onCategoryChange,
+            label = "Category (optional)",
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        extraContentBeforeActions?.invoke(this)
+        
+        BrandButton(
+            text = if (isSaving) "Saving..." else "Save coupon",
             onClick = onSave,
             modifier = Modifier.fillMaxWidth(),
             enabled = storeName.isNotBlank() && !isSaving
-        ) {
-            if (isSaving) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Icon(Icons.Default.Save, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Save Coupon")
-            }
-        }
+        )
 
-        OutlinedButton(
+        BrandButton(
+            text = "Copy log data",
             onClick = onCopyLogs,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp)
-        ) {
-            Icon(imageVector = Icons.Default.ContentCopy, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Copy Logcat Data")
-        }
+                .padding(top = 12.dp),
+            tier = BrandButtonTier.Secondary,
+        )
         
         // Error message
         error?.let { errorMsg ->
@@ -211,7 +174,8 @@ fun UnifiedCouponForm(
             DatePickerDialog(
                 onDismissRequest = { showDatePicker = false },
                 confirmButton = {
-                    Button(
+                    BrandButton(
+                        text = "OK",
                         onClick = {
                             datePickerState.selectedDateMillis?.let { millis ->
                                 val date = Date(millis)
@@ -220,16 +184,14 @@ fun UnifiedCouponForm(
                             }
                             showDatePicker = false
                         }
-                    ) {
-                        Text("OK")
-                    }
+                    )
                 },
                 dismissButton = {
-                    Button(
-                        onClick = { showDatePicker = false }
-                    ) {
-                        Text("Cancel")
-                    }
+                    BrandButton(
+                        text = "Cancel",
+                        onClick = { showDatePicker = false },
+                        tier = BrandButtonTier.Tertiary,
+                    )
                 }
             ) {
                 DatePicker(state = datePickerState)

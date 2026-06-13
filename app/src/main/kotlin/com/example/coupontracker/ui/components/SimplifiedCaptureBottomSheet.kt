@@ -1,7 +1,7 @@
 package com.example.coupontracker.ui.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Camera
-import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Card
@@ -33,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.coupontracker.ui.theme.BrandSpacing
+import com.example.coupontracker.ui.theme.BrandTypography
 import kotlinx.coroutines.launch
 
 /**
@@ -53,19 +53,26 @@ fun SimplifiedCaptureBottomSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        sheetState = sheetState
+        sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
-        Column(
+        GlassSurface(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(BrandSpacing.Medium),
+            shape = MaterialTheme.shapes.large,
+        ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(BrandSpacing.CardPadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = "Add coupon",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                style = BrandTypography.HeadlineSmall,
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(BrandSpacing.Small))
@@ -123,6 +130,7 @@ fun SimplifiedCaptureBottomSheet(
 
             Spacer(modifier = Modifier.height(BrandSpacing.Large))
         }
+        }
     }
 }
 
@@ -139,7 +147,7 @@ private fun CaptureOptionCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        border = BorderStroke(BrandSpacing.Hairline, MaterialTheme.colorScheme.outline),
         onClick = onClick
     ) {
         Row(
@@ -152,13 +160,13 @@ private fun CaptureOptionCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = BrandTypography.TitleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = subtitle,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = BrandTypography.BodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
