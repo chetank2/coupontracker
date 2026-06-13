@@ -97,6 +97,7 @@ class DetailViewModel @Inject constructor(
                 try {
                     // Update usage count
                     repository.updateCouponUsageCount(coupon.id)
+                    repository.updateCouponStatus(coupon.id, "Used")
 
                     // If this was the last use and the coupon has a usage limit, mark as used
                     if (coupon.usageLimit != null && coupon.usageCount + 1 >= coupon.usageLimit) {
@@ -113,6 +114,24 @@ class DetailViewModel @Inject constructor(
                     loadCoupon(coupon.id)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error tracking usage", e)
+                }
+            }
+        }
+    }
+
+    /**
+     * Set a reminder for the coupon
+     */
+    fun setReminderLeadTime(leadTimeMinutes: Int) {
+        viewModelScope.launch {
+            _coupon.value?.let { coupon ->
+                val expiry = coupon.expiryDate ?: return@launch
+                val reminderAt = Date(expiry.time - TimeUnit.MINUTES.toMillis(leadTimeMinutes.toLong()))
+                try {
+                    repository.updateCouponReminder(coupon.id, reminderAt, leadTimeMinutes)
+                    loadCoupon(coupon.id)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error setting reminder lead time", e)
                 }
             }
         }

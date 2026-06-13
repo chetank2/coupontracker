@@ -7,6 +7,7 @@ import com.example.coupontracker.data.model.Settings
 import com.example.coupontracker.data.model.SortOrder
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.repository.SettingsRepository
+import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.util.SecureBackupManager
 import com.example.coupontracker.util.ThemeManager
 import com.example.coupontracker.util.ThemeMode
@@ -46,12 +47,22 @@ class SettingsViewModel @Inject constructor(
     private val _backupState = MutableStateFlow<BackupState>(BackupState.Idle)
     val backupState: StateFlow<BackupState> = _backupState.asStateFlow()
 
+    private val _cleanupState = MutableStateFlow<CleanupState>(CleanupState.Idle)
+    val cleanupState: StateFlow<CleanupState> = _cleanupState.asStateFlow()
+
     sealed class BackupState {
         object Idle : BackupState()
         object Exporting : BackupState()
         object Importing : BackupState()
         data class Success(val message: String, val count: Int = 0) : BackupState()
         data class Error(val message: String) : BackupState()
+    }
+
+    sealed class CleanupState {
+        object Idle : CleanupState()
+        object Running : CleanupState()
+        data class Success(val removedCount: Int) : CleanupState()
+        data class Error(val message: String) : CleanupState()
     }
 
     fun updateSortOrder(sortOrder: SortOrder) {
@@ -64,6 +75,48 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             repository.updateNotificationsEnabled(enabled)
         }
+    }
+
+    fun cleanupDuplicateCoupons() {
+        viewModelScope.launch {
+            _cleanupState.value = CleanupState.Running
+            try {
+                val coupons = couponRepository.getAllCoupons().first()
+                val duplicates = coupons
+                    .groupBy { coupon -> duplicateKey(coupon) }
+                    .filterKeys { it != null }
+                    .values
+                    .flatMap { group ->
+                        if (group.size <= 1) {
+                            emptyList()
+                        } else {
+                            group.sortedWith(
+                                compareByDescending<com.example.coupontracker.data.model.Coupon> { it.updatedAt }
+                                    .thenByDescending { it.id }
+                            ).drop(1)
+                        }
+                    }
+
+                duplicates.forEach { couponRepository.deleteCoupon(it) }
+                _cleanupState.value = CleanupState.Success(duplicates.size)
+            } catch (e: Exception) {
+                _cleanupState.value = CleanupState.Error(e.message ?: "Duplicate cleanup failed")
+            }
+        }
+    }
+
+    private fun duplicateKey(coupon: com.example.coupontracker.data.model.Coupon): String? {
+        val code = coupon.redeemCode
+            ?.trim()
+            ?.uppercase()
+            ?.takeIf { it.length >= 6 && it.any(Char::isDigit) && it.any(Char::isLetter) }
+        if (code != null) return "code:$code"
+
+        val normalizedDescription = coupon.normalizedDescription
+            ?: CouponDedupUtils.normalizeDescription(coupon.description)
+        val store = coupon.storeName.trim().lowercase()
+        if (store.isBlank() || normalizedDescription.length < 12) return null
+        return "store:$store|desc:$normalizedDescription"
     }
 
     fun updateDarkModeEnabled(enabled: Boolean) {

@@ -1,5 +1,8 @@
 package com.example.coupontracker.ui.screen
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coupontracker.ui.navigation.Screen
@@ -60,6 +64,18 @@ fun SettingsScreen(
     val context = LocalContext.current
     var showDataSafety by remember { mutableStateOf(false) }
     var showAdvanced by remember { mutableStateOf(false) }
+    val settings by viewModel.settings.collectAsState()
+    val cleanupState by viewModel.cleanupState.collectAsState()
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        viewModel.updateNotificationsEnabled(granted)
+        Toast.makeText(
+            context,
+            if (granted) "Notifications enabled" else "Notifications permission denied",
+            Toast.LENGTH_SHORT
+        ).show()
+    }
 
     if (showDataSafety) {
         DataSafetyDialog(
@@ -104,6 +120,22 @@ fun SettingsScreen(
 
     // Get theme mode
     val themeMode by viewModel.themeMode.collectAsState()
+
+    LaunchedEffect(cleanupState) {
+        when (val state = cleanupState) {
+            is SettingsViewModel.CleanupState.Success -> {
+                Toast.makeText(
+                    context,
+                    if (state.removedCount == 0) "No duplicates found" else "Removed ${state.removedCount} duplicate coupon${if (state.removedCount == 1) "" else "s"}",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            is SettingsViewModel.CleanupState.Error -> {
+                Toast.makeText(context, state.message, Toast.LENGTH_SHORT).show()
+            }
+            else -> Unit
+        }
+    }
 
     // UI states
     val scrollState = rememberScrollState()
@@ -168,6 +200,31 @@ fun SettingsScreen(
                 )
             }
 
+            SettingsSection(title = "NOTIFICATIONS") {
+                SettingsRow(
+                    title = "Expiry reminders",
+                    subtitle = if (settings.notificationsEnabled) {
+                        "Reminder notifications are enabled."
+                    } else {
+                        "Turn on notifications for saved coupon reminders."
+                    },
+                    trailing = {
+                        Switch(
+                            checked = settings.notificationsEnabled,
+                            onCheckedChange = { enabled ->
+                                if (enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    viewModel.updateNotificationsEnabled(enabled)
+                                }
+                            }
+                        )
+                    },
+                )
+            }
+
             SettingsSection(title = "APPEARANCE") {
                 ThemeSelector(
                     selectedThemeMode = themeMode,
@@ -204,6 +261,16 @@ fun SettingsScreen(
                         title = "Reader learning",
                         subtitle = "Review extraction learning signals.",
                         onClick = { navController.navigate(Screen.ExtractionDashboard.route) },
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        title = "Clean duplicate coupons",
+                        subtitle = when (cleanupState) {
+                            SettingsViewModel.CleanupState.Running -> "Checking saved coupons..."
+                            is SettingsViewModel.CleanupState.Success -> "Last cleanup removed ${(cleanupState as SettingsViewModel.CleanupState.Success).removedCount} duplicate coupons."
+                            else -> "Merge repeated scans of the same coupon."
+                        },
+                        onClick = { viewModel.cleanupDuplicateCoupons() },
                     )
 
                     val commitHash = remember(BuildConfig.APP_VERSION) {

@@ -113,6 +113,8 @@ fun CouponDetailScreen(
                     showImagePreview = showImagePreview,
                     onToggleImagePreview = { showImagePreview = it },
                     onTrackUsage = { viewModel.trackUsage() },
+                    onSetReminderLeadTime = { minutes -> viewModel.setReminderLeadTime(minutes) },
+                    onCancelReminder = { viewModel.cancelReminder() },
                     context = context,
                     debugSnapshot = debugSnapshot,
                     isDebugBuild = isDebugBuild
@@ -135,6 +137,8 @@ private fun CouponDetailContent(
     showImagePreview: Boolean,
     onToggleImagePreview: (Boolean) -> Unit,
     onTrackUsage: () -> Unit,
+    onSetReminderLeadTime: (Int) -> Unit,
+    onCancelReminder: () -> Unit,
     context: Context,
     debugSnapshot: ExtractionDebugSnapshot?,
     isDebugBuild: Boolean
@@ -347,17 +351,19 @@ private fun CouponDetailContent(
         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
         CouponActionButtons(
+            coupon = coupon,
             onTrackUsageClick = {
                 onTrackUsage()
                 Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
             },
-            onSetReminderClick = {
-                Toast.makeText(
-                    context,
-                    "Reminder settings coming soon",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
+            onSetReminderLeadTime = { minutes ->
+                onSetReminderLeadTime(minutes)
+                Toast.makeText(context, "Reminder saved", Toast.LENGTH_SHORT).show()
+            },
+            onCancelReminderClick = {
+                onCancelReminder()
+                Toast.makeText(context, "Reminder removed", Toast.LENGTH_SHORT).show()
+            },
         )
 
         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
@@ -459,31 +465,109 @@ private fun com.example.coupontracker.data.model.Coupon.detailCardOfferSummary(
 
 @Composable
 private fun CouponActionButtons(
+    coupon: com.example.coupontracker.data.model.Coupon,
     onTrackUsageClick: () -> Unit,
-    onSetReminderClick: () -> Unit
+    onSetReminderLeadTime: (Int) -> Unit,
+    onCancelReminderClick: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
-    ) {
-        Button(
-            onClick = onTrackUsageClick,
-            modifier = Modifier.weight(1f)
+    var reminderMenuExpanded by remember { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
         ) {
-            Icon(Icons.Default.CheckCircle, contentDescription = null)
-            Spacer(modifier = Modifier.width(BrandSpacing.Small))
-            Text("Track Usage")
+            Button(
+                onClick = onTrackUsageClick,
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.CheckCircle, contentDescription = null)
+                Spacer(modifier = Modifier.width(BrandSpacing.Small))
+                Text(if (coupon.status.equals("Used", ignoreCase = true)) "Used again" else "Mark used")
+            }
+
+            Box(modifier = Modifier.weight(1f)) {
+                Button(
+                    onClick = { reminderMenuExpanded = true },
+                    enabled = coupon.expiryDate != null,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Notifications, contentDescription = null)
+                    Spacer(modifier = Modifier.width(BrandSpacing.Small))
+                    Text(if (coupon.reminderLeadTimeMinutes != null) "Reminder" else "Remind me")
+                }
+
+                DropdownMenu(
+                    expanded = reminderMenuExpanded,
+                    onDismissRequest = { reminderMenuExpanded = false }
+                ) {
+                    ReminderOption("At expiry", 0, onSetReminderLeadTime) {
+                        reminderMenuExpanded = false
+                    }
+                    ReminderOption("1 hour before", 60, onSetReminderLeadTime) {
+                        reminderMenuExpanded = false
+                    }
+                    ReminderOption("24 hours before", 1440, onSetReminderLeadTime) {
+                        reminderMenuExpanded = false
+                    }
+                    ReminderOption("48 hours before", 2880, onSetReminderLeadTime) {
+                        reminderMenuExpanded = false
+                    }
+                    if (coupon.reminderLeadTimeMinutes != null) {
+                        Divider()
+                        DropdownMenuItem(
+                            text = { Text("Remove reminder") },
+                            onClick = {
+                                reminderMenuExpanded = false
+                                onCancelReminderClick()
+                            }
+                        )
+                    }
+                }
+            }
         }
 
-        Button(
-            onClick = onSetReminderClick,
-            modifier = Modifier.weight(1f)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Small),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.Notifications, contentDescription = null)
-            Spacer(modifier = Modifier.width(BrandSpacing.Small))
-            Text("Set Reminder")
+            Text(
+                text = "Used ${coupon.usageCount} time${if (coupon.usageCount == 1) "" else "s"}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            coupon.usageLimit?.takeIf { it > 0 }?.let { limit ->
+                Text(
+                    text = "• Limit $limit",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            coupon.reminderDate?.let { reminderDate ->
+                Text(
+                    text = "• Reminder ${DateFormatter.formatShort(reminderDate)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun ReminderOption(
+    label: String,
+    minutes: Int,
+    onSetReminderLeadTime: (Int) -> Unit,
+    onSelected: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        onClick = {
+            onSetReminderLeadTime(minutes)
+            onSelected()
+        }
+    )
 }
 
 @Composable

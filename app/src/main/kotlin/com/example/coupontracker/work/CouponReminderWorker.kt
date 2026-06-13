@@ -65,7 +65,19 @@ class CouponReminderWorker @AssistedInject constructor(
 
     private fun postNotification(coupon: Coupon) {
         val context = applicationContext
+        val notificationsEnabled = context
+            .getSharedPreferences("coupon_settings", Context.MODE_PRIVATE)
+            .getBoolean("notifications_enabled", true)
+        if (!notificationsEnabled) {
+            Log.d(TAG, "Notifications disabled; skipping reminder for coupon ${coupon.id}")
+            return
+        }
+
         val notificationManager = NotificationManagerCompat.from(context)
+        if (!notificationManager.areNotificationsEnabled()) {
+            Log.d(TAG, "System notifications disabled; skipping reminder for coupon ${coupon.id}")
+            return
+        }
         val args = Bundle().apply {
             putLong("couponId", coupon.id)
         }
