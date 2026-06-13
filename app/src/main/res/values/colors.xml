@@ -1,79 +1,83 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Primary Colors -->
-    <color name="primary">#1976D2</color>
-    <color name="primary_variant">#1565C0</color>
-    <color name="on_primary">#FFFFFF</color>
-    
-    <!-- Secondary Colors -->
-    <color name="secondary">#03DAC6</color>
-    <color name="secondary_variant">#018786</color>
-    <color name="on_secondary">#000000</color>
-    
-    <!-- Background Colors -->
-    <color name="background">#FAFAFA</color>
-    <color name="background_light">#FFFFFF</color>
-    <color name="surface">#FFFFFF</color>
-    <color name="on_surface">#000000</color>
-    <color name="on_surface_variant">#5F6368</color>
-    
+    <!-- Vault tokens (Light palette) -->
+    <color name="primary">#00D69E</color>
+    <color name="primary_variant">#00B488</color>
+    <color name="on_primary">#0D0C10</color>
+
+    <!-- Secondary holds the surface variant so M2 widgets receive a tonal neutral. -->
+    <color name="secondary">#EAE4D9</color>
+    <color name="secondary_variant">#D9D2C5</color>
+    <color name="on_secondary">#1B1A1F</color>
+
+    <!-- Background / Surface -->
+    <color name="background">#F2EDE4</color>
+    <color name="background_light">#FFFCF5</color>
+    <color name="surface">#FFFCF5</color>
+    <color name="on_background">#0D0C10</color>
+    <color name="on_surface">#1B1A1F</color>
+    <color name="on_surface_variant">#6E6A60</color>
+
+    <!-- Stroke / Divider -->
+    <color name="stroke">#D9D2C5</color>
+    <color name="divider">#E6E1D5</color>
+
     <!-- Status Colors -->
-    <color name="success">#4CAF50</color>
-    <color name="warning">#FF9800</color>
-    <color name="error">#F44336</color>
+    <color name="success">#00D69E</color>
+    <color name="warning">#D9A800</color>
+    <color name="error">#DC3553</color>
     <color name="on_error">#FFFFFF</color>
-    <color name="info">#2196F3</color>
-    
+    <color name="info">#3B82F6</color>
+
     <!-- Coupon Status Colors -->
-    <color name="expired">#F44336</color>
-    <color name="expiring_soon">#FF9800</color>
-    <color name="valid">#4CAF50</color>
-    
-    <!-- Additional Background Colors -->
-    <color name="on_background">#000000</color>
-    <color name="card_background">#FFFFFF</color>
-    <color name="card_stroke">#E0E0E0</color>
-    
+    <color name="expired">#DC3553</color>
+    <color name="expiring_soon">#D9A800</color>
+    <color name="valid">#00D69E</color>
+
+    <!-- Cards -->
+    <color name="card_background">#FFFCF5</color>
+    <color name="card_stroke">#D9D2C5</color>
+
     <!-- Navigation Colors -->
-    <color name="bottom_nav_icon">#757575</color>
-    <color name="bottom_nav_text">#424242</color>
-    
+    <color name="bottom_nav_icon">#6E6A60</color>
+    <color name="bottom_nav_text">#1B1A1F</color>
+
     <!-- Launcher Icon Colors -->
-    <color name="ic_launcher_background">#1976D2</color>
-    
+    <color name="ic_launcher_background">#0D0C10</color>
+
     <!-- Field Detection Colors -->
     <color name="field_code">#FF6B6B</color>
     <color name="field_benefit">#4ECDC4</color>
     <color name="field_expiry">#45B7D1</color>
     <color name="field_app">#F9CA24</color>
     <color name="field_terms">#A55EEA</color>
-    
+
     <!-- Coupon Status Colors -->
-    <color name="coupon_complete">#00FF00</color>
-    <color name="coupon_partial_top">#FFAA00</color>
-    <color name="coupon_partial_bottom">#FF6600</color>
-    
-    <!-- Legacy Colors -->
-    <color name="colorPrimary">#1976D2</color>
-    <color name="colorPrimaryDark">#1565C0</color>
-    <color name="colorAccent">#03DAC6</color>
-    
+    <color name="coupon_complete">#00D69E</color>
+    <color name="coupon_partial_top">#F2C84B</color>
+    <color name="coupon_partial_bottom">#D9A800</color>
+
+    <!-- Legacy Colors (kept for AppCompat / older XML references) -->
+    <color name="colorPrimary">@color/primary</color>
+    <color name="colorPrimaryDark">@color/primary_variant</color>
+    <color name="colorAccent">@color/primary</color>
+
     <!-- Accent Colors (Default - Light Mode) -->
-    <color name="accent_green">#4CAF50</color>
-    <color name="accent_red">#F44336</color>
-    <color name="accent_yellow">#FF9800</color>
-    
+    <color name="accent_green">#00D69E</color>
+    <color name="accent_red">#DC3553</color>
+    <color name="accent_yellow">#D9A800</color>
+
     <!-- Text Colors (Default - Light Mode) -->
-    <color name="text_primary">#000000</color>
-    <color name="text_secondary">#757575</color>
-    <color name="text_tertiary">#9E9E9E</color>
-    <color name="text_on_dark">#FFFFFF</color>
-    <color name="text_on_dark_secondary">#E0E0E0</color>
-    
+    <color name="text_primary">#0D0C10</color>
+    <color name="text_secondary">#6E6A60</color>
+    <color name="text_tertiary">#A39E92</color>
+    <color name="text_on_dark">#F7F4EE</color>
+    <color name="text_on_dark_secondary">#E6E2D9</color>
+
     <!-- Card Colors (Default - Light Mode) -->
-    <color name="card">#FFFFFF</color>
-    
+    <color name="card">#FFFCF5</color>
+
     <!-- Basic Colors -->
-    <color name="black">#000000</color>
-    <color name="white">#FFFFFF</color>
+    <color name="black">#0D0C10</color>
+    <color name="white">#F7F4EE</color>
 </resources>
