@@ -13,7 +13,7 @@
         <item name="colorOnSecondary">@color/on_secondary</item>
         
         <!-- Status bar color -->
-        <item name="android:statusBarColor">@color/primary</item>
+        <item name="android:statusBarColor">@color/background</item>
         
         <!-- Background colors -->
         <item name="android:colorBackground">@color/background</item>
@@ -153,9 +153,9 @@
     <!-- Component styles -->
     <style name="Widget.CouponTracker.Button" parent="Widget.MaterialComponents.Button">
         <item name="android:textAppearance">@style/TextAppearance.CouponTracker.Button</item>
-        <item name="backgroundTint">@color/secondary</item>
-        <item name="android:textColor">@color/text_on_dark</item>
-        <item name="cornerRadius">4dp</item>
+        <item name="backgroundTint">@color/primary</item>
+        <item name="android:textColor">@color/on_primary</item>
+        <item name="cornerRadius">12dp</item>
         <item name="android:paddingStart">16dp</item>
         <item name="android:paddingEnd">16dp</item>
         <item name="android:paddingTop">16dp</item>
@@ -164,19 +164,20 @@
     </style>
     
     <style name="Widget.CouponTracker.CardView" parent="Widget.MaterialComponents.CardView">
-        <item name="cardCornerRadius">4dp</item>
-        <item name="cardElevation">2dp</item>
-        <item name="contentPadding">16dp</item>
+        <item name="cardCornerRadius">16dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="contentPadding">20dp</item>
         <item name="cardBackgroundColor">@color/card_background</item>
-        <item name="rippleColor">@color/secondary</item>
-        <item name="strokeWidth">0dp</item>
+        <item name="rippleColor">@color/primary</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="strokeColor">@color/stroke</item>
     </style>
     
     <style name="Widget.CouponTracker.Toolbar" parent="Widget.MaterialComponents.Toolbar">
-        <item name="android:background">@color/primary</item>
-        <item name="titleTextColor">@color/on_primary</item>
-        <item name="subtitleTextColor">@color/on_primary</item>
-        <item name="android:elevation">4dp</item>
+        <item name="android:background">@color/background</item>
+        <item name="titleTextColor">@color/on_background</item>
+        <item name="subtitleTextColor">@color/on_surface</item>
+        <item name="android:elevation">0dp</item>
         <item name="titleTextAppearance">@style/TextAppearance.CouponTracker.Headline6</item>
         <item name="subtitleTextAppearance">@style/TextAppearance.CouponTracker.Subtitle1</item>
         <item name="contentInsetStartWithNavigation">16dp</item>
@@ -185,16 +186,16 @@
     <!-- Shape styles -->
     <style name="ShapeAppearance.CouponTracker.SmallComponent" parent="ShapeAppearance.MaterialComponents.SmallComponent">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">4dp</item>
+        <item name="cornerSize">8dp</item>
     </style>
     
     <style name="ShapeAppearance.CouponTracker.MediumComponent" parent="ShapeAppearance.MaterialComponents.MediumComponent">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">4dp</item>
+        <item name="cornerSize">12dp</item>
     </style>
     
     <style name="ShapeAppearance.CouponTracker.LargeComponent" parent="ShapeAppearance.MaterialComponents.LargeComponent">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">4dp</item>
+        <item name="cornerSize">16dp</item>
     </style>
 </resources>

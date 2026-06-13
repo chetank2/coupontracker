@@ -3,27 +3,27 @@
     <!-- Base application theme. -->
     <style name="Theme.CouponTracker" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Primary brand colors -->
-        <item name="colorPrimary">#000000</item>
-        <item name="colorPrimaryVariant">#333333</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryVariant">@color/primary_variant</item>
+        <item name="colorOnPrimary">@color/on_primary</item>
 
         <!-- Secondary brand colors -->
-        <item name="colorSecondary">#777777</item>
-        <item name="colorSecondaryVariant">#555555</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
+        <item name="colorSecondary">@color/secondary</item>
+        <item name="colorSecondaryVariant">@color/secondary_variant</item>
+        <item name="colorOnSecondary">@color/on_secondary</item>
 
         <!-- Status bar color -->
-        <item name="android:statusBarColor">#121212</item>
+        <item name="android:statusBarColor">@color/background</item>
 
         <!-- Background colors -->
-        <item name="android:colorBackground">#121212</item>
-        <item name="colorSurface">#1E1E1E</item>
-        <item name="colorOnBackground">#FFFFFF</item>
-        <item name="colorOnSurface">#FFFFFF</item>
+        <item name="android:colorBackground">@color/background</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnBackground">@color/on_background</item>
+        <item name="colorOnSurface">@color/on_surface</item>
 
         <!-- Error colors -->
-        <item name="colorError">#EF5350</item>
-        <item name="colorOnError">#FFFFFF</item>
+        <item name="colorError">@color/error</item>
+        <item name="colorOnError">@color/on_error</item>
 
         <!-- Typography -->
         <item name="textAppearanceHeadline1">@style/TextAppearance.CouponTracker.Headline1</item>
