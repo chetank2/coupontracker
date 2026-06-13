@@ -32,6 +32,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.viewmodel.QRScannerViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -127,8 +128,8 @@ fun QRScannerScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("QR Code Scanner") },
+            BrandTopBar(
+                title = "QR scanner",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

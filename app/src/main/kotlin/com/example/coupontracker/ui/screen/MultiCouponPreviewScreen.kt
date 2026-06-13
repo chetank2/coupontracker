@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.extraction.ExtractionValidator
 import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.data.util.DescriptionUtils
@@ -37,16 +38,13 @@ fun MultiCouponPreviewScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Review ${coupons.size} Coupons") },
+            BrandTopBar(
+                title = "Review ${coupons.size} coupons",
                 navigationIcon = {
                     IconButton(onClick = onCancel) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                }
             )
         },
         bottomBar = {

@@ -32,6 +32,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.coupontracker.camera.CaptureReadiness
+import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.viewmodel.CameraUiState
 import com.example.coupontracker.ui.viewmodel.SmartCameraViewModel
 import kotlinx.coroutines.launch
@@ -96,8 +97,8 @@ fun SmartCameraScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Smart Capture") },
+            BrandTopBar(
+                title = "Smart capture",
                 navigationIcon = {
                     IconButton(onClick = onBackPressed) {
                         Icon(Icons.Default.ArrowBack, "Back")
@@ -335,4 +336,3 @@ fun ReadinessIndicator(readiness: CaptureReadiness) {
         )
     }
 }
-

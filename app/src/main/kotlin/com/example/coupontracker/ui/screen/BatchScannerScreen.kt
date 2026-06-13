@@ -35,6 +35,7 @@ import androidx.navigation.NavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.viewmodel.BatchScannerViewModel
 import com.example.coupontracker.ui.viewmodel.ImageProcessingStatus
@@ -119,8 +120,8 @@ fun BatchScannerScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Batch Scanner") },
+            BrandTopBar(
+                title = "Batch scanner",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

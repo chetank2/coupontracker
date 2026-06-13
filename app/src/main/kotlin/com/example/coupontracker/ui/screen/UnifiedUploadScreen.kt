@@ -27,7 +27,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,6 +38,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.viewmodel.UnifiedUploadViewModel
 import com.example.coupontracker.util.CouponInfo
@@ -115,8 +115,8 @@ fun UnifiedUploadScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Upload Coupon") },
+            BrandTopBar(
+                title = "Upload coupon",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

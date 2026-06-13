@@ -35,7 +35,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +51,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.viewmodel.UnifiedCameraViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -111,8 +111,8 @@ fun UnifiedCameraScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(if (uiState.isBatchMode) "Batch Capture" else "Camera Capture") },
+            BrandTopBar(
+                title = if (uiState.isBatchMode) "Batch capture" else "Camera capture",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
