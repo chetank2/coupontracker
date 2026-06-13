@@ -9,21 +9,21 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.example.coupontracker.ui.theme.BrandColors
 import com.example.coupontracker.ui.theme.BrandTypography
 import com.example.coupontracker.ui.theme.CouponTrackerTheme
 
 /**
  * BrandTopBar — flush, no elevation, editorial title.
  *
- * Vault top bar that sits on the [BrandColors.Background] with no surface tint and no
+ * Vault top bar that sits on the theme background with no surface tint and no
  * elevation overlay. Title uses [BrandTypography.HeadlineSmall] in the Display family
- * for an editorial feel; action icons fall back to [BrandColors.OnSurfaceVariant] so
+ * for an editorial feel; action icons fall back to the theme's secondary content so
  * they read as secondary affordances next to the title.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,23 +34,24 @@ fun BrandTopBar(
     navigationIcon: @Composable () -> Unit = {},
     actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
 ) {
+    val colors = MaterialTheme.colorScheme
     CenterAlignedTopAppBar(
         modifier = modifier,
         title = {
             Text(
                 text = title,
                 style = BrandTypography.HeadlineSmall,
-                color = BrandColors.OnBackground,
+                color = colors.onBackground,
             )
         },
         navigationIcon = navigationIcon,
         actions = actions,
         colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-            containerColor = BrandColors.Background,
-            scrolledContainerColor = BrandColors.Background,
-            navigationIconContentColor = BrandColors.OnBackground,
-            titleContentColor = BrandColors.OnBackground,
-            actionIconContentColor = BrandColors.OnSurfaceVariant,
+            containerColor = colors.background,
+            scrolledContainerColor = colors.background,
+            navigationIconContentColor = colors.onBackground,
+            titleContentColor = colors.onBackground,
+            actionIconContentColor = colors.onSurfaceVariant,
         ),
     )
 }
@@ -62,7 +63,7 @@ private fun BrandTopBarPreview() {
     CouponTrackerTheme {
         BrandTopBar(
             modifier = Modifier
-                .background(BrandColors.Background)
+                .background(MaterialTheme.colorScheme.background)
                 .fillMaxWidth(),
             title = "Vault",
             navigationIcon = {

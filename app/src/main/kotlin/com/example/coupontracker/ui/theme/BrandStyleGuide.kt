@@ -7,12 +7,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coupontracker.R
 
 /**
  * Vault Brand Style Guide — see docs/superpowers/specs/2026-06-13-vault-redesign-design.md
@@ -133,15 +135,19 @@ object BrandColors {
 }
 
 /**
- * Font families. Variable-axis weights are bound per FontWeight via FontVariation
- * once the bundled .ttf binaries are added. Until then, both families resolve to
- * the platform default so the rest of the token system can land cleanly.
+ * Vault font families bundled in res/font.
  */
-// TODO(vault): swap to bundled Instrument Serif when .ttf binaries are added.
-val DisplayFamily: FontFamily = FontFamily.Default
+val DisplayFamily: FontFamily = FontFamily(
+    Font(R.font.instrument_serif_regular, FontWeight.Normal),
+    Font(R.font.instrument_serif_italic, FontWeight.Normal, FontStyle.Italic),
+)
 
-// TODO(vault): swap to bundled Plus Jakarta Sans variable when .ttf is added.
-val BodyFamily: FontFamily = FontFamily.Default
+val BodyFamily: FontFamily = FontFamily(
+    Font(R.font.plus_jakarta_sans_variable, FontWeight.Normal),
+    Font(R.font.plus_jakarta_sans_variable, FontWeight.Medium),
+    Font(R.font.plus_jakarta_sans_variable, FontWeight.SemiBold),
+    Font(R.font.plus_jakarta_sans_variable, FontWeight.Bold),
+)
 
 /** Apply tabular figures to any numeric body / title / label style. */
 fun TextStyle.tabularNumerals(): TextStyle = copy(fontFeatureSettings = "tnum")

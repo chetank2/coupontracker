@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -20,7 +21,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.coupontracker.ui.theme.BrandColors
 import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.theme.BrandTypography
@@ -42,16 +42,18 @@ fun BrandTextField(
     modifier: Modifier = Modifier,
     placeholder: String? = null,
     enabled: Boolean = true,
+    readOnly: Boolean = false,
     singleLine: Boolean = true,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     visualTransformation: VisualTransformation = VisualTransformation.None,
 ) {
     val sanitisedLabel = remember(label) { label.lowercase() }
+    val colors = MaterialTheme.colorScheme
     Column(modifier = modifier) {
         Text(
             text = label.uppercase(),
             style = BrandTypography.LabelMedium,
-            color = BrandColors.OnSurfaceVariant,
+            color = colors.onSurfaceVariant,
             modifier = Modifier
                 .padding(bottom = 6.dp)
                 .semantics { contentDescription = sanitisedLabel },
@@ -60,16 +62,17 @@ fun BrandTextField(
             value = value,
             onValueChange = onValueChange,
             enabled = enabled,
+            readOnly = readOnly,
             singleLine = singleLine,
             keyboardOptions = keyboardOptions,
             visualTransformation = visualTransformation,
-            textStyle = BrandTypography.BodyLarge.copy(color = BrandColors.OnSurface),
+            textStyle = BrandTypography.BodyLarge.copy(color = colors.onSurface),
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(BrandShapes.Medium)
-                .background(BrandColors.Surface)
+                .background(colors.surface)
                 .border(
-                    BorderStroke(BrandSpacing.Hairline, BrandColors.Stroke),
+                    BorderStroke(BrandSpacing.Hairline, colors.outline),
                     BrandShapes.Medium,
                 )
                 .padding(PaddingValues(horizontal = 16.dp, vertical = 14.dp)),
@@ -78,7 +81,7 @@ fun BrandTextField(
                     Text(
                         text = placeholder,
                         style = BrandTypography.BodyLarge,
-                        color = BrandColors.Muted,
+                        color = colors.onSurfaceVariant,
                     )
                 }
                 innerTextField()
@@ -94,7 +97,7 @@ private fun BrandTextFieldPreview() {
     CouponTrackerTheme {
         Column(
             modifier = Modifier
-                .background(BrandColors.Background)
+                .background(MaterialTheme.colorScheme.background)
                 .padding(BrandSpacing.ContentEdge),
         ) {
             BrandTextField(

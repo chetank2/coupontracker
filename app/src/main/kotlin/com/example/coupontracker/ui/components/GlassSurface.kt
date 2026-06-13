@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -22,7 +23,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.coupontracker.R
-import com.example.coupontracker.ui.theme.BrandColors
 import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.theme.CouponTrackerTheme
@@ -34,15 +34,16 @@ import com.example.coupontracker.ui.theme.CouponTrackerTheme
  * On older API levels falls back to a denser tint composited with a low-alpha noise
  * texture (`R.drawable.glass_noise`) so the surface still feels layered rather than flat.
  *
- * A 1.dp [BrandColors.Stroke] hairline border is always drawn on top to define the edge.
+ * A 1.dp theme outline hairline border is always drawn on top to define the edge.
  */
 @Composable
 fun GlassSurface(
     modifier: Modifier = Modifier,
     shape: Shape = BrandShapes.Large,
-    tint: Color = BrandColors.SurfaceVariant,
+    tint: Color = MaterialTheme.colorScheme.surfaceVariant,
     content: @Composable () -> Unit,
 ) {
+    val stroke = MaterialTheme.colorScheme.outline
     Box(modifier = modifier.clip(shape)) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Box(
@@ -63,7 +64,7 @@ fun GlassSurface(
         Box(
             Modifier
                 .fillMaxSize()
-                .border(BorderStroke(BrandSpacing.Hairline, BrandColors.Stroke), shape)
+                .border(BorderStroke(BrandSpacing.Hairline, stroke), shape)
         )
         content()
     }

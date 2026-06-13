@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -17,7 +18,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.coupontracker.ui.theme.BrandColors
 import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.theme.BrandTypography
@@ -34,6 +34,7 @@ fun BrandButton(
     enabled: Boolean = true,
 ) {
     val padding = PaddingValues(horizontal = 20.dp, vertical = 14.dp)
+    val colors = MaterialTheme.colorScheme
     when (tier) {
         BrandButtonTier.Primary -> Button(
             onClick = onClick,
@@ -41,8 +42,8 @@ fun BrandButton(
             enabled = enabled,
             shape = BrandShapes.Medium,
             colors = ButtonDefaults.buttonColors(
-                containerColor = BrandColors.Accent,
-                contentColor   = BrandColors.OnAccent,
+                containerColor = colors.primary,
+                contentColor   = colors.onPrimary,
             ),
             contentPadding = padding,
         ) { Text(text, style = BrandTypography.LabelLarge) }
@@ -51,15 +52,15 @@ fun BrandButton(
             modifier = modifier,
             enabled = enabled,
             shape = BrandShapes.Medium,
-            border = BorderStroke(BrandSpacing.Hairline, BrandColors.Stroke),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = BrandColors.OnSurface),
+            border = BorderStroke(BrandSpacing.Hairline, colors.outline),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = colors.onSurface),
             contentPadding = padding,
         ) { Text(text, style = BrandTypography.LabelLarge) }
         BrandButtonTier.Tertiary -> TextButton(
             onClick = onClick,
             modifier = modifier,
             enabled = enabled,
-            colors = ButtonDefaults.textButtonColors(contentColor = BrandColors.Accent),
+            colors = ButtonDefaults.textButtonColors(contentColor = colors.primary),
             contentPadding = padding,
         ) { Text(text, style = BrandTypography.LabelLarge) }
     }
@@ -72,7 +73,7 @@ private fun BrandButtonPreview() {
     CouponTrackerTheme {
         Column(
             modifier = Modifier
-                .background(BrandColors.Background)
+                .background(MaterialTheme.colorScheme.background)
                 .fillMaxWidth()
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
