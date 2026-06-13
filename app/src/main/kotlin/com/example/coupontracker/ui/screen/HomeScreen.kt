@@ -19,21 +19,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
@@ -70,13 +67,15 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.ui.components.BrandTopBar
+import com.example.coupontracker.ui.components.CouponCardModel
+import com.example.coupontracker.ui.components.DateFormatter
 import com.example.coupontracker.ui.components.EmptyState
-import com.example.coupontracker.ui.components.EnhancedCouponCard
 import com.example.coupontracker.ui.components.FilterSortBottomSheet
 import com.example.coupontracker.ui.components.PrimaryButton
-import com.example.coupontracker.ui.components.SecondaryButton
 import com.example.coupontracker.ui.components.SectionHeader
 import com.example.coupontracker.ui.components.SimplifiedCaptureBottomSheet
+import com.example.coupontracker.ui.components.WalletStack
 import com.example.coupontracker.ui.model.CouponStatusFilter
 import com.example.coupontracker.ui.model.ExpiryRange
 import com.example.coupontracker.ui.model.FilterState
@@ -150,14 +149,30 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    if (!isSearchActive) {
-                        Text(
-                            text = "Coupon Tracker",
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                    } else {
+            if (!isSearchActive) {
+                BrandTopBar(
+                    title = "Vault",
+                    actions = {
+                        IconButton(onClick = { isSearchActive = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Search"
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { navController.navigate(Screen.Settings.route) }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings"
+                            )
+                        }
+                    }
+                )
+            } else {
+                TopAppBar(
+                    title = {
                         TextField(
                             value = searchQuery,
                             onValueChange = {
@@ -174,38 +189,36 @@ fun HomeScreen(
                                 unfocusedContainerColor = MaterialTheme.colorScheme.surface
                             )
                         )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = {
-                            isSearchActive = !isSearchActive
-                            if (!isSearchActive) {
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                isSearchActive = false
                                 searchQuery = ""
                                 viewModel.updateSearchQuery("")
                             }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Close search"
+                            )
                         }
-                    ) {
-                        Icon(
-                            imageVector = if (isSearchActive) Icons.Default.Close else Icons.Default.Search,
-                            contentDescription = if (isSearchActive) "Close search" else "Search"
-                        )
-                    }
 
-                    IconButton(
-                        onClick = { navController.navigate(Screen.Settings.route) }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                        IconButton(
+                            onClick = { navController.navigate(Screen.Settings.route) }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "Settings"
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground
+                    )
                 )
-            )
+            }
         },
         floatingActionButton = {
             if (isModelInstalled) {
@@ -382,7 +395,7 @@ fun HomeScreen(
                 }
             } else {
                 SectionHeader(
-                    title = "Your Coupons",
+                    title = "Wallet",
                     modifier = Modifier.padding(
                         start = BrandSpacing.Medium,
                         end = BrandSpacing.Medium,
@@ -398,45 +411,65 @@ fun HomeScreen(
                     }
                 )
 
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    contentPadding = PaddingValues(
-                        start = BrandSpacing.Medium,
-                        end = BrandSpacing.Medium,
-                        bottom = BrandSpacing.Giant
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
-                ) {
-                    items(coupons) { coupon ->
-                        val debugSnapshot = homeUiState.extractionDebug[coupon.id]
-                        val displayDescription = remember(coupon.description, coupon.storeName, coupon.redeemCode) {
-                            DescriptionUtils.formatDisplayDescription(
-                                description = coupon.description,
-                                storeName = coupon.storeName,
-                                redeemCode = coupon.redeemCode
-                            )
+                WalletStack(
+                    coupons = coupons.map { coupon ->
+                        coupon.toCouponCardModel()
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = BrandSpacing.ContentEdge),
+                    onCouponTap = { index ->
+                        coupons.getOrNull(index)?.let { coupon ->
+                            navController.navigate(Screen.CouponDetail.createRoute(coupon.id))
                         }
-                        EnhancedCouponCard(
-                            storeName = coupon.storeName,
-                            description = displayDescription,
-                            expiryDate = coupon.expiryDate,
-                            amount = coupon.getCashbackNumericValue(),
-                            code = coupon.redeemCode,
-                            imageUri = coupon.imageUri,
-                            onClick = {
-                                navController.navigate(Screen.CouponDetail.createRoute(coupon.id))
-                            },
-                            onCopyCode = { code ->
-                                clipboardManager.setText(AnnotatedString(code))
-                            },
-                            cashbackDisplayText = coupon.getCashbackDisplayText(),
-                            debugSnapshot = debugSnapshot
-                        )
                     }
-                }
+                )
             }
         }
     }
+}
+
+private fun Coupon.toCouponCardModel(): CouponCardModel {
+    val initial = storeName.firstOrNull { it.isLetterOrDigit() } ?: 'C'
+
+    return CouponCardModel(
+        brandName = storeName,
+        brandInitial = initial,
+        brandColor = null,
+        valueLabel = cardOfferSummary(),
+        code = redeemCode.orEmpty(),
+        expiresAt = DateFormatter.formatShort(expiryDate),
+    )
+}
+
+private fun Coupon.cardOfferSummary(): String {
+    val cashback = getCashbackDisplayText()
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .takeIf { it.isNotBlank() && it.length <= 36 && !it.equals("0.0", ignoreCase = true) }
+
+    if (cashback != null) return cashback
+
+    val displayDescription = DescriptionUtils.formatDisplayDescription(
+        description = description,
+        storeName = storeName,
+        redeemCode = redeemCode,
+    ).replace(Regex("\\s+"), " ").trim()
+
+    val offerPattern = Regex(
+        pattern = """(?i)(₹\s*\d[\d,]*(?:\s*off)?|\d+\s*%\s*(?:off|cashback)?|flat\s+[^.]{1,32}|free\s+[^.]{1,32}|save\s+[^.]{1,32})""",
+    )
+    val matchedOffer = offerPattern.find(displayDescription)?.value
+        ?.replace(Regex("\\s+"), " ")
+        ?.trim()
+        ?.take(44)
+
+    return matchedOffer?.ifBlank { null }
+        ?: when {
+            displayDescription.contains("voucher", ignoreCase = true) -> "Saved voucher"
+            displayDescription.contains("coupon", ignoreCase = true) -> "Saved coupon"
+            else -> "Saved offer"
+        }
 }
 
 @Composable

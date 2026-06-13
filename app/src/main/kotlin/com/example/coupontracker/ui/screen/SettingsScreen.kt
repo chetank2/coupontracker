@@ -1,19 +1,17 @@
 package com.example.coupontracker.ui.screen
 
-import android.content.Context
-import android.content.Intent
-import android.content.SharedPreferences
-import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.*
@@ -26,24 +24,18 @@ import androidx.navigation.NavController
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.util.ModelMetadataReader
 import com.example.coupontracker.util.SecurePreferencesManager
-import com.example.coupontracker.util.ApiType
 import kotlinx.coroutines.launch
-import androidx.compose.material.icons.filled.Analytics
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.School
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.res.stringResource
-import com.example.coupontracker.ui.components.PasswordDialog
+import androidx.compose.ui.unit.sp
+import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.components.ThemeSelector
 import com.example.coupontracker.ui.components.DataSafetyDialog
 import com.example.coupontracker.ui.viewmodel.SettingsViewModel
-import com.example.coupontracker.llm.LlmRuntimeManager
-import com.example.coupontracker.llm.ModelDownloadManager
-import com.example.coupontracker.util.LlmServiceStatus
-import com.example.coupontracker.util.LocalLlmOcrService
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
@@ -51,23 +43,13 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Storage
-import com.example.coupontracker.ocr.OcrEngine
-import dagger.hilt.android.EntryPointAccessors
-import dagger.hilt.EntryPoint
-import dagger.hilt.InstallIn
-import dagger.hilt.components.SingletonComponent
 import com.example.coupontracker.R
 import com.example.coupontracker.BuildConfig
+import com.example.coupontracker.ui.theme.BrandShapes
+import com.example.coupontracker.ui.theme.BrandSpacing
+import com.example.coupontracker.ui.theme.BrandTypography
 
 // Using keys from SecurePreferencesManager
-
-// We've removed the API Type enum as users don't need to select the OCR technology
-
-@EntryPoint
-@InstallIn(SingletonComponent::class)
-interface SettingsScreenEntryPoint {
-    fun getOcrEngine(): OcrEngine
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -76,14 +58,6 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val ocrEngine = remember {
-        val hiltEntryPoint = EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            SettingsScreenEntryPoint::class.java
-        )
-        hiltEntryPoint.getOcrEngine()
-    }
-    
     var showDataSafety by remember { mutableStateOf(false) }
     var showAdvanced by remember { mutableStateOf(false) }
 
@@ -133,11 +107,16 @@ fun SettingsScreen(
 
     // UI states
     val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        scrollState.scrollTo(0)
+    }
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Settings") },
+            BrandTopBar(
+                title = "Settings",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Default.ArrowBack, contentDescription = "Back")
@@ -149,327 +128,98 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
                 .padding(paddingValues)
-                .padding(16.dp)
+                .padding(horizontal = BrandSpacing.ContentEdge, vertical = BrandSpacing.Medium)
                 .verticalScroll(scrollState),
             horizontalAlignment = Alignment.Start,
-            verticalArrangement = Arrangement.Top
+            verticalArrangement = Arrangement.spacedBy(BrandSpacing.SectionSpacing)
         ) {
-
-            Text(
-                text = "Appearance",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+            SettingsSection(title = "PRIVACY") {
+                SettingsRow(
+                    title = "Private by design",
+                    subtitle = "Coupon recognition runs on this device. Your saved coupons stay on your phone.",
+                    trailing = { CompactValue("On-device") },
                 )
-            ) {
+                SettingsDivider()
+                SettingsRow(
+                    title = stringResource(id = R.string.settings_data_safety_title),
+                    subtitle = stringResource(id = R.string.settings_data_safety_summary),
+                    onClick = { showDataSafety = true },
+                )
+                SettingsDivider()
+                SettingsRow(
+                    title = "Privacy policy",
+                    subtitle = "Read how Coupon Tracker handles your data.",
+                    onClick = { navController.navigate(Screen.PrivacyPolicy.route) },
+                )
+            }
+
+            SettingsSection(title = "MODEL") {
+                ModelManagementCard()
+            }
+
+            SettingsSection(title = "BACKUP") {
+                BackupRestoreCard(
+                    viewModel = viewModel,
+                    onPickerReturn = {
+                        coroutineScope.launch { scrollState.animateScrollTo(0) }
+                    },
+                )
+            }
+
+            SettingsSection(title = "APPEARANCE") {
                 ThemeSelector(
                     selectedThemeMode = themeMode,
                     onThemeModeSelected = { newThemeMode ->
                         viewModel.setThemeMode(newThemeMode)
-                    }
+                    },
+                    modifier = Modifier.padding(vertical = BrandSpacing.ExtraSmall),
                 )
             }
 
-            Text(
-                text = "Privacy",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+            SettingsSection(title = "ADVANCED") {
+                SettingsRow(
+                    title = "Advanced",
+                    subtitle = "Diagnostics and internal tools.",
+                    onClick = { showAdvanced = !showAdvanced },
+                    trailing = {
                         Icon(
-                            imageVector = Icons.Default.Lock,
+                            imageVector = if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        
-                        Spacer(modifier = Modifier.width(8.dp))
-                        
-                        Text(
-                            text = "Private by design",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    },
+                )
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "All coupon recognition happens directly on your device. Your data never leaves your phone.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                if (showAdvanced) {
+                    SettingsDivider()
+                    SettingsRow(
+                        title = "Diagnostics",
+                        subtitle = "Analytics dashboard for troubleshooting.",
+                        onClick = { navController.navigate(Screen.Analytics.route) },
                     )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    TextButton(
-                        onClick = { navController.navigate(Screen.PrivacyPolicy.route) },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Privacy Policy")
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Coupon reader:",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = "Active",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFF4CAF50),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
-
-            Text(
-                text = "Offline scanning",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            
-            // Model Management (simplified)
-            ModelManagementCard(ocrEngine = ocrEngine)
-
-            Text(
-                text = "Backup",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp, top = 8.dp)
-            )
-            
-            BackupRestoreCard(viewModel = viewModel)
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = stringResource(id = R.string.settings_data_safety_title),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Text(
-                        text = stringResource(id = R.string.settings_data_safety_summary),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    SettingsDivider()
+                    SettingsRow(
+                        title = "Reader learning",
+                        subtitle = "Review extraction learning signals.",
+                        onClick = { navController.navigate(Screen.ExtractionDashboard.route) },
                     )
-
-                    TextButton(
-                        onClick = { showDataSafety = true },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text(stringResource(id = R.string.settings_data_safety_button))
-                    }
-                }
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    TextButton(
-                        onClick = { showAdvanced = !showAdvanced },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowDropDown,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Advanced",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    if (showAdvanced) {
-                        Divider(modifier = Modifier.padding(vertical = 4.dp))
-
-                        TextButton(
-                            onClick = { navController.navigate(Screen.Analytics.route) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Analytics,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Diagnostics",
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-
-                        TextButton(
-                            onClick = { navController.navigate(Screen.ExtractionDashboard.route) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.School,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "Reader learning",
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Text(
-                text = "About",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp, top = 8.dp)
-            )
-            
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-
-                        Spacer(modifier = Modifier.width(8.dp))
-
-                        Text(
-                            text = "CouponTracker",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
 
                     val commitHash = remember(BuildConfig.APP_VERSION) {
                         BuildConfig.APP_VERSION.split("-").firstOrNull { it.startsWith("g") }?.removePrefix("g")
                     }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = stringResource(id = R.string.settings_app_version_label) + ":",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Text(
-                            text = BuildConfig.APP_VERSION,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-
-                    if (commitHash != null) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(id = R.string.settings_build_commit, commitHash),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "A private wallet for saved coupon codes and expiry dates.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    SettingsDivider()
+                    SettingsRow(
+                        title = "App version",
+                        subtitle = buildString {
+                            append("A private wallet for coupon codes and expiry dates.")
+                            if (commitHash != null) {
+                                append(" ")
+                                append(stringResource(id = R.string.settings_build_commit, commitHash))
+                            }
+                        },
+                        trailing = { CompactValue(BuildConfig.APP_VERSION) },
                     )
                 }
             }
@@ -477,12 +227,108 @@ fun SettingsScreen(
     }
 }
 
+@Composable
+private fun SettingsSection(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(BrandSpacing.ExtraSmall)) {
+        Text(
+            text = title,
+            style = BrandTypography.LabelMedium.copy(
+                letterSpacing = 1.8.sp,
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    width = BrandSpacing.Hairline,
+                    color = MaterialTheme.colorScheme.outline,
+                    shape = BrandShapes.Large,
+                ),
+            shape = BrandShapes.Large,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 0.dp,
+            shadowElevation = 0.dp,
+        ) {
+            Column(content = content)
+        }
+    }
+}
+
+@Composable
+private fun SettingsRow(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    trailing: @Composable RowScope.() -> Unit = {
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    },
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(horizontal = BrandSpacing.Medium, vertical = BrandSpacing.Small),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium),
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(BrandSpacing.Micro),
+        ) {
+            Text(
+                text = title,
+                style = BrandTypography.TitleSmall.copy(fontSize = 15.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = subtitle,
+                style = BrandTypography.BodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        trailing()
+    }
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = BrandSpacing.Medium),
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.55f),
+        thickness = BrandSpacing.Hairline,
+    )
+}
+
+@Composable
+private fun CompactValue(text: String) {
+    Text(
+        text = text,
+        style = BrandTypography.BodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
 // Removed LlmStatusCard - too technical for users (Memory, Reference Count, etc.)
 // Removed ApiTypeSelector - only one OCR engine (Tesseract), no choice needed
 
 
 @Composable
-private fun ModelManagementCard(ocrEngine: OcrEngine) {
+private fun ModelManagementCard() {
     val context = LocalContext.current
     val modelImportViewModel: com.example.coupontracker.ui.viewmodel.ModelImportViewModel = hiltViewModel()
     val uiState by modelImportViewModel.uiState.collectAsState()
@@ -520,23 +366,17 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
         }
     }
     
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
+            .padding(BrandSpacing.Medium),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
             // Header
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.CloudDownload,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -568,7 +408,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                             Text(
                                 text = "Private scanning setup is installed • ${totalSizeMB} MB",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -598,7 +438,7 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                 Text(
                     text = "Set up offline scanning to read coupon screenshots privately on this device.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             
@@ -673,6 +513,9 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                     OutlinedButton(
                         onClick = { modelImportViewModel.runSelfTest() },
                         enabled = !uiState.selfTestRunning && !uiState.isImporting,
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                         modifier = Modifier.weight(1f)
                     ) {
                         if (uiState.selfTestRunning) {
@@ -702,26 +545,29 @@ private fun ModelManagementCard(ocrEngine: OcrEngine) {
                     }
                 }
             }
-        }
     }
 }
 
 @Composable
-private fun BackupRestoreCard(viewModel: SettingsViewModel) {
+private fun BackupRestoreCard(
+    viewModel: SettingsViewModel,
+    onPickerReturn: () -> Unit,
+) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
     val backupState by viewModel.backupState.collectAsState()
     
     // File pickers
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
+        onPickerReturn()
         uri?.let { viewModel.exportBackup(it) }
     }
     
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
+        onPickerReturn()
         uri?.let { viewModel.importBackup(it) }
     }
     
@@ -750,23 +596,17 @@ private fun BackupRestoreCard(viewModel: SettingsViewModel) {
         else -> {}
     }
     
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+            .padding(BrandSpacing.Medium),
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
-        ) {
             // Header
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.Storage,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
@@ -799,6 +639,9 @@ private fun BackupRestoreCard(viewModel: SettingsViewModel) {
                     },
                     enabled = backupState !is SettingsViewModel.BackupState.Exporting &&
                              backupState !is SettingsViewModel.BackupState.Importing,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                     modifier = Modifier.weight(1f)
                 ) {
                     if (backupState is SettingsViewModel.BackupState.Exporting) {
@@ -853,7 +696,7 @@ private fun BackupRestoreCard(viewModel: SettingsViewModel) {
                 Icon(
                     imageVector = Icons.Default.Lock,
                     contentDescription = null,
-                    tint = Color(0xFF4CAF50),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(14.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
@@ -863,7 +706,6 @@ private fun BackupRestoreCard(viewModel: SettingsViewModel) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
             }
-        }
     }
 }
 

@@ -39,6 +39,11 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.R
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
+import com.example.coupontracker.ui.components.BrandTopBar
+import com.example.coupontracker.ui.components.CouponCard
+import com.example.coupontracker.ui.components.CouponCardModel
+import com.example.coupontracker.ui.components.CouponCardState
+import com.example.coupontracker.ui.components.CouponCardVariant
 import com.example.coupontracker.ui.components.DateFormatter
 import com.example.coupontracker.ui.components.ExtractionDebugPanel
 import com.example.coupontracker.ui.components.StatusType
@@ -73,8 +78,8 @@ fun CouponDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Coupon details") },
+            BrandTopBar(
+                title = "Coupon details",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -148,6 +153,19 @@ private fun CouponDetailContent(
             .verticalScroll(rememberScrollState())
             .padding(BrandSpacing.Medium)
     ) {
+        CouponCard(
+            model = coupon.toDetailCouponCardModel(displayDescription),
+            state = CouponCardState.Default,
+            variant = CouponCardVariant.WalletStack,
+            isHero = true,
+            onTap = {},
+            onRedeem = {
+                onTrackUsage()
+                Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.padding(bottom = BrandSpacing.Medium),
+        )
+
         // Coupon image (if available)
         coupon.imageUri?.let { imageUri ->
             Card(
@@ -394,6 +412,49 @@ private fun CouponDetailContent(
 
         Spacer(modifier = Modifier.height(BrandSpacing.Large))
     }
+}
+
+private fun com.example.coupontracker.data.model.Coupon.toDetailCouponCardModel(
+    displayDescription: String,
+): CouponCardModel {
+    val initial = storeName.firstOrNull { it.isLetterOrDigit() } ?: 'C'
+    return CouponCardModel(
+        brandName = storeName,
+        brandInitial = initial,
+        brandColor = null,
+        valueLabel = detailCardOfferSummary(displayDescription),
+        code = redeemCode.orEmpty(),
+        expiresAt = DateFormatter.formatShort(expiryDate),
+    )
+}
+
+private fun com.example.coupontracker.data.model.Coupon.detailCardOfferSummary(
+    displayDescription: String,
+): String {
+    val cashback = getCashbackDisplayText()
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .takeIf { it.isNotBlank() && it.length <= 36 && !it.equals("0.0", ignoreCase = true) }
+
+    if (cashback != null) return cashback
+
+    val normalizedDescription = displayDescription
+        .replace(Regex("\\s+"), " ")
+        .trim()
+    val offerPattern = Regex(
+        pattern = """(?i)(₹\s*\d[\d,]*(?:\s*off)?|\d+\s*%\s*(?:off|cashback)?|flat\s+[^.]{1,32}|free\s+[^.]{1,32}|save\s+[^.]{1,32})""",
+    )
+    val matchedOffer = offerPattern.find(normalizedDescription)?.value
+        ?.replace(Regex("\\s+"), " ")
+        ?.trim()
+        ?.take(44)
+
+    return matchedOffer?.ifBlank { null }
+        ?: when {
+            normalizedDescription.contains("voucher", ignoreCase = true) -> "Saved voucher"
+            normalizedDescription.contains("coupon", ignoreCase = true) -> "Saved coupon"
+            else -> "Saved offer"
+        }
 }
 
 @Composable

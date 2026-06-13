@@ -6,21 +6,13 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -35,6 +27,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.coupontracker.ui.components.BrandButton
+import com.example.coupontracker.ui.components.BrandButtonTier
+import com.example.coupontracker.ui.components.BrandTextField
+import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.components.UnifiedCouponForm
 import com.example.coupontracker.util.ExtractionLogBuffer
 import com.example.coupontracker.ui.viewmodel.ManualEntryViewModel
@@ -87,8 +83,8 @@ fun ManualEntryScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Manual Entry") },
+            BrandTopBar(
+                title = "Manual entry",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -102,7 +98,6 @@ fun ManualEntryScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Main content with UnifiedCouponForm
             UnifiedCouponForm(
                 storeName = storeName,
                 onStoreNameChange = { storeName = it },
@@ -145,48 +140,36 @@ fun ManualEntryScreen(
                 isSaving = uiState.isSaving,
                 error = uiState.error,
                 modifier = Modifier
-                    .padding(16.dp)
-            )
-
-            // URL processing field at the bottom
-            if (!uiState.isProcessingUrl) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    OutlinedTextField(
-                        value = uiState.url ?: "",
-                        onValueChange = { viewModel.setUrl(it) },
-                        label = { Text("Enter URL (Optional)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        leadingIcon = {
-                            Icon(Icons.Default.Link, contentDescription = null)
-                        },
-                        trailingIcon = {
-                            if (!uiState.url.isNullOrBlank()) {
-                                IconButton(onClick = { viewModel.processUrl() }) {
-                                    Icon(Icons.Default.Search, contentDescription = "Process URL")
-                                }
-                            }
+                    .padding(16.dp),
+                extraContentBeforeActions = {
+                    if (!uiState.isProcessingUrl) {
+                        BrandTextField(
+                            value = uiState.url ?: "",
+                            onValueChange = { viewModel.setUrl(it) },
+                            label = "URL (optional)",
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = "https://example.com/coupon"
+                        )
+                        BrandButton(
+                            text = "Read URL",
+                            onClick = { viewModel.processUrl() },
+                            enabled = !uiState.url.isNullOrBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                            tier = BrandButtonTier.Secondary,
+                        )
+                    } else {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            Text(
+                                text = "Processing URL...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
                         }
-                    )
+                    }
                 }
-            } else {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Text(
-                        text = "Processing URL...",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                }
-            }
+            )
         }
     }
 }
