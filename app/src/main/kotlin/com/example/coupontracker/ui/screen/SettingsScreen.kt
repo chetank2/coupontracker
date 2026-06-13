@@ -380,7 +380,7 @@ private fun ModelManagementCard() {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Offline coupon reader",
+                    text = "Qwen offline coupon reader",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -436,7 +436,7 @@ private fun ModelManagementCard() {
                 }
             } else {
                 Text(
-                    text = "Set up offline scanning to read coupon screenshots privately on this device.",
+                    text = "Set up the Qwen model to read coupon screenshots privately on this device.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -486,7 +486,7 @@ private fun ModelManagementCard() {
                     ) {
                         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Set up offline scanning")
+                        Text("Set up Qwen model")
                     }
                     
                     Spacer(modifier = Modifier.height(8.dp))
