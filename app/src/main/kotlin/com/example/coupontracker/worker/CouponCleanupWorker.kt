@@ -80,7 +80,7 @@ class CouponCleanupWorker @AssistedInject constructor(
                 }
 
                 is ExtractResult.Failed -> {
-                    markFailed(couponId, result.error.message ?: "Reader failed")
+                    markFailed(couponId, userFacingFailure(result.error.message))
                     Result.success()
                 }
 
@@ -91,7 +91,7 @@ class CouponCleanupWorker @AssistedInject constructor(
             }
         } catch (t: Throwable) {
             Log.e(TAG, "Coupon cleanup failed", t)
-            markFailed(couponId, t.message ?: "Reader failed")
+            markFailed(couponId, userFacingFailure(t.message))
             Result.success()
         }
     }
@@ -126,6 +126,28 @@ class CouponCleanupWorker @AssistedInject constructor(
                 updatedAt = Date()
             )
         )
+    }
+
+    private fun userFacingFailure(rawMessage: String?): String {
+        val message = rawMessage.orEmpty()
+        return when {
+            message.contains("not available", ignoreCase = true) ||
+                message.contains("not installed", ignoreCase = true) ||
+                message.contains("not found", ignoreCase = true) -> {
+                "Set up the Qwen model in Settings, then try Clean again."
+            }
+            message.contains("loadModel", ignoreCase = true) ||
+                message.contains("initialize", ignoreCase = true) ||
+                message.contains("native", ignoreCase = true) -> {
+                "Qwen could not start. Remove and set up the model again in Settings."
+            }
+            message.contains("timeout", ignoreCase = true) ||
+                message.contains("timed out", ignoreCase = true) -> {
+                "Qwen took too long. The OCR result is still saved; try Clean again later."
+            }
+            message.isBlank() -> "Reader failed. The OCR result is still saved."
+            else -> message
+        }
     }
 
     private fun mergeCleanedCoupon(current: Coupon, info: CouponInfo): Coupon {

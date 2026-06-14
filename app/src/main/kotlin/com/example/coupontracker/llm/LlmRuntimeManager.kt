@@ -165,14 +165,12 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 com.example.coupontracker.model.ModelPaths.QWEN25_MODEL_FILE
             )
         ) {
-            if (!qwen25Verified.exists()) {
-                Log.w(TAG, "⚠️ Qwen2.5 model detected but .verified sentinel missing – treating as installed")
-            } else if (qwen25Verified.length() == 0L) {
-                Log.w(TAG, "⚠️ Qwen2.5 .verified sentinel is empty – continuing to treat model as installed")
+            if (!qwen25Verified.exists() || qwen25Verified.length() == 0L) {
+                Log.w(TAG, "Qwen2.5 model file exists but install marker is missing or empty")
             } else {
                 Log.d(TAG, "✅ Detected Qwen2.5-1.5B model")
+                return com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN25
             }
-            return com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN25
         }
         
         // Check Qwen2 (legacy fallback)
@@ -185,14 +183,12 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 com.example.coupontracker.model.ModelPaths.QWEN2_MODEL_FILE
             )
         ) {
-            if (!qwen2Verified.exists()) {
-                Log.w(TAG, "⚠️ Qwen2 model detected but .verified sentinel missing – treating as installed")
-            } else if (qwen2Verified.length() == 0L) {
-                Log.w(TAG, "⚠️ Qwen2 .verified sentinel is empty – continuing to treat model as installed")
+            if (!qwen2Verified.exists() || qwen2Verified.length() == 0L) {
+                Log.w(TAG, "Qwen2 model file exists but install marker is missing or empty")
             } else {
                 Log.d(TAG, "✅ Detected Qwen2-1.5B model (legacy)")
+                return com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN2
             }
-            return com.example.coupontracker.model.ModelPaths.MODEL_ID_QWEN2
         }
         
         // Check MiniCPM
@@ -205,14 +201,12 @@ class LlmRuntimeManager private constructor(private val context: Context) {
                 com.example.coupontracker.model.ModelPaths.MINICPM_MODEL_FILE
             )
         ) {
-            if (!minicpmVerified.exists()) {
-                Log.w(TAG, "⚠️ MiniCPM model detected but .verified sentinel missing – treating as installed")
-            } else if (minicpmVerified.length() == 0L) {
-                Log.w(TAG, "⚠️ MiniCPM .verified sentinel is empty – continuing to treat model as installed")
+            if (!minicpmVerified.exists() || minicpmVerified.length() == 0L) {
+                Log.w(TAG, "MiniCPM model file exists but install marker is missing or empty")
             } else {
                 Log.d(TAG, "✅ Detected MiniCPM-Llama3-V2.5 model")
+                return com.example.coupontracker.model.ModelPaths.MODEL_ID_MINICPM
             }
-            return com.example.coupontracker.model.ModelPaths.MODEL_ID_MINICPM
         }
         
         // No model found, return default
@@ -237,23 +231,18 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         Log.d(TAG, "Model directory: ${modelDir.absolutePath}")
         
         val missingFiles = mutableListOf<String>()
-        var missingSentinel = false
         for (requiredFile in requiredFiles) {
             val file = File(modelDir, requiredFile)
             val minSize = com.example.coupontracker.model.ModelPaths.getMinFileSize(detectedModelId, requiredFile)
 
             if (!file.exists()) {
-                if (requiredFile == ".verified") {
-                    missingSentinel = true
-                    continue
-                }
                 missingFiles.add(requiredFile)
                 continue
             }
 
             if (requiredFile == ".verified") {
-                if (file.length() == 0L) {
-                    missingSentinel = true
+                if (file.length() <= 0L) {
+                    missingFiles.add(requiredFile)
                 }
                 continue
             }
@@ -270,17 +259,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             return false
         }
 
-        if (missingSentinel) {
-            Log.w(TAG, "⚠️ Model sentinel (.verified) missing or empty – continuing but telemetry will note unverified install")
-        }
-
         Log.d(TAG, "✅ All required model files are present and valid ($modelName)")
-        val sentinelMessage = if (missingSentinel) {
-            "$modelName (sentinel missing)"
-        } else {
-            modelName
-        }
-        StartupMetricsLogger.logModelFilesValidated(success = true, message = sentinelMessage)
+        StartupMetricsLogger.logModelFilesValidated(success = true, message = modelName)
         return true
     }
     

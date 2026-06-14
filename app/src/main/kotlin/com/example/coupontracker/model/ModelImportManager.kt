@@ -121,6 +121,10 @@ class ModelImportManager @Inject constructor(
             
             // Verify all required files exist and meet size thresholds
             for (requiredPath in requiredFiles) {
+                if (requiredPath == VERIFIED_MARKER) {
+                    continue
+                }
+
                 val file = File(stagingDir, requiredPath)
                 
                 if (!file.exists()) {
@@ -383,7 +387,7 @@ class ModelImportManager @Inject constructor(
         val modelDir = ModelPaths.modelDir(context)
         val verifiedFile = File(modelDir, VERIFIED_MARKER)
         
-        if (!verifiedFile.exists()) {
+        if (!verifiedFile.exists() || verifiedFile.length() == 0L) {
             return false
         }
         
@@ -394,7 +398,10 @@ class ModelImportManager @Inject constructor(
         // Verify all required files still exist
         return requiredFiles.all { path ->
             val file = File(modelDir, path)
-            file.exists() && file.length() > 0
+            file.exists() && when (path) {
+                VERIFIED_MARKER -> file.length() > 0L
+                else -> file.length() >= ModelPaths.getMinFileSize(modelId, path)
+            }
         }
     }
     

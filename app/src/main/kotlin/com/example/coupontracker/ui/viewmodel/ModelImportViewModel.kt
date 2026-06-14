@@ -69,15 +69,10 @@ class ModelImportViewModel @Inject constructor(
             )
             
             val result = modelImportManager.importModel(uri) { progress ->
-                when (progress) {
-                    is ImportResult.Progress -> {
-                        _uiState.value = _uiState.value.copy(
-                            importProgress = progress.percent,
-                            importMessage = progress.message
-                        )
-                    }
-                    else -> {}
-                }
+                _uiState.value = _uiState.value.copy(
+                    importProgress = progress.percent,
+                    importMessage = progress.message
+                )
             }
             
             when (result) {
@@ -91,10 +86,8 @@ class ModelImportViewModel @Inject constructor(
                         importMessage = "Import complete"
                     )
 
-                    result.manifest?.let { manifest ->
-                        securePreferencesManager.setLlmModelVersion(manifest.version)
-                        securePreferencesManager.setLlmModelSizeMB(result.sizeMB.toFloat())
-                    }
+                    securePreferencesManager.setLlmModelVersion(result.manifest.version)
+                    securePreferencesManager.setLlmModelSizeMB(result.sizeMB.toFloat())
                     
                     // Auto-run self-test after successful import
                     runSelfTest()
