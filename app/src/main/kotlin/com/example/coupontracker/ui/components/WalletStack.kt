@@ -29,7 +29,7 @@ fun WalletStack(
         itemsIndexed(coupons) { index, model ->
             CouponCard(
                 model = model,
-                state = CouponCardState.Default,
+                state = model.state,
                 variant = CouponCardVariant.WalletStack,
                 isHero = index == activeIndex,
                 onTap = { onCouponTap(index) },

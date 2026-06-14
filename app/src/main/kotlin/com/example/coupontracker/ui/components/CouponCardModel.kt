@@ -52,4 +52,5 @@ data class CouponCardModel(
     val expiresAt: String,
     val statusLabel: String? = null,
     val statusInProgress: Boolean = false,
+    val state: CouponCardState = CouponCardState.Default,
 )

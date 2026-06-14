@@ -92,6 +92,12 @@ fun CouponDetailScreen(
                 },
                 actions = {
                     val shareEnabled = coupon != null
+                    IconButton(
+                        onClick = { viewModel.cleanCoupon() },
+                        enabled = shareEnabled
+                    ) {
+                        Icon(Icons.Default.AutoFixHigh, contentDescription = "Clean coupon")
+                    }
                     IconButton(onClick = {
                         coupon?.let { shareCoupon(context, it) }
                     }, enabled = shareEnabled) {
@@ -161,6 +167,7 @@ private fun CouponDetailContent(
             redeemCode = coupon.redeemCode
         )
     }
+    val detailCardModel = coupon.toDetailCouponCardModel(displayDescription)
 
     Column(
         modifier = Modifier
@@ -169,8 +176,8 @@ private fun CouponDetailContent(
             .padding(BrandSpacing.Medium)
     ) {
         CouponCard(
-            model = coupon.toDetailCouponCardModel(displayDescription),
-            state = CouponCardState.Default,
+            model = detailCardModel,
+            state = detailCardModel.state,
             variant = CouponCardVariant.WalletStack,
             isHero = true,
             onTap = {},
@@ -456,6 +463,11 @@ private fun Coupon.toDetailCouponCardModel(
         },
         statusInProgress = cleanupStatus == Coupon.CleanupStatus.PENDING ||
             cleanupStatus == Coupon.CleanupStatus.RUNNING,
+        state = when {
+            status.equals("Used", ignoreCase = true) -> CouponCardState.Redeemed
+            expiryDate?.before(Date()) == true -> CouponCardState.Expired
+            else -> CouponCardState.Default
+        },
     )
 }
 

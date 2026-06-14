@@ -71,6 +71,7 @@ import com.example.coupontracker.ui.components.BrandButton
 import com.example.coupontracker.ui.components.BrandButtonTier
 import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.components.CouponCardModel
+import com.example.coupontracker.ui.components.CouponCardState
 import com.example.coupontracker.ui.components.DateFormatter
 import com.example.coupontracker.ui.components.EmptyState
 import com.example.coupontracker.ui.components.FilterSortBottomSheet
@@ -85,6 +86,7 @@ import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.HomeViewModel
 import com.example.coupontracker.ui.viewmodel.ModelAvailabilityStatus
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -449,6 +451,11 @@ private fun Coupon.toCouponCardModel(): CouponCardModel {
         },
         statusInProgress = cleanupStatus == Coupon.CleanupStatus.PENDING ||
             cleanupStatus == Coupon.CleanupStatus.RUNNING,
+        state = when {
+            status.equals("Used", ignoreCase = true) -> CouponCardState.Redeemed
+            expiryDate?.before(Date()) == true -> CouponCardState.Expired
+            else -> CouponCardState.Default
+        },
     )
 }
 
