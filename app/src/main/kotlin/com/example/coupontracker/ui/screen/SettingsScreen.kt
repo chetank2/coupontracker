@@ -470,14 +470,13 @@ private fun ModelManagementCard() {
                             color = Color(0xFF4CAF50),
                             fontWeight = FontWeight.Bold
                         )
-                        uiState.modelInfo?.let { info ->
-                            val totalSizeMB = info.files.sumOf { it.size } / (1024 * 1024)
-                            Text(
-                                text = "Private scanning setup is installed • ${totalSizeMB} MB",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        val modelName = uiState.modelInfo?.name ?: "Qwen2.5 offline reader"
+                        val sizeText = uiState.modelSizeMB.takeIf { it > 0 }?.let { " • $it MB" }.orEmpty()
+                        Text(
+                            text = "$modelName installed$sizeText",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
                 

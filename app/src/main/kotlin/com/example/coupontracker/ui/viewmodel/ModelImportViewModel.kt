@@ -46,11 +46,15 @@ class ModelImportViewModel @Inject constructor(
     fun checkInstalledModel() {
         val installed = modelImportManager.isModelInstalled()
         val info = if (installed) modelImportManager.getInstalledModelInfo() else null
+        val sizeMB = if (installed) modelImportManager.getInstalledModelSizeMB() else 0
+        if (installed && sizeMB > 0) {
+            securePreferencesManager.setLlmModelSizeMB(sizeMB.toFloat())
+        }
         
         _uiState.value = _uiState.value.copy(
             isModelInstalled = installed,
             modelInfo = info,
-            modelSizeMB = info?.files?.sumOf { it.size }?.let { (it / 1_000_000).toInt() } ?: 0
+            modelSizeMB = sizeMB
         )
     }
     
@@ -221,4 +225,3 @@ class ModelImportViewModel @Inject constructor(
         }
     }
 }
-

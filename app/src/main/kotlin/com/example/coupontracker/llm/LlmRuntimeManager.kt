@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.util.Log
 import androidx.annotation.VisibleForTesting
+import com.example.coupontracker.BuildConfig
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -435,9 +436,14 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         Log.d(TAG, "Initializing $modelName model...")
         
         // Initialize model through native interface
+        val nativeModelPath = if (BuildConfig.LLM_BACKEND == "MLC") {
+            modelDir.absolutePath
+        } else {
+            modelFile.absolutePath
+        }
         val handle = nativeInterface.initializeModel(
-            modelFile.absolutePath,   // Pass the GGUF model file path to native loader
-            configPath.absolutePath   // Configuration file consumed by the native loader
+            nativeModelPath,
+            configPath.absolutePath
         )
         
         if (handle == 0L) {
@@ -868,8 +874,13 @@ private class MLCEngineReal(
 
         val modelDirectoryPath = modelDirectory?.absolutePath ?: modelFile.absolutePath
         Log.i(TAG, "Initializing MLC runtime from $modelDirectoryPath")
+        val nativeModelPath = if (BuildConfig.LLM_BACKEND == "MLC") {
+            modelDirectoryPath
+        } else {
+            modelFile.absolutePath
+        }
         modelHandle = nativeInterface.initializeModel(
-            modelFile.absolutePath,
+            nativeModelPath,
             configFile.absolutePath
         ).also { handle ->
             require(handle != 0L) { "MLC runtime returned invalid handle" }

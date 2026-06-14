@@ -354,13 +354,24 @@ class ModelImportManager @Inject constructor(
     }
     
     private fun createDefaultManifest(): ModelManifest {
+        val modelId = ModelPaths.DEFAULT_MODEL_ID
+        val modelDir = ModelPaths.modelDir(context, modelId)
+        val files = ModelPaths.getRequiredFiles(modelId).map { path ->
+            val file = File(modelDir, path)
+            FileEntry(
+                path = path,
+                size = file.takeIf { it.exists() && it.isFile }?.length() ?: 0L,
+                sha256 = "",
+                required = true
+            )
+        }
         return ModelManifest(
-            name = "minicpm_llama3_v25_q4",
-            version = "2.5.0",
+            name = ModelPaths.getModelName(modelId),
+            version = securePreferences.getLlmModelVersion()?.takeIf { it.isNotBlank() } ?: modelId,
             platform = "android",
-            quantization = "q4f16_1",
+            quantization = "Q4_K_M",
             requiresRuntimeVersion = "1.0.0",
-            files = emptyList()
+            files = files
         )
     }
     
@@ -406,6 +417,11 @@ class ModelImportManager @Inject constructor(
             Log.e(TAG, "Error reading model manifest", e)
             null
         }
+    }
+
+    fun getInstalledModelSizeMB(): Int {
+        if (!isModelInstalled()) return 0
+        return (calculateDirectorySize(ModelPaths.modelDir(context)) / 1_000_000).toInt()
     }
     
     /**
@@ -466,4 +482,3 @@ class ModelImportManager @Inject constructor(
         }
     }
 }
-
