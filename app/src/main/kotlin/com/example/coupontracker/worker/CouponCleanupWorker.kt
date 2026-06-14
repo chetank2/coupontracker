@@ -1,0 +1,204 @@
+package com.example.coupontracker.worker
+
+import android.content.Context
+import android.graphics.BitmapFactory
+import android.net.Uri
+import android.util.Log
+import androidx.hilt.work.HiltWorker
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+import androidx.work.workDataOf
+import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.data.util.CouponDedupUtils
+import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.util.CouponFixContext
+import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.util.CouponPostProcessor
+import com.example.coupontracker.util.ExtractResult
+import com.example.coupontracker.util.GenericFieldHeuristics
+import com.example.coupontracker.util.LocalLlmOcrService
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.Date
+
+@HiltWorker
+class CouponCleanupWorker @AssistedInject constructor(
+    @Assisted appContext: Context,
+    @Assisted workerParams: WorkerParameters,
+    private val couponRepository: CouponRepository,
+    private val localLlmOcrService: LocalLlmOcrService
+) : CoroutineWorker(appContext, workerParams) {
+
+    override suspend fun doWork(): Result {
+        val couponId = inputData.getLong(KEY_COUPON_ID, 0L)
+        if (couponId <= 0L) return Result.failure()
+
+        val coupon = couponRepository.getCouponById(couponId) ?: return Result.success()
+        couponRepository.updateCoupon(
+            coupon.copy(
+                cleanupStatus = Coupon.CleanupStatus.RUNNING,
+                cleanupStartedAt = Date(),
+                cleanupFinishedAt = null,
+                cleanupError = null,
+                updatedAt = Date()
+            )
+        )
+
+        return try {
+            val bitmap = decodeBitmap(coupon.imageUri)
+            if (bitmap == null) {
+                markFailed(couponId, "Saved screenshot is unavailable")
+                return Result.success()
+            }
+
+            val result = withTimeoutOrNull(CLEANUP_TIMEOUT_MS) {
+                localLlmOcrService.processCouponImageTyped(bitmap)
+            }
+
+            bitmap.recycle()
+
+            when (result) {
+                is ExtractResult.Good -> {
+                    val current = couponRepository.getCouponById(couponId) ?: return Result.success()
+                    val cleaned = mergeCleanedCoupon(current, result.info)
+                    couponRepository.updateCoupon(cleaned)
+                    Result.success()
+                }
+
+                is ExtractResult.LowQuality -> {
+                    markFailed(couponId, "Reader could not improve this coupon")
+                    Result.success()
+                }
+
+                is ExtractResult.Failed -> {
+                    markFailed(couponId, result.error.message ?: "Reader failed")
+                    Result.success()
+                }
+
+                null -> {
+                    markFailed(couponId, "Reader timed out")
+                    Result.success()
+                }
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Coupon cleanup failed", t)
+            markFailed(couponId, t.message ?: "Reader failed")
+            Result.success()
+        }
+    }
+
+    private suspend fun decodeBitmap(imageUri: String?) = withContext(Dispatchers.IO) {
+        if (imageUri.isNullOrBlank()) return@withContext null
+        runCatching {
+            applicationContext.contentResolver.openInputStream(Uri.parse(imageUri))?.use { input ->
+                BitmapFactory.decodeStream(input)
+            }
+        }.getOrNull()
+    }
+
+    private suspend fun markFailed(couponId: Long, message: String) {
+        val current = couponRepository.getCouponById(couponId) ?: return
+        couponRepository.updateCoupon(
+            current.copy(
+                cleanupStatus = Coupon.CleanupStatus.FAILED,
+                cleanupFinishedAt = Date(),
+                cleanupError = message,
+                updatedAt = Date()
+            )
+        )
+    }
+
+    private fun mergeCleanedCoupon(current: Coupon, info: CouponInfo): Coupon {
+        val rawOcr = current.rawOcrText
+        val qwenDescription = info.description.takeIf(GenericFieldHeuristics::isMeaningfulDescription)
+        val qwenCode = info.redeemCode?.trim()?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+        val currentCode = current.redeemCode?.trim()?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+        val selectedCode = when {
+            currentCode.isNullOrBlank() && isSupportedByOcr(qwenCode, rawOcr) -> qwenCode
+            currentCode.isNullOrBlank() -> qwenCode
+            isSupportedByOcr(qwenCode, rawOcr) && qwenCode.equals(currentCode, ignoreCase = true) -> qwenCode
+            else -> currentCode
+        }
+
+        val selectedStore = info.storeName
+            .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
+            ?.takeIf { GenericFieldHeuristics.isGenericOrMissing(current.storeName) || current.storeName == "Unknown Store" }
+            ?: current.storeName
+
+        val descriptionWithCashback = DescriptionUtils.appendDetails(
+            qwenDescription ?: current.description,
+            info.cashbackDetail
+        )
+
+        val merged = current.copy(
+            storeName = selectedStore,
+            description = descriptionWithCashback,
+            expiryDate = current.expiryDate ?: info.expiryDate,
+            redeemCode = selectedCode,
+            category = current.category ?: info.category,
+            status = current.status ?: info.status ?: "Active",
+            minimumPurchase = current.minimumPurchase ?: info.minimumPurchase,
+            maximumDiscount = current.maximumDiscount ?: info.maximumDiscount,
+            paymentMethod = current.paymentMethod ?: info.paymentMethod,
+            platformType = current.platformType ?: info.platformType,
+            usageLimit = current.usageLimit ?: info.usageLimit,
+            cleanupStatus = Coupon.CleanupStatus.CLEANED,
+            cleanupFinishedAt = Date(),
+            cleanupError = null,
+            lastCleanedBy = "Qwen2.5",
+            extractionSource = Coupon.ExtractionSource.QWEN_CLEANED,
+            updatedAt = Date()
+        )
+
+        val refined = CouponPostProcessor.refine(
+            coupon = merged,
+            context = CouponFixContext(ocrText = rawOcr)
+        )
+
+        return refined.copy(
+            cleanupStatus = Coupon.CleanupStatus.CLEANED,
+            cleanupFinishedAt = merged.cleanupFinishedAt,
+            cleanupError = null,
+            lastCleanedBy = merged.lastCleanedBy,
+            extractionSource = merged.extractionSource,
+            normalizedDescription = CouponDedupUtils.normalizeDescription(refined.description),
+            needsAttention = refined.needsAttention && hasMissingCriticalFields(refined)
+        )
+    }
+
+    private fun hasMissingCriticalFields(coupon: Coupon): Boolean {
+        return coupon.storeName == "Unknown Store" ||
+            coupon.description.isBlank() ||
+            (coupon.redeemCode.isNullOrBlank() && coupon.expiryDate == null)
+    }
+
+    private fun isSupportedByOcr(value: String?, rawOcr: String?): Boolean {
+        if (value.isNullOrBlank() || rawOcr.isNullOrBlank()) return false
+        return rawOcr.contains(value, ignoreCase = true)
+    }
+
+    companion object {
+        private const val TAG = "CouponCleanupWorker"
+        private const val KEY_COUPON_ID = "coupon_id"
+        private const val CLEANUP_TIMEOUT_MS = 60_000L
+
+        fun enqueue(context: Context, couponId: Long) {
+            val request = OneTimeWorkRequestBuilder<CouponCleanupWorker>()
+                .setInputData(workDataOf(KEY_COUPON_ID to couponId))
+                .build()
+
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                "coupon_cleanup_$couponId",
+                ExistingWorkPolicy.REPLACE,
+                request
+            )
+        }
+    }
+}

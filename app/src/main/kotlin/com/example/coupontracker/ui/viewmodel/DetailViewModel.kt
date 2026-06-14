@@ -1,5 +1,6 @@
 package com.example.coupontracker.ui.viewmodel
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,7 +9,10 @@ import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.util.CouponNotificationManager
+import com.example.coupontracker.worker.CouponCleanupWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -24,6 +28,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DetailViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val repository: CouponRepository,
     private val notificationManager: CouponNotificationManager,
     private val debugRepository: ExtractionDebugRepository
@@ -53,13 +58,33 @@ class DetailViewModel @Inject constructor(
         )
 
     private var couponId: Long = 0
+    private var couponObserverJob: Job? = null
 
     fun loadCoupon(id: Long) {
         couponId = id
         currentCouponId.value = id
+        couponObserverJob?.cancel()
+        couponObserverJob = viewModelScope.launch {
+            repository.observeCouponById(id).collect { couponData ->
+                _coupon.value = couponData
+            }
+        }
+    }
+
+    fun cleanCoupon() {
         viewModelScope.launch {
-            val couponData = repository.getCouponById(id)
-            _coupon.value = couponData
+            _coupon.value?.let { coupon ->
+                repository.updateCoupon(
+                    coupon.copy(
+                        cleanupStatus = Coupon.CleanupStatus.PENDING,
+                        cleanupError = null,
+                        cleanupStartedAt = null,
+                        cleanupFinishedAt = null,
+                        updatedAt = Date()
+                    )
+                )
+                CouponCleanupWorker.enqueue(context, coupon.id)
+            }
         }
     }
 

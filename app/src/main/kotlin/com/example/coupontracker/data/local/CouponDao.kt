@@ -14,6 +14,9 @@ interface CouponDao {
     @Query("SELECT * FROM coupons WHERE id = :couponId")
     suspend fun getCouponById(couponId: Long): Coupon?
 
+    @Query("SELECT * FROM coupons WHERE id = :couponId")
+    fun observeCouponById(couponId: Long): Flow<Coupon?>
+
     @Query("SELECT * FROM coupons WHERE storeName LIKE '%' || :query || '%' OR category LIKE '%' || :query || '%'")
     fun searchCoupons(query: String): Flow<List<Coupon>>
 

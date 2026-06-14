@@ -17,6 +17,8 @@ class CouponRepositoryImpl @Inject constructor(
     // Existing methods
     override fun getAllCoupons(): Flow<List<Coupon>> = couponDao.getAllCoupons()
 
+    override fun observeCouponById(couponId: Long): Flow<Coupon?> = couponDao.observeCouponById(couponId)
+
     override suspend fun getCouponById(couponId: Long): Coupon? = couponDao.getCouponById(couponId)
 
     override fun searchCoupons(query: String): Flow<List<Coupon>> = couponDao.searchCoupons(query)
@@ -193,6 +195,14 @@ class CouponRepositoryImpl @Inject constructor(
             extractionTimestamp = incoming.extractionTimestamp ?: existing.extractionTimestamp,
             rating = incoming.rating ?: existing.rating,
             needsAttention = incoming.needsAttention || existing.needsAttention,
+            cleanupStatus = incoming.cleanupStatus,
+            cleanupStartedAt = incoming.cleanupStartedAt ?: existing.cleanupStartedAt,
+            cleanupFinishedAt = incoming.cleanupFinishedAt ?: existing.cleanupFinishedAt,
+            cleanupError = incoming.cleanupError ?: existing.cleanupError,
+            lastCleanedBy = incoming.lastCleanedBy ?: existing.lastCleanedBy,
+            rawOcrText = incoming.rawOcrText ?: existing.rawOcrText,
+            ocrConfidence = incoming.ocrConfidence ?: existing.ocrConfidence,
+            extractionSource = incoming.extractionSource ?: existing.extractionSource,
             createdAt = existing.createdAt,
             updatedAt = Date()
         )

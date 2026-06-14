@@ -54,7 +54,17 @@ data class Coupon(
     val redeemCodes: String? = null,        // JSON-encoded array of strings
     val primaryRedeemCode: String? = null,
     val storeUrl: String? = null,
-    val offerType: String? = null           // one of: cashback, discount, freebie, points, unknown
+    val offerType: String? = null,          // one of: cashback, discount, freebie, points, unknown
+
+    // Background cleanup metadata
+    val cleanupStatus: String = CleanupStatus.NONE,
+    val cleanupStartedAt: Date? = null,
+    val cleanupFinishedAt: Date? = null,
+    val cleanupError: String? = null,
+    val lastCleanedBy: String? = null,
+    val rawOcrText: String? = null,
+    val ocrConfidence: Float? = null,
+    val extractionSource: String? = null
 ) {
     fun withAdditionalDetails(vararg details: String?): Coupon {
         val mergedDescription = DescriptionUtils.appendDetails(description, *details)
@@ -92,5 +102,18 @@ data class Coupon(
             display.isNotBlank() -> CashbackInfo(CashbackType.TEXT, 0.0)
             else -> CashbackInfo(CashbackType.TEXT, 0.0)
         }
+    }
+
+    object CleanupStatus {
+        const val NONE = "NONE"
+        const val PENDING = "PENDING"
+        const val RUNNING = "RUNNING"
+        const val CLEANED = "CLEANED"
+        const val FAILED = "FAILED"
+    }
+
+    object ExtractionSource {
+        const val OCR_FAST = "OCR_FAST"
+        const val QWEN_CLEANED = "QWEN_CLEANED"
     }
 }

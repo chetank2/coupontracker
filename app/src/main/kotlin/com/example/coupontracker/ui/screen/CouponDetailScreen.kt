@@ -39,7 +39,10 @@ import com.example.coupontracker.ui.components.ImagePreviewDialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.R
+import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
+import com.example.coupontracker.ui.components.BrandButton
+import com.example.coupontracker.ui.components.BrandButtonTier
 import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.components.CouponCard
 import com.example.coupontracker.ui.components.CouponCardModel
@@ -120,6 +123,7 @@ fun CouponDetailScreen(
                         onTrackUsage = { viewModel.trackUsage() },
                         onSetReminderLeadTime = { minutes -> viewModel.setReminderLeadTime(minutes) },
                         onCancelReminder = { viewModel.cancelReminder() },
+                        onCleanCoupon = { viewModel.cleanCoupon() },
                         context = context,
                         debugSnapshot = debugSnapshot,
                         isDebugBuild = isDebugBuild
@@ -139,12 +143,13 @@ fun CouponDetailScreen(
 
 @Composable
 private fun CouponDetailContent(
-    coupon: com.example.coupontracker.data.model.Coupon,
+    coupon: Coupon,
     showImagePreview: Boolean,
     onToggleImagePreview: (Boolean) -> Unit,
     onTrackUsage: () -> Unit,
     onSetReminderLeadTime: (Int) -> Unit,
     onCancelReminder: () -> Unit,
+    onCleanCoupon: () -> Unit,
     context: Context,
     debugSnapshot: ExtractionDebugSnapshot?,
     isDebugBuild: Boolean
@@ -174,6 +179,12 @@ private fun CouponDetailContent(
                 Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
             },
             modifier = Modifier.padding(bottom = BrandSpacing.Medium),
+        )
+
+        CleanupStatusCard(
+            coupon = coupon,
+            onCleanCoupon = onCleanCoupon,
+            modifier = Modifier.padding(bottom = BrandSpacing.Medium)
         )
 
         // Coupon image (if available)
@@ -426,7 +437,7 @@ private fun CouponDetailContent(
     }
 }
 
-private fun com.example.coupontracker.data.model.Coupon.toDetailCouponCardModel(
+private fun Coupon.toDetailCouponCardModel(
     displayDescription: String,
 ): CouponCardModel {
     val initial = storeName.firstOrNull { it.isLetterOrDigit() } ?: 'C'
@@ -437,10 +448,18 @@ private fun com.example.coupontracker.data.model.Coupon.toDetailCouponCardModel(
         valueLabel = detailCardOfferSummary(displayDescription),
         code = redeemCode.orEmpty(),
         expiresAt = DateFormatter.formatShort(expiryDate),
+        statusLabel = when (cleanupStatus) {
+            Coupon.CleanupStatus.PENDING -> "Queued"
+            Coupon.CleanupStatus.RUNNING -> "Cleaning"
+            Coupon.CleanupStatus.FAILED -> "Needs clean"
+            else -> null
+        },
+        statusInProgress = cleanupStatus == Coupon.CleanupStatus.PENDING ||
+            cleanupStatus == Coupon.CleanupStatus.RUNNING,
     )
 }
 
-private fun com.example.coupontracker.data.model.Coupon.detailCardOfferSummary(
+private fun Coupon.detailCardOfferSummary(
     displayDescription: String,
 ): String {
     val cashback = getCashbackDisplayText()
@@ -471,7 +490,7 @@ private fun com.example.coupontracker.data.model.Coupon.detailCardOfferSummary(
 
 @Composable
 private fun CouponActionButtons(
-    coupon: com.example.coupontracker.data.model.Coupon,
+    coupon: Coupon,
     onTrackUsageClick: () -> Unit,
     onSetReminderLeadTime: (Int) -> Unit,
     onCancelReminderClick: () -> Unit,
@@ -554,6 +573,95 @@ private fun CouponActionButtons(
                     text = "• Reminder ${DateFormatter.formatShort(reminderDate)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CleanupStatusCard(
+    coupon: Coupon,
+    onCleanCoupon: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isRunning = coupon.cleanupStatus == Coupon.CleanupStatus.PENDING ||
+        coupon.cleanupStatus == Coupon.CleanupStatus.RUNNING
+    val shouldShow = isRunning ||
+        coupon.cleanupStatus == Coupon.CleanupStatus.FAILED ||
+        coupon.cleanupStatus == Coupon.CleanupStatus.CLEANED ||
+        coupon.needsAttention
+
+    if (!shouldShow) return
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(
+            width = 1.dp,
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(BrandSpacing.Medium),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
+        ) {
+            if (isRunning) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Icon(
+                    imageVector = when (coupon.cleanupStatus) {
+                        Coupon.CleanupStatus.CLEANED -> Icons.Default.CheckCircle
+                        Coupon.CleanupStatus.FAILED -> Icons.Default.ErrorOutline
+                        else -> Icons.Default.AutoFixHigh
+                    },
+                    contentDescription = null,
+                    tint = when (coupon.cleanupStatus) {
+                        Coupon.CleanupStatus.CLEANED -> MaterialTheme.colorScheme.primary
+                        Coupon.CleanupStatus.FAILED -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = when (coupon.cleanupStatus) {
+                        Coupon.CleanupStatus.PENDING -> "Cleaning queued"
+                        Coupon.CleanupStatus.RUNNING -> "Cleaning details"
+                        Coupon.CleanupStatus.CLEANED -> "Cleaned with Qwen2.5"
+                        Coupon.CleanupStatus.FAILED -> "Cleaning failed"
+                        else -> "Clean coupon details"
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = when (coupon.cleanupStatus) {
+                        Coupon.CleanupStatus.PENDING -> "The saved coupon is ready. The reader will improve fields in the background."
+                        Coupon.CleanupStatus.RUNNING -> "The saved coupon stays usable while the reader improves it."
+                        Coupon.CleanupStatus.CLEANED -> "Store, offer, code, and expiry were checked after saving."
+                        Coupon.CleanupStatus.FAILED -> coupon.cleanupError ?: "The reader could not improve this coupon."
+                        else -> "Use the reader to improve weak or missing fields."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            if (!isRunning && coupon.cleanupStatus != Coupon.CleanupStatus.CLEANED) {
+                BrandButton(
+                    text = "Clean",
+                    onClick = onCleanCoupon,
+                    tier = BrandButtonTier.Secondary,
+                    leadingIcon = Icons.Default.AutoFixHigh
                 )
             }
         }

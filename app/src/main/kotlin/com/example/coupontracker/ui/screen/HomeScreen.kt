@@ -441,6 +441,14 @@ private fun Coupon.toCouponCardModel(): CouponCardModel {
         valueLabel = cardOfferSummary(),
         code = redeemCode.orEmpty(),
         expiresAt = DateFormatter.formatShort(expiryDate),
+        statusLabel = when (cleanupStatus) {
+            Coupon.CleanupStatus.PENDING -> "Queued"
+            Coupon.CleanupStatus.RUNNING -> "Cleaning"
+            Coupon.CleanupStatus.FAILED -> "Needs clean"
+            else -> null
+        },
+        statusInProgress = cleanupStatus == Coupon.CleanupStatus.PENDING ||
+            cleanupStatus == Coupon.CleanupStatus.RUNNING,
     )
 }
 

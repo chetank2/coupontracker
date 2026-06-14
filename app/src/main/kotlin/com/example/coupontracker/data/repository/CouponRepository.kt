@@ -7,6 +7,7 @@ import java.util.Date
 interface CouponRepository {
     // Existing methods
     fun getAllCoupons(): Flow<List<Coupon>>
+    fun observeCouponById(couponId: Long): Flow<Coupon?>
     suspend fun getCouponById(couponId: Long): Coupon?
     fun searchCoupons(query: String): Flow<List<Coupon>>
     fun getCouponsByName(): Flow<List<Coupon>>

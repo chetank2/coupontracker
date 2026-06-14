@@ -48,6 +48,7 @@ import com.example.coupontracker.util.MultiEngineOCR
 import com.example.coupontracker.util.RunPath
 import com.example.coupontracker.util.UriPersistenceManager
 import com.example.coupontracker.util.LlmProgressUpdate
+import com.example.coupontracker.worker.CouponCleanupWorker
 import com.example.coupontracker.util.normalizeExpiryDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -57,7 +58,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.text.SimpleDateFormat
@@ -101,8 +101,7 @@ class ScannerViewModel @Inject constructor(
     companion object {
         private const val TAG = "ScannerViewModel"
         private const val STRATEGY_SURFACE_SINGLE = "single_capture"
-        private const val OCR_CONFIDENCE_ACCEPT_WITHOUT_QWEN = 0.85f
-        private const val INLINE_QWEN_TIMEOUT_MS = 45_000L
+        private const val OCR_CONFIDENCE_QUEUE_CLEANUP = 0.85f
 
         @VisibleForTesting
         internal fun parseExpiryDate(
@@ -598,66 +597,22 @@ class ScannerViewModel @Inject constructor(
                     }
                     
                     // Step 2: Use universal field detector with OCR text
-                    val context = buildUniversalExtractionContext(ocrText, ocrHints)
+                    val extractionContext = buildUniversalExtractionContext(ocrText, ocrHints)
                     val extractionResult = universalExtractionService.extractCoupon(
                         image = bitmap,
                         ocrText = ocrText,
-                        context = context
+                        context = extractionContext
                     )
                     
                     val processingTime = System.currentTimeMillis() - startTime
                     
                     if (extractionResult.success && extractionResult.confidence > 0.4f) {
-                        val shouldValidateWithQwen = extractionResult.confidence < OCR_CONFIDENCE_ACCEPT_WITHOUT_QWEN
+                        val shouldQueueCleanup = shouldQueueCleanup(extractionResult.coupon, extractionResult.confidence)
                         Log.d(
                             TAG,
                             "OCR_FIRST: Universal extraction successful (confidence: ${extractionResult.confidence}); " +
-                                if (shouldValidateWithQwen) "validating with Qwen" else "using high-confidence OCR result"
+                                if (shouldQueueCleanup) "queueing background cleanup" else "using high-confidence OCR result"
                         )
-
-                        val llmResult = if (shouldValidateWithQwen) {
-                            Log.d(TAG, "OCR_FIRST: Running inline Qwen validation")
-                            emitLlmProgress(
-                                LlmProgressUpdate(
-                                    stage = LlmProgressStage.PROMPTING,
-                                    percent = 45,
-                                    message = "OCR complete - asking AI to structure the coupon"
-                                )
-                            )
-
-                            try {
-                                withTimeoutOrNull(INLINE_QWEN_TIMEOUT_MS) {
-                                    localLlmOcrService.processCouponImageTyped(bitmap) { update ->
-                                        emitLlmProgress(update)
-                                    }
-                                }.also { result ->
-                                    if (result == null) {
-                                        Log.w(TAG, "OCR_FIRST: Qwen validation timed out after ${INLINE_QWEN_TIMEOUT_MS}ms; using OCR result")
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.w(TAG, "OCR_FIRST: Qwen validation failed; using OCR result", e)
-                                null
-                            }
-                        } else {
-                            null
-                        }
-
-                        val sourceCoupon = when (llmResult) {
-                            is ExtractResult.Good -> {
-                                Log.d(TAG, "OCR_FIRST: Qwen validation successful; fusing AI and OCR fields")
-                                fuseLlmAndOcrResults(llmResult, extractionResult, imageUri)
-                            }
-                            is ExtractResult.LowQuality -> {
-                                Log.w(TAG, "OCR_FIRST: Qwen returned low quality (${llmResult.reason}); using OCR result")
-                                extractionResult.coupon
-                            }
-                            is ExtractResult.Failed -> {
-                                Log.w(TAG, "OCR_FIRST: Qwen failed at ${llmResult.stage}; using OCR result")
-                                extractionResult.coupon
-                            }
-                            null -> extractionResult.coupon
-                        }
 
                         // Step 3: Persist URI and save coupon
                         val persistedUri = uriPersistenceManager.persistUri(imageUri)
@@ -666,9 +621,16 @@ class ScannerViewModel @Inject constructor(
                             extractionResult.coupon.extractionConfidenceBreakdown,
                             extractionResult.extractedFields
                         )
-                        val baseCoupon = sourceCoupon.copy(
+                        val baseCoupon = extractionResult.coupon.copy(
                             imageUri = finalImageUri,
-                            extractionConfidenceBreakdown = confidenceBreakdown
+                            extractionConfidenceBreakdown = confidenceBreakdown,
+                            cleanupStatus = if (shouldQueueCleanup) Coupon.CleanupStatus.PENDING else Coupon.CleanupStatus.NONE,
+                            cleanupStartedAt = null,
+                            cleanupFinishedAt = null,
+                            cleanupError = null,
+                            rawOcrText = ocrText,
+                            ocrConfidence = extractionResult.confidence,
+                            extractionSource = Coupon.ExtractionSource.OCR_FAST
                         )
                         val finalCoupon = finalizeCoupon(
                             base = baseCoupon,
@@ -694,13 +656,25 @@ class ScannerViewModel @Inject constructor(
                             fieldsExtracted = fieldsExtracted
                         )
                         
-                        // Step 6: Update UI
-                        val llmProgress = if (llmResult is ExtractResult.Good) {
-                            LlmProgress.SUCCESS
+                        if (persistImmediately) {
+                            val savedCouponId = persistCoupon(
+                                coupon = finalCoupon,
+                                normalizedDescription = CouponDedupUtils.normalizeDescription(finalCoupon.description),
+                                llmStatus = LlmProgress.FALLBACK,
+                                debugSnapshot = null
+                            )
+                            if (shouldQueueCleanup) {
+                                CouponCleanupWorker.enqueue(context, savedCouponId)
+                            }
                         } else {
-                            LlmProgress.FALLBACK
+                            pendingPreview = PendingPreview(
+                                coupon = finalCoupon,
+                                normalizedDescription = CouponDedupUtils.normalizeDescription(finalCoupon.description),
+                                llmStatus = LlmProgress.FALLBACK,
+                                debugSnapshot = null
+                            )
+                            _uiState.value = ScannerUiState.Success(finalCoupon, LlmProgress.FALLBACK)
                         }
-                        _uiState.value = ScannerUiState.Success(finalCoupon, llmProgress)
                         Log.d(TAG, "OCR_FIRST: Completed successfully in ${processingTime}ms")
                         
                     } else {
@@ -1123,7 +1097,7 @@ class ScannerViewModel @Inject constructor(
         normalizedDescription: String,
         llmStatus: LlmProgress,
         debugSnapshot: ExtractionDebugSnapshot?
-    ) {
+    ): Long {
         // First check if a duplicate already exists using the saveOrMerge helper
         val savedCouponId = couponRepository.saveOrMergeCoupon(
             coupon = coupon,
@@ -1171,6 +1145,17 @@ class ScannerViewModel @Inject constructor(
                 "llm_status" to llmStatus.name
             )
         )
+
+        return savedCouponId
+    }
+
+    private fun shouldQueueCleanup(coupon: Coupon, confidence: Float): Boolean {
+        return confidence < OCR_CONFIDENCE_QUEUE_CLEANUP ||
+            coupon.needsAttention ||
+            coupon.storeName == "Unknown Store" ||
+            coupon.redeemCode.isNullOrBlank() ||
+            coupon.expiryDate == null ||
+            !GenericFieldHeuristics.isMeaningfulDescription(coupon.description)
     }
 
     fun confirmPreviewSave(updatedCoupon: Coupon? = null) {
@@ -1180,12 +1165,15 @@ class ScannerViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                persistCoupon(
+                val savedCouponId = persistCoupon(
                     coupon = couponToPersist,
                     normalizedDescription = normalizedDescription,
                     llmStatus = preview.llmStatus,
                     debugSnapshot = preview.debugSnapshot
                 )
+                if (couponToPersist.cleanupStatus == Coupon.CleanupStatus.PENDING) {
+                    CouponCleanupWorker.enqueue(context, savedCouponId)
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving preview coupon", e)
                 _uiState.value = ScannerUiState.Error("Error saving coupon: ${e.message}")

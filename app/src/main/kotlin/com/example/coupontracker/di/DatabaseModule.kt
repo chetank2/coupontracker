@@ -39,7 +39,8 @@ object DatabaseModule {
                 CouponDatabase.MIGRATION_10_11,
                 CouponDatabase.MIGRATION_11_12,
                 CouponDatabase.MIGRATION_12_13,
-                CouponDatabase.MIGRATION_13_14
+                CouponDatabase.MIGRATION_13_14,
+                CouponDatabase.MIGRATION_14_15
             )
             .fallbackToDestructiveMigration()
             .build()
