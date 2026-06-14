@@ -42,6 +42,10 @@ class CouponCleanupWorker @AssistedInject constructor(
     override suspend fun doWork(): Result {
         val couponId = inputData.getLong(KEY_COUPON_ID, 0L)
         if (couponId <= 0L) return Result.failure()
+        if (!inputData.getBoolean(KEY_USER_REQUESTED, false)) {
+            Log.w(TAG, "Ignoring cleanup work without explicit user request for couponId=$couponId")
+            return Result.success()
+        }
 
         val coupon = couponRepository.getCouponById(couponId) ?: return Result.success()
         couponRepository.updateCoupon(
@@ -222,11 +226,17 @@ class CouponCleanupWorker @AssistedInject constructor(
     companion object {
         private const val TAG = "CouponCleanupWorker"
         private const val KEY_COUPON_ID = "coupon_id"
+        private const val KEY_USER_REQUESTED = "user_requested"
         private const val CLEANUP_TIMEOUT_MS = 60_000L
 
-        fun enqueue(context: Context, couponId: Long) {
+        fun enqueueUserRequested(context: Context, couponId: Long) {
             val request = OneTimeWorkRequestBuilder<CouponCleanupWorker>()
-                .setInputData(workDataOf(KEY_COUPON_ID to couponId))
+                .setInputData(
+                    workDataOf(
+                        KEY_COUPON_ID to couponId,
+                        KEY_USER_REQUESTED to true
+                    )
+                )
                 .build()
 
             WorkManager.getInstance(context).enqueueUniqueWork(

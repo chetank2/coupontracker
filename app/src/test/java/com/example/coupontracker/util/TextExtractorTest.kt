@@ -148,6 +148,20 @@ class TextExtractorTest {
     }
 
     @Test
+    fun `extractRedeemCode preserves hyphenated explicit code`() {
+        val text = """
+            Lenskart
+            Gold Membership offer
+            Code: AFFLPHG-UFPJ-TDOAB
+            Valid till 30 Jun 2026
+        """.trimIndent()
+
+        val result = extractor.extractRedeemCode(text)
+
+        assertEquals("AFFLPHG-UFPJ-TDOAB", result)
+    }
+
+    @Test
     fun `parseExpiryDate handles day first format with trailing time`() {
         val text = "Get 2 Months Audible Premium Plus\nExpires on 31 May, 2025, 11:59 PM"
 
@@ -158,4 +172,3 @@ class TextExtractorTest {
         assertEquals("2025-05-31", formatter.format(result!!))
     }
 }
-

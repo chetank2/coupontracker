@@ -83,7 +83,7 @@ class DetailViewModel @Inject constructor(
                         updatedAt = Date()
                     )
                 )
-                CouponCleanupWorker.enqueue(context, coupon.id)
+                CouponCleanupWorker.enqueueUserRequested(context, coupon.id)
             }
         }
     }

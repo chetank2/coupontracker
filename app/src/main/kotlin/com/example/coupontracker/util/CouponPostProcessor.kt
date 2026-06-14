@@ -60,7 +60,11 @@ object CouponPostProcessor {
     }
 
     private fun resolveRedeemCode(current: String?, ocrText: String?): String? {
+        val explicitCode = extractExplicitCode(ocrText)
         val normalized = current?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+        if (!explicitCode.isNullOrBlank() && explicitCode != normalized) {
+            return explicitCode
+        }
         if (normalized != null) {
             return normalized
         }
@@ -73,6 +77,17 @@ object CouponPostProcessor {
         }
 
         return null
+    }
+
+    private fun extractExplicitCode(ocrText: String?): String? {
+        if (ocrText.isNullOrBlank()) return null
+        val pattern = Regex(
+            pattern = "(?im)\\bcode\\s*[-–—:]?\\s*([A-Z0-9][A-Z0-9_-]{4,}(?:[-–—][A-Z0-9][A-Z0-9_-]{2,})*)"
+        )
+        return pattern.find(ocrText)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.let(RedeemCodeSanitizer::sanitizePreserve)
     }
 
     private fun resolveExpiry(current: Date?, ocrText: String?, captureTimestamp: Date?): Date? {

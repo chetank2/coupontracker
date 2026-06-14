@@ -952,23 +952,23 @@ class TextExtractor {
      */
     fun extractRedeemCode(text: String): String? {
         // First check for code: pattern (most common)
-        val codePattern = Pattern.compile("(?i)code\\s*[-–—:]?\\s*([A-Z0-9]{5,})")
+        val codePattern = Pattern.compile("(?i)code\\s*[-–—:]?\\s*([A-Z0-9][A-Z0-9_-]{4,}(?:[-–—][A-Z0-9][A-Z0-9_-]{2,})*)")
         val codeMatcher = codePattern.matcher(text)
         if (codeMatcher.find()) {
             val code = codeMatcher.group(1)
             safeLogDebug(TAG) { "Found code from 'code:' pattern: $code" }
-            RedeemCodeSanitizer.sanitize(code)?.let { sanitized ->
+            RedeemCodeSanitizer.sanitizePreserve(code)?.let { sanitized ->
                 return sanitized
             }
         }
 
         // Look for "code" pattern without colon (common in Myntra coupons)
-        val codeWithoutColonPattern = Pattern.compile("(?i)\\bcode\\b\\s*[-–—:]?\\s*([A-Z0-9]{5,})")
+        val codeWithoutColonPattern = Pattern.compile("(?i)\\bcode\\b\\s*[-–—:]?\\s*([A-Z0-9][A-Z0-9_-]{4,}(?:[-–—][A-Z0-9][A-Z0-9_-]{2,})*)")
         val codeWithoutColonMatcher = codeWithoutColonPattern.matcher(text)
         if (codeWithoutColonMatcher.find()) {
             val code = codeWithoutColonMatcher.group(1)
             safeLogDebug(TAG) { "Found code from 'code' pattern without colon: $code" }
-            RedeemCodeSanitizer.sanitize(code)?.let { sanitized ->
+            RedeemCodeSanitizer.sanitizePreserve(code)?.let { sanitized ->
                 return sanitized
             }
         }

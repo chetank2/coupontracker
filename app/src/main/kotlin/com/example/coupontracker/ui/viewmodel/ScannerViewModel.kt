@@ -48,7 +48,6 @@ import com.example.coupontracker.util.MultiEngineOCR
 import com.example.coupontracker.util.RunPath
 import com.example.coupontracker.util.UriPersistenceManager
 import com.example.coupontracker.util.LlmProgressUpdate
-import com.example.coupontracker.worker.CouponCleanupWorker
 import com.example.coupontracker.util.normalizeExpiryDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -1201,15 +1200,12 @@ class ScannerViewModel @Inject constructor(
 
         viewModelScope.launch {
             try {
-                val savedCouponId = persistCoupon(
+                persistCoupon(
                     coupon = couponToPersist,
                     normalizedDescription = normalizedDescription,
                     llmStatus = preview.llmStatus,
                     debugSnapshot = preview.debugSnapshot
                 )
-                if (couponToPersist.cleanupStatus == Coupon.CleanupStatus.PENDING) {
-                    CouponCleanupWorker.enqueue(context, savedCouponId)
-                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving preview coupon", e)
                 _uiState.value = ScannerUiState.Error("Error saving coupon: ${e.message}")

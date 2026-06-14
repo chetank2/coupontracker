@@ -52,7 +52,6 @@ import org.json.JSONObject
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Local LLM OCR Service using Qwen2-1.5B (text-only)
@@ -433,7 +432,6 @@ class LocalLlmOcrService(
     private var modelPinned = false
     private val warmupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val warmupMutex = Mutex()
-    private val nativeSmokeTestTriggered = AtomicBoolean(false)
     
     init {
         Log.d(TAG, "🔍 LocalLlmOcrService initialization started")
@@ -448,16 +446,8 @@ class LocalLlmOcrService(
             Log.d(TAG, "   JNI references: ${modelInfo.referenceCount}")
             if (modelInfo.isLoaded) {
                 modelPinned = true
-            } else {
-                warmupScope.launch {
-                    runCatching {
-                        ensureModelWarm("service_init", null)
-                    }.onFailure { warmupError ->
-                        Log.w(TAG, "Deferred model warmup failed: ${warmupError.message}", warmupError)
-                    }
-                }
             }
-            maybeScheduleNativeSmokeTest(modelInfo)
+            Log.d(TAG, "Qwen warmup deferred until the user taps Clean")
         } else {
             Log.w(TAG, "⚠️  Qwen model NOT available - extraction will use pattern fallbacks")
             Log.w(TAG, "   Download the model from Settings to enable AI-powered extraction")
@@ -613,74 +603,6 @@ class LocalLlmOcrService(
             .flatMap { it.split(Regex("\\s+")) }
             .count { it.isNotBlank() }
             .coerceAtLeast(1)
-    }
-
-    private fun maybeScheduleNativeSmokeTest(modelInfo: ModelInfo) {
-        if (!BuildConfig.DEBUG) {
-            return
-        }
-        if (!modelInfo.isAvailable) {
-            return
-        }
-        if (!nativeSmokeTestTriggered.compareAndSet(false, true)) {
-            return
-        }
-
-        warmupScope.launch {
-            runCatching { runNativeSmokeTest(modelInfo) }
-                .onFailure { error ->
-                    Log.w(TAG, "JNI smoke test failed: ${error.message}", error)
-                }
-        }
-    }
-
-    private suspend fun runNativeSmokeTest(modelInfo: ModelInfo) {
-        Log.i(TAG, "🧪 Running JNI smoke test for ${modelInfo.name} (${modelInfo.version})")
-        val metadata = llmRuntime.getModelInfo()
-        Log.i(
-            TAG,
-            "JNI metadata snapshot: name=${metadata.name}, version=${metadata.version}, available=${metadata.isAvailable}, loaded=${metadata.isLoaded}"
-        )
-
-        ensureModelWarm("jni_smoke", null)
-
-        val smokePrompt = """
-            Return one JSON object with keys storeName, description, redeemCode, expiryDate, storeNameSource, storeNameEvidence, needsAttention.
-            Copy wording from the coupon text, never output null, and use the literal string "unknown" only if the value is truly missing. Keep storeNameEvidence as an array of up to three short snippets drawn from the text.
-        """.trimIndent()
-
-        val smokeOcr = """
-            Coupon Smoke Test: DemoMart promises ₹250 cashback on orders above ₹1,000. Use code DEMO250 before 25 Dec 2025.
-        """.trimIndent()
-
-        val response = withTimeoutOrNull(15_000L) {
-            llmRuntime.runTextInference(smokeOcr, smokePrompt)
-        }
-
-        if (response == null) {
-            Log.w(TAG, "JNI smoke test produced no response within timeout")
-        } else {
-            runCatching { JSONObject(response) }
-                .onSuccess { json ->
-                    val keys = mutableListOf<String>()
-                    json.keys().forEachRemaining { keys += it }
-                    Log.i(
-                        TAG,
-                        "JNI smoke test JSON keys=${keys.sorted()} preview=${response.take(160)}"
-                    )
-                }
-                .onFailure { error ->
-                    Log.w(
-                        TAG,
-                        "JNI smoke test response was not valid JSON: ${error.message}. payload=${response.take(160)}"
-                    )
-                }
-        }
-
-        if (!modelPinned) {
-            runCatching { llmRuntime.releaseModel() }
-                .onFailure { error -> Log.w(TAG, "Smoke test cleanup failed", error) }
-        }
     }
 
     private suspend fun runLlmInferenceWithRetry(
