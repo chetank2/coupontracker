@@ -40,8 +40,13 @@ fun BrandButton(
     tier: BrandButtonTier = BrandButtonTier.Primary,
     enabled: Boolean = true,
     leadingIcon: ImageVector? = null,
+    compact: Boolean = false,
 ) {
-    val padding = PaddingValues(horizontal = 20.dp, vertical = 14.dp)
+    val padding = if (compact) {
+        PaddingValues(horizontal = 14.dp, vertical = 10.dp)
+    } else {
+        PaddingValues(horizontal = 20.dp, vertical = 14.dp)
+    }
     val colors = MaterialTheme.colorScheme
     when (tier) {
         BrandButtonTier.Primary -> Button(

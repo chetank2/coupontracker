@@ -501,25 +501,23 @@ private fun CouponActionButtons(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
         ) {
-            Button(
+            BrandButton(
+                text = if (coupon.status.equals("Used", ignoreCase = true)) "Used again" else "Mark used",
                 onClick = onTrackUsageClick,
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null)
-                Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                Text(if (coupon.status.equals("Used", ignoreCase = true)) "Used again" else "Mark used")
-            }
+                modifier = Modifier.weight(1f),
+                tier = BrandButtonTier.Primary,
+                leadingIcon = Icons.Default.CheckCircle,
+            )
 
             Box(modifier = Modifier.weight(1f)) {
-                Button(
+                BrandButton(
+                    text = if (coupon.reminderLeadTimeMinutes != null) "Reminder" else "Remind me",
                     onClick = { reminderMenuExpanded = true },
                     enabled = coupon.expiryDate != null,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Icon(Icons.Default.Notifications, contentDescription = null)
-                    Spacer(modifier = Modifier.width(BrandSpacing.Small))
-                    Text(if (coupon.reminderLeadTimeMinutes != null) "Reminder" else "Remind me")
-                }
+                    modifier = Modifier.fillMaxWidth(),
+                    tier = BrandButtonTier.Secondary,
+                    leadingIcon = Icons.Default.Notifications,
+                )
 
                 DropdownMenu(
                     expanded = reminderMenuExpanded,
@@ -661,7 +659,8 @@ private fun CleanupStatusCard(
                     text = "Clean",
                     onClick = onCleanCoupon,
                     tier = BrandButtonTier.Secondary,
-                    leadingIcon = Icons.Default.AutoFixHigh
+                    leadingIcon = Icons.Default.AutoFixHigh,
+                    compact = true
                 )
             }
         }
