@@ -1152,6 +1152,131 @@ class LocalLlmOcrService(
             )
         }
     }
+
+    suspend fun processCouponOcrTextTyped(
+        rawOcrText: String,
+        captureTimestamp: Date? = null,
+        progressCallback: ((LlmProgressUpdate) -> Unit)? = null
+    ): ExtractResult = coroutineScope {
+        val startTime = System.currentTimeMillis()
+        val normalizedInput = rawOcrText.trim()
+        if (normalizedInput.isBlank()) {
+            return@coroutineScope ExtractResult.Failed(
+                stage = ExtractionStage.LLM,
+                error = IllegalArgumentException("OCR text is blank")
+            )
+        }
+
+        try {
+            if (!isServiceAvailable()) {
+                notifyProgress(
+                    stage = LlmProgressStage.FAILED,
+                    percent = 100,
+                    message = "AI model missing – download required",
+                    progressCallback = progressCallback
+                )
+                return@coroutineScope ExtractResult.Failed(
+                    stage = ExtractionStage.LLM,
+                    error = IllegalStateException("LLM model not available on device")
+                )
+            }
+
+            notifyProgress(
+                stage = LlmProgressStage.PROMPTING,
+                percent = 45,
+                message = "Asking the AI to structure the coupon…",
+                progressCallback = progressCallback
+            )
+
+            val promptResult = promptBuilder.build(normalizedInput, emptyList())
+            val normalizedOcr = promptResult.processedOcr.normalizedText.ifBlank { normalizedInput }
+            val extractionContext = ExtractionContext(
+                imageUri = "inline://cleanup",
+                ocrText = normalizedOcr,
+                captureTimestamp = captureTimestamp
+            )
+            val structuredCandidatesDeferred = async(Dispatchers.Default) {
+                structuredFieldExtractor.detectFieldsStructured(extractionContext)
+            }
+
+            notifyProgress(
+                stage = LlmProgressStage.INFERENCE,
+                percent = 65,
+                message = "Running on-device AI…",
+                progressCallback = progressCallback
+            )
+
+            val llmOutcome = runLlmInferenceWithRetry(normalizedOcr, promptResult.prompt, progressCallback)
+            val llmResponse = llmOutcome.response
+                ?: return@coroutineScope ExtractResult.Failed(
+                    stage = ExtractionStage.LLM,
+                    error = IllegalStateException("LLM inference returned no response")
+                )
+
+            notifyProgress(
+                stage = LlmProgressStage.PARSING,
+                percent = 80,
+                message = "Interpreting AI response…",
+                progressCallback = progressCallback
+            )
+
+            val trimmedResponse = llmResponse.trimStart()
+            if (!trimmedResponse.startsWith("{")) {
+                return@coroutineScope ExtractResult.Failed(
+                    stage = ExtractionStage.LLM,
+                    error = IllegalStateException("LLM response not JSON (missing opening brace)")
+                )
+            }
+
+            val structuredCandidates = runCatching { structuredCandidatesDeferred.await() }
+                .onFailure { error -> Log.w(TAG, "Structured extraction failed: ${error.message}", error) }
+                .getOrElse { emptyMap() }
+            val parsedResult = parseWithOptionalRetry(
+                initialOutcome = llmOutcome,
+                normalizedOcr = normalizedOcr,
+                rawOcrText = normalizedInput,
+                prompt = promptResult.prompt,
+                captureTimestamp = captureTimestamp,
+                structuredCandidates = structuredCandidates,
+                allowTokenExpansion = true,
+                progressCallback = progressCallback
+            )
+            val couponInfo = parsedResult.couponInfo
+
+            if (MockLlmResponseDetector.isMockResponse(couponInfo)) {
+                return@coroutineScope ExtractResult.Failed(
+                    stage = ExtractionStage.LLM,
+                    error = IllegalStateException("Mock LLM response detected (placeholder runtime output)")
+                )
+            }
+
+            notifyProgress(
+                stage = LlmProgressStage.VALIDATING,
+                percent = 90,
+                message = "Validating coupon fields…",
+                progressCallback = progressCallback
+            )
+
+            val qualityScore = calculateQualityScore(couponInfo)
+            val signals = ExtractionSignals(
+                qualityScore = qualityScore,
+                fieldConfidences = calculateFieldConfidences(couponInfo),
+                processingTimeMs = System.currentTimeMillis() - startTime,
+                memoryUsageMB = parsedResult.outcome.memoryUsageMb.toFloat(),
+                stage = ExtractionStage.LLM,
+                nativeAvailable = llmRuntime.isModelAvailable(),
+                modelVersion = SUPPORTED_MODEL_VERSION
+            )
+
+            when {
+                qualityScore >= 70 -> ExtractResult.Good(couponInfo, signals)
+                else -> ExtractResult.LowQuality(couponInfo, determineQualityReason(couponInfo), signals)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Text cleanup failed: ${e.message}", e)
+            ExtractResult.Failed(ExtractionStage.LLM, e)
+        }
+    }
     
     /**
      * Process coupon image using local LLM

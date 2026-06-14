@@ -16,6 +16,7 @@ import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.model.ModelCatalog
+import com.example.coupontracker.ocr.OcrEngine
 import com.example.coupontracker.util.CouponFixContext
 import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.util.CouponPostProcessor
@@ -34,7 +35,8 @@ class CouponCleanupWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
     private val couponRepository: CouponRepository,
-    private val localLlmOcrService: LocalLlmOcrService
+    private val localLlmOcrService: LocalLlmOcrService,
+    private val ocrEngine: OcrEngine
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
@@ -53,17 +55,16 @@ class CouponCleanupWorker @AssistedInject constructor(
         )
 
         return try {
-            val bitmap = decodeBitmap(coupon.imageUri)
-            if (bitmap == null) {
-                markFailed(couponId, "Saved screenshot is unavailable")
+            val ocrText = coupon.rawOcrText?.takeIf { it.isNotBlank() }
+                ?: extractOcrText(coupon.imageUri)
+            if (ocrText.isNullOrBlank()) {
+                markFailed(couponId, "Saved OCR text is unavailable")
                 return Result.success()
             }
 
             val result = withTimeoutOrNull(CLEANUP_TIMEOUT_MS) {
-                localLlmOcrService.processCouponImageTyped(bitmap)
+                localLlmOcrService.processCouponOcrTextTyped(ocrText)
             }
-
-            bitmap.recycle()
 
             when (result) {
                 is ExtractResult.Good -> {
@@ -102,6 +103,17 @@ class CouponCleanupWorker @AssistedInject constructor(
                 BitmapFactory.decodeStream(input)
             }
         }.getOrNull()
+    }
+
+    private suspend fun extractOcrText(imageUri: String?): String? {
+        val bitmap = decodeBitmap(imageUri) ?: return null
+        return try {
+            withContext(Dispatchers.IO) {
+                ocrEngine.recognize(bitmap).takeIf { it.isNotBlank() }
+            }
+        } finally {
+            bitmap.recycle()
+        }
     }
 
     private suspend fun markFailed(couponId: Long, message: String) {
