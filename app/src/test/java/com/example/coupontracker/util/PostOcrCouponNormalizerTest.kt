@@ -49,4 +49,24 @@ class PostOcrCouponNormalizerTest {
         assertEquals("Get Extra 20% off", result.description)
         assertFalse(result.description.orEmpty().contains("0.0"))
     }
+
+    @Test
+    fun normalizerCorrectsMisreadRupeeSymbolForBeardo() {
+        val rawOcr = """
+            Beardo
+            Extra 20% off on bank cards
+            Z499 on Beardo
+            Use code BEARDO499
+        """.trimIndent()
+
+        val result = PostOcrCouponNormalizer.normalize(
+            currentDescription = rawOcr,
+            ocrText = rawOcr,
+            storeName = "Beardo",
+            redeemCode = "BEARDO499",
+        )
+
+        assertEquals("₹499 on Beardo", result.description)
+        assertFalse(result.description.orEmpty().contains("20%"))
+    }
 }

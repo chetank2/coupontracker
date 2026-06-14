@@ -57,6 +57,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import java.io.InputStream
 import java.text.SimpleDateFormat
@@ -100,7 +101,8 @@ class ScannerViewModel @Inject constructor(
     companion object {
         private const val TAG = "ScannerViewModel"
         private const val STRATEGY_SURFACE_SINGLE = "single_capture"
-        private const val ENABLE_INLINE_QWEN_VALIDATION = false
+        private const val OCR_CONFIDENCE_ACCEPT_WITHOUT_QWEN = 0.85f
+        private const val INLINE_QWEN_TIMEOUT_MS = 45_000L
 
         @VisibleForTesting
         internal fun parseExpiryDate(
@@ -606,10 +608,15 @@ class ScannerViewModel @Inject constructor(
                     val processingTime = System.currentTimeMillis() - startTime
                     
                     if (extractionResult.success && extractionResult.confidence > 0.4f) {
-                        Log.d(TAG, "OCR_FIRST: Universal extraction successful (confidence: ${extractionResult.confidence}); using OCR result")
+                        val shouldValidateWithQwen = extractionResult.confidence < OCR_CONFIDENCE_ACCEPT_WITHOUT_QWEN
+                        Log.d(
+                            TAG,
+                            "OCR_FIRST: Universal extraction successful (confidence: ${extractionResult.confidence}); " +
+                                if (shouldValidateWithQwen) "validating with Qwen" else "using high-confidence OCR result"
+                        )
 
-                        val llmResult = if (ENABLE_INLINE_QWEN_VALIDATION) {
-                            Log.d(TAG, "OCR_FIRST: Running optional inline Qwen validation")
+                        val llmResult = if (shouldValidateWithQwen) {
+                            Log.d(TAG, "OCR_FIRST: Running inline Qwen validation")
                             emitLlmProgress(
                                 LlmProgressUpdate(
                                     stage = LlmProgressStage.PROMPTING,
@@ -619,15 +626,20 @@ class ScannerViewModel @Inject constructor(
                             )
 
                             try {
-                                localLlmOcrService.processCouponImageTyped(bitmap) { update ->
-                                    emitLlmProgress(update)
+                                withTimeoutOrNull(INLINE_QWEN_TIMEOUT_MS) {
+                                    localLlmOcrService.processCouponImageTyped(bitmap) { update ->
+                                        emitLlmProgress(update)
+                                    }
+                                }.also { result ->
+                                    if (result == null) {
+                                        Log.w(TAG, "OCR_FIRST: Qwen validation timed out after ${INLINE_QWEN_TIMEOUT_MS}ms; using OCR result")
+                                    }
                                 }
                             } catch (e: Exception) {
                                 Log.w(TAG, "OCR_FIRST: Qwen validation failed; using OCR result", e)
                                 null
                             }
                         } else {
-                            Log.d(TAG, "OCR_FIRST: Inline Qwen validation disabled for fast scan completion")
                             null
                         }
 

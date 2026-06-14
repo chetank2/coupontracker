@@ -73,8 +73,8 @@ object PostOcrCouponNormalizer {
         val cleanedLines = cleanLines(ocrText.orEmpty(), storeName, redeemCode)
         val current = cleanDescriptionLines(currentDescription, storeName, redeemCode)
 
-        val currentOffer = current.firstOrNull(::isOfferLine)
-        val extractedOffer = cleanedLines.firstOrNull(::isOfferLine)
+        val currentOffer = current.bestOfferLine(storeName)
+        val extractedOffer = cleanedLines.bestOfferLine(storeName)
             ?: textExtractor.extractDescription(cleanedLines.joinToString("\n"))
                 ?.takeIf { isAcceptableDescription(it, storeName, redeemCode) }
 
@@ -185,11 +185,44 @@ object PostOcrCouponNormalizer {
         return true
     }
 
+    private fun List<String>.bestOfferLine(storeName: String?): String? {
+        return asSequence()
+            .filter(::isOfferLine)
+            .mapIndexed { index, line -> IndexedValue(index, line) }
+            .maxWithOrNull(
+                compareBy<IndexedValue<String>> { scoreOfferLine(it.value, storeName) }
+                    .thenByDescending { -it.index }
+            )
+            ?.value
+    }
+
+    private fun scoreOfferLine(line: String, storeName: String?): Int {
+        val normalized = line.lowercase(Locale.ROOT)
+        var score = 0
+        if (normalized.contains("₹") || normalized.contains("rs")) score += 1
+        if (Regex("""\d{1,3}\s*%""").containsMatchIn(normalized)) score += 1
+        if (normalized.contains("flat") || normalized.contains("save") || normalized.contains("get")) score += 1
+        if (!storeName.isNullOrBlank() && normalized.contains(storeName.lowercase(Locale.ROOT))) score += 3
+        if (normalized.contains("extra") || normalized.contains("additional")) score -= 2
+        if (normalized.contains("bank") ||
+            normalized.contains("card") ||
+            normalized.contains("hdfc") ||
+            normalized.contains("axis") ||
+            normalized.contains("icici") ||
+            normalized.contains("sbi") ||
+            normalized.contains("payment")
+        ) {
+            score -= 2
+        }
+        return score
+    }
+
     private fun isTermsLine(line: String): Boolean = termsLineRegex.containsMatchIn(line)
 
     private fun compactLine(raw: String): String {
         return raw
             .replace(Regex("""^[•*\-]+\s*"""), "")
+            .replace(Regex("""(?i)(?<![A-Z0-9])z\s*(?=\d{2,}(?:[,\d]*)(?:\b|\s))"""), "₹")
             .replace(Regex("""(?i)\b(?:copy|copy code|tap to copy|apply code)\b"""), " ")
             .replace(Regex("""(?i)\bcashback\s*:?\s*0+(?:\.0+)?\b"""), " ")
             .replace(Regex("\\s+"), " ")

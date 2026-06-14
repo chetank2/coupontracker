@@ -170,6 +170,7 @@ class UniversalFieldDetector @Inject constructor(
     ): List<ExtractionCandidate> {
         
         val candidates = mutableListOf<ExtractionCandidate>()
+        val normalizedText = normalizeCurrencyGlyphs(text)
         
         // Extract all potential amounts from text
         val amountPatterns = listOf(
@@ -182,12 +183,12 @@ class UniversalFieldDetector @Inject constructor(
         )
         
         for (pattern in amountPatterns) {
-            pattern.findAll(text).forEach { match ->
+            pattern.findAll(normalizedText).forEach { match ->
                 val amountText = match.value
                 val parsedAmount = IndianCurrencyParser.parseAmount(amountText)
                 
                 if (parsedAmount != null && parsedAmount > 0) {
-                    val confidence = calculateAmountConfidence(match, text)
+                    val confidence = calculateAmountConfidence(match, normalizedText)
                     candidates.add(
                         ExtractionCandidate(
                             text = amountText,
@@ -378,18 +379,48 @@ class UniversalFieldDetector @Inject constructor(
         var confidence = 0.5f
         
         // Boost confidence based on context
-        val beforeText = fullText.substring(0, match.range.first).takeLast(20).lowercase()
-        val afterText = fullText.substring(match.range.last + 1).take(20).lowercase()
+        val beforeText = fullText.substring(0, match.range.first).takeLast(40).lowercase()
+        val afterText = fullText.substring(match.range.last + 1).take(40).lowercase()
+        val windowText = "$beforeText ${match.value.lowercase()} $afterText"
         
         if (beforeText.contains("get") || beforeText.contains("save") || beforeText.contains("flat")) {
             confidence += 0.2f
+        }
+
+        if (match.value.contains("₹") || match.value.contains("rs", ignoreCase = true)) {
+            confidence += 0.15f
         }
         
         if (afterText.contains("off") || afterText.contains("cashback") || afterText.contains("discount")) {
             confidence += 0.2f
         }
+
+        if (afterText.contains(" on ") || afterText.contains(" at ")) {
+            confidence += 0.1f
+        }
+
+        if (windowText.contains("extra") || windowText.contains("additional") || windowText.contains("upto") || windowText.contains("up to")) {
+            confidence -= 0.15f
+        }
+
+        if (windowText.contains("bank") ||
+            windowText.contains("card") ||
+            windowText.contains("hdfc") ||
+            windowText.contains("axis") ||
+            windowText.contains("icici") ||
+            windowText.contains("sbi") ||
+            windowText.contains("payment")
+        ) {
+            confidence -= 0.2f
+        }
         
-        return confidence.coerceAtMost(1.0f)
+        return confidence.coerceIn(0f, 1.0f)
+    }
+
+    private fun normalizeCurrencyGlyphs(text: String): String {
+        return text.replace(Regex("""(?i)(?<![A-Z0-9])z\s*(?=\d{2,}(?:[,\d]*)(?:\b|\s))""")) {
+            "₹"
+        }
     }
     
     private fun calculateStoreNameConfidence(storeName: String, fullText: String): Float {
