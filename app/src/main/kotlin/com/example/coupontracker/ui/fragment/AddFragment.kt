@@ -369,18 +369,20 @@ class AddFragment : Fragment() {
     private fun setupLlmOcrControls() {
         // Initialize secure preferences manager
         securePreferencesManager.initialize()
+        securePreferencesManager.setSelectedApiType(ApiType.MODEL_BASED)
         
         // Set initial state
         updateLlmUiState()
         
         // Setup switch listener
         binding.llmOcrSwitch.setOnCheckedChangeListener { _, isChecked ->
-            // Set ApiType based on switch state
-            val apiType = if (isChecked) ApiType.LOCAL_LLM else ApiType.MODEL_BASED
-            securePreferencesManager.setSelectedApiType(apiType)
-            updateLlmControlsVisibility(isChecked)
-            Log.d(TAG, "Local LLM OCR switch set to: $isChecked, ApiType: $apiType")
-            ExtractionLogBuffer.appendInfo(TAG, "Local LLM OCR switch set to $isChecked (apiType=$apiType)")
+            securePreferencesManager.setSelectedApiType(ApiType.MODEL_BASED)
+            if (isChecked) {
+                binding.llmOcrSwitch.isChecked = false
+            }
+            updateLlmControlsVisibility(false)
+            Log.d(TAG, "Local LLM capture switch ignored; Clean button owns Qwen cleanup")
+            ExtractionLogBuffer.appendInfo(TAG, "Qwen cleanup is available from the Clean action after OCR capture")
         }
         
         // Setup info button

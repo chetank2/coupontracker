@@ -556,45 +556,8 @@ class BatchScannerViewModel @Inject constructor(
         allowOcrFallback: Boolean = true,
         allowLegacyFallback: Boolean = true
     ): Coupon {
-        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            val llmResult = localLlmOcrService.processCouponImageTyped(bitmap)
-            
-            when (llmResult) {
-                is com.example.coupontracker.util.ExtractResult.Good -> {
-                    buildCouponFromLlmResult(
-                        llmResult.info,
-                        uri,
-                        llmResult.signals.fieldConfidences
-                    )
-                }
-                else -> {
-                    if (allowOcrFallback) {
-                        // First fallback: Try OCR (but don't allow it to call back to LLM)
-                        Log.d(TAG, "LLM_FIRST failed, falling back to OCR_FIRST (terminal)")
-                        processWithOcrFirstPath(
-                            uri = uri,
-                            bitmap = bitmap,
-                            allowLlmFallback = false,
-                            allowLegacyFallback = allowLegacyFallback
-                        )
-                    } else {
-                        // Terminal fallback: Use LEGACY two-stage detection if available
-                        Log.d(TAG, "LLM_FIRST failed with no OCR fallback allowed, using LEGACY")
-                        if (allowLegacyFallback) {
-                            logStrategyExecution(
-                                requested = com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST,
-                                executed = "legacy",
-                                reason = "llm_terminal_failure"
-                            )
-                            processWithLegacyPath(uri, bitmap)
-                        } else {
-                            Log.w(TAG, "LLM_FIRST fallback to LEGACY disabled, returning placeholder coupon")
-                            buildPlaceholderCoupon(uri)
-                        }
-                    }
-                }
-            }
-        }
+        Log.d(TAG, "LLM_FIRST requested for batch capture; using OCR_FIRST because cleanup is manual")
+        return processWithOcrFirstPath(uri, bitmap, allowLlmFallback = false, allowLegacyFallback = false)
     }
     
     /**
@@ -622,57 +585,13 @@ class BatchScannerViewModel @Inject constructor(
                     if (extractionResult.success) {
                         extractionResult.coupon.copy(imageUri = persistUri(uri))
                     } else {
-                        if (allowLlmFallback) {
-                            // First fallback: Try LLM (but don't allow it to call back to OCR)
-                            Log.d(TAG, "OCR_FIRST low confidence, falling back to LLM_FIRST (terminal)")
-                            processWithLlmFirstPath(
-                                uri = uri,
-                                bitmap = bitmap,
-                                allowOcrFallback = false,
-                                allowLegacyFallback = allowLegacyFallback
-                            )
-                        } else {
-                            // Terminal fallback: Use LEGACY two-stage detection
-                            Log.d(TAG, "OCR_FIRST failed with no LLM fallback allowed, using LEGACY")
-                            if (allowLegacyFallback) {
-                                logStrategyExecution(
-                                    requested = com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST,
-                                    executed = "legacy",
-                                    reason = "ocr_low_confidence"
-                                )
-                                processWithLegacyPath(uri, bitmap)
-                            } else {
-                                Log.w(TAG, "OCR_FIRST fallback to LEGACY disabled, returning placeholder coupon")
-                                buildPlaceholderCoupon(uri)
-                            }
-                        }
+                        Log.w(TAG, "OCR_FIRST low confidence; returning OCR placeholder for manual cleanup")
+                        buildPlaceholderCoupon(uri)
                     }
                 }
                 is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Error -> {
-                    if (allowLlmFallback) {
-                        // First fallback: Try LLM (but don't allow it to call back to OCR)
-                        Log.d(TAG, "OCR_FIRST error, falling back to LLM_FIRST (terminal)")
-                        processWithLlmFirstPath(
-                            uri = uri,
-                            bitmap = bitmap,
-                            allowOcrFallback = false,
-                            allowLegacyFallback = allowLegacyFallback
-                        )
-                    } else {
-                        // Terminal fallback: Use LEGACY two-stage detection
-                        Log.d(TAG, "OCR_FIRST failed with no LLM fallback allowed, using LEGACY")
-                        if (allowLegacyFallback) {
-                            logStrategyExecution(
-                                requested = com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST,
-                                executed = "legacy",
-                                reason = "ocr_exception"
-                            )
-                            processWithLegacyPath(uri, bitmap)
-                        } else {
-                            Log.w(TAG, "OCR_FIRST fallback to LEGACY disabled, returning placeholder coupon")
-                            buildPlaceholderCoupon(uri)
-                        }
-                    }
+                    Log.w(TAG, "OCR_FIRST error; returning placeholder for manual cleanup")
+                    buildPlaceholderCoupon(uri)
                 }
             }
         }
@@ -682,60 +601,8 @@ class BatchScannerViewModel @Inject constructor(
      * Process image using HYBRID strategy
      */
     private suspend fun processWithHybridPath(uri: Uri, bitmap: android.graphics.Bitmap): Coupon {
-        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            // Launch both in parallel
-            val (llmResult, ocrResult) = coroutineScope {
-                val llmDeferred = async {
-                    try { localLlmOcrService.processCouponImageTyped(bitmap) } catch (e: Exception) { null }
-                }
-                val ocrDeferred = async(kotlinx.coroutines.Dispatchers.IO) {
-                    try {
-                        val ocr = multiEngineOCR.processImage(bitmap)
-                        when (ocr) {
-                            is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success -> {
-                                val text = ocr.text.ifBlank {
-                                    ocr.extractedInfo.values.joinToString(" ")
-                                }
-                                universalExtractionService.extractCoupon(bitmap, text, com.example.coupontracker.universal.ExtractionContext())
-                            }
-                            else -> null
-                        }
-                    } catch (e: Exception) { null }
-                }
-                Pair(llmDeferred.await(), ocrDeferred.await())
-            }
-            
-            // Fuse results with real per-field confidence comparison
-            when {
-                llmResult is com.example.coupontracker.util.ExtractResult.Good && ocrResult != null && ocrResult.success -> {
-                    // Both successful - perform REAL FUSION (not just LLM)
-                    Log.d(TAG, "HYBRID: Both LLM and OCR successful, performing per-field fusion")
-                    fuseLlmAndOcrResults(llmResult, ocrResult, uri)
-                }
-                llmResult is com.example.coupontracker.util.ExtractResult.Good -> {
-                    Log.d(TAG, "HYBRID: Only LLM successful")
-                    buildCouponFromLlmResult(
-                        llmResult.info,
-                        uri,
-                        llmResult.signals.fieldConfidences
-                    )
-                }
-                ocrResult != null && ocrResult.success -> {
-                    Log.d(TAG, "HYBRID: Only OCR successful")
-                    ocrResult.coupon.copy(imageUri = persistUri(uri))
-                }
-                else -> {
-                    // Both failed - use LEGACY
-                    Log.d(TAG, "HYBRID: Both failed, falling back to LEGACY")
-                    logStrategyExecution(
-                        requested = com.example.coupontracker.util.ExtractionStrategy.HYBRID,
-                        executed = "legacy",
-                        reason = "hybrid_no_success"
-                    )
-                    processWithLegacyPath(uri, bitmap)
-                }
-            }
-        }
+        Log.d(TAG, "HYBRID requested for batch capture; using OCR_FIRST because cleanup is manual")
+        return processWithOcrFirstPath(uri, bitmap, allowLlmFallback = false, allowLegacyFallback = false)
     }
 
     private suspend fun logStrategyExecution(
@@ -883,78 +750,32 @@ class BatchScannerViewModel @Inject constructor(
             extractedInfo["minicpmDetectionStatus"] = instance.status.name
             
             try {
-                // Step 1: Try LLM extraction on the cropped coupon
-                Log.d(TAG, "LEGACY: Extracting fields from coupon crop using LLM")
-                finalStage = "LLM"
-                
-                val llmResult = localLlmOcrService.processCouponImageTyped(instance.cropBitmap)
-                
-                when (llmResult) {
-                    is com.example.coupontracker.util.ExtractResult.Good -> {
-                        // LLM succeeded - map fields
-                        extractedInfo.putAll(mapCouponInfoToFields(llmResult.info))
-                        Log.d(TAG, "LEGACY: LLM extraction successful (quality: ${llmResult.signals.qualityScore})")
-                    }
-                    
-                    is com.example.coupontracker.util.ExtractResult.LowQuality -> {
-                        // LLM low quality - use it but try OCR fallback
-                        extractedInfo.putAll(mapCouponInfoToFields(llmResult.info))
-                        
-                        Log.w(TAG, "LEGACY: LLM low quality (${llmResult.reason}), trying OCR fallback")
-                        finalStage = "LLM+OCR_FALLBACK"
-                        
-                        // OCR fallback on the crop
-                        val ocrResult = multiEngineOCR.processImage(instance.cropBitmap)
-                        when (ocrResult) {
-                            is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success -> {
-                                val ocrText = ocrResult.text.ifBlank {
-                                    ocrResult.extractedInfo.values.joinToString(" ")
-                                }
-                                val universalResult = universalExtractionService.extractCoupon(
-                                    instance.cropBitmap, ocrText, com.example.coupontracker.universal.ExtractionContext()
-                                )
-                                if (universalResult.success) {
-                                    // Merge OCR fields where LLM was weak
-                                    mergeValidatedFields(extractedInfo, mapCouponToFields(universalResult.coupon))
-                                }
-                            }
-                            else -> {
-                                Log.w(TAG, "LEGACY: OCR fallback also failed")
-                            }
+                Log.d(TAG, "LEGACY: Extracting fields from coupon crop using OCR only")
+                finalStage = "OCR_ONLY"
+
+                val ocrResult = multiEngineOCR.processImage(instance.cropBitmap)
+                when (ocrResult) {
+                    is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success -> {
+                        val ocrText = ocrResult.text.ifBlank {
+                            ocrResult.extractedInfo.values.joinToString(" ")
+                        }
+                        val universalResult = universalExtractionService.extractCoupon(
+                            instance.cropBitmap,
+                            ocrText,
+                            com.example.coupontracker.universal.ExtractionContext()
+                        )
+                        if (universalResult.success) {
+                            extractedInfo.putAll(mapCouponToFields(universalResult.coupon))
+                        } else {
+                            extractedInfo["storeName"] = com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
+                            extractedInfo["description"] = ocrText.ifBlank { "Extraction failed - please edit manually" }
                         }
                     }
-                    
-                    is com.example.coupontracker.util.ExtractResult.Failed -> {
-                        // LLM failed completely - use OCR only
-                        Log.e(TAG, "LEGACY: LLM failed (${llmResult.error.message}), using OCR only")
-                        finalStage = "OCR_ONLY"
-                        
-                        val ocrResult = multiEngineOCR.processImage(instance.cropBitmap)
-                        when (ocrResult) {
-                            is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success -> {
-                                val ocrText = ocrResult.text.ifBlank {
-                                    ocrResult.extractedInfo.values.joinToString(" ")
-                                }
-                                val universalResult = universalExtractionService.extractCoupon(
-                                    instance.cropBitmap, ocrText, com.example.coupontracker.universal.ExtractionContext()
-                                )
-                                if (universalResult.success) {
-                                    extractedInfo.putAll(mapCouponToFields(universalResult.coupon))
-                                } else {
-                                    // Both LLM and OCR failed - return minimal data
-                                    extractedInfo["storeName"] = com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
-                                    extractedInfo["description"] = "Extraction failed - please edit manually"
-                                }
-                            }
-                            else -> {
-                                // Both LLM and OCR failed
-                                extractedInfo["storeName"] = com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
-                                extractedInfo["description"] = "Extraction failed - please edit manually"
-                            }
-                        }
+                    else -> {
+                        extractedInfo["storeName"] = com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
+                        extractedInfo["description"] = "Extraction failed - please edit manually"
                     }
                 }
-                
             } catch (e: Exception) {
                 Log.e(TAG, "LEGACY: Field extraction failed", e)
                 finalStage = "ERROR"
@@ -1249,36 +1070,11 @@ class BatchScannerViewModel @Inject constructor(
         bitmap: android.graphics.Bitmap,
         strategy: com.example.coupontracker.util.ExtractionStrategy
     ): Coupon {
-        return when (strategy) {
-            com.example.coupontracker.util.ExtractionStrategy.LEGACY -> {
-                logStrategyExecution(
-                    requested = strategy,
-                    executed = strategy.name.lowercase(Locale.getDefault())
-                )
-                processWithLegacyPath(uri, bitmap)
-            }
-            com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST -> {
-                logStrategyExecution(
-                    requested = strategy,
-                    executed = strategy.name.lowercase(Locale.getDefault())
-                )
-                processWithLlmFirstPath(uri, bitmap)
-            }
-            com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST -> {
-                logStrategyExecution(
-                    requested = strategy,
-                    executed = strategy.name.lowercase(Locale.getDefault())
-                )
-                processWithOcrFirstPath(uri, bitmap)
-            }
-            com.example.coupontracker.util.ExtractionStrategy.HYBRID -> {
-                logStrategyExecution(
-                    requested = strategy,
-                    executed = strategy.name.lowercase(Locale.getDefault())
-                )
-                processWithHybridPath(uri, bitmap)
-            }
-        }
+        logStrategyExecution(
+            requested = strategy,
+            executed = "ocr_first_manual_clean"
+        )
+        return processWithOcrFirstPath(uri, bitmap, allowLlmFallback = false, allowLegacyFallback = false)
     }
     
     /**
@@ -1290,27 +1086,7 @@ class BatchScannerViewModel @Inject constructor(
         strategy: com.example.coupontracker.util.ExtractionStrategy,
         uri: Uri
     ): Coupon {
-        // If region already has OCR text, use it directly with LLM
-        if (region.ocrText.isNotBlank() && strategy in listOf(
-            com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST,
-            com.example.coupontracker.util.ExtractionStrategy.HYBRID
-        )) {
-            try {
-                Log.d(TAG, "Using pre-extracted OCR text (${region.ocrText.length} chars) for LLM extraction")
-                
-                // Use LLM with pre-extracted OCR text
-                val llmResult = localLlmOcrService.processCouponImageTyped(regionBitmap)
-                
-                if (llmResult is com.example.coupontracker.util.ExtractResult.Good) {
-                    return convertExtractResultToCoupon(llmResult, uri)
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "LLM extraction with pre-extracted OCR failed: ${e.message}")
-            }
-        }
-        
-        // Fallback: extract using standard strategy path
-        return extractSingleCoupon(uri, regionBitmap, strategy)
+        return extractSingleCoupon(uri, regionBitmap, com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST)
     }
 
     /**

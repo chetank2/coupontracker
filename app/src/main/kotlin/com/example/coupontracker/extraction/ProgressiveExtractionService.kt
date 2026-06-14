@@ -24,16 +24,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Progressive Extraction Service - Multi-pass extraction pipeline.
- * Qwen FIRST STRATEGY: Uses the on-device Qwen2.5 text model as the primary method, patterns as fallback.
+ * Progressive Extraction Service - Multi-pass OCR/pattern extraction pipeline.
  *
- * NEW ORDER (October 2, 2025):
- * 1. Qwen2.5 Text LLM (PRIMARY - if available and high confidence, stop here)
- * 2. Structured Pattern Matching (fallback/supplement)
- * 3. Semantic Analysis (refinement)
- * 4. Learned Patterns (database)
- * 5. Heuristic Extraction (last resort)
- * 6. Conservative Defaults (minimal info)
+ * Capture must stay fast and deterministic:
+ * 1. Structured Pattern Matching
+ * 2. Semantic Analysis
+ * 3. Learned Patterns
+ * 4. Heuristic Extraction
+ * 5. Conservative Defaults
  * 
  * CRITICAL: Learning ALWAYS runs after extraction, regardless of which pass succeeded.
  * NEVER returns "Error processing coupon" - always returns meaningful data.
@@ -51,7 +49,7 @@ class ProgressiveExtractionService @Inject constructor(
     // V2: Validation components for multi-coupon extraction
     private val confidenceScorer = ConfidenceScorer()
     private val extractionValidator = ExtractionValidator(confidenceScorer)
-    private val llmPassEnabled = AtomicBoolean(true)
+    private val llmPassEnabled = AtomicBoolean(false)
     
     companion object {
         private const val TAG = "ProgressiveExtractionService"
@@ -110,7 +108,7 @@ class ProgressiveExtractionService @Inject constructor(
     
     /**
      * Extract coupon using progressive refinement pipeline
- * NEW: Qwen-first STRATEGY
+     * OCR-first strategy. Qwen cleanup is intentionally not run here.
      */
     suspend fun extractCoupon(
         androidContext: Context,
@@ -121,7 +119,7 @@ class ProgressiveExtractionService @Inject constructor(
         captureTimestamp: Date? = null  // FIXED: Accept timestamp as parameter
     ): ProgressiveExtractionResult = withContext(Dispatchers.Default) {
         
-        Log.d(TAG, "🚀 Starting Qwen-first extraction pipeline")
+        Log.d(TAG, "🚀 Starting OCR-first extraction pipeline")
         Log.d(TAG, "OCR text length: ${ocrText.length} characters")
         
         // FIXED: Use provided timestamp if available, otherwise try to extract from URI
@@ -155,56 +153,15 @@ class ProgressiveExtractionService @Inject constructor(
         
         val extractedFields = mutableMapOf<FieldType, FieldCandidate>()
         
-        // ====== PASS 1: Qwen2.5 text LLM (PRIMARY METHOD) ======
-        Log.d(TAG, "▶ Pass 1: Qwen2.5 text LLM (PRIMARY extraction method)")
         var miniCpmConfidence = 0f
-        var passesUsed = 1
+        var passesUsed = 0
         
-        if (llmService == null) {
-            Log.w(TAG, "⚠️  Qwen LLM NOT available - using pattern-based extraction")
-        } else if (!llmPassEnabled.get()) {
-            Log.w(TAG, "⚠️  Qwen warmup previously failed - skipping LLM-first pass")
-        } else {
-            try {
-                Log.d(TAG, "✅ Qwen2.5 LLM available - running primary text extraction")
-                val llmInfo = llmService.processCouponImage(image, effectiveCaptureTimestamp)
-
-                if (llmInfo != null) {
-                    // Convert ALL fields from Qwen (not just missing ones)
-                    val llmResults = convertCouponInfoToFieldCandidates(llmInfo, FieldType.values().toSet())
-                    mergeResults(extractedFields, llmResults, replaceIfBetter = true)
-
-                    miniCpmConfidence = calculateOverallConfidence(extractedFields)
-                    Log.d(TAG, "  Qwen extracted ${extractedFields.size} fields (confidence: $miniCpmConfidence)")
-                    logPassResults(1, extractedFields)
-
-                    // HIGH CONFIDENCE? We're done! 🎯
-                    if (miniCpmConfidence >= 0.85f && CRITICAL_FIELDS.all { it in extractedFields }) {
-                        Log.d(TAG, "✅ HIGH confidence from Qwen (${miniCpmConfidence}) - stopping here!")
-                        return@withContext finishExtraction(context, extractedFields, image, imageUri, passesUsed, "Qwen2.5 Text LLM")
-                    }
-
-                    // Medium confidence - continue to supplement with patterns
-                    Log.d(TAG, "  Medium confidence from Qwen - supplementing with pattern-based extraction")
-                } else {
-                    Log.w(TAG, "⚠️  Qwen returned null - falling back to patterns")
-                }
-
-            } catch (error: PassOneUnavailableException) {
-                llmPassEnabled.set(false)
-                Log.w(TAG, "⚠️  Disabling Pass 1 after warmup failure: ${error.message}")
-            } catch (error: Exception) {
-                Log.e(TAG, "❌ Qwen error: ${error.message} - falling back to patterns", error)
-            }
-        }
-        
-        // ====== PASS 2: Structured Pattern Matching (Fallback/Supplement) ======
-        Log.d(TAG, "▶ Pass 2: Structured pattern extraction (supplement)")
+        // ====== PASS 1: Structured Pattern Matching ======
+        Log.d(TAG, "▶ Pass 1: Structured pattern extraction")
         passesUsed++
         val structuredResults = structuredExtractor.detectFieldsStructured(context, minConfidence = 0.4f)
-        // Only merge if it improves confidence (don't replace good Qwen results)
         mergeResults(extractedFields, structuredResults, replaceIfBetter = false)
-        logPassResults(2, extractedFields)
+        logPassResults(1, extractedFields)
         
         // ====== PASS 3: Semantic Analysis (Refinement) ======
         val stillMissing = CRITICAL_FIELDS - extractedFields.keys

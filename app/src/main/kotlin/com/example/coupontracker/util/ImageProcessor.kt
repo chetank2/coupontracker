@@ -46,7 +46,7 @@ class ImageProcessor(
     private val securePreferencesManager by lazy { SecurePreferencesManager(context) }
     
     // Feature flag for progressive extraction
-    private val USE_PROGRESSIVE_EXTRACTION = true  // Set to true to use new pipeline
+    private val USE_PROGRESSIVE_EXTRACTION = false
 
     // SharedPreferences listener - we've simplified the OCR approach
     private val sharedPreferencesListener =
@@ -147,22 +147,11 @@ class ImageProcessor(
             
             // Get the selected API type from preferences
             val selectedApiType = securePreferencesManager.getSelectedApiType()
-            val llmModelDownloaded = securePreferencesManager.getLlmModelDownloaded()
             
             val result = when (selectedApiType) {
                 ApiType.LOCAL_LLM -> {
-                    if (llmModelDownloaded) {
-                        Log.d(TAG, "Using Local LLM OCR service")
-                        try {
-                            localLlmOcrService.processCouponImage(bitmap, captureTimestamp)
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Local LLM failed, falling back to Model-based OCR", e)
-                            fallbackToModelBasedOcr(bitmap, captureTimestamp, reason = "local_llm_exception")
-                        }
-                    } else {
-                        Log.w(TAG, "Local LLM selected but model not downloaded, falling back to Model-based OCR")
-                        fallbackToModelBasedOcr(bitmap, captureTimestamp, reason = "local_llm_not_downloaded")
-                    }
+                    Log.d(TAG, "Local LLM preference ignored during capture; using OCR-first manual-clean flow")
+                    fallbackToModelBasedOcr(bitmap, captureTimestamp, reason = "manual_clean_ocr_first")
                 }
                 ApiType.MODEL_BASED -> {
                     Log.d(TAG, "Using Model-based OCR service")
