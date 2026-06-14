@@ -115,6 +115,7 @@ fun CouponDetailScreen(
                     onTrackUsage = { viewModel.trackUsage() },
                     onSetReminderLeadTime = { minutes -> viewModel.setReminderLeadTime(minutes) },
                     onCancelReminder = { viewModel.cancelReminder() },
+                    onShareCoupon = { shareCoupon(context, it) },
                     context = context,
                     debugSnapshot = debugSnapshot,
                     isDebugBuild = isDebugBuild
@@ -139,6 +140,7 @@ private fun CouponDetailContent(
     onTrackUsage: () -> Unit,
     onSetReminderLeadTime: (Int) -> Unit,
     onCancelReminder: () -> Unit,
+    onShareCoupon: (com.example.coupontracker.data.model.Coupon) -> Unit,
     context: Context,
     debugSnapshot: ExtractionDebugSnapshot?,
     isDebugBuild: Boolean
@@ -368,6 +370,14 @@ private fun CouponDetailContent(
 
         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
+        CouponShareSection(
+            coupon = coupon,
+            context = context,
+            onShareCoupon = onShareCoupon,
+        )
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
         // Cashback amount - HIDDEN per user request
         // User: "Don't show the amount" - description field has full offer text
         /*
@@ -461,6 +471,76 @@ private fun com.example.coupontracker.data.model.Coupon.detailCardOfferSummary(
             normalizedDescription.contains("coupon", ignoreCase = true) -> "Saved coupon"
             else -> "Saved offer"
         }
+}
+
+@Composable
+private fun CouponShareSection(
+    coupon: com.example.coupontracker.data.model.Coupon,
+    context: Context,
+    onShareCoupon: (com.example.coupontracker.data.model.Coupon) -> Unit,
+) {
+    val shareText = remember(coupon) { coupon.toShareText() }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(BrandSpacing.Medium),
+            verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(BrandSpacing.Small))
+                Text(
+                    text = "Share coupon",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+            Text(
+                text = shareText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 5,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
+            ) {
+                Button(
+                    onClick = { onShareCoupon(coupon) },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null)
+                    Spacer(modifier = Modifier.width(BrandSpacing.Tiny))
+                    Text("Share")
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Coupon details", shareText))
+                        Toast.makeText(context, "Coupon details copied", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null)
+                    Spacer(modifier = Modifier.width(BrandSpacing.Tiny))
+                    Text("Copy")
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -995,24 +1075,33 @@ private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.C
 }
 
 private fun shareCoupon(context: Context, coupon: com.example.coupontracker.data.model.Coupon) {
-    val shareBody = buildString {
-        append("Store: ${coupon.storeName}\n")
-        if (coupon.description.isNotBlank()) append("Offer: ${coupon.description}\n")
-        coupon.redeemCode?.takeIf { it.isNotBlank() }?.let { append("Code: $it\n") }
-        coupon.expiryDate?.let { append("Expires: ${com.example.coupontracker.ui.components.DateFormatter.formatShort(it)}\n") }
-    }
+    val shareBody = coupon.toShareText()
 
     val shareIntent = Intent(Intent.ACTION_SEND).apply {
         putExtra(Intent.EXTRA_TEXT, shareBody)
         type = "text/plain"
     }
 
-    coupon.imageUri?.let { uriString ->
-        val uri = Uri.parse(uriString)
-        shareIntent.putExtra(Intent.EXTRA_STREAM, uri)
-        shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        shareIntent.type = "image/*"
-    }
-
     context.startActivity(Intent.createChooser(shareIntent, "Share coupon"))
+}
+
+private fun com.example.coupontracker.data.model.Coupon.toShareText(): String {
+    val displayDescription = DescriptionUtils.formatDisplayDescription(
+        description = description,
+        storeName = storeName,
+        redeemCode = redeemCode
+    )
+
+    return buildString {
+        append("Coupon from $storeName")
+        append("\n\n")
+        if (displayDescription.isNotBlank()) {
+            append("Offer: $displayDescription\n")
+        }
+        redeemCode?.takeIf { it.isNotBlank() }?.let { append("Code: $it\n") }
+        expiryDate?.let { append("Expires: ${DateFormatter.formatShort(it)}\n") }
+        if (!status.isNullOrBlank()) {
+            append("Status: $status\n")
+        }
+    }.trim()
 }
