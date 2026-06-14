@@ -26,13 +26,21 @@ object CouponPostProcessor {
         val refinedStore = resolveStoreName(coupon.storeName, ocrText)
         val refinedCode = resolveRedeemCode(coupon.redeemCode, ocrText)
         val refinedExpiry = resolveExpiry(coupon.expiryDate, ocrText, context.captureTimestamp)
-        val refinedDescription = resolveDescription(coupon.description, ocrText)
+        val normalized = PostOcrCouponNormalizer.normalize(
+            currentDescription = coupon.description,
+            ocrText = ocrText,
+            storeName = refinedStore,
+            redeemCode = refinedCode,
+        )
+        val refinedDescription = normalized.description
+            ?: resolveDescription(coupon.description, null)
 
         return coupon.copy(
             storeName = refinedStore,
             redeemCode = refinedCode,
             expiryDate = refinedExpiry,
-            description = refinedDescription
+            description = refinedDescription,
+            needsAttention = coupon.needsAttention || normalized.needsAttention,
         )
     }
 
@@ -91,15 +99,8 @@ object CouponPostProcessor {
                 return cleaned
             }
 
-            val fallback = LocalLlmOcrService.cleanDescription(ocrText)
-                .takeIf { it.isNotBlank() }
-                ?.let { it.take(240) }
-            if (!fallback.isNullOrBlank() && fallback !in descriptionPlaceholders) {
-                return fallback
-            }
         }
 
         return current.ifBlank { "Coupon offer" }
     }
 }
-
