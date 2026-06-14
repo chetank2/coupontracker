@@ -71,6 +71,12 @@ models/
 # Local backup files
 *.bak
 
+# Local audit artifacts
+/.claude/
+/coupontracker-*.png
+/test.md
+/test-1.md
+
 # Large files
 *.dylib
 *.so

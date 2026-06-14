@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -46,6 +47,7 @@ import com.example.coupontracker.ui.components.CouponCardState
 import com.example.coupontracker.ui.components.CouponCardVariant
 import com.example.coupontracker.ui.components.DateFormatter
 import com.example.coupontracker.ui.components.ExtractionDebugPanel
+import com.example.coupontracker.ui.components.GlassSurface
 import com.example.coupontracker.ui.components.StatusType
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.DetailViewModel
@@ -102,29 +104,33 @@ fun CouponDetailScreen(
             )
         }
     ) { paddingValues ->
-        Box(
+        GlassSurface(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(paddingValues),
+            shape = RectangleShape,
+            tint = MaterialTheme.colorScheme.background,
         ) {
-            coupon?.let { coupon ->
-                CouponDetailContent(
-                    coupon = coupon,
-                    showImagePreview = showImagePreview,
-                    onToggleImagePreview = { showImagePreview = it },
-                    onTrackUsage = { viewModel.trackUsage() },
-                    onSetReminderLeadTime = { minutes -> viewModel.setReminderLeadTime(minutes) },
-                    onCancelReminder = { viewModel.cancelReminder() },
-                    context = context,
-                    debugSnapshot = debugSnapshot,
-                    isDebugBuild = isDebugBuild
-                )
-            } ?: run {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator()
+            Box(modifier = Modifier.fillMaxSize()) {
+                coupon?.let { coupon ->
+                    CouponDetailContent(
+                        coupon = coupon,
+                        showImagePreview = showImagePreview,
+                        onToggleImagePreview = { showImagePreview = it },
+                        onTrackUsage = { viewModel.trackUsage() },
+                        onSetReminderLeadTime = { minutes -> viewModel.setReminderLeadTime(minutes) },
+                        onCancelReminder = { viewModel.cancelReminder() },
+                        context = context,
+                        debugSnapshot = debugSnapshot,
+                        isDebugBuild = isDebugBuild
+                    )
+                } ?: run {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
                 }
             }
         }

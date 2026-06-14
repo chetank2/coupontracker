@@ -16,8 +16,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -27,17 +25,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import androidx.compose.ui.layout.ContentScale
@@ -50,50 +41,6 @@ import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
 import java.text.SimpleDateFormat
 import java.util.*
-
-/**
- * Primary button with the brand style
- */
-@Composable
-fun PrimaryButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    loading: Boolean = false,
-    leadingIcon: ImageVector? = null
-) {
-    BrandButton(
-        text = if (loading) "Loading..." else text,
-        onClick = onClick,
-        modifier = modifier,
-        enabled = enabled && !loading,
-        tier = BrandButtonTier.Primary,
-        leadingIcon = leadingIcon,
-    )
-}
-
-/**
- * Secondary button with the brand style
- */
-@Composable
-fun SecondaryButton(
-    text: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    loading: Boolean = false,
-    leadingIcon: ImageVector? = null
-) {
-    BrandButton(
-        text = if (loading) "Loading..." else text,
-        onClick = onClick,
-        modifier = modifier,
-        enabled = enabled && !loading,
-        tier = BrandButtonTier.Secondary,
-        leadingIcon = leadingIcon,
-    )
-}
 
 /**
  * Outlined button with the brand style
@@ -212,135 +159,6 @@ fun BrandCard(
         colors = colors,
         content = content
     )
-}
-
-/**
- * Enhanced text field with brand styling and error handling
- */
-@Composable
-fun BrandTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    label: String? = null,
-    placeholder: String? = null,
-    leadingIcon: ImageVector? = null,
-    trailingIcon: ImageVector? = null,
-    onTrailingIconClick: (() -> Unit)? = null,
-    isError: Boolean = false,
-    errorMessage: String? = null,
-    keyboardType: KeyboardType = KeyboardType.Text,
-    imeAction: ImeAction = ImeAction.Done,
-    onImeAction: () -> Unit = {},
-    isPassword: Boolean = false,
-    enabled: Boolean = true,
-    readOnly: Boolean = false,
-    maxLines: Int = 1,
-    singleLine: Boolean = true
-) {
-    val focusManager = LocalFocusManager.current
-    val focusRequester = remember { FocusRequester() }
-    var passwordVisible by remember { mutableStateOf(false) }
-
-    Column(modifier = modifier) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester),
-            label = label?.let { { Text(text = it) } },
-            placeholder = placeholder?.let { { Text(text = it) } },
-            leadingIcon = leadingIcon?.let {
-                {
-                    Icon(
-                        imageVector = it,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            trailingIcon = when {
-                isPassword -> {
-                    {
-                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                            Icon(
-                                imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-                trailingIcon != null && onTrailingIconClick != null -> {
-                    {
-                        IconButton(onClick = onTrailingIconClick) {
-                            Icon(
-                                imageVector = trailingIcon,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-                isError -> {
-                    {
-                        Icon(
-                            imageVector = Icons.Default.Error,
-                            contentDescription = "Error",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-                else -> null
-            },
-            isError = isError,
-            keyboardOptions = KeyboardOptions(
-                keyboardType = keyboardType,
-                imeAction = imeAction
-            ),
-            keyboardActions = KeyboardActions(
-                onDone = {
-                    focusManager.clearFocus()
-                    onImeAction()
-                },
-                onNext = {
-                    onImeAction()
-                }
-            ),
-            visualTransformation = if (isPassword && !passwordVisible) {
-                PasswordVisualTransformation()
-            } else {
-                VisualTransformation.None
-            },
-            enabled = enabled,
-            readOnly = readOnly,
-            maxLines = maxLines,
-            singleLine = singleLine,
-            shape = BrandShapes.InputShape,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-                errorBorderColor = MaterialTheme.colorScheme.error,
-                focusedLabelColor = MaterialTheme.colorScheme.primary,
-                unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                errorLabelColor = MaterialTheme.colorScheme.error
-            )
-        )
-
-        AnimatedVisibility(
-            visible = isError && !errorMessage.isNullOrBlank(),
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically()
-        ) {
-            Text(
-                text = errorMessage ?: "",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(start = 16.dp, top = 4.dp)
-            )
-        }
-    }
 }
 
 /**

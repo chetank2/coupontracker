@@ -41,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -68,9 +69,11 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.ui.components.BrandTopBar
+import com.example.coupontracker.ui.components.GlassSurface
 import com.example.coupontracker.ui.components.PulsatingHighlight
 import com.example.coupontracker.ui.components.TooltipOverlay
 import com.example.coupontracker.ui.navigation.Screen
+import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.CaptureMode
 import com.example.coupontracker.ui.viewmodel.SmartCaptureViewModel
@@ -210,7 +213,24 @@ fun SmartCaptureScreen(
                 }
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) }
+        snackbarHost = {
+            SnackbarHost(snackbarHostState) { snackbarData ->
+                GlassSurface(
+                    modifier = Modifier
+                        .padding(BrandSpacing.Medium)
+                        .fillMaxWidth(),
+                    shape = BrandShapes.Large,
+                    tint = MaterialTheme.colorScheme.surface,
+                ) {
+                    Snackbar(
+                        snackbarData = snackbarData,
+                        containerColor = Color.Transparent,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        actionColor = MaterialTheme.colorScheme.primary,
+                    )
+                }
+            }
+        }
     ) { paddingValues ->
         Box(
             modifier = Modifier

@@ -49,8 +49,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.R
 import com.example.coupontracker.ui.components.DataSafetyDialog
-import com.example.coupontracker.ui.components.PrimaryButton
-import com.example.coupontracker.ui.components.SecondaryButton
+import com.example.coupontracker.ui.components.BrandButton
+import com.example.coupontracker.ui.components.BrandButtonTier
 import com.example.coupontracker.ui.components.TextBrandButton
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.BrandColors
@@ -110,9 +110,10 @@ private fun CouponOnboardingLayout(
         )
 
         if (currentPage < totalPages) {
-            PrimaryButton(
+            BrandButton(
                 text = stringResource(id = R.string.onboarding_next),
                 onClick = { onPageChange(currentPage + 1) },
+                tier = BrandButtonTier.Primary,
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -251,7 +252,7 @@ private fun ModelDownloadPage(
                 }
             }
 
-            PrimaryButton(
+            BrandButton(
                 text = if (modelState.isImporting) {
                     stringResource(id = R.string.onboarding_model_downloading_button)
                 } else {
@@ -259,6 +260,7 @@ private fun ModelDownloadPage(
                 },
                 onClick = onDownload,
                 enabled = !modelState.isImporting,
+                tier = BrandButtonTier.Primary,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -297,15 +299,17 @@ private fun GetStartedPage(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
         ) {
-            PrimaryButton(
+            BrandButton(
                 text = stringResource(id = R.string.onboarding_scan_camera),
                 onClick = onScan,
+                tier = BrandButtonTier.Primary,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            SecondaryButton(
+            BrandButton(
                 text = stringResource(id = R.string.onboarding_upload_screenshot),
                 onClick = onUpload,
+                tier = BrandButtonTier.Secondary,
                 modifier = Modifier.fillMaxWidth()
             )
 

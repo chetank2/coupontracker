@@ -2,21 +2,26 @@ package com.example.coupontracker.ui.screen
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.coupontracker.ui.components.BrandButton
+import com.example.coupontracker.ui.components.BrandButtonTier
+import com.example.coupontracker.ui.components.BrandTopBar
+import com.example.coupontracker.ui.theme.BrandShapes
+import com.example.coupontracker.ui.theme.BrandSpacing
+import com.example.coupontracker.ui.theme.BrandTypography
 import com.example.coupontracker.util.SecurePreferencesManager
 
 private const val MINICPM_LICENSE_URL = "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5"
@@ -41,114 +46,108 @@ fun LicenseGateScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp)
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        // Icon
-        Icon(
-            imageVector = Icons.Default.Info,
-            contentDescription = null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Title
-        Text(
-            text = "MiniCPM Model License",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // License Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
+        BrandTopBar(title = "Model access")
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = BrandSpacing.ContentEdge, vertical = BrandSpacing.Large),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "MiniCPM license",
+                style = BrandTypography.DisplayMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center
             )
+
+            Spacer(modifier = Modifier.height(BrandSpacing.Small))
+
+            Text(
+                text = "Complete the model provider steps once before downloading offline scanning files.",
+                style = BrandTypography.BodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Large))
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = BrandSpacing.ContentEdge),
+            shape = BrandShapes.Large,
+            border = BorderStroke(BrandSpacing.Hairline, MaterialTheme.colorScheme.outline),
+            color = MaterialTheme.colorScheme.surface
         ) {
             Column(
-                modifier = Modifier.padding(16.dp)
+                modifier = Modifier.padding(BrandSpacing.Medium),
+                verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
             ) {
                 Text(
-                    text = "Before downloading the MiniCPM-Llama3-V-2.5 model:",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    text = "Before downloading the MiniCPM-Llama3-V-2.5 model",
+                    style = BrandTypography.TitleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                
-                Spacer(modifier = Modifier.height(12.dp))
-                
+
                 Text(
                     text = "1. This model is free for commercial use",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = BrandTypography.BodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
+
                 Text(
                     text = "2. You must complete the official questionnaire",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = BrandTypography.BodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
+
                 Text(
                     text = "3. By proceeding, you agree to the model's license terms",
-                    style = MaterialTheme.typography.bodyMedium
+                    style = BrandTypography.BodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
-        
-        Spacer(modifier = Modifier.height(24.dp))
-        
-        // Questionnaire Button
-        OutlinedButton(
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+        BrandButton(
+            text = "Complete questionnaire",
             onClick = {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(QUESTIONNAIRE_URL))
                 context.startActivity(intent)
             },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                imageVector = Icons.Default.OpenInNew,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Complete Questionnaire")
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // License Link Button
-        OutlinedButton(
+            tier = BrandButtonTier.Secondary,
+            leadingIcon = Icons.Default.OpenInNew,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = BrandSpacing.ContentEdge)
+        )
+
+        BrandButton(
+            text = "View full license",
             onClick = {
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(MINICPM_LICENSE_URL))
                 context.startActivity(intent)
             },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                imageVector = Icons.Default.OpenInNew,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("View Full License")
-        }
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        // Checkboxes
+            tier = BrandButtonTier.Secondary,
+            leadingIcon = Icons.Default.OpenInNew,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = BrandSpacing.ContentEdge)
+        )
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Large))
+
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = BrandSpacing.ContentEdge),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(
@@ -158,14 +157,15 @@ fun LicenseGateScreen(
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "I have completed the official questionnaire",
-                style = MaterialTheme.typography.bodyMedium
+                style = BrandTypography.BodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
+
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = BrandSpacing.ContentEdge),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Checkbox(
@@ -175,38 +175,35 @@ fun LicenseGateScreen(
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = "I agree to the MiniCPM license terms",
-                style = MaterialTheme.typography.bodyMedium
+                style = BrandTypography.BodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        // Accept Button
-        Button(
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Large))
+
+        BrandButton(
+            text = "Accept and continue",
             onClick = {
                 securePreferencesManager.setMiniCpmLicenseAccepted(true)
                 onLicenseAccepted()
             },
             enabled = agreedToTerms && completedQuestionnaire,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(
-                imageVector = Icons.Default.Check,
-                contentDescription = null
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Accept & Continue")
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Disclaimer
+            tier = BrandButtonTier.Primary,
+            leadingIcon = Icons.Default.Check,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = BrandSpacing.ContentEdge)
+        )
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
         Text(
             text = "By accepting, you confirm that you have read and understood the MiniCPM license terms and completed the required questionnaire.",
-            style = MaterialTheme.typography.bodySmall,
+            style = BrandTypography.BodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(horizontal = BrandSpacing.ContentEdge)
         )
     }
 }
-

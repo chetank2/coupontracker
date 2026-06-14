@@ -67,12 +67,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.ui.components.BrandButton
+import com.example.coupontracker.ui.components.BrandButtonTier
 import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.components.CouponCardModel
 import com.example.coupontracker.ui.components.DateFormatter
 import com.example.coupontracker.ui.components.EmptyState
 import com.example.coupontracker.ui.components.FilterSortBottomSheet
-import com.example.coupontracker.ui.components.PrimaryButton
 import com.example.coupontracker.ui.components.SectionHeader
 import com.example.coupontracker.ui.components.SimplifiedCaptureBottomSheet
 import com.example.coupontracker.ui.components.WalletStack
@@ -374,7 +375,7 @@ fun HomeScreen(
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     modifier = Modifier.fillMaxWidth(0.7f)
                                 ) {
-                                    PrimaryButton(
+                                    BrandButton(
                                         text = if (isModelInstalled) "Add coupon" else "Set up offline scanning",
                                         onClick = {
                                             if (isModelInstalled) {
@@ -384,6 +385,7 @@ fun HomeScreen(
                                             }
                                         },
                                         leadingIcon = if (isModelInstalled) Icons.Default.Add else Icons.Default.CloudDownload,
+                                        tier = BrandButtonTier.Primary,
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .padding(top = BrandSpacing.Medium)
@@ -606,10 +608,11 @@ private fun ModelDownloadCard(
                 )
             }
 
-            PrimaryButton(
+            BrandButton(
                 text = primaryLabel,
                 onClick = onDownloadClick,
                 leadingIcon = Icons.Default.CloudDownload,
+                tier = BrandButtonTier.Primary,
                 modifier = Modifier.fillMaxWidth()
             )
 
