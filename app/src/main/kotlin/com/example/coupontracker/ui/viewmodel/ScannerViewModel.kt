@@ -292,45 +292,12 @@ class ScannerViewModel @Inject constructor(
                     return@launch
                 }
 
-                // V2: Route based on extraction strategy
-                when (strategy) {
-                    com.example.coupontracker.util.ExtractionStrategy.LEGACY -> {
-                        logStrategyExecution(
-                            requested = strategy,
-                            executed = strategy.name.lowercase(Locale.getDefault()),
-                            surface = STRATEGY_SURFACE_SINGLE
-                        )
-                        // LEGACY: Two-stage detection → LLM → OCR fallback
-                        scanWithLegacyPath(imageUri, bitmap, persistImmediately)
-                    }
-                    com.example.coupontracker.util.ExtractionStrategy.LLM_FIRST -> {
-                        logStrategyExecution(
-                            requested = strategy,
-                            executed = strategy.name.lowercase(Locale.getDefault()),
-                            surface = STRATEGY_SURFACE_SINGLE
-                        )
-                        // LLM_FIRST: LLM locates ROIs → OCR extracts → Fusion
-                        scanWithLlmFirstPath(imageUri, bitmap, persistImmediately)
-                    }
-                    com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST -> {
-                        logStrategyExecution(
-                            requested = strategy,
-                            executed = strategy.name.lowercase(Locale.getDefault()),
-                            surface = STRATEGY_SURFACE_SINGLE
-                        )
-                        // OCR_FIRST: OCR finds text → LLM validates → Fusion
-                        scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
-                    }
-                    com.example.coupontracker.util.ExtractionStrategy.HYBRID -> {
-                        logStrategyExecution(
-                            requested = strategy,
-                            executed = strategy.name.lowercase(Locale.getDefault()),
-                            surface = STRATEGY_SURFACE_SINGLE
-                        )
-                        // HYBRID: Parallel LLM + OCR → Fusion arbitrates
-                        scanWithHybridPath(imageUri, bitmap, persistImmediately)
-                    }
-                }
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = "ocr_first_manual_clean",
+                    surface = STRATEGY_SURFACE_SINGLE
+                )
+                scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error in enhanced scanning", e)
@@ -591,8 +558,14 @@ class ScannerViewModel @Inject constructor(
                     Log.d(TAG, "OCR_FIRST: Extracted ${ocrText.length} characters from OCR")
                     
                     if (ocrText.isBlank()) {
-                        Log.w(TAG, "OCR_FIRST: No OCR text extracted, falling back to LLM")
-                        scanWithLlmFirstPath(imageUri, bitmap, persistImmediately)
+                        Log.w(TAG, "OCR_FIRST: No OCR text extracted; saving review placeholder")
+                        saveOcrOnlyCoupon(
+                            imageUri = imageUri,
+                            ocrText = "",
+                            confidence = 0f,
+                            persistImmediately = persistImmediately,
+                            failureReason = "No text found in screenshot"
+                        )
                         return
                     }
                     
@@ -607,11 +580,10 @@ class ScannerViewModel @Inject constructor(
                     val processingTime = System.currentTimeMillis() - startTime
                     
                     if (extractionResult.success && extractionResult.confidence > 0.4f) {
-                        val shouldQueueCleanup = shouldQueueCleanup(extractionResult.coupon, extractionResult.confidence)
                         Log.d(
                             TAG,
                             "OCR_FIRST: Universal extraction successful (confidence: ${extractionResult.confidence}); " +
-                                if (shouldQueueCleanup) "queueing background cleanup" else "using high-confidence OCR result"
+                                "saving OCR result without automatic cleanup"
                         )
 
                         // Step 3: Persist URI and save coupon
@@ -624,7 +596,7 @@ class ScannerViewModel @Inject constructor(
                         val baseCoupon = extractionResult.coupon.copy(
                             imageUri = finalImageUri,
                             extractionConfidenceBreakdown = confidenceBreakdown,
-                            cleanupStatus = if (shouldQueueCleanup) Coupon.CleanupStatus.PENDING else Coupon.CleanupStatus.NONE,
+                            cleanupStatus = Coupon.CleanupStatus.NONE,
                             cleanupStartedAt = null,
                             cleanupFinishedAt = null,
                             cleanupError = null,
@@ -657,15 +629,12 @@ class ScannerViewModel @Inject constructor(
                         )
                         
                         if (persistImmediately) {
-                            val savedCouponId = persistCoupon(
+                            persistCoupon(
                                 coupon = finalCoupon,
                                 normalizedDescription = CouponDedupUtils.normalizeDescription(finalCoupon.description),
                                 llmStatus = LlmProgress.FALLBACK,
                                 debugSnapshot = null
                             )
-                            if (shouldQueueCleanup) {
-                                CouponCleanupWorker.enqueue(context, savedCouponId)
-                            }
                         } else {
                             pendingPreview = PendingPreview(
                                 coupon = finalCoupon,
@@ -678,7 +647,7 @@ class ScannerViewModel @Inject constructor(
                         Log.d(TAG, "OCR_FIRST: Completed successfully in ${processingTime}ms")
                         
                     } else {
-                        Log.w(TAG, "OCR_FIRST: Low confidence (${extractionResult.confidence}), falling back to LLM")
+                        Log.w(TAG, "OCR_FIRST: Low confidence (${extractionResult.confidence}); saving OCR-only result")
                         
                         performanceMonitor.recordExtractionAttempt(
                             method = ExtractionMethod.OCR_PATTERN_MATCH,
@@ -688,14 +657,19 @@ class ScannerViewModel @Inject constructor(
                             fieldsExtracted = emptySet()
                         )
                         
-                        // Fallback to LLM for validation
-                        scanWithLlmFirstPath(imageUri, bitmap, persistImmediately)
+                        saveOcrOnlyCoupon(
+                            imageUri = imageUri,
+                            ocrText = ocrText,
+                            confidence = extractionResult.confidence,
+                            persistImmediately = persistImmediately,
+                            failureReason = "OCR result needs review"
+                        )
                     }
                 }
                 
                 is MultiEngineOCR.OCRResult.Error -> {
                     val processingTime = System.currentTimeMillis() - startTime
-                    Log.e(TAG, "OCR_FIRST: OCR failed - ${ocrResult.message}, falling back to LLM")
+                    Log.e(TAG, "OCR_FIRST: OCR failed - ${ocrResult.message}; saving review placeholder")
                     
                     performanceMonitor.recordExtractionAttempt(
                         method = ExtractionMethod.OCR_PATTERN_MATCH,
@@ -705,8 +679,13 @@ class ScannerViewModel @Inject constructor(
                         fieldsExtracted = emptySet()
                     )
                     
-                    // Fallback to LLM when OCR fails
-                    scanWithLlmFirstPath(imageUri, bitmap, persistImmediately)
+                    saveOcrOnlyCoupon(
+                        imageUri = imageUri,
+                        ocrText = "",
+                        confidence = 0f,
+                        persistImmediately = persistImmediately,
+                        failureReason = ocrResult.message
+                    )
                 }
             }
             
@@ -722,8 +701,65 @@ class ScannerViewModel @Inject constructor(
                 fieldsExtracted = emptySet()
             )
             
-            // Fallback to LLM on exception
-            scanWithLlmFirstPath(imageUri, bitmap, persistImmediately)
+            saveOcrOnlyCoupon(
+                imageUri = imageUri,
+                ocrText = "",
+                confidence = 0f,
+                persistImmediately = persistImmediately,
+                failureReason = e.message ?: "OCR failed"
+            )
+        }
+    }
+
+    private suspend fun saveOcrOnlyCoupon(
+        imageUri: Uri,
+        ocrText: String,
+        confidence: Float,
+        persistImmediately: Boolean,
+        failureReason: String
+    ) {
+        val persistedUri = uriPersistenceManager.persistUri(imageUri)
+        val finalImageUri = resolveImageUri(persistedUri, imageUri)
+        val description = ocrText
+            .lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .joinToString(" ")
+            .take(500)
+            .ifBlank { failureReason }
+        val coupon = finalizeCoupon(
+            base = Coupon(
+                storeName = Coupon.Defaults.UNKNOWN_STORE,
+                description = description,
+                redeemCode = null,
+                imageUri = finalImageUri,
+                status = Coupon.Status.ACTIVE,
+                needsAttention = true,
+                cleanupStatus = Coupon.CleanupStatus.NONE,
+                rawOcrText = ocrText,
+                ocrConfidence = confidence,
+                extractionSource = Coupon.ExtractionSource.OCR_FAST
+            ),
+            ocrText = ocrText,
+            captureTimestamp = null
+        )
+        val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
+
+        if (persistImmediately) {
+            persistCoupon(
+                coupon = coupon,
+                normalizedDescription = normalizedDescription,
+                llmStatus = LlmProgress.FALLBACK,
+                debugSnapshot = null
+            )
+        } else {
+            pendingPreview = PendingPreview(
+                coupon = coupon,
+                normalizedDescription = normalizedDescription,
+                llmStatus = LlmProgress.FALLBACK,
+                debugSnapshot = null
+            )
+            _uiState.value = ScannerUiState.Success(coupon, LlmProgress.FALLBACK)
         }
     }
     
@@ -1376,88 +1412,39 @@ class ScannerViewModel @Inject constructor(
         return withContext(Dispatchers.IO) {
             val startTime = System.currentTimeMillis()
             val extractedInfo = mutableMapOf<String, String>()
-            var progress = LlmProgress.SUCCESS
+            var progress = LlmProgress.FALLBACK
             val triedStages = mutableListOf<String>()
-            var finalStage = "UNKNOWN"
+            var finalStage = "OCR"
             var qualityScore: Int? = null
             var fieldConfidences: Map<String, Float> = emptyMap()
-            var sourceStage: ExtractionStage? = null
+            var sourceStage: ExtractionStage? = ExtractionStage.MLKIT
             var fullOcrText: String? = null
 
             extractedInfo["minicpmConfidence"] = couponInstance.confidence.toString()
             extractedInfo["minicpmDetectionStatus"] = couponInstance.status.name
 
             try {
-                // Try LLM extraction first
-                triedStages.add("LLM")
-                finalStage = "LLM"
-                
-                val result = localLlmOcrService.processCouponImageTyped(couponInstance.cropBitmap) { update ->
-                    emitLlmProgress(update)
-                }
-                
-                when (result) {
-                    is ExtractResult.Good -> {
-                        extractedInfo.putAll(mapCouponInfoToFields(result.info))
-                        progress = LlmProgress.SUCCESS
-                        qualityScore = result.signals.qualityScore
-                        fieldConfidences = result.signals.fieldConfidences
-                        sourceStage = result.signals.stage
-                        Log.d(TAG, "✅ LLM extraction successful (quality: ${result.signals.qualityScore})")
-                    }
-
-                    is ExtractResult.LowQuality -> {
-                        extractedInfo.putAll(mapCouponInfoToFields(result.info))
-                        progress = LlmProgress.NEEDS_REVIEW
-                        qualityScore = result.signals.qualityScore
-                        fieldConfidences = result.signals.fieldConfidences
-                        sourceStage = result.signals.stage
-
-                        // Try fallback for low quality
-                        triedStages.add("FALLBACK_OCR")
-                        finalStage = "FALLBACK_OCR"
-                        val fallbackResult = runFallbackOcr(couponInstance.cropBitmap)
-                        mergeValidatedFields(extractedInfo, fallbackResult.fields)
-                        fullOcrText = fallbackResult.text ?: fullOcrText
-                        
-                        Log.w(TAG, "⚠️ LLM low quality (${result.reason}), used fallback")
-                    }
-                    
-                    is ExtractResult.Failed -> {
-                        // LLM failed, use fallback
-                        triedStages.add("FALLBACK_OCR")
-                        finalStage = "FALLBACK_OCR"
-                        progress = LlmProgress.FALLBACK
-                        qualityScore = result.signals?.qualityScore
-                        fieldConfidences = result.signals?.fieldConfidences ?: emptyMap()
-                        sourceStage = result.signals?.stage ?: result.stage
-                        val fallbackResult = runFallbackOcr(couponInstance.cropBitmap)
-                        extractedInfo.putAll(fallbackResult.fields)
-                        fullOcrText = fallbackResult.text ?: fullOcrText
-
-                        Log.e(TAG, "❌ LLM extraction failed: ${result.error.message}")
-                    }
-                }
-                
-            } catch (e: Exception) {
-                Log.e(TAG, "Qwen processing failed, using fallback", e)
-                triedStages.add("FALLBACK_OCR")
-                finalStage = "FALLBACK_OCR"
-                progress = LlmProgress.FALLBACK
-                qualityScore = qualityScore ?: 0
-                sourceStage = sourceStage ?: ExtractionStage.LLM
+                triedStages.add("OCR")
                 val fallbackResult = runFallbackOcr(couponInstance.cropBitmap)
                 extractedInfo.putAll(fallbackResult.fields)
-                fullOcrText = fallbackResult.text ?: fullOcrText
+                fullOcrText = fallbackResult.text
+                qualityScore = if (fallbackResult.fields.isNotEmpty()) 55 else 0
+                fieldConfidences = fallbackResult.fields.keys.associateWith { 0.55f }
+                Log.d(TAG, "OCR-only field extraction completed with ${fallbackResult.fields.size} fields")
+            } catch (e: Exception) {
+                Log.e(TAG, "OCR field extraction failed", e)
+                triedStages.add("OCR_FAILED")
+                finalStage = "OCR_FAILED"
+                qualityScore = qualityScore ?: 0
             }
 
             // Track run path telemetry
             val totalTime = System.currentTimeMillis() - startTime
             val runPath = RunPath(
-                primary = "LLM",
+                primary = "OCR",
                 tried = triedStages,
                 final = finalStage,
-                nativeAvailable = localLlmOcrService.isServiceAvailable(),
+                nativeAvailable = false,
                 totalTimeMs = totalTime
             )
 
@@ -1467,10 +1454,6 @@ class ScannerViewModel @Inject constructor(
             extractedInfo["runPath"] = "${runPath.strategy} → ${runPath.final}"
             extractedInfo["processingTimeMs"] = totalTime.toString()
             qualityScore?.let { extractedInfo["qualityScore"] = it.toString() }
-
-            if (sourceStage == null && finalStage == "FALLBACK_OCR") {
-                sourceStage = ExtractionStage.MLKIT
-            }
 
             val baseResult = FieldExtractionResult(
                 fields = extractedInfo.toMap(),

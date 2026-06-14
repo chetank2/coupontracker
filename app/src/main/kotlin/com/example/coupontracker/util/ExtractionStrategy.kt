@@ -89,14 +89,9 @@ object ExtractionConfig {
         telemetry = ExtractionTelemetryService(context)
 
         val pending = pendingAdvancedFlag
-        val persistedAdvanced = prefs?.getBoolean(KEY_ADVANCED_ENABLED, false) ?: false
         runtimeAdvancedAvailable = runCatching { runtimeAvailabilityChecker(context) }.getOrDefault(false)
 
-        advancedStrategiesEnabled = when {
-            pending != null -> pending.enabled
-            persistedAdvanced -> true
-            else -> runtimeAdvancedAvailable
-        }
+        advancedStrategiesEnabled = false
 
         if (pending != null) {
             if (pending.persist) {
@@ -147,11 +142,7 @@ object ExtractionConfig {
     }
 
     private fun computeDefaultStrategy(): ExtractionStrategy {
-        return if (advancedStrategiesEnabled && runtimeAdvancedAvailable) {
-            ExtractionStrategy.LLM_FIRST
-        } else {
-            ExtractionStrategy.OCR_FIRST
-        }
+        return ExtractionStrategy.OCR_FIRST
     }
     
     /**
@@ -218,8 +209,7 @@ object ExtractionConfig {
      */
     fun getAvailableStrategies(): List<ExtractionStrategy> {
         val strategies = linkedSetOf(
-            ExtractionStrategy.OCR_FIRST,
-            ExtractionStrategy.LEGACY
+            ExtractionStrategy.OCR_FIRST
         )
 
         if (shouldExposeAdvancedStrategies()) {
@@ -237,45 +227,22 @@ object ExtractionConfig {
         return getAvailableStrategies().contains(strategy)
     }
 
-    fun areAdvancedStrategiesEnabled(): Boolean = advancedStrategiesEnabled && runtimeAdvancedAvailable
+    fun areAdvancedStrategiesEnabled(): Boolean = false
 
     fun setAdvancedStrategiesEnabled(enabled: Boolean, persist: Boolean = true) {
-        if (!isInitialized) {
-            pendingAdvancedFlag = PendingAdvancedFlag(enabled, persist)
-        }
-
-        if (advancedStrategiesEnabled == enabled) {
-            if (persist && isInitialized) {
-                prefs?.edit()?.putBoolean(KEY_ADVANCED_ENABLED, enabled)?.apply()
-            }
-            return
-        }
-
-        advancedStrategiesEnabled = enabled
-
+        advancedStrategiesEnabled = false
         if (persist && isInitialized) {
-            prefs?.edit()?.putBoolean(KEY_ADVANCED_ENABLED, enabled)?.apply()
+            prefs?.edit()?.putBoolean(KEY_ADVANCED_ENABLED, false)?.apply()
         }
-
-        if (!isInitialized) {
-            return
-        }
-
-        if (enabled) {
-            if (!runtimeAdvancedAvailable) {
-                Log.i(TAG, "Advanced strategies requested but runtime unavailable – waiting for availability")
-                return
-            }
-
-            val savedStrategy = readSavedStrategy()
-            if (savedStrategy != null && isStrategyGuarded(savedStrategy)) {
-                Log.i(TAG, "Advanced strategies enabled – restoring saved strategy ${savedStrategy.name}")
-                updateStrategyInternal(savedStrategy, persist = false)
-            }
-        } else if (isStrategyGuarded(_strategy)) {
-            Log.i(TAG, "Advanced strategies disabled – reverting to OCR_FIRST in memory")
+        if (isStrategyGuarded(_strategy)) {
             updateStrategyInternal(ExtractionStrategy.OCR_FIRST, persist = false)
         }
+        recordStrategyTelemetry(
+            requested = enabled.toString(),
+            active = ExtractionStrategy.OCR_FIRST.name,
+            allowed = false,
+            reason = "manual_clean_required"
+        )
     }
 
     fun refreshRuntimeAvailability(context: Context) {
@@ -283,17 +250,11 @@ object ExtractionConfig {
             return
         }
 
-        val previous = runtimeAdvancedAvailable
         runtimeAdvancedAvailable = runCatching { runtimeAvailabilityChecker(context) }.getOrDefault(false)
-
-        if (!advancedStrategiesEnabled && runtimeAdvancedAvailable) {
-            Log.i(TAG, "Runtime advanced capabilities detected – enabling guarded strategies")
-            setAdvancedStrategiesEnabled(true, persist = false)
-        } else if (advancedStrategiesEnabled && !runtimeAdvancedAvailable) {
-            Log.w(TAG, "Runtime advanced capabilities lost – reverting to OCR_FIRST")
-            setAdvancedStrategiesEnabled(false, persist = false)
-        } else if (previous != runtimeAdvancedAvailable) {
-            Log.d(TAG, "Runtime advanced availability changed: $previous → $runtimeAdvancedAvailable")
+        advancedStrategiesEnabled = false
+        if (_strategy != ExtractionStrategy.OCR_FIRST) {
+            Log.i(TAG, "Manual-clean flow requires OCR_FIRST capture – reverting from ${_strategy.name}")
+            updateStrategyInternal(ExtractionStrategy.OCR_FIRST, persist = false)
         }
     }
 
@@ -345,7 +306,7 @@ object ExtractionConfig {
     }
 
     private fun isStrategyAllowed(strategy: ExtractionStrategy): Boolean {
-        return !isStrategyGuarded(strategy) || (advancedStrategiesEnabled && runtimeAdvancedAvailable)
+        return strategy == ExtractionStrategy.OCR_FIRST
     }
 
     private fun shouldExposeAdvancedStrategies(): Boolean {
