@@ -371,6 +371,13 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         Log.d(TAG, "✅ GGUF verification passed")
         Log.d(TAG, "  Version: ${metadata.version}")
         Log.d(TAG, "  Tensors: ${metadata.tensorCount}")
+
+        if (BuildConfig.LLM_BACKEND == "MLC" && com.example.coupontracker.model.ModelPaths.isGgufModel(detectedModelId)) {
+            throw IllegalStateException(
+                "$modelName is a GGUF model and requires a llama.cpp app build. " +
+                    "Rebuild without -DUSE_MLC_RUNTIME=ON."
+            )
+        }
         
         // Check if model has optional multimodal support
         val hasVision = com.example.coupontracker.model.ModelPaths.hasVisionSupport(detectedModelId)
@@ -587,7 +594,7 @@ class LlmRuntimeManager private constructor(private val context: Context) {
             
         } catch (e: Exception) {
             Log.e(TAG, "Text inference failed", e)
-            return@withContext null
+            throw IllegalStateException("Text inference failed: ${e.message}", e)
         }
     }
 
