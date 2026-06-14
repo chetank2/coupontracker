@@ -112,6 +112,15 @@ data class Coupon(
         const val FAILED = "FAILED"
     }
 
+    object Status {
+        const val ACTIVE = "Active"
+        const val USED = "Used"
+    }
+
+    object Defaults {
+        const val UNKNOWN_STORE = "Unknown Store"
+    }
+
     object ExtractionSource {
         const val OCR_FAST = "OCR_FAST"
         const val QWEN_CLEANED = "QWEN_CLEANED"

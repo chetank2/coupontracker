@@ -183,7 +183,7 @@ class AddCouponViewModel @Inject constructor(
                         imageUri = persistedImageUri,
                         category = category,
                         rating = rating,
-                        status = status ?: "Active",
+                        status = status ?: com.example.coupontracker.data.model.Coupon.Status.ACTIVE,
                         minimumPurchase = minimumPurchase,
                         maximumDiscount = maximumDiscount,
                         isPriority = isPriority,

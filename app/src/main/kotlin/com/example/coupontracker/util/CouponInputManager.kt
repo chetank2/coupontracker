@@ -121,7 +121,7 @@ private fun buildDescriptionFromInfo(info: CouponInfo): String {
         segments += "Rating: ${it.trim()}"
     }
 
-    info.status?.takeIf { it.isNotBlank() && !it.equals("Active", ignoreCase = true) }?.let {
+    info.status?.takeIf { it.isNotBlank() && !it.equals(com.example.coupontracker.data.model.Coupon.Status.ACTIVE, ignoreCase = true) }?.let {
         segments += "Status: ${it.trim()}"
     }
 
@@ -435,11 +435,11 @@ class CouponInputManager(
                         if (!code.isNullOrBlank()) {
                             // Create a basic coupon with just the code
                             return@withContext Coupon(
-                                storeName = "Unknown Store",
+                                storeName = com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE,
                                 description = "Scanned from QR code",
                                 redeemCode = code,
                                 imageUri = null,
-                                status = "Active"
+                                status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE
                             )
                         }
                     }
@@ -453,12 +453,12 @@ class CouponInputManager(
                 val composedDescription = buildDescriptionFromInfo(couponInfo)
 
                 val baseCoupon = Coupon(
-                    storeName = couponInfo.storeName.ifBlank { "Unknown Store" },
+                    storeName = couponInfo.storeName.ifBlank { com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE },
                     description = composedDescription.ifBlank { "No description" },
                     expiryDate = couponInfo.expiryDate,
                     redeemCode = couponInfo.redeemCode,
                     imageUri = null,
-                    status = status ?: "Active"
+                    status = status ?: com.example.coupontracker.data.model.Coupon.Status.ACTIVE
                 )
 
                 val contextText = listOfNotNull(
@@ -599,7 +599,7 @@ class CouponInputManager(
                             description = "Coupon from URL",
                             redeemCode = code,
                             imageUri = null,
-                            status = "Active"
+                            status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE
                         )
                         }
 
@@ -630,11 +630,11 @@ class CouponInputManager(
 
                 // Otherwise, treat as a coupon code
                 return@withContext Coupon(
-                    storeName = "Unknown Store",
+                    storeName = com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE,
                     description = "Manual entry",
                     redeemCode = text,
                     imageUri = null,
-                    status = "Active"
+                    status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon from text", e)
@@ -953,7 +953,7 @@ class CouponInputManager(
     private fun extractDomainFromUrl(url: String): String {
         return try {
             val uri = java.net.URI(url)
-            val domain = uri.host ?: return "Unknown Store"
+            val domain = uri.host ?: return com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
 
             // Remove www. prefix if present
             if (domain.startsWith("www.")) {
@@ -962,7 +962,7 @@ class CouponInputManager(
                 domain
             }
         } catch (e: Exception) {
-            "Unknown Store"
+            com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
         }
     }
 

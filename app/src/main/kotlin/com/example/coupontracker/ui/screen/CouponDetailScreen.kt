@@ -41,18 +41,18 @@ import androidx.navigation.NavController
 import com.example.coupontracker.R
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
+import com.example.coupontracker.model.ModelCatalog
 import com.example.coupontracker.ui.components.BrandButton
 import com.example.coupontracker.ui.components.BrandButtonTier
 import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.components.CouponCard
-import com.example.coupontracker.ui.components.CouponCardModel
-import com.example.coupontracker.ui.components.CouponCardState
 import com.example.coupontracker.ui.components.CouponCardVariant
 import com.example.coupontracker.ui.components.DateFormatter
 import com.example.coupontracker.ui.components.ExtractionDebugPanel
 import com.example.coupontracker.ui.components.GlassSurface
 import com.example.coupontracker.ui.components.StatusType
 import com.example.coupontracker.ui.theme.BrandSpacing
+import com.example.coupontracker.ui.model.toCouponCardModel
 import com.example.coupontracker.ui.viewmodel.DetailViewModel
 import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.data.util.DescriptionUtils
@@ -84,10 +84,10 @@ fun CouponDetailScreen(
     Scaffold(
         topBar = {
             BrandTopBar(
-                title = "Coupon details",
+                title = stringResource(R.string.coupon_details_title),
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.content_back))
                     }
                 },
                 actions = {
@@ -96,18 +96,18 @@ fun CouponDetailScreen(
                         onClick = { viewModel.cleanCoupon() },
                         enabled = shareEnabled
                     ) {
-                        Icon(Icons.Default.AutoFixHigh, contentDescription = "Clean coupon")
+                        Icon(Icons.Default.AutoFixHigh, contentDescription = stringResource(R.string.content_clean_coupon))
                     }
                     IconButton(onClick = {
                         coupon?.let { shareCoupon(context, it) }
                     }, enabled = shareEnabled) {
-                        Icon(Icons.Default.Share, contentDescription = "Share coupon")
+                        Icon(Icons.Default.Share, contentDescription = stringResource(R.string.content_share_coupon))
                     }
                     IconButton(onClick = {
                         viewModel.deleteCoupon()
                         navController.popBackStack()
                     }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.content_delete))
                     }
                 }
             )
@@ -167,7 +167,7 @@ private fun CouponDetailContent(
             redeemCode = coupon.redeemCode
         )
     }
-    val detailCardModel = coupon.toDetailCouponCardModel(displayDescription)
+    val detailCardModel = coupon.toCouponCardModel(displayDescription)
 
     Column(
         modifier = Modifier
@@ -303,7 +303,7 @@ private fun CouponDetailContent(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = coupon.redeemCode,
+                text = coupon.redeemCode,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
@@ -444,62 +444,6 @@ private fun CouponDetailContent(
     }
 }
 
-private fun Coupon.toDetailCouponCardModel(
-    displayDescription: String,
-): CouponCardModel {
-    val initial = storeName.firstOrNull { it.isLetterOrDigit() } ?: 'C'
-    return CouponCardModel(
-        brandName = storeName,
-        brandInitial = initial,
-        brandColor = null,
-        valueLabel = detailCardOfferSummary(displayDescription),
-        code = redeemCode.orEmpty(),
-        expiresAt = DateFormatter.formatShort(expiryDate),
-        statusLabel = when (cleanupStatus) {
-            Coupon.CleanupStatus.PENDING -> "Queued"
-            Coupon.CleanupStatus.RUNNING -> "Cleaning"
-            Coupon.CleanupStatus.FAILED -> "Needs clean"
-            else -> null
-        },
-        statusInProgress = cleanupStatus == Coupon.CleanupStatus.PENDING ||
-            cleanupStatus == Coupon.CleanupStatus.RUNNING,
-        state = when {
-            status.equals("Used", ignoreCase = true) -> CouponCardState.Redeemed
-            expiryDate?.before(Date()) == true -> CouponCardState.Expired
-            else -> CouponCardState.Default
-        },
-    )
-}
-
-private fun Coupon.detailCardOfferSummary(
-    displayDescription: String,
-): String {
-    val cashback = getCashbackDisplayText()
-        .replace(Regex("\\s+"), " ")
-        .trim()
-        .takeIf { it.isNotBlank() && it.length <= 36 && !it.equals("0.0", ignoreCase = true) }
-
-    if (cashback != null) return cashback
-
-    val normalizedDescription = displayDescription
-        .replace(Regex("\\s+"), " ")
-        .trim()
-    val offerPattern = Regex(
-        pattern = """(?i)(₹\s*\d[\d,]*(?:\s*off)?|\d+\s*%\s*(?:off|cashback)?|flat\s+[^.]{1,32}|free\s+[^.]{1,32}|save\s+[^.]{1,32})""",
-    )
-    val matchedOffer = offerPattern.find(normalizedDescription)?.value
-        ?.replace(Regex("\\s+"), " ")
-        ?.trim()
-        ?.take(44)
-
-    return matchedOffer?.ifBlank { null }
-        ?: when {
-            normalizedDescription.contains("voucher", ignoreCase = true) -> "Saved voucher"
-            normalizedDescription.contains("coupon", ignoreCase = true) -> "Saved coupon"
-            else -> "Saved offer"
-        }
-}
-
 @Composable
 private fun CouponActionButtons(
     coupon: Coupon,
@@ -514,7 +458,11 @@ private fun CouponActionButtons(
             horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Medium)
         ) {
             BrandButton(
-                text = if (coupon.status.equals("Used", ignoreCase = true)) "Used again" else "Mark used",
+                text = if (coupon.status.equals(Coupon.Status.USED, ignoreCase = true)) {
+                    stringResource(R.string.coupon_used_again)
+                } else {
+                    stringResource(R.string.coupon_mark_used)
+                },
                 onClick = onTrackUsageClick,
                 modifier = Modifier.weight(1f),
                 tier = BrandButtonTier.Primary,
@@ -523,7 +471,11 @@ private fun CouponActionButtons(
 
             Box(modifier = Modifier.weight(1f)) {
                 BrandButton(
-                    text = if (coupon.reminderLeadTimeMinutes != null) "Reminder" else "Remind me",
+                    text = if (coupon.reminderLeadTimeMinutes != null) {
+                        stringResource(R.string.coupon_reminder)
+                    } else {
+                        stringResource(R.string.coupon_remind_me)
+                    },
                     onClick = { reminderMenuExpanded = true },
                     enabled = coupon.expiryDate != null,
                     modifier = Modifier.fillMaxWidth(),
@@ -644,22 +596,25 @@ private fun CleanupStatusCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = when (coupon.cleanupStatus) {
-                        Coupon.CleanupStatus.PENDING -> "Cleaning queued"
-                        Coupon.CleanupStatus.RUNNING -> "Cleaning details"
-                        Coupon.CleanupStatus.CLEANED -> "Cleaned with Qwen2.5"
-                        Coupon.CleanupStatus.FAILED -> "Cleaning failed"
-                        else -> "Clean coupon details"
+                        Coupon.CleanupStatus.PENDING -> stringResource(R.string.coupon_cleaning_queued_title)
+                        Coupon.CleanupStatus.RUNNING -> stringResource(R.string.coupon_cleaning_running_title)
+                        Coupon.CleanupStatus.CLEANED -> stringResource(
+                            R.string.coupon_cleaning_done_title,
+                            ModelCatalog.COUPON_READER_NAME
+                        )
+                        Coupon.CleanupStatus.FAILED -> stringResource(R.string.coupon_cleaning_failed_title)
+                        else -> stringResource(R.string.coupon_cleaning_default_title)
                     },
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     text = when (coupon.cleanupStatus) {
-                        Coupon.CleanupStatus.PENDING -> "The saved coupon is ready. The reader will improve fields in the background."
-                        Coupon.CleanupStatus.RUNNING -> "The saved coupon stays usable while the reader improves it."
-                        Coupon.CleanupStatus.CLEANED -> "Store, offer, code, and expiry were checked after saving."
-                        Coupon.CleanupStatus.FAILED -> coupon.cleanupError ?: "The reader could not improve this coupon."
-                        else -> "Use the reader to improve weak or missing fields."
+                        Coupon.CleanupStatus.PENDING -> stringResource(R.string.coupon_cleaning_queued_body)
+                        Coupon.CleanupStatus.RUNNING -> stringResource(R.string.coupon_cleaning_running_body)
+                        Coupon.CleanupStatus.CLEANED -> stringResource(R.string.coupon_cleaning_done_body)
+                        Coupon.CleanupStatus.FAILED -> coupon.cleanupError ?: stringResource(R.string.coupon_cleaning_failed_body)
+                        else -> stringResource(R.string.coupon_cleaning_default_body)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -668,7 +623,7 @@ private fun CleanupStatusCard(
 
             if (!isRunning && coupon.cleanupStatus != Coupon.CleanupStatus.CLEANED) {
                 BrandButton(
-                    text = "Clean",
+                    text = stringResource(R.string.coupon_clean),
                     onClick = onCleanCoupon,
                     tier = BrandButtonTier.Secondary,
                     leadingIcon = Icons.Default.AutoFixHigh,

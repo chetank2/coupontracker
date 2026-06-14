@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.coupontracker.R
 import com.example.coupontracker.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -168,12 +169,15 @@ class ModelImportViewModel @Inject constructor(
                     _uiState.value = _uiState.value.copy(
                         isImporting = true,
                         importProgress = 0,
-                        importMessage = "Preparing download (Qwen2.5-1.5B, 940 MB)...",
+                        importMessage = getApplication<Application>().getString(
+                            R.string.model_setup_preparing,
+                            ModelCatalog.COUPON_READER_VARIANT,
+                            ModelCatalog.COUPON_READER_SIZE
+                        ),
                         importError = null
                     )
                 }
                 
-                // Download Qwen2.5-1.5B model (improved JSON output, text-only)
                 val result = modelDownloadManager.downloadQwen25Model { progress ->
                     viewModelScope.launch(Dispatchers.Main) {
                         _uiState.value = _uiState.value.copy(

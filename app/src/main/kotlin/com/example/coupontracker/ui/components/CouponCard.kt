@@ -50,10 +50,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.coupontracker.R
 import com.example.coupontracker.ui.theme.BrandAnimationDuration
 import com.example.coupontracker.ui.theme.BrandColors
 import com.example.coupontracker.ui.theme.BrandShapes
@@ -142,8 +144,8 @@ fun CouponCard(
             }
 
             when (state) {
-                CouponCardState.Expired -> CouponWatermark("EXPIRED", colors.error)
-                CouponCardState.Redeemed -> CouponWatermark("REDEEMED", colors.primary)
+                CouponCardState.Expired -> CouponWatermark(stringResource(R.string.coupon_status_expired), colors.error)
+                CouponCardState.Redeemed -> CouponWatermark(stringResource(R.string.coupon_status_redeemed), colors.primary)
                 else -> Unit
             }
 
@@ -271,7 +273,11 @@ private fun CouponCardContent(
                         color = colors.onSurfaceVariant,
                     )
                     Text(
-                        text = if (revealed || model.code.isBlank()) model.code.ifBlank { "No code" } else "••••••",
+                        text = if (revealed || model.code.isBlank()) {
+                            model.code.ifBlank { stringResource(R.string.coupon_no_code) }
+                        } else {
+                            "••••••"
+                        },
                         style = BrandTypography.BodyMedium.tabularNumerals(),
                         color = colors.onSurface,
                         maxLines = 1,
@@ -286,7 +292,7 @@ private fun CouponCardContent(
                         color = colors.onSurfaceVariant,
                     )
                     Text(
-                        text = model.expiresAt.ifBlank { "No expiry" },
+                        text = model.expiresAt.ifBlank { stringResource(R.string.coupon_no_expiry) },
                         style = BrandTypography.BodyMedium.tabularNumerals(),
                         color = colors.onSurface,
                     )

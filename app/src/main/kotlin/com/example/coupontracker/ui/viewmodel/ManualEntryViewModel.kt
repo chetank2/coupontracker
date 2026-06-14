@@ -123,7 +123,7 @@ class ManualEntryViewModel @Inject constructor(
                     redeemCode = code.takeIf { !it.isNullOrBlank() },
                     imageUri = null,
                     category = category.takeIf { !it.isNullOrBlank() },
-                    status = "Active",
+                    status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE,
                     createdAt = Date(),
                     updatedAt = Date()
                 )

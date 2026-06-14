@@ -15,6 +15,7 @@ import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.model.ModelCatalog
 import com.example.coupontracker.util.CouponFixContext
 import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.util.CouponPostProcessor
@@ -129,7 +130,7 @@ class CouponCleanupWorker @AssistedInject constructor(
 
         val selectedStore = info.storeName
             .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
-            ?.takeIf { GenericFieldHeuristics.isGenericOrMissing(current.storeName) || current.storeName == "Unknown Store" }
+            ?.takeIf { GenericFieldHeuristics.isGenericOrMissing(current.storeName) || current.storeName == Coupon.Defaults.UNKNOWN_STORE }
             ?: current.storeName
 
         val descriptionWithCashback = DescriptionUtils.appendDetails(
@@ -143,7 +144,7 @@ class CouponCleanupWorker @AssistedInject constructor(
             expiryDate = current.expiryDate ?: info.expiryDate,
             redeemCode = selectedCode,
             category = current.category ?: info.category,
-            status = current.status ?: info.status ?: "Active",
+            status = current.status ?: info.status ?: Coupon.Status.ACTIVE,
             minimumPurchase = current.minimumPurchase ?: info.minimumPurchase,
             maximumDiscount = current.maximumDiscount ?: info.maximumDiscount,
             paymentMethod = current.paymentMethod ?: info.paymentMethod,
@@ -152,7 +153,7 @@ class CouponCleanupWorker @AssistedInject constructor(
             cleanupStatus = Coupon.CleanupStatus.CLEANED,
             cleanupFinishedAt = Date(),
             cleanupError = null,
-            lastCleanedBy = "Qwen2.5",
+            lastCleanedBy = ModelCatalog.COUPON_READER_NAME,
             extractionSource = Coupon.ExtractionSource.QWEN_CLEANED,
             updatedAt = Date()
         )
@@ -174,7 +175,7 @@ class CouponCleanupWorker @AssistedInject constructor(
     }
 
     private fun hasMissingCriticalFields(coupon: Coupon): Boolean {
-        return coupon.storeName == "Unknown Store" ||
+        return coupon.storeName == Coupon.Defaults.UNKNOWN_STORE ||
             coupon.description.isBlank() ||
             (coupon.redeemCode.isNullOrBlank() && coupon.expiryDate == null)
     }

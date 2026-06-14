@@ -42,7 +42,7 @@ data class CouponInfo(
      */
     fun isValid(): Boolean {
         // Must have a merchant name
-        if (storeName.isBlank() || storeName == "Unknown Store") {
+        if (storeName.isBlank() || storeName == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE) {
             return false
         }
 

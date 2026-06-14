@@ -32,7 +32,7 @@ data class CouponData(
          */
         fun fromExtractedFields(fields: Map<String, ExtractedField>): CouponData {
             // Extract values
-            val merchantName = fields["merchantName"]?.value ?: "Unknown Store"
+            val merchantName = fields["merchantName"]?.value ?: com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
             val code = fields["code"]?.value
             val amount = fields["amount"]?.value
             val expiryDate = fields["expiryDate"]?.value
@@ -150,7 +150,7 @@ data class CouponData(
      */
     fun isValid(): Boolean {
         // Must have a merchant name
-        if (merchantName.isBlank() || merchantName == "Unknown Store") {
+        if (merchantName.isBlank() || merchantName == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE) {
             return false
         }
         

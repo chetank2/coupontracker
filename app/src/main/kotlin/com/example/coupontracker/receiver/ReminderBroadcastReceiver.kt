@@ -29,7 +29,7 @@ class ReminderBroadcastReceiver : BroadcastReceiver() {
     
     override fun onReceive(context: Context, intent: Intent) {
         val couponId = intent.getLongExtra(EXTRA_COUPON_ID, -1)
-        val storeName = intent.getStringExtra(EXTRA_STORE_NAME) ?: "Unknown Store"
+        val storeName = intent.getStringExtra(EXTRA_STORE_NAME) ?: com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
         val description = intent.getStringExtra(EXTRA_DESCRIPTION) ?: "Coupon reminder"
         val message = intent.getStringExtra(EXTRA_MESSAGE) ?: "Don't forget to use this coupon"
         val type = intent.getStringExtra(EXTRA_TYPE) ?: TYPE_REMINDER

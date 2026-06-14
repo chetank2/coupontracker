@@ -56,7 +56,7 @@ class RegionBasedExtractor(
             val status = textExtractor.extractStatus(fullText)
 
             val result = CouponInfo(
-                storeName = storeName ?: textExtractor.extractStoreName(fullText) ?: "Unknown Store",
+                storeName = storeName ?: textExtractor.extractStoreName(fullText) ?: com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE,
                 description = description ?: textExtractor.extractDescription(fullText) ?: "",
                 expiryDate = expiryDate ?: textExtractor.extractExpiryDate(fullText),
                 cashbackDetail = cashbackDetail ?: textExtractor.extractCashbackDetail(fullText),
@@ -431,8 +431,8 @@ class RegionBasedExtractor(
         data["rating"] = couponInfo.rating
         data["status"] = couponInfo.status
 
-        // RULE 1: If store name is "Unknown Store" but text contains a known store, use that
-        if (data["storeName"] == "Unknown Store") {
+        // RULE 1: If store name is com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE but text contains a known store, use that
+        if (data["storeName"] == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE) {
             // Look for known stores in text
             val knownStores = listOf("Myntra", "ABHIBUS", "NEWMEE", "IXIGO", "BOAT", "XYXX", "Mivi")
             for (store in knownStores) {
@@ -470,7 +470,7 @@ class RegionBasedExtractor(
         }
 
         // RULE 3: If we have a cashback detail but no description, create a synthetic one
-        if (data["description"] == "" && data["cashbackDetail"] != null && data["storeName"] != "Unknown Store") {
+        if (data["description"] == "" && data["cashbackDetail"] != null && data["storeName"] != com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE) {
             val detail = data["cashbackDetail"] as? String
             val store = data["storeName"] as? String ?: "the store"
             if (!detail.isNullOrBlank()) {
@@ -481,7 +481,7 @@ class RegionBasedExtractor(
 
         // Create new CouponInfo with validated/enriched data
         return CouponInfo(
-            storeName = data["storeName"] as? String ?: "Unknown Store",
+            storeName = data["storeName"] as? String ?: com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE,
             description = data["description"] as? String ?: "",
             expiryDate = data["expiryDate"] as java.util.Date?,
             cashbackDetail = data["cashbackDetail"] as? String,

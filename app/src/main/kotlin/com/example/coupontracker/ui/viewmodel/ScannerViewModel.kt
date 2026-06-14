@@ -471,7 +471,7 @@ class ScannerViewModel @Inject constructor(
                     
                     // Step 5: Record metrics
                     val fieldsExtracted = mutableSetOf<String>()
-                    if (finalCoupon.storeName != "Unknown Store") fieldsExtracted.add("storeName")
+                    if (finalCoupon.storeName != Coupon.Defaults.UNKNOWN_STORE) fieldsExtracted.add("storeName")
                     if (!finalCoupon.redeemCode.isNullOrBlank()) fieldsExtracted.add("redeemCode")
                     if (finalCoupon.getCashbackNumericValue() > 0) fieldsExtracted.add("cashback")
                     if (finalCoupon.expiryDate != null) fieldsExtracted.add("expiryDate")
@@ -550,13 +550,13 @@ class ScannerViewModel @Inject constructor(
         val cashbackDetail = couponInfo.cashbackDetail?.takeIf { it.isNotBlank() }
 
         val baseCoupon = Coupon(
-            storeName = couponInfo.storeName.takeIf { it.isNotBlank() } ?: "Unknown Store",
+            storeName = couponInfo.storeName.takeIf { it.isNotBlank() } ?: Coupon.Defaults.UNKNOWN_STORE,
             description = baseDescription,
             expiryDate = expiryDate,
             redeemCode = couponInfo.redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
             imageUri = imageUri.toString(),
             category = couponInfo.category,
-            status = "Active",
+            status = Coupon.Status.ACTIVE,
             extractionConfidenceBreakdown = fieldConfidences,
             needsAttention = couponInfo.needsAttention,
             storeNameSource = couponInfo.storeNameSource,
@@ -643,7 +643,7 @@ class ScannerViewModel @Inject constructor(
                         
                         // Step 5: Record metrics
                         val fieldsExtracted = mutableSetOf<String>()
-                        if (finalCoupon.storeName != "Unknown Store") fieldsExtracted.add("storeName")
+                        if (finalCoupon.storeName != Coupon.Defaults.UNKNOWN_STORE) fieldsExtracted.add("storeName")
                         if (!finalCoupon.redeemCode.isNullOrBlank()) fieldsExtracted.add("redeemCode")
                         if (finalCoupon.getCashbackNumericValue() > 0) fieldsExtracted.add("cashback")
                         if (finalCoupon.expiryDate != null) fieldsExtracted.add("expiryDate")
@@ -825,7 +825,7 @@ class ScannerViewModel @Inject constructor(
                 
                 // Record metrics
                 val fieldsExtracted = mutableSetOf<String>()
-                if (finalCoupon.storeName != "Unknown Store") fieldsExtracted.add("storeName")
+                if (finalCoupon.storeName != Coupon.Defaults.UNKNOWN_STORE) fieldsExtracted.add("storeName")
                 if (!finalCoupon.redeemCode.isNullOrBlank()) fieldsExtracted.add("redeemCode")
                 if (finalCoupon.getCashbackNumericValue() > 0) fieldsExtracted.add("cashback")
                 if (finalCoupon.expiryDate != null) fieldsExtracted.add("expiryDate")
@@ -903,10 +903,10 @@ class ScannerViewModel @Inject constructor(
         // Store name: prefer LLM if confident
         val storeName = if (llmConf.getOrDefault("storeName", 0f) > 0.6f && llmInfo.storeName.isNotBlank()) {
             llmInfo.storeName
-        } else if (ocrCoupon.storeName != "Unknown Store") {
+        } else if (ocrCoupon.storeName != Coupon.Defaults.UNKNOWN_STORE) {
             ocrCoupon.storeName
         } else {
-            llmInfo.storeName.takeIf { it.isNotBlank() } ?: "Unknown Store"
+            llmInfo.storeName.takeIf { it.isNotBlank() } ?: Coupon.Defaults.UNKNOWN_STORE
         }
         
         // Coupon code: prefer higher confidence
@@ -946,7 +946,7 @@ class ScannerViewModel @Inject constructor(
             redeemCode = redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
             imageUri = imageUri.toString(),
             category = llmInfo.category ?: ocrCoupon.category,
-            status = "Active"
+            status = Coupon.Status.ACTIVE
         )
     }
 
@@ -1152,7 +1152,7 @@ class ScannerViewModel @Inject constructor(
     private fun shouldQueueCleanup(coupon: Coupon, confidence: Float): Boolean {
         return confidence < OCR_CONFIDENCE_QUEUE_CLEANUP ||
             coupon.needsAttention ||
-            coupon.storeName == "Unknown Store" ||
+            coupon.storeName == Coupon.Defaults.UNKNOWN_STORE ||
             coupon.redeemCode.isNullOrBlank() ||
             coupon.expiryDate == null ||
             !GenericFieldHeuristics.isMeaningfulDescription(coupon.description)
@@ -1675,7 +1675,7 @@ class ScannerViewModel @Inject constructor(
         val mergedDescription = DescriptionUtils.appendDetails(baseDescription, cashbackDetail)
 
         return Coupon(
-            storeName = extractedInfo["storeName"] ?: extractedInfo["app"] ?: "Unknown Store",
+            storeName = extractedInfo["storeName"] ?: extractedInfo["app"] ?: Coupon.Defaults.UNKNOWN_STORE,
             description = mergedDescription,
             expiryDate = expiryDate,
             redeemCode = extractedInfo["code"], // Don't generate fallback - use null if not extracted
@@ -1768,7 +1768,7 @@ class ScannerViewModel @Inject constructor(
 
                 // Record successful extraction
                 val fieldsExtracted = mutableSetOf<String>()
-                if (coupon.storeName != "Unknown Store") fieldsExtracted.add("storeName")
+                if (coupon.storeName != Coupon.Defaults.UNKNOWN_STORE) fieldsExtracted.add("storeName")
                 if (!coupon.redeemCode.isNullOrBlank()) fieldsExtracted.add("redeemCode")
                 if (coupon.getCashbackNumericValue() > 0) fieldsExtracted.add("cashback")
                 if (coupon.expiryDate != null) fieldsExtracted.add("expiryDate")
@@ -2039,7 +2039,7 @@ class ScannerViewModel @Inject constructor(
         val mergedDescription = DescriptionUtils.appendDetails(baseDescription, cashbackDetail)
 
         return Coupon(
-            storeName = extractedInfo["storeName"] ?: "Unknown Store",
+            storeName = extractedInfo["storeName"] ?: Coupon.Defaults.UNKNOWN_STORE,
             description = mergedDescription,
             expiryDate = expiryDate,
             redeemCode = extractedInfo["code"],

@@ -536,13 +536,13 @@ class BatchScannerViewModel @Inject constructor(
      */
     private suspend fun buildPlaceholderCoupon(uri: Uri): Coupon {
         return Coupon(
-            storeName = "Unknown Store",
+            storeName = com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE,
             description = "Extraction failed - please edit manually",
             expiryDate = null,
             redeemCode = null,
             imageUri = persistUri(uri),
             category = "Other",
-            status = "Active"
+            status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE
         )
     }
     
@@ -791,10 +791,10 @@ class BatchScannerViewModel @Inject constructor(
         // Store name: prefer LLM if confident (>0.6), else OCR
         val storeName = if (llmConf.getOrDefault("storeName", 0f) > 0.6f && llmInfo.storeName.isNotBlank()) {
             llmInfo.storeName
-        } else if (ocrCoupon.storeName != "Unknown Store") {
+        } else if (ocrCoupon.storeName != com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE) {
             ocrCoupon.storeName
         } else {
-            llmInfo.storeName.takeIf { it.isNotBlank() } ?: "Unknown Store"
+            llmInfo.storeName.takeIf { it.isNotBlank() } ?: com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
         }
         
         // Coupon code: prefer LLM if confident (>0.7), else OCR
@@ -834,7 +834,7 @@ class BatchScannerViewModel @Inject constructor(
             redeemCode = redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
             imageUri = persistUri(uri),
             category = llmInfo.category ?: ocrCoupon.category,
-            status = "Active"
+            status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE
         )
     }
 
@@ -942,13 +942,13 @@ class BatchScannerViewModel @Inject constructor(
                                     extractedInfo.putAll(mapCouponToFields(universalResult.coupon))
                                 } else {
                                     // Both LLM and OCR failed - return minimal data
-                                    extractedInfo["storeName"] = "Unknown Store"
+                                    extractedInfo["storeName"] = com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
                                     extractedInfo["description"] = "Extraction failed - please edit manually"
                                 }
                             }
                             else -> {
                                 // Both LLM and OCR failed
-                                extractedInfo["storeName"] = "Unknown Store"
+                                extractedInfo["storeName"] = com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
                                 extractedInfo["description"] = "Extraction failed - please edit manually"
                             }
                         }
@@ -958,7 +958,7 @@ class BatchScannerViewModel @Inject constructor(
             } catch (e: Exception) {
                 Log.e(TAG, "LEGACY: Field extraction failed", e)
                 finalStage = "ERROR"
-                extractedInfo["storeName"] = "Unknown Store"
+                extractedInfo["storeName"] = com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
                 extractedInfo["description"] = "Extraction error: ${e.message}"
             }
             
@@ -1019,7 +1019,7 @@ class BatchScannerViewModel @Inject constructor(
     private fun mapCouponToFields(coupon: com.example.coupontracker.data.model.Coupon): Map<String, String> {
         val fields = mutableMapOf<String, String>()
         
-        if (coupon.storeName.isNotBlank() && coupon.storeName != "Unknown Store") {
+        if (coupon.storeName.isNotBlank() && coupon.storeName != com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE) {
             fields["storeName"] = coupon.storeName
         }
         
@@ -1055,7 +1055,7 @@ class BatchScannerViewModel @Inject constructor(
             when {
                 // If LLM field is missing or generic, use OCR
                 !llmFields.containsKey(key) -> llmFields[key] = value
-                llmFields[key] == "Unknown Store" && key == "storeName" -> llmFields[key] = value
+                llmFields[key] == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE && key == "storeName" -> llmFields[key] = value
                 llmFields[key]?.isBlank() == true -> llmFields[key] = value
                 // For codes, prefer OCR if it looks more valid
                 key == "code" && value.length >= 4 && llmFields[key]?.length ?: 0 < 4 -> llmFields[key] = value
@@ -1083,13 +1083,13 @@ class BatchScannerViewModel @Inject constructor(
         val mergedDescription = DescriptionUtils.appendDetails(baseDescription, fields["amount"])
         
         return Coupon(
-            storeName = fields["storeName"] ?: "Unknown Store",
+            storeName = fields["storeName"] ?: com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE,
             description = mergedDescription,
             expiryDate = expiryDate,
             redeemCode = fields["code"]?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
             imageUri = persistUri(uri),
             category = fields["category"],
-            status = "Active"
+            status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE
         )
     }
     
@@ -1101,12 +1101,12 @@ class BatchScannerViewModel @Inject constructor(
         val description = buildDescriptionFromInfo(couponInfo)
         
         return Coupon(
-            storeName = couponInfo.storeName.takeIf { it.isNotBlank() } ?: "Unknown Store",
+            storeName = couponInfo.storeName.takeIf { it.isNotBlank() } ?: com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE,
             description = description.ifBlank { "Extracted via LLM" },
             expiryDate = couponInfo.expiryDate,
             redeemCode = couponInfo.redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" },
             imageUri = persistUri(uri),
-            status = "Active"
+            status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE
         )
     }
 
@@ -1149,7 +1149,7 @@ class BatchScannerViewModel @Inject constructor(
             segments += "Rating: ${it.trim()}"
         }
 
-        info.status?.takeIf { it.isNotBlank() && !it.equals("Active", ignoreCase = true) }?.let {
+        info.status?.takeIf { it.isNotBlank() && !it.equals(com.example.coupontracker.data.model.Coupon.Status.ACTIVE, ignoreCase = true) }?.let {
             segments += "Status: ${it.trim()}"
         }
 
@@ -1424,7 +1424,7 @@ class BatchScannerViewModel @Inject constructor(
             expiryDate = couponInfo.expiryDate,
             redeemCode = couponInfo.redeemCode,
             imageUri = uri.toString(),
-            status = "Active",
+            status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE,
             needsAttention = couponInfo.needsAttention,
             storeNameSource = couponInfo.storeNameSource,
             storeNameEvidence = couponInfo.storeNameEvidence,

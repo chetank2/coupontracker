@@ -56,6 +56,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -65,14 +66,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import com.example.coupontracker.R
 import com.example.coupontracker.data.model.Coupon
-import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.ui.components.BrandButton
 import com.example.coupontracker.ui.components.BrandButtonTier
 import com.example.coupontracker.ui.components.BrandTopBar
-import com.example.coupontracker.ui.components.CouponCardModel
-import com.example.coupontracker.ui.components.CouponCardState
-import com.example.coupontracker.ui.components.DateFormatter
 import com.example.coupontracker.ui.components.EmptyState
 import com.example.coupontracker.ui.components.FilterSortBottomSheet
 import com.example.coupontracker.ui.components.SectionHeader
@@ -82,11 +80,11 @@ import com.example.coupontracker.ui.model.CouponStatusFilter
 import com.example.coupontracker.ui.model.ExpiryRange
 import com.example.coupontracker.ui.model.FilterState
 import com.example.coupontracker.ui.model.hasActiveFilters
+import com.example.coupontracker.ui.model.toCouponCardModel
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.HomeViewModel
 import com.example.coupontracker.ui.viewmodel.ModelAvailabilityStatus
-import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -399,7 +397,7 @@ fun HomeScreen(
                 }
             } else {
                 SectionHeader(
-                    title = "Wallet",
+                    title = stringResource(R.string.coupon_wallet_title),
                     modifier = Modifier.padding(
                         start = BrandSpacing.Medium,
                         end = BrandSpacing.Medium,
@@ -408,7 +406,7 @@ fun HomeScreen(
                     ),
                     action = {
                         Text(
-                            text = "${coupons.size} total",
+                            text = stringResource(R.string.coupon_total_count, coupons.size),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -431,62 +429,6 @@ fun HomeScreen(
             }
         }
     }
-}
-
-private fun Coupon.toCouponCardModel(): CouponCardModel {
-    val initial = storeName.firstOrNull { it.isLetterOrDigit() } ?: 'C'
-
-    return CouponCardModel(
-        brandName = storeName,
-        brandInitial = initial,
-        brandColor = null,
-        valueLabel = cardOfferSummary(),
-        code = redeemCode.orEmpty(),
-        expiresAt = DateFormatter.formatShort(expiryDate),
-        statusLabel = when (cleanupStatus) {
-            Coupon.CleanupStatus.PENDING -> "Queued"
-            Coupon.CleanupStatus.RUNNING -> "Cleaning"
-            Coupon.CleanupStatus.FAILED -> "Needs clean"
-            else -> null
-        },
-        statusInProgress = cleanupStatus == Coupon.CleanupStatus.PENDING ||
-            cleanupStatus == Coupon.CleanupStatus.RUNNING,
-        state = when {
-            status.equals("Used", ignoreCase = true) -> CouponCardState.Redeemed
-            expiryDate?.before(Date()) == true -> CouponCardState.Expired
-            else -> CouponCardState.Default
-        },
-    )
-}
-
-private fun Coupon.cardOfferSummary(): String {
-    val cashback = getCashbackDisplayText()
-        .replace(Regex("\\s+"), " ")
-        .trim()
-        .takeIf { it.isNotBlank() && it.length <= 36 && !it.equals("0.0", ignoreCase = true) }
-
-    if (cashback != null) return cashback
-
-    val displayDescription = DescriptionUtils.formatDisplayDescription(
-        description = description,
-        storeName = storeName,
-        redeemCode = redeemCode,
-    ).replace(Regex("\\s+"), " ").trim()
-
-    val offerPattern = Regex(
-        pattern = """(?i)(₹\s*\d[\d,]*(?:\s*off)?|\d+\s*%\s*(?:off|cashback)?|flat\s+[^.]{1,32}|free\s+[^.]{1,32}|save\s+[^.]{1,32})""",
-    )
-    val matchedOffer = offerPattern.find(displayDescription)?.value
-        ?.replace(Regex("\\s+"), " ")
-        ?.trim()
-        ?.take(44)
-
-    return matchedOffer?.ifBlank { null }
-        ?: when {
-            displayDescription.contains("voucher", ignoreCase = true) -> "Saved voucher"
-            displayDescription.contains("coupon", ignoreCase = true) -> "Saved coupon"
-            else -> "Saved offer"
-        }
 }
 
 @Composable

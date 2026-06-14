@@ -56,7 +56,7 @@ object CouponPostProcessor {
             }
         }
 
-        return current.ifBlank { "Unknown Store" }
+        return current.ifBlank { com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE }
     }
 
     private fun resolveRedeemCode(current: String?, ocrText: String?): String? {

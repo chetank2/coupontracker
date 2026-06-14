@@ -381,7 +381,7 @@ class CouponFieldExtractor {
         // Set default merchant name if missing
         if (!results.containsKey("merchantName")) {
             results["merchantName"] = ExtractedField(
-                "Unknown Store",
+                com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE,
                 ConfidenceLevel.SYNTHETIC
             )
         }

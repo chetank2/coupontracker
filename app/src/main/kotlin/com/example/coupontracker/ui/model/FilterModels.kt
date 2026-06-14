@@ -24,7 +24,7 @@ fun FilterState.hasActiveFilters(includeSearchQuery: Boolean = false, searchQuer
 
 enum class CouponStatusFilter(val displayName: String) {
     ALL("All statuses"),
-    ACTIVE("Active"),
+    ACTIVE(com.example.coupontracker.data.model.Coupon.Status.ACTIVE),
     EXPIRING_SOON("Expiring soon"),
     EXPIRED("Expired")
 }

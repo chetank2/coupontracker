@@ -122,11 +122,11 @@ class DetailViewModel @Inject constructor(
                 try {
                     // Update usage count
                     repository.updateCouponUsageCount(coupon.id)
-                    repository.updateCouponStatus(coupon.id, "Used")
+                    repository.updateCouponStatus(coupon.id, Coupon.Status.USED)
 
                     // If this was the last use and the coupon has a usage limit, mark as used
                     if (coupon.usageLimit != null && coupon.usageCount + 1 >= coupon.usageLimit) {
-                        repository.updateCouponStatus(coupon.id, "Used")
+                        repository.updateCouponStatus(coupon.id, Coupon.Status.USED)
                     }
 
                     // Track savings if applicable

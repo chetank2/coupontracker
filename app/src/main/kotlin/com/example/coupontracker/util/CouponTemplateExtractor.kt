@@ -278,7 +278,7 @@ class CouponTemplateExtractor {
         val textExtractor = TextExtractor()
         
         // For CRED coupons, extract store name more aggressively
-        val storeName = findStoreNameInCREDCoupon(text) ?: textExtractor.extractStoreName(text) ?: "Unknown Store"
+        val storeName = findStoreNameInCREDCoupon(text) ?: textExtractor.extractStoreName(text) ?: com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
         
         // Try to extract redeemCode with CRED-specific pattern first
         val redeemCodePattern = Pattern.compile("(?i)\\b(CRED[A-Z0-9]{3,10})\\b")

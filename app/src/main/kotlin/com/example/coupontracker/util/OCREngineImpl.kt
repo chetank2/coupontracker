@@ -95,7 +95,7 @@ class OCREngineImpl(
 
         // Fallback to a basic extraction if all methods fail
         val results = mutableMapOf<String, String>()
-        results["storeName"] = if (isMyntraCoupon) "Myntra" else "Unknown Store"
+        results["storeName"] = if (isMyntraCoupon) "Myntra" else com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
         results["description"] = if (isMyntraCoupon) "Myntra coupon" else "Scanned coupon"
         results["amount"] = "₹0"
 

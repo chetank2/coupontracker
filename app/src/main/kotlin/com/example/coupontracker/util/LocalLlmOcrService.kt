@@ -1336,7 +1336,7 @@ class LocalLlmOcrService(
             Log.d(TAG, "Falling back to traditional OCR after invalid LLM response")
             val fallbackResult = fallbackToTraditionalOCR(bitmap, captureTimestamp)
 
-            fallbackUsed = if (fallbackResult.storeName != "Unknown Store" || !fallbackResult.redeemCode.isNullOrBlank()) {
+            fallbackUsed = if (fallbackResult.storeName != com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE || !fallbackResult.redeemCode.isNullOrBlank()) {
                 "ML_KIT"
             } else {
                 "MODEL_BASED"
@@ -1359,7 +1359,7 @@ class LocalLlmOcrService(
     
     private fun countExtractedFields(couponInfo: CouponInfo): Int {
         var count = 0
-        if (couponInfo.storeName != "Unknown Store") count++
+        if (couponInfo.storeName != com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE) count++
         if (!couponInfo.redeemCode.isNullOrBlank()) count++
         if (couponInfo.expiryDate != null) count++
         if (couponInfo.description.isNotBlank()) count++
@@ -1409,7 +1409,7 @@ class LocalLlmOcrService(
                 val fallbackService = ModelBasedOCRService(context, ocrEngine)
                 val fallbackInfo = fallbackService.processCouponImage(bitmap)
                 listOfNotNull(
-                    fallbackInfo.storeName.takeIf { !it.equals("Unknown Store", ignoreCase = true) && it.isNotBlank() },
+                    fallbackInfo.storeName.takeIf { !it.equals(com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE, ignoreCase = true) && it.isNotBlank() },
                     fallbackInfo.description.takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) },
                     fallbackInfo.redeemCode
                 ).joinToString(" ").ifBlank { null }
@@ -1641,9 +1641,9 @@ class LocalLlmOcrService(
 
             val finalStoreName = finalStoreCandidate?.takeIf {
                 it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it)
-            } ?: "Unknown Store"
+            } ?: com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
 
-            val storeNeedsAttention = storeResolution.needsAttention || finalStoreName == "Unknown Store"
+            val storeNeedsAttention = storeResolution.needsAttention || finalStoreName == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
             val storeEvidence = storeResolution.evidence
             val storeSource = storeResolution.source
 
@@ -2212,7 +2212,7 @@ class LocalLlmOcrService(
         var failureReason: String? = null
         
         // Check essential fields
-        if (couponInfo.storeName != "Unknown Store") qualityScore += 30
+        if (couponInfo.storeName != com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE) qualityScore += 30
         if (!couponInfo.redeemCode.isNullOrBlank()) qualityScore += 25
         val hasSavingsDetail = hasSavingsDetail(couponInfo)
         if (hasSavingsDetail) qualityScore += 25
@@ -2236,7 +2236,7 @@ class LocalLlmOcrService(
         // Determine failure reasons for better telemetry
         when {
             // Complete failure - no meaningful data at all
-            couponInfo.storeName == "Unknown Store" && 
+            couponInfo.storeName == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE && 
             couponInfo.redeemCode.isNullOrBlank() && 
             isCashbackDetailMissing -> {
                 failureReason = "COMPLETE_EXTRACTION_FAILURE"
@@ -2294,7 +2294,7 @@ class LocalLlmOcrService(
                 }
             
             // Validate that we got meaningful extraction results
-            if (extractedInfo.storeName == "Unknown Store" &&
+            if (extractedInfo.storeName == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE &&
                 extractedInfo.redeemCode.isNullOrBlank() &&
                 !hasSavingsDetail(extractedInfo)) {
                 throw Exception("ML Kit OCR produced insufficient coupon data")
@@ -2448,7 +2448,7 @@ class LocalLlmOcrService(
         )
         
         return when {
-            couponInfo.storeName == "Unknown Store" &&
+            couponInfo.storeName == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE &&
             couponInfo.redeemCode.isNullOrBlank() &&
             isCashbackDetailMissing -> QualityReason.COMPLETE_EXTRACTION_FAILURE
             

@@ -589,7 +589,7 @@ class ProgressiveExtractionService @Inject constructor(
             return fallback.trim()
         }
 
-        return primary.trim().ifBlank { "Unknown Store" }
+        return primary.trim().ifBlank { com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE }
     }
 
     private fun isValidStoreName(value: String?): Boolean {

@@ -83,7 +83,7 @@ class ExtractionValidator(
         val confidences = mutableMapOf<FieldType, FieldConfidence>()
         
         // Score each field that has a value
-        if (coupon.storeName.isNotBlank() && coupon.storeName != "Unknown Store") {
+        if (coupon.storeName.isNotBlank() && coupon.storeName != com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE) {
             confidences[FieldType.STORE_NAME] = confidenceScorer.scoreField(
                 FieldType.STORE_NAME,
                 coupon.storeName,
@@ -202,7 +202,7 @@ class ExtractionValidator(
         }
         
         // Check for common issues
-        if (coupon.storeName == "Unknown Store" || coupon.storeName.length < 3) {
+        if (coupon.storeName == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE || coupon.storeName.length < 3) {
             recommendations.add("Store name appears to be placeholder or too short")
         }
         

@@ -55,12 +55,12 @@ class SmartCouponSanitizer(
         val createdAt = fallbackCoupon?.createdAt ?: captureTimestamp ?: Date()
         val baseCoupon = fallbackCoupon ?: Coupon(
             id = 0,
-            storeName = canonicalStore ?: "Unknown Store",
+            storeName = canonicalStore ?: com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE,
             description = description,
             redeemCode = sanitizedCode,
             expiryDate = expiryDateConverted,
             imageUri = imageUri,
-            status = "Active",
+            status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE,
             createdAt = createdAt,
             updatedAt = Date()
         )

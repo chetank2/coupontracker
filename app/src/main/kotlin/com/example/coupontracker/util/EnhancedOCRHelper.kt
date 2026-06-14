@@ -252,7 +252,7 @@ class EnhancedOCRHelper(
         
         // If we couldn't extract any information, provide some defaults
         if (result.isEmpty()) {
-            result["storeName"] = if (isMyntraCoupon) "Myntra" else "Unknown Store"
+            result["storeName"] = if (isMyntraCoupon) "Myntra" else com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
             setDescription(result, "Scanned coupon")
         }
         
