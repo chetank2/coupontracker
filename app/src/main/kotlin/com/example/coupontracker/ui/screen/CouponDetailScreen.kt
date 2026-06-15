@@ -45,14 +45,11 @@ import com.example.coupontracker.model.ModelCatalog
 import com.example.coupontracker.ui.components.BrandButton
 import com.example.coupontracker.ui.components.BrandButtonTier
 import com.example.coupontracker.ui.components.BrandTopBar
-import com.example.coupontracker.ui.components.CouponCard
-import com.example.coupontracker.ui.components.CouponCardVariant
 import com.example.coupontracker.ui.components.DateFormatter
 import com.example.coupontracker.ui.components.ExtractionDebugPanel
 import com.example.coupontracker.ui.components.GlassSurface
 import com.example.coupontracker.ui.components.StatusType
 import com.example.coupontracker.ui.theme.BrandSpacing
-import com.example.coupontracker.ui.model.toCouponCardModel
 import com.example.coupontracker.ui.viewmodel.DetailViewModel
 import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.data.util.DescriptionUtils
@@ -167,7 +164,6 @@ private fun CouponDetailContent(
             redeemCode = coupon.redeemCode
         )
     }
-    val detailCardModel = coupon.toCouponCardModel(displayDescription)
 
     Column(
         modifier = Modifier
@@ -175,19 +171,6 @@ private fun CouponDetailContent(
             .verticalScroll(rememberScrollState())
             .padding(BrandSpacing.Medium)
     ) {
-        CouponCard(
-            model = detailCardModel,
-            state = detailCardModel.state,
-            variant = CouponCardVariant.WalletStack,
-            isHero = true,
-            onTap = {},
-            onRedeem = {
-                onTrackUsage()
-                Toast.makeText(context, "Usage tracked", Toast.LENGTH_SHORT).show()
-            },
-            modifier = Modifier.padding(bottom = BrandSpacing.Medium),
-        )
-
         CleanupStatusCard(
             coupon = coupon,
             onCleanCoupon = onCleanCoupon,
@@ -196,13 +179,18 @@ private fun CouponDetailContent(
 
         // Coupon image (if available)
         coupon.imageUri?.let { imageUri ->
-            Card(
+            Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
                     .padding(bottom = BrandSpacing.Medium)
                     .clickable { onToggleImagePreview(true) },
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant
+                )
             ) {
                 AsyncImage(
                     model = ImageRequest.Builder(context)
@@ -211,7 +199,9 @@ private fun CouponDetailContent(
                         .build(),
                     contentDescription = "Coupon Image",
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(12.dp))
                 )
             }
 

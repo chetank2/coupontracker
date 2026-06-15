@@ -32,6 +32,7 @@ fun WalletStack(
                 state = model.state,
                 variant = CouponCardVariant.WalletStack,
                 isHero = index == activeIndex,
+                showBorder = index != activeIndex,
                 onTap = { onCouponTap(index) },
                 modifier = Modifier.fillMaxWidth(),
             )

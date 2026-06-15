@@ -72,6 +72,7 @@ fun CouponCard(
     state: CouponCardState,
     variant: CouponCardVariant,
     isHero: Boolean = false,
+    showBorder: Boolean = true,
     onTap: () -> Unit,
     onRedeem: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -114,7 +115,9 @@ fun CouponCard(
                 .clip(BrandShapes.CouponCard)
                 .background(colors.surface)
                 .then(
-                    if (variant == CouponCardVariant.Preview) {
+                    if (!showBorder) {
+                        Modifier
+                    } else if (variant == CouponCardVariant.Preview) {
                         Modifier.dashedCouponBorder(colors.outline)
                     } else {
                         Modifier.border(
@@ -167,7 +170,7 @@ fun CouponCard(
             }
         }
 
-        if (isHero) {
+        if (isHero && showBorder) {
             Canvas(modifier = Modifier.matchParentSize()) {
                 val strokeWidth = BrandSpacing.Hairline2.toPx()
                 drawRoundRect(

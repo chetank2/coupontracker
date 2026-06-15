@@ -40,6 +40,7 @@ class BatchScannerViewModel @Inject constructor(
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Bitmap memory management
     private val universalExtractionService: com.example.coupontracker.universal.UniversalExtractionService,  // V2: Universal extraction
     private val ocrFirstCouponExtractor: OcrFirstCouponExtractor,
+    private val couponInputManager: CouponInputManager,
     private val analyticsTracker: AnalyticsTracker,
     private val telemetryService: ExtractionTelemetryService,
     private val regionPipeline: com.example.coupontracker.extraction.multi.CouponRegionPipeline,
@@ -296,6 +297,21 @@ class BatchScannerViewModel @Inject constructor(
                     updateState { it.copy(currentlyProcessingImage = selectedImage) }
                     var bitmap: android.graphics.Bitmap? = null
                     try {
+                        if (selectedImage.isPdf()) {
+                            Log.d(TAG, "Batch: Processing PDF ${selectedImage.displayName}")
+                            val coupon = couponInputManager.processPdfUri(uri)
+                            processedCoupons.add(coupon)
+                            imageStatuses.add(
+                                ImageProcessingStatus(
+                                    image = selectedImage,
+                                    success = true,
+                                    message = null,
+                                    couponsFound = 1
+                                )
+                            )
+                            continue
+                        }
+
                         if (!selectedImage.isImage()) {
                             Log.w(TAG, "Batch: Unsupported file type ${selectedImage.mimeType} for uri=$uri")
                             failedCount++
@@ -822,6 +838,7 @@ data class SelectedImage(
     val selectionOrder: Int
 ) {
     fun isImage(): Boolean = mimeType.startsWith("image/") || mimeType == "image/*"
+    fun isPdf(): Boolean = mimeType == "application/pdf"
 }
 
 data class ImageProcessingStatus(
