@@ -54,7 +54,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -94,11 +93,8 @@ fun HomeScreen(
 ) {
     val homeUiState by viewModel.uiState.collectAsState()
     val coupons = homeUiState.coupons
-    val isModelInstalled = homeUiState.modelStatus == ModelAvailabilityStatus.INSTALLED
     val showModelCard = homeUiState.showModelCard
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
-
     val sharedPreferences = remember {
         context.getSharedPreferences("coupon_tracker_prefs", Context.MODE_PRIVATE)
     }
@@ -133,12 +129,6 @@ fun HomeScreen(
     // Bottom sheet states
     var showCaptureBottomSheet by remember { mutableStateOf(false) }
     var showFilterSortBottomSheet by remember { mutableStateOf(false) }
-
-    LaunchedEffect(isModelInstalled) {
-        if (!isModelInstalled) {
-            showCaptureBottomSheet = false
-        }
-    }
 
     LaunchedEffect(key1 = true) {
         val isFirstLaunchPref = sharedPreferences.getBoolean("is_first_launch", true)
@@ -222,34 +212,32 @@ fun HomeScreen(
             }
         },
         floatingActionButton = {
-            if (isModelInstalled) {
-                ExtendedFloatingActionButton(
-                    onClick = { showCaptureBottomSheet = true },
-                    icon = {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = null
-                        )
-                    },
-                    text = {
-                        Text(
-                            text = "Add Coupon",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    },
-                    expanded = true,
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    elevation = FloatingActionButtonDefaults.elevation(
-                        defaultElevation = 6.dp,
-                        pressedElevation = 8.dp
-                    ),
-                    modifier = Modifier.padding(vertical = BrandSpacing.Small)
-                )
-            }
+            ExtendedFloatingActionButton(
+                onClick = { showCaptureBottomSheet = true },
+                icon = {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = null
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Add Coupon",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                },
+                expanded = true,
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 6.dp,
+                    pressedElevation = 8.dp
+                ),
+                modifier = Modifier.padding(vertical = BrandSpacing.Small)
+            )
 
             // Show the simplified capture bottom sheet when the FAB is clicked
-            if (showCaptureBottomSheet && isModelInstalled) {
+            if (showCaptureBottomSheet) {
                 SimplifiedCaptureBottomSheet(
                     onDismiss = { showCaptureBottomSheet = false },
                     onCameraCapture = {
@@ -376,15 +364,11 @@ fun HomeScreen(
                                     modifier = Modifier.fillMaxWidth(0.7f)
                                 ) {
                                     BrandButton(
-                                        text = if (isModelInstalled) "Add coupon" else "Set up offline scanning",
+                                        text = "Add coupon",
                                         onClick = {
-                                            if (isModelInstalled) {
-                                                showCaptureBottomSheet = true
-                                            } else {
-                                                navController.navigate(Screen.Settings.route)
-                                            }
+                                            showCaptureBottomSheet = true
                                         },
-                                        leadingIcon = if (isModelInstalled) Icons.Default.Add else Icons.Default.CloudDownload,
+                                        leadingIcon = Icons.Default.Add,
                                         tier = BrandButtonTier.Primary,
                                         modifier = Modifier
                                             .fillMaxWidth()
@@ -475,14 +459,14 @@ private fun ModelDownloadCard(
 ) {
     val description = remember(status, message) {
         when (status) {
-            ModelAvailabilityStatus.ERROR -> "We couldn't verify the offline model. Try downloading again to unlock scanning."
+            ModelAvailabilityStatus.ERROR -> "We couldn't verify the offline model. Try downloading again to use cleaning."
             else -> if (message.isNotBlank()) {
                 message
             } else {
                 when (status) {
-                    ModelAvailabilityStatus.NOT_INSTALLED -> "Set up the private coupon reader to scan screenshots on this device."
-                    ModelAvailabilityStatus.DOWNLOADING -> "Offline scanning setup is in progress. Keep the app open until it finishes."
-                    ModelAvailabilityStatus.INSTALLED -> "Offline scanning is ready."
+                    ModelAvailabilityStatus.NOT_INSTALLED -> "Set up the private cleaner to improve saved coupon details on this device."
+                    ModelAvailabilityStatus.DOWNLOADING -> "Offline cleaning setup is in progress. Keep the app open until it finishes."
+                    ModelAvailabilityStatus.INSTALLED -> "Offline cleaning is ready."
                     ModelAvailabilityStatus.ERROR -> ""
                 }
             }
@@ -494,7 +478,7 @@ private fun ModelDownloadCard(
     }
 
     val primaryLabel = when (status) {
-        ModelAvailabilityStatus.NOT_INSTALLED -> "Set up offline scanning"
+        ModelAvailabilityStatus.NOT_INSTALLED -> "Set up cleaner"
         ModelAvailabilityStatus.DOWNLOADING -> "View Progress"
         ModelAvailabilityStatus.ERROR -> "Retry setup"
         ModelAvailabilityStatus.INSTALLED -> "Manage"
@@ -527,11 +511,11 @@ private fun ModelDownloadCard(
                 Spacer(modifier = Modifier.width(BrandSpacing.Small))
                 Column {
                     Text(
-                        text = "Set up offline scanning",
+                        text = "Set up offline cleaning",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Text(
-                        text = "Private coupon reading happens on your phone.",
+                        text = "Coupon cleanup happens privately on your phone.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
