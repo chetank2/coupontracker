@@ -86,6 +86,11 @@ fun AppNavigation(
         if (!onboardingCompleted) return@LaunchedEffect
 
         val pendingRoute = when {
+            sharedPreferences.getLong("pending_coupon_id", 0L) > 0L -> {
+                val couponId = sharedPreferences.getLong("pending_coupon_id", 0L)
+                sharedPreferences.edit().remove("pending_coupon_id").apply()
+                Screen.CouponDetail.createRoute(couponId)
+            }
             sharedPreferences.getString("shared_image_uris", null) != null -> Screen.BatchScanner.route
             sharedPreferences.getString("shared_image_uri", null) != null -> Screen.Scanner.route
             sharedPreferences.getString("shared_url", null) != null -> Screen.ManualEntry.route

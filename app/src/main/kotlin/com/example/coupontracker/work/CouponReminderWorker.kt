@@ -1,12 +1,12 @@
 package com.example.coupontracker.work
 
 import android.content.Context
-import android.os.Bundle
+import android.app.PendingIntent
+import android.content.Intent
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.hilt.work.HiltWorker
-import androidx.navigation.NavDeepLinkBuilder
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
@@ -78,16 +78,16 @@ class CouponReminderWorker @AssistedInject constructor(
             Log.d(TAG, "System notifications disabled; skipping reminder for coupon ${coupon.id}")
             return
         }
-        val args = Bundle().apply {
-            putLong("couponId", coupon.id)
+        val intent = Intent(context, MainActivity::class.java).apply {
+            putExtra(MainActivity.EXTRA_COUPON_ID, coupon.id)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-
-        val pendingIntent = NavDeepLinkBuilder(context)
-            .setComponentName(MainActivity::class.java)
-            .setGraph(R.navigation.nav_graph)
-            .setDestination(R.id.detailFragment)
-            .setArguments(args)
-            .createPendingIntent()
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            notificationId(coupon),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
 
         val contentText = context.getString(
             R.string.notification_coupon_reminder_body,

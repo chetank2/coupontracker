@@ -3,7 +3,10 @@ package com.example.coupontracker.ocr
 import android.graphics.Rect
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class OcrMergerTest {
 
     private fun span(text: String, conf: Float, y: Int): OcrTextSpan =

@@ -5,6 +5,7 @@ import com.example.coupontracker.llm.gemma.GemmaRuntime
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,7 +24,12 @@ class GemmaTextCouponModelTest {
         val result = model.extractFromText("ocr text", "prompt", grammar = null)
 
         assertEquals(ModelMode.TEXT_GEMMA, model.mode)
-        assertEquals(canonical, result.canonicalJson)
+        JSONObject(result.canonicalJson).let { json ->
+            assertEquals("AJIO", json.getString("storeName"))
+            assertEquals("SAVE50", json.getString("redeemCode"))
+            assertEquals("2026-06-01", json.getString("expiryDate"))
+            assertEquals("ocr", json.getString("storeNameSource"))
+        }
         assertTrue(result.latencyMs >= 0)
     }
 

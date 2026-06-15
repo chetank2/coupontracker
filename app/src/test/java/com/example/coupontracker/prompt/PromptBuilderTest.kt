@@ -30,9 +30,10 @@ class PromptBuilderTest {
     fun `build includes canonical provenance and description guidance`() {
         val result = builder.build(sampleOcr)
 
-        assertTrue(result.systemPrompt.contains("storeNameSource must be one lowercase provenance token"))
-        assertTrue(result.systemPrompt.contains("Use ocr when the store name is present in the OCR excerpt"))
-        assertTrue(result.userPrompt.contains("combine the main offer line with its following subtitle"))
-        assertTrue(result.userPrompt.contains("copy exact supporting lines"))
+        assertTrue(result.systemPrompt.contains("storeNameSource=ocr|logo|heading|vision|unknown"))
+        assertTrue(result.systemPrompt.contains("storeNameEvidence=1-2 exact OCR snippets"))
+        assertTrue(result.systemPrompt.contains("No markdown, comments, nulls, empty strings, or extra keys"))
+        assertTrue(result.userPrompt.contains("Do not invent"))
+        assertTrue(result.userPrompt.contains("Get Flat 20% Off*"))
     }
 }

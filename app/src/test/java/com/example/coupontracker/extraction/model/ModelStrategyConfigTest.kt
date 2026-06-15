@@ -46,6 +46,7 @@ class ModelStrategyConfigTest {
         val prefs = mockk<SharedPreferences>(relaxed = true)
         val editor = mockk<SharedPreferences.Editor>(relaxed = true)
         every { prefs.edit() } returns editor
+        every { editor.putString(any(), any()) } returns editor
         val config = ModelStrategyConfig(prefs)
 
         config.setModeFor(ModelRole.EXPERIMENT, ModelMode.TEXT_GEMMA)

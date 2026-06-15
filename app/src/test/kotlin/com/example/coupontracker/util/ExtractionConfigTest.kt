@@ -6,7 +6,6 @@ import com.example.coupontracker.llm.MlcLlmNative
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.robolectric.RobolectricTestRunner
@@ -46,30 +45,29 @@ class ExtractionConfigTest {
     }
 
     @Test
-    fun enablingAdvancedStrategiesRestoresPersistedSelection() {
+    fun enablingAdvancedStrategiesKeepsOcrFirst() {
         ExtractionConfig.runtimeAvailabilityChecker = { true }
         ExtractionConfig.init(context)
         ExtractionConfig.setAdvancedStrategiesEnabled(true)
-        assertTrue(ExtractionConfig.areAdvancedStrategiesEnabled())
-        ExtractionConfig.setStrategy(ExtractionStrategy.LLM_FIRST)
 
-        assertEquals(ExtractionStrategy.LLM_FIRST, ExtractionConfig.getStrategy())
+        assertFalse(ExtractionConfig.areAdvancedStrategiesEnabled())
+        assertEquals(ExtractionStrategy.OCR_FIRST, ExtractionConfig.getStrategy())
 
         ExtractionConfig.resetForTesting()
         ExtractionConfig.runtimeAvailabilityChecker = { true }
         ExtractionConfig.init(context)
 
-        assertTrue(ExtractionConfig.areAdvancedStrategiesEnabled())
-        assertEquals(ExtractionStrategy.LLM_FIRST, ExtractionConfig.getStrategy())
+        assertFalse(ExtractionConfig.areAdvancedStrategiesEnabled())
+        assertEquals(ExtractionStrategy.OCR_FIRST, ExtractionConfig.getStrategy())
     }
 
     @Test
-    fun persistedAdvancedSelectionResumesWhenGuardToggledOn() {
+    fun unsupportedPersistedSelectionFallsBackToOcrFirst() {
         ExtractionConfig.runtimeAvailabilityChecker = { false }
         ExtractionConfig.init(context)
         context.getSharedPreferences("extraction_config", Context.MODE_PRIVATE)
             .edit()
-            .putString("extraction_strategy", ExtractionStrategy.HYBRID.name)
+            .putString("extraction_strategy", "HYBRID")
             .apply()
 
         ExtractionConfig.resetForTesting()
@@ -82,29 +80,37 @@ class ExtractionConfigTest {
         ExtractionConfig.refreshRuntimeAvailability(context)
         ExtractionConfig.setAdvancedStrategiesEnabled(true)
 
-        assertTrue(ExtractionConfig.areAdvancedStrategiesEnabled())
-        assertEquals(ExtractionStrategy.HYBRID, ExtractionConfig.getStrategy())
+        assertFalse(ExtractionConfig.areAdvancedStrategiesEnabled())
+        assertEquals(ExtractionStrategy.OCR_FIRST, ExtractionConfig.getStrategy())
     }
 
     @Test
-    fun availableStrategiesIncludeAdvancedWhenLibraryReadyAndGuardEnabled() {
+    fun availableStrategiesOnlyIncludeOcrFirst() {
         ExtractionConfig.runtimeAvailabilityChecker = { true }
         ExtractionConfig.init(context)
         ExtractionConfig.setAdvancedStrategiesEnabled(true)
 
         val strategies = ExtractionConfig.getAvailableStrategies()
 
-        assertTrue(strategies.contains(ExtractionStrategy.LLM_FIRST))
-        assertTrue(strategies.contains(ExtractionStrategy.HYBRID))
+        assertEquals(listOf(ExtractionStrategy.OCR_FIRST), strategies)
     }
 
     @Test
-    fun runtimeAvailabilityAutomaticallyEnablesAdvancedStrategies() {
+    fun runtimeAvailabilityDoesNotEnableCaptureModelStrategies() {
         ExtractionConfig.runtimeAvailabilityChecker = { true }
         ExtractionConfig.init(context)
 
-        assertTrue(ExtractionConfig.areAdvancedStrategiesEnabled())
-        assertEquals(ExtractionStrategy.LLM_FIRST, ExtractionConfig.getStrategy())
+        assertFalse(ExtractionConfig.areAdvancedStrategiesEnabled())
+        assertEquals(ExtractionStrategy.OCR_FIRST, ExtractionConfig.getStrategy())
+    }
+
+    @Test
+    fun remoteUnsupportedStrategyKeepsOcrFirst() {
+        ExtractionConfig.init(context)
+
+        ExtractionConfig.updateFromRemoteConfig("LLM_FIRST")
+
+        assertEquals(ExtractionStrategy.OCR_FIRST, ExtractionConfig.getStrategy())
     }
 
     private fun clearPreferences() {

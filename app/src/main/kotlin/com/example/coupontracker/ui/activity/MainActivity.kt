@@ -89,6 +89,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleSharedContent(intent: Intent) {
+        handleCouponDeepLink(intent)
+
         when (intent.action) {
             Intent.ACTION_SEND -> {
                 if (intent.isImageLikeShare()) {
@@ -102,6 +104,22 @@ class MainActivity : ComponentActivity() {
                     handleMultipleSharedImages(intent)
                 }
             }
+        }
+    }
+
+    private fun handleCouponDeepLink(intent: Intent) {
+        val couponId = intent.getLongExtra(EXTRA_COUPON_ID, 0L)
+        if (couponId <= 0L) {
+            return
+        }
+
+        getSharedPreferences("coupon_tracker_prefs", MODE_PRIVATE)
+            .edit()
+            .putLong("pending_coupon_id", couponId)
+            .apply()
+
+        navControllerRef?.navigate(Screen.CouponDetail.createRoute(couponId)) {
+            launchSingleTop = true
         }
     }
 
@@ -222,5 +240,9 @@ class MainActivity : ComponentActivity() {
         } catch (e: IllegalArgumentException) {
             Log.w(TAG, "Shared URI does not support persistable permission: $uri", e)
         }
+    }
+
+    companion object {
+        const val EXTRA_COUPON_ID = "couponId"
     }
 }

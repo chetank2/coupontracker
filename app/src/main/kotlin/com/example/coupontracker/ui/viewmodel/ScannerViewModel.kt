@@ -223,7 +223,7 @@ class ScannerViewModel @Inject constructor(
                     error = e
                 ),
                 RunPath(
-                    strategy = "LEGACY",
+                    strategy = "OCR_FIRST",
                     final = "two_stage_detector_initialization_failure",
                     reasons = mutableListOf("stub_mode_manifest")
                 )
@@ -239,7 +239,7 @@ class ScannerViewModel @Inject constructor(
                     error = e
                 ),
                 RunPath(
-                    strategy = "LEGACY",
+                    strategy = "OCR_FIRST",
                     final = "two_stage_detector_initialization_failure",
                     reasons = mutableListOf("unexpected_initialization_error")
                 )

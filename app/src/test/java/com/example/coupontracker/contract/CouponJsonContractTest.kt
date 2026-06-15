@@ -1,6 +1,7 @@
 package com.example.coupontracker.contract
 
 import com.example.coupontracker.llm.CouponSchemaKeys
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -36,9 +37,9 @@ class CouponJsonContractTest {
 
     @Test
     fun `missing required key is flagged`() {
-        val missingExpiry = canonicalValid.replace(
-            ",\"expiryDate\":\"2026-06-01\"", ""
-        )
+        val missingExpiry = JSONObject(canonicalValid)
+            .apply { remove(CouponSchemaKeys.EXPIRY_DATE) }
+            .toString()
         val report = CouponJsonContract.validate(missingExpiry)
         assertFalse(report.valid)
         assertEquals(setOf(CouponSchemaKeys.EXPIRY_DATE), report.missingKeys)
