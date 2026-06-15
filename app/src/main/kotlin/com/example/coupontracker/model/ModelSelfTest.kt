@@ -1,7 +1,9 @@
 package com.example.coupontracker.model
 
 import android.util.Log
+import com.example.coupontracker.contract.CouponJsonContract
 import com.example.coupontracker.llm.LlmRuntimeManager
+import org.json.JSONObject
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
@@ -55,11 +57,41 @@ class ModelSelfTest @Inject constructor(
             }
 
             val duration = System.currentTimeMillis() - startTime
-            val jsonLike = response?.trimStart()?.startsWith("{") == true
-            if (!jsonLike) {
-                val preview = response?.take(120)?.replace('\n', ' ')
-                Log.w(TAG, "Self-test response was not JSON: $preview")
+            val rawResponse = response.orEmpty().trim()
+            val json = runCatching { JSONObject(rawResponse) }.getOrElse {
+                val preview = rawResponse.take(160).replace('\n', ' ')
+                Log.w(TAG, "Self-test response was not parseable JSON: $preview", it)
                 return SelfTestResult.Failed("Reader loaded but did not return valid JSON")
+            }
+
+            val contractReport = CouponJsonContract.validate(json)
+            if (!contractReport.valid) {
+                Log.w(
+                    TAG,
+                    "Self-test JSON failed contract: missing=${contractReport.missingKeys}, " +
+                        "unknown=${contractReport.unknownKeys}, errors=${contractReport.structuralErrors}"
+                )
+                return SelfTestResult.Failed("Reader loaded but failed the coupon JSON check")
+            }
+
+            val store = json.optString("storeName")
+            val code = json.optString("redeemCode")
+            val expiry = json.optString("expiryDate")
+            val description = json.optString("description")
+            val matchesFixture = store.contains("Domino", ignoreCase = true) &&
+                code.equals("PIZZA20", ignoreCase = true) &&
+                expiry.contains("30", ignoreCase = true) &&
+                expiry.contains("Jun", ignoreCase = true) &&
+                expiry.contains("2026", ignoreCase = true) &&
+                description.contains("20", ignoreCase = true)
+
+            if (!matchesFixture) {
+                Log.w(
+                    TAG,
+                    "Self-test response did not match fixture: store='$store', code='$code', " +
+                        "expiry='$expiry', description='$description'"
+                )
+                return SelfTestResult.Failed("Reader loaded but returned incorrect coupon details")
             }
 
             Log.d(TAG, "Self-test passed with ${modelInfo.name} in ${duration}ms")
