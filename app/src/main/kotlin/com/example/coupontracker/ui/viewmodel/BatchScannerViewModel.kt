@@ -11,6 +11,7 @@ import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.util.AnalyticsTracker
 import com.example.coupontracker.util.CouponInputManager
 import com.example.coupontracker.util.GenericFieldHeuristics
@@ -38,8 +39,8 @@ class BatchScannerViewModel @Inject constructor(
     private val couponRepository: CouponRepository,
     private val ocrEngine: com.example.coupontracker.ocr.OcrEngine,  // Tesseract OCR engine
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Bitmap memory management
-    private val localLlmOcrService: com.example.coupontracker.util.LocalLlmOcrService,  // V2: LLM service
     private val universalExtractionService: com.example.coupontracker.universal.UniversalExtractionService,  // V2: Universal extraction
+    private val ocrFirstCouponExtractor: OcrFirstCouponExtractor,
     private val analyticsTracker: AnalyticsTracker,
     private val telemetryService: ExtractionTelemetryService,
     private val regionPipeline: com.example.coupontracker.extraction.multi.CouponRegionPipeline,
@@ -571,29 +572,15 @@ class BatchScannerViewModel @Inject constructor(
         allowLegacyFallback: Boolean = true
     ): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val ocrResult = multiEngineOCR.processImage(bitmap)
-            
-            when (ocrResult) {
-                is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success -> {
-                    val ocrText = ocrResult.text.ifBlank {
-                        ocrResult.extractedInfo.values.joinToString(" ")
-                    }
-                    val extractionResult = universalExtractionService.extractCoupon(
-                        bitmap, ocrText, com.example.coupontracker.universal.ExtractionContext()
-                    )
-                    
-                    if (extractionResult.success) {
-                        extractionResult.coupon.copy(imageUri = persistUri(uri))
-                    } else {
-                        Log.w(TAG, "OCR_FIRST low confidence; returning OCR placeholder for manual cleanup")
-                        buildPlaceholderCoupon(uri)
-                    }
-                }
-                is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Error -> {
-                    Log.w(TAG, "OCR_FIRST error; returning placeholder for manual cleanup")
-                    buildPlaceholderCoupon(uri)
-                }
+            val extraction = ocrFirstCouponExtractor.extract(
+                bitmap = bitmap,
+                imageUri = persistUri(uri),
+                captureTimestamp = null
+            )
+            if (!extraction.success) {
+                Log.w(TAG, "OCR_FIRST low confidence; returning shared OCR review result")
             }
+            extraction.coupon
         }
     }
     

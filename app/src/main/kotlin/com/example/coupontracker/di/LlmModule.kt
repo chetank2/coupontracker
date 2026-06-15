@@ -90,10 +90,9 @@ object LlmModule {
         @ApplicationContext context: Context,
         ocrEngine: com.example.coupontracker.ocr.OcrEngine,
         telemetryService: ExtractionTelemetryService,
-        localLlmOcrService: LocalLlmOcrService,
         progressiveExtractionService: com.example.coupontracker.extraction.ProgressiveExtractionService
     ): ImageProcessor {
-        return ImageProcessor(context, ocrEngine, telemetryService, localLlmOcrService, progressiveExtractionService)
+        return ImageProcessor(context, ocrEngine, telemetryService, progressiveExtractionService)
     }
 
     @Provides

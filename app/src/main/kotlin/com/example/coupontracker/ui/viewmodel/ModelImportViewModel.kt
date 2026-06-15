@@ -146,14 +146,8 @@ class ModelImportViewModel @Inject constructor(
     }
     
     /**
-     * Download REAL MiniCPM model with VISION support (mmproj)
-     * Downloads 5.8GB total: 4.7GB main model + 1.1GB vision projector
-     * 
-     * PRIVACY GUARANTEE:
-     * - Only downloads model files (GET requests to HuggingFace)
-     * - HTTPS only (enforced by network security config)
-     * - No user data ever uploaded
-     * - All inference is offline after download
+     * Download the Qwen2.5 text model used by the explicit Clean action.
+     * Capture remains OCR-first; this model is only used after the user asks to clean a saved coupon.
      */
     fun downloadModel() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -190,7 +184,7 @@ class ModelImportViewModel @Inject constructor(
                                 isModelInstalled = true,
                                 modelSizeMB = result.modelSizeMB.toInt(),
                                 importProgress = 100,
-                                importMessage = "Download complete - Vision enabled!"
+                                importMessage = "Download complete"
                             )
                             
                             // Check for updated model info

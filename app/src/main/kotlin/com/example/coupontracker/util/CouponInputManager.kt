@@ -17,6 +17,7 @@ import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.extraction.MultiCouponExtractionService.CouponWithConfidence
 import com.example.coupontracker.extraction.MultiCouponExtractionService.MultiCouponResult
@@ -138,7 +139,8 @@ private fun buildDescriptionFromInfo(info: CouponInfo): String {
 class CouponInputManager(
     private val context: Context,
     private val imageProcessor: ImageProcessor,
-    private val multiCouponExtractionService: MultiCouponExtractionService?
+    private val multiCouponExtractionService: MultiCouponExtractionService?,
+    private val ocrFirstCouponExtractor: OcrFirstCouponExtractor
 ) {
 
     companion object {
@@ -445,42 +447,16 @@ class CouponInputManager(
                     }
                 }
 
-                // Process with OCR using capture timestamp
-                val couponInfo = imageProcessor.processImage(bitmap, captureTimestamp)
-                ExtractionLogBuffer.appendInfo(TAG, "ImageProcessor returned coupon info: store='${couponInfo.storeName}', description='${couponInfo.description}'")
-
-                val status = couponInfo.status?.takeIf { it.isNotBlank() }
-                val composedDescription = buildDescriptionFromInfo(couponInfo)
-
-                val baseCoupon = Coupon(
-                    storeName = couponInfo.storeName.ifBlank { com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE },
-                    description = composedDescription.ifBlank { "No description" },
-                    expiryDate = couponInfo.expiryDate,
-                    redeemCode = couponInfo.redeemCode,
+                val extraction = ocrFirstCouponExtractor.extract(
+                    bitmap = bitmap,
                     imageUri = null,
-                    status = status ?: com.example.coupontracker.data.model.Coupon.Status.ACTIVE
+                    captureTimestamp = captureTimestamp
                 )
-
-                val contextText = listOfNotNull(
-                    quickOcrText.takeIf { it.isNotBlank() },
-                    composedDescription.takeIf { it.isNotBlank() }
-                ).joinToString("\n").ifBlank { null }
-
-                val refinedCoupon = CouponPostProcessor.refine(
-                    coupon = baseCoupon,
-                    context = CouponFixContext(
-                        ocrText = contextText,
-                        captureTimestamp = captureTimestamp
-                    )
+                ExtractionLogBuffer.appendInfo(
+                    TAG,
+                    "OCR-first extractor returned coupon: store='${extraction.coupon.storeName}', confidence=${extraction.confidence}"
                 )
-
-                val normalizedExpiry = normalizeExpiryDate(refinedCoupon.expiryDate, captureTimestamp)
-                if (refinedCoupon.expiryDate != null && normalizedExpiry == null) {
-                    Log.d(TAG, "Discarding fallback expiry date; treating as unknown")
-                    ExtractionLogBuffer.appendInfo(TAG, "Discarding fallback expiry date; treating as unknown")
-                }
-
-                return@withContext refinedCoupon.copy(expiryDate = normalizedExpiry)
+                return@withContext extraction.coupon
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon from bitmap", e)
                 ExtractionLogBuffer.appendError(TAG, "Error processing coupon from bitmap", e)

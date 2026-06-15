@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 // ImageProcessor import removed - now provided by LlmModule
 // SecurePreferencesManager import removed - now provided by LlmModule
 import com.example.coupontracker.extraction.MultiCouponExtractionService
+import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.util.CouponInputManager
 import com.example.coupontracker.util.ImageProcessor
 import com.example.coupontracker.util.ThemeManager
@@ -52,12 +53,14 @@ object AppModule {
     fun provideCouponInputManager(
         @ApplicationContext context: Context,
         imageProcessor: ImageProcessor,
-        multiCouponExtractionService: MultiCouponExtractionService
+        multiCouponExtractionService: MultiCouponExtractionService,
+        ocrFirstCouponExtractor: OcrFirstCouponExtractor
     ): CouponInputManager {
         return CouponInputManager(
             context = context,
             imageProcessor = imageProcessor,
-            multiCouponExtractionService = multiCouponExtractionService
+            multiCouponExtractionService = multiCouponExtractionService,
+            ocrFirstCouponExtractor = ocrFirstCouponExtractor
         )
     }
 

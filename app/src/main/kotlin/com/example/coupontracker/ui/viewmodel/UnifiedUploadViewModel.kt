@@ -97,15 +97,12 @@ class UnifiedUploadViewModel @Inject constructor(
                 val coupon = if (mediaType == "pdf") {
                     couponInputManager.processPdfUri(uri)
                 } else {
-                    couponInputManager.processCouponFromImageUri(uri)
+                    couponInputManager.processCouponFromImageUriWithPersistence(uri)
                 }
-
-                // Set the image URI in the coupon object
-                val couponWithImage = coupon.copy(imageUri = uri.toString())
 
                 _uiState.value = _uiState.value.copy(
                     isProcessing = false,
-                    processedCoupon = couponWithImage
+                    processedCoupon = coupon
                 )
             } catch (e: Exception) {
                 handleError(e, "Error processing ${mediaType}")

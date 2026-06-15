@@ -24,8 +24,7 @@ import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.theme.BrandTypography
 import com.example.coupontracker.util.SecurePreferencesManager
 
-private const val MINICPM_LICENSE_URL = "https://huggingface.co/openbmb/MiniCPM-Llama3-V-2_5"
-private const val QUESTIONNAIRE_URL = "https://modelbest.feishu.cn/share/base/form/shrcnpV5ZT9EJ6xkmaNKWTN7Bcd"
+private const val MODEL_LICENSE_URL = "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF"
 
 @Composable
 fun LicenseGateScreen(
@@ -34,7 +33,6 @@ fun LicenseGateScreen(
 ) {
     val context = LocalContext.current
     var agreedToTerms by remember { mutableStateOf(false) }
-    var completedQuestionnaire by remember { mutableStateOf(false) }
     
     // Check if already accepted
     LaunchedEffect(Unit) {
@@ -58,7 +56,7 @@ fun LicenseGateScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "MiniCPM license",
+                text = "Offline reader license",
                 style = BrandTypography.DisplayMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
@@ -89,25 +87,25 @@ fun LicenseGateScreen(
                 verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
             ) {
                 Text(
-                    text = "Before downloading the MiniCPM-Llama3-V-2.5 model",
+                    text = "Before downloading the Qwen2.5 offline reader",
                     style = BrandTypography.TitleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
-                    text = "1. This model is free for commercial use",
+                    text = "1. Review the model provider page",
                     style = BrandTypography.BodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Text(
-                    text = "2. You must complete the official questionnaire",
+                    text = "2. The download is about 940 MB",
                     style = BrandTypography.BodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 Text(
-                    text = "3. By proceeding, you agree to the model's license terms",
+                    text = "3. Coupon cleaning runs on this device",
                     style = BrandTypography.BodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -117,22 +115,9 @@ fun LicenseGateScreen(
         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
         BrandButton(
-            text = "Complete questionnaire",
+            text = "View model page",
             onClick = {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(QUESTIONNAIRE_URL))
-                context.startActivity(intent)
-            },
-            tier = BrandButtonTier.Secondary,
-            leadingIcon = Icons.Default.OpenInNew,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = BrandSpacing.ContentEdge)
-        )
-
-        BrandButton(
-            text = "View full license",
-            onClick = {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(MINICPM_LICENSE_URL))
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(MODEL_LICENSE_URL))
                 context.startActivity(intent)
             },
             tier = BrandButtonTier.Secondary,
@@ -143,24 +128,6 @@ fun LicenseGateScreen(
         )
 
         Spacer(modifier = Modifier.height(BrandSpacing.Large))
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = BrandSpacing.ContentEdge),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(
-                checked = completedQuestionnaire,
-                onCheckedChange = { completedQuestionnaire = it }
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "I have completed the official questionnaire",
-                style = BrandTypography.BodyMedium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
 
         Row(
             modifier = Modifier
@@ -174,7 +141,7 @@ fun LicenseGateScreen(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "I agree to the MiniCPM license terms",
+                text = "I agree to the model provider terms",
                 style = BrandTypography.BodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
@@ -188,7 +155,7 @@ fun LicenseGateScreen(
                 securePreferencesManager.setMiniCpmLicenseAccepted(true)
                 onLicenseAccepted()
             },
-            enabled = agreedToTerms && completedQuestionnaire,
+            enabled = agreedToTerms,
             tier = BrandButtonTier.Primary,
             leadingIcon = Icons.Default.Check,
             modifier = Modifier
@@ -199,7 +166,7 @@ fun LicenseGateScreen(
         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
         Text(
-            text = "By accepting, you confirm that you have read and understood the MiniCPM license terms and completed the required questionnaire.",
+            text = "By accepting, you confirm that you have reviewed the model provider terms.",
             style = BrandTypography.BodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

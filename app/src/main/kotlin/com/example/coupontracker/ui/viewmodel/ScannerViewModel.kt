@@ -18,6 +18,7 @@ import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugScorer
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
+import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.universal.ExtractionContext
 import com.example.coupontracker.universal.ExtractionCandidate
 import com.example.coupontracker.universal.UniversalExtractionService
@@ -41,7 +42,6 @@ import com.example.coupontracker.util.ExtractionTelemetryService
 import com.example.coupontracker.feedback.ValidatorFeedbackRecorder
 import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.util.IndianCurrencyParser
-import com.example.coupontracker.util.LocalLlmOcrService
 import com.example.coupontracker.util.LlmProgressStage
 import com.example.coupontracker.util.MultiCouponDetectorState
 import com.example.coupontracker.util.MultiEngineOCR
@@ -52,7 +52,6 @@ import com.example.coupontracker.util.normalizeExpiryDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,11 +71,11 @@ class ScannerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val couponRepository: CouponRepository,
     private val ocrEngine: com.example.coupontracker.ocr.OcrEngine,  // Tesseract OCR engine
-    private val localLlmOcrService: LocalLlmOcrService,
     private val telemetryService: ExtractionTelemetryService,
     private val universalExtractionService: UniversalExtractionService,
     private val performanceMonitor: ExtractionPerformanceMonitor,
     private val analyticsTracker: AnalyticsTracker,
+    private val ocrFirstCouponExtractor: OcrFirstCouponExtractor,
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Injected bitmap memory management
     private val debugRepository: ExtractionDebugRepository,
     private val validatorFeedbackRecorder: ValidatorFeedbackRecorder
@@ -317,226 +316,6 @@ class ScannerViewModel @Inject constructor(
     }
     
     /**
-     * V2: LEGACY extraction path (current behavior)
-     * Two-stage detection → process instances → fallback to universal/traditional OCR
-     */
-    private suspend fun scanWithLegacyPath(imageUri: Uri, bitmap: Bitmap, persistImmediately: Boolean) {
-        Log.d(TAG, "LEGACY path: Running two-stage detection")
-
-        val detector = twoStageDetector ?: run {
-            val message = detectorInitErrorMessage ?: "Multi-coupon detector is unavailable."
-            Log.w(TAG, "LEGACY path unavailable: $message – falling back to single-coupon flow")
-            emitLlmProgress(
-                LlmProgressUpdate(
-                    stage = LlmProgressStage.PREPARING,
-                    percent = 5,
-                    message = "Multi-coupon detection disabled – using single-coupon mode"
-                )
-            )
-            scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
-            return
-        }
-
-        val detectionStart = System.currentTimeMillis()
-        // Run two-stage detection
-        val couponInstances = withContext(Dispatchers.IO) {
-            detector.detectMultiCoupons(bitmap)
-        }
-
-        val detectionTime = System.currentTimeMillis() - detectionStart
-        analyticsTracker.trackProcessingTime(detectionTime, "two_stage_detection")
-
-        Log.d(TAG, "Two-stage detection completed: ${couponInstances.size} coupons detected")
-
-        when {
-            couponInstances.isEmpty() -> {
-                Log.d(TAG, "No coupons detected, trying universal extraction first")
-                tryUniversalExtraction(imageUri, bitmap)
-            }
-            couponInstances.size == 1 -> {
-                val couponInstance = couponInstances.first()
-                processSingleCoupon(
-                    couponInstance = couponInstance,
-                    imageUri = imageUri.toString(),
-                    persistImmediately = persistImmediately
-                )
-            }
-            else -> {
-                analyticsTracker.trackEvent(
-                    AnalyticsTracker.EVENT_MULTIPLE_COUPONS_DETECTED,
-                    mapOf(
-                        "count" to couponInstances.size,
-                        "source" to "two_stage"
-                    )
-                )
-                _uiState.value = ScannerUiState.MultiCouponDetected(couponInstances, bitmap, imageUri.toString())
-            }
-        }
-    }
-    
-    /**
-     * V2: LLM_FIRST extraction path - REAL IMPLEMENTATION
-     * LLM identifies fields directly → Validate with OCR for low-confidence fields → Learn patterns
-     */
-    private suspend fun scanWithLlmFirstPath(imageUri: Uri, bitmap: Bitmap, persistImmediately: Boolean) {
-        val startTime = System.currentTimeMillis()
-        Log.d(TAG, "LLM_FIRST: Running Qwen2.5 for direct field extraction")
-        
-        try {
-            // Step 1: Call LLM service to extract fields directly
-            val llmResult = localLlmOcrService.processCouponImageTyped(bitmap) { update ->
-                emitLlmProgress(update)
-            }
-            val processingTime = System.currentTimeMillis() - startTime
-            
-            when (llmResult) {
-                is ExtractResult.Good -> {
-                    val avgConfidence = llmResult.signals.fieldConfidences.values.average().toFloat()
-                    Log.d(TAG, "LLM_FIRST: LLM extraction successful (confidence: $avgConfidence)")
-                    
-                    // Step 2: Build coupon from LLM result
-                    val llmCoupon = buildCouponFromLlmResult(llmResult.info, imageUri)
-
-                    // Step 3: Persist URI
-                    val persistedUri = uriPersistenceManager.persistUri(imageUri)
-                    val finalImageUri = resolveImageUri(persistedUri, imageUri)
-                    val finalCoupon = finalizeCoupon(
-                        base = llmCoupon.copy(imageUri = finalImageUri),
-                        ocrText = null,
-                        captureTimestamp = null
-                    )
-
-                    val debugSnapshot = ExtractionDebugScorer.fromLlmResult(llmResult, source = "llm_first")
-                    val normalizedDescription = CouponDedupUtils.normalizeDescription(finalCoupon.description)
-
-                    if (persistImmediately) {
-                        persistCoupon(
-                            coupon = finalCoupon,
-                            normalizedDescription = normalizedDescription,
-                            llmStatus = LlmProgress.SUCCESS,
-                            debugSnapshot = debugSnapshot
-                        )
-                    } else {
-                        pendingPreview = PendingPreview(
-                            coupon = finalCoupon,
-                            normalizedDescription = normalizedDescription,
-                            llmStatus = LlmProgress.SUCCESS,
-                            debugSnapshot = debugSnapshot
-                        )
-                        _uiState.value = ScannerUiState.Success(finalCoupon, LlmProgress.SUCCESS)
-                    }
-
-                    // Step 4: Learn patterns (store extraction result for learning)
-                    lastExtractionResult = com.example.coupontracker.universal.UniversalExtractionResult(
-                        coupon = finalCoupon,
-                        confidence = avgConfidence,
-                        extractedFields = emptyMap(),
-                        allCandidates = emptyMap(),
-                        success = true
-                    ) to ""
-                    
-                    // Step 5: Record metrics
-                    val fieldsExtracted = mutableSetOf<String>()
-                    if (finalCoupon.storeName != Coupon.Defaults.UNKNOWN_STORE) fieldsExtracted.add("storeName")
-                    if (!finalCoupon.redeemCode.isNullOrBlank()) fieldsExtracted.add("redeemCode")
-                    if (finalCoupon.getCashbackNumericValue() > 0) fieldsExtracted.add("cashback")
-                    if (finalCoupon.expiryDate != null) fieldsExtracted.add("expiryDate")
-                    
-                    performanceMonitor.recordExtractionAttempt(
-                        method = ExtractionMethod.LLM_DIRECT,
-                        success = true,
-                        confidence = avgConfidence,
-                        processingTimeMs = processingTime,
-                        fieldsExtracted = fieldsExtracted
-                    )
-                    
-                    Log.d(TAG, "LLM_FIRST: Completed successfully in ${processingTime}ms")
-                }
-                
-                is ExtractResult.LowQuality -> {
-                    Log.w(TAG, "LLM_FIRST: Low quality result (${llmResult.reason}), falling back to universal")
-                    
-                    performanceMonitor.recordExtractionAttempt(
-                        method = ExtractionMethod.LLM_DIRECT,
-                        success = false,
-                        confidence = 0.3f,
-                        processingTimeMs = processingTime,
-                        fieldsExtracted = emptySet()
-                    )
-                    
-                    // Fallback to universal extraction
-                    tryUniversalExtraction(imageUri, bitmap)
-                }
-                
-                is ExtractResult.Failed -> {
-                    Log.e(TAG, "LLM_FIRST: LLM failed at ${llmResult.stage}, falling back to universal")
-                    
-                    performanceMonitor.recordExtractionAttempt(
-                        method = ExtractionMethod.LLM_DIRECT,
-                        success = false,
-                        confidence = 0f,
-                        processingTimeMs = processingTime,
-                        fieldsExtracted = emptySet()
-                    )
-                    
-                    // Fallback to universal extraction
-                    tryUniversalExtraction(imageUri, bitmap)
-                    }
-                }
-
-            } catch (e: Exception) {
-            Log.e(TAG, "LLM_FIRST: Exception during LLM extraction", e)
-            val processingTime = System.currentTimeMillis() - startTime
-            
-            performanceMonitor.recordExtractionAttempt(
-                method = ExtractionMethod.LLM_DIRECT,
-                success = false,
-                confidence = 0f,
-                processingTimeMs = processingTime,
-                fieldsExtracted = emptySet()
-            )
-            
-            // Fallback to universal extraction
-            tryUniversalExtraction(imageUri, bitmap)
-        }
-    }
-    
-    /**
-     * Build coupon from LLM extraction result
-     */
-    private fun buildCouponFromLlmResult(
-        couponInfo: CouponInfo,
-        imageUri: Uri,
-        fieldConfidences: Map<String, Float> = emptyMap()
-    ): Coupon {
-        val expiryDate = couponInfo.expiryDate
-        val baseDescription = couponInfo.description
-            .takeIf { it.isNotBlank() }
-            ?: "Extracted via LLM"
-        val cashbackDetail = couponInfo.cashbackDetail?.takeIf { it.isNotBlank() }
-
-        val baseCoupon = Coupon(
-            storeName = couponInfo.storeName.takeIf { it.isNotBlank() } ?: Coupon.Defaults.UNKNOWN_STORE,
-            description = baseDescription,
-            expiryDate = expiryDate,
-            redeemCode = couponInfo.redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
-            imageUri = imageUri.toString(),
-            category = couponInfo.category,
-            status = Coupon.Status.ACTIVE,
-            extractionConfidenceBreakdown = fieldConfidences,
-            needsAttention = couponInfo.needsAttention,
-            storeNameSource = couponInfo.storeNameSource,
-            storeNameEvidence = couponInfo.storeNameEvidence
-        )
-
-        return if (cashbackDetail != null) {
-            baseCoupon.withAdditionalDetails(cashbackDetail)
-        } else {
-            baseCoupon
-        }
-    }
-    
-    /**
      * V2: OCR_FIRST extraction path - REAL IMPLEMENTATION
      * OCR extracts all text → Universal detector applies patterns → Build coupon
      */
@@ -545,149 +324,61 @@ class ScannerViewModel @Inject constructor(
         Log.d(TAG, "OCR_FIRST: Running multi-engine OCR for comprehensive text extraction")
         
         try {
-            // Step 1: Run comprehensive OCR to get all text
-            val ocrResult = withContext(Dispatchers.IO) {
-                multiEngineOCR.processImage(bitmap)
-            }
-            
-            when (ocrResult) {
-                is MultiEngineOCR.OCRResult.Success -> {
-                    val ocrHints = ocrResult.extractedInfo
-                    val ocrText = ocrResult.text
-                    Log.d(TAG, "OCR_FIRST: Extracted ${ocrText.length} characters from OCR")
-                    
-                    if (ocrText.isBlank()) {
-                        Log.w(TAG, "OCR_FIRST: No OCR text extracted; saving review placeholder")
-                        saveOcrOnlyCoupon(
-                            imageUri = imageUri,
-                            ocrText = "",
-                            confidence = 0f,
-                            persistImmediately = persistImmediately,
-                            failureReason = "No text found in screenshot"
-                        )
-                        return
-                    }
-                    
-                    // Step 2: Use universal field detector with OCR text
-                    val extractionContext = buildUniversalExtractionContext(ocrText, ocrHints)
-                    val extractionResult = universalExtractionService.extractCoupon(
-                        image = bitmap,
-                        ocrText = ocrText,
-                        context = extractionContext
-                    )
-                    
-                    val processingTime = System.currentTimeMillis() - startTime
-                    
-                    if (extractionResult.success && extractionResult.confidence > 0.4f) {
-                        Log.d(
-                            TAG,
-                            "OCR_FIRST: Universal extraction successful (confidence: ${extractionResult.confidence}); " +
-                                "saving OCR result without automatic cleanup"
-                        )
+            val persistedUri = uriPersistenceManager.persistUri(imageUri)
+            val finalImageUri = resolveImageUri(persistedUri, imageUri)
+            val previousStore = lastExtractionResult
+                ?.first
+                ?.coupon
+                ?.storeName
+                ?.takeIf { it.isNotBlank() && !fieldHeuristics.isGenericOrMissing(it) }
 
-                        // Step 3: Persist URI and save coupon
-                        val persistedUri = uriPersistenceManager.persistUri(imageUri)
-                        val finalImageUri = resolveImageUri(persistedUri, imageUri)
-                        val confidenceBreakdown = buildConfidenceMap(
-                            extractionResult.coupon.extractionConfidenceBreakdown,
-                            extractionResult.extractedFields
-                        )
-                        val baseCoupon = extractionResult.coupon.copy(
-                            imageUri = finalImageUri,
-                            extractionConfidenceBreakdown = confidenceBreakdown,
-                            cleanupStatus = Coupon.CleanupStatus.NONE,
-                            cleanupStartedAt = null,
-                            cleanupFinishedAt = null,
-                            cleanupError = null,
-                            rawOcrText = ocrText,
-                            ocrConfidence = extractionResult.confidence,
-                            extractionSource = Coupon.ExtractionSource.OCR_FAST
-                        )
-                        val finalCoupon = finalizeCoupon(
-                            base = baseCoupon,
-                            ocrText = ocrText,
-                            captureTimestamp = null
-                        ).ensureConfidenceBreakdown(confidenceBreakdown)
-                        
-                        // Step 4: Store for potential learning
-                        lastExtractionResult = extractionResult.copy(coupon = finalCoupon) to ocrText
-                        
-                        // Step 5: Record metrics
-                        val fieldsExtracted = mutableSetOf<String>()
-                        if (finalCoupon.storeName != Coupon.Defaults.UNKNOWN_STORE) fieldsExtracted.add("storeName")
-                        if (!finalCoupon.redeemCode.isNullOrBlank()) fieldsExtracted.add("redeemCode")
-                        if (finalCoupon.getCashbackNumericValue() > 0) fieldsExtracted.add("cashback")
-                        if (finalCoupon.expiryDate != null) fieldsExtracted.add("expiryDate")
-                        
-                        performanceMonitor.recordExtractionAttempt(
-                            method = ExtractionMethod.OCR_PATTERN_MATCH,
-                            success = true,
-                            confidence = extractionResult.confidence,
-                            processingTimeMs = processingTime,
-                            fieldsExtracted = fieldsExtracted
-                        )
-                        
-                        if (persistImmediately) {
-                            persistCoupon(
-                                coupon = finalCoupon,
-                                normalizedDescription = CouponDedupUtils.normalizeDescription(finalCoupon.description),
-                                llmStatus = LlmProgress.FALLBACK,
-                                debugSnapshot = null
-                            )
-                        } else {
-                            pendingPreview = PendingPreview(
-                                coupon = finalCoupon,
-                                normalizedDescription = CouponDedupUtils.normalizeDescription(finalCoupon.description),
-                                llmStatus = LlmProgress.FALLBACK,
-                                debugSnapshot = null
-                            )
-                            _uiState.value = ScannerUiState.Success(finalCoupon, LlmProgress.FALLBACK)
-                        }
-                        Log.d(TAG, "OCR_FIRST: Completed successfully in ${processingTime}ms")
-                        
-                    } else {
-                        Log.w(TAG, "OCR_FIRST: Low confidence (${extractionResult.confidence}); saving OCR-only result")
-                        
-                        performanceMonitor.recordExtractionAttempt(
-                            method = ExtractionMethod.OCR_PATTERN_MATCH,
-                            success = false,
-                            confidence = extractionResult.confidence,
-                            processingTimeMs = processingTime,
-                            fieldsExtracted = emptySet()
-                        )
-                        
-                        saveOcrOnlyCoupon(
-                            imageUri = imageUri,
-                            ocrText = ocrText,
-                            confidence = extractionResult.confidence,
-                            persistImmediately = persistImmediately,
-                            failureReason = "OCR result needs review"
-                        )
-                    }
-                }
-                
-                is MultiEngineOCR.OCRResult.Error -> {
-                    val processingTime = System.currentTimeMillis() - startTime
-                    Log.e(TAG, "OCR_FIRST: OCR failed - ${ocrResult.message}; saving review placeholder")
-                    
-                    performanceMonitor.recordExtractionAttempt(
-                        method = ExtractionMethod.OCR_PATTERN_MATCH,
-                        success = false,
-                        confidence = 0f,
-                        processingTimeMs = processingTime,
-                        fieldsExtracted = emptySet()
-                    )
-                    
-                    saveOcrOnlyCoupon(
-                        imageUri = imageUri,
-                        ocrText = "",
-                        confidence = 0f,
-                        persistImmediately = persistImmediately,
-                        failureReason = ocrResult.message
-                    )
-                }
+            val extraction = ocrFirstCouponExtractor.extract(
+                bitmap = bitmap,
+                imageUri = finalImageUri,
+                captureTimestamp = null,
+                previousStoreName = previousStore
+            )
+            val finalCoupon = extraction.coupon
+            val processingTime = System.currentTimeMillis() - startTime
+            val fieldsExtracted = mutableSetOf<String>()
+            if (finalCoupon.storeName != Coupon.Defaults.UNKNOWN_STORE) fieldsExtracted.add("storeName")
+            if (!finalCoupon.redeemCode.isNullOrBlank()) fieldsExtracted.add("redeemCode")
+            if (finalCoupon.getCashbackNumericValue() > 0) fieldsExtracted.add("cashback")
+            if (finalCoupon.expiryDate != null) fieldsExtracted.add("expiryDate")
+
+            performanceMonitor.recordExtractionAttempt(
+                method = ExtractionMethod.OCR_PATTERN_MATCH,
+                success = extraction.success,
+                confidence = extraction.confidence,
+                processingTimeMs = processingTime,
+                fieldsExtracted = fieldsExtracted
+            )
+
+            lastExtractionResult = com.example.coupontracker.universal.UniversalExtractionResult(
+                coupon = finalCoupon,
+                confidence = extraction.confidence,
+                extractedFields = emptyMap(),
+                allCandidates = emptyMap(),
+                success = extraction.success
+            ) to extraction.rawOcrText
+
+            if (persistImmediately) {
+                persistCoupon(
+                    coupon = finalCoupon,
+                    normalizedDescription = CouponDedupUtils.normalizeDescription(finalCoupon.description),
+                    llmStatus = LlmProgress.FALLBACK,
+                    debugSnapshot = null
+                )
+            } else {
+                pendingPreview = PendingPreview(
+                    coupon = finalCoupon,
+                    normalizedDescription = CouponDedupUtils.normalizeDescription(finalCoupon.description),
+                    llmStatus = LlmProgress.FALLBACK,
+                    debugSnapshot = null
+                )
+                _uiState.value = ScannerUiState.Success(finalCoupon, LlmProgress.FALLBACK)
             }
-            
+            Log.d(TAG, "OCR_FIRST: Completed with shared extractor in ${processingTime}ms")
         } catch (e: Exception) {
             Log.e(TAG, "OCR_FIRST: Exception during OCR extraction", e)
             val processingTime = System.currentTimeMillis() - startTime
@@ -762,229 +453,6 @@ class ScannerViewModel @Inject constructor(
         }
     }
     
-    /**
-     * V2: HYBRID extraction path - REAL IMPLEMENTATION
-     * Parallel LLM + OCR → Fusion chooses best fields → Build coupon
-     */
-    private suspend fun scanWithHybridPath(imageUri: Uri, bitmap: Bitmap, persistImmediately: Boolean) {
-        val startTime = System.currentTimeMillis()
-        Log.d(TAG, "HYBRID: Launching parallel LLM + OCR execution")
-        
-        try {
-            // Step 1 & 2: Launch both extraction methods in parallel and await
-            val (llmResult, ocrResult) = kotlinx.coroutines.coroutineScope {
-                val llmDeferred = async(Dispatchers.Default) {
-                    try {
-                        Log.d(TAG, "HYBRID: Starting LLM extraction...")
-                        localLlmOcrService.processCouponImageTyped(bitmap) { update ->
-                            emitLlmProgress(update)
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "HYBRID: LLM extraction failed", e)
-                        null
-                    }
-                }
-                
-                val ocrDeferred = async(Dispatchers.IO) {
-                    try {
-                        Log.d(TAG, "HYBRID: Starting OCR extraction...")
-                        when (val ocrResult = multiEngineOCR.processImage(bitmap)) {
-                            is MultiEngineOCR.OCRResult.Success -> {
-                                val context = buildUniversalExtractionContext(ocrResult.text, ocrResult.extractedInfo)
-                                universalExtractionService.extractCoupon(bitmap, ocrResult.text, context)
-                            }
-                            is MultiEngineOCR.OCRResult.Error -> null
-                        }
-                    } catch (e: Exception) {
-                        Log.w(TAG, "HYBRID: OCR extraction failed", e)
-                        null
-                    }
-                }
-                
-                // Await both results
-                Pair(llmDeferred.await(), ocrDeferred.await())
-            }
-            
-            val processingTime = System.currentTimeMillis() - startTime
-            Log.d(TAG, "HYBRID: Both extractions completed in ${processingTime}ms")
-            
-            // Step 3: Fusion - Choose best fields from each method
-            val fusedCoupon = when {
-                // Both successful - fuse fields by choosing best confidence
-                llmResult is ExtractResult.Good && ocrResult != null && ocrResult.success -> {
-                    Log.d(TAG, "HYBRID: Both LLM and OCR successful, fusing results")
-                    fuseLlmAndOcrResults(llmResult, ocrResult, imageUri)
-                }
-                
-                // Only LLM successful
-                llmResult is ExtractResult.Good -> {
-                    Log.d(TAG, "HYBRID: Only LLM successful, using LLM result")
-                    buildCouponFromLlmResult(
-                        llmResult.info,
-                        imageUri,
-                        llmResult.signals.fieldConfidences
-                    )
-                }
-                
-                // Only OCR successful
-                ocrResult != null && ocrResult.success -> {
-                    Log.d(TAG, "HYBRID: Only OCR successful, using OCR result")
-                    ocrResult.coupon
-                }
-                
-                // Both failed
-                else -> {
-                    Log.w(TAG, "HYBRID: Both LLM and OCR failed")
-                    null
-                }
-            }
-            
-            // Step 4: Process result
-            if (fusedCoupon != null) {
-                // Persist URI
-                val persistedUri = uriPersistenceManager.persistUri(imageUri)
-                val finalCoupon = finalizeCoupon(
-                    base = fusedCoupon.copy(imageUri = resolveImageUri(persistedUri, imageUri)),
-                    ocrText = null,
-                    captureTimestamp = null
-                )
-                
-                // Store for potential learning
-                lastExtractionResult = com.example.coupontracker.universal.UniversalExtractionResult(
-                    coupon = finalCoupon,
-                    confidence = 0.8f,
-                    extractedFields = emptyMap(),
-                    allCandidates = emptyMap(),
-                    success = true
-                ) to ""
-                
-                // Record metrics
-                val fieldsExtracted = mutableSetOf<String>()
-                if (finalCoupon.storeName != Coupon.Defaults.UNKNOWN_STORE) fieldsExtracted.add("storeName")
-                if (!finalCoupon.redeemCode.isNullOrBlank()) fieldsExtracted.add("redeemCode")
-                if (finalCoupon.getCashbackNumericValue() > 0) fieldsExtracted.add("cashback")
-                if (finalCoupon.expiryDate != null) fieldsExtracted.add("expiryDate")
-                
-                performanceMonitor.recordExtractionAttempt(
-                    method = ExtractionMethod.HYBRID_FUSION,
-                    success = true,
-                    confidence = 0.8f, // Hybrid fusion confidence
-                    processingTimeMs = processingTime,
-                    fieldsExtracted = fieldsExtracted
-                )
-                
-                // Update UI
-                _uiState.value = ScannerUiState.Success(finalCoupon, LlmProgress.SUCCESS)
-                Log.d(TAG, "HYBRID: Completed successfully in ${processingTime}ms")
-                
-            } else {
-                Log.w(TAG, "HYBRID: Both methods failed, falling back to LEGACY")
-                logStrategyExecution(
-                    requested = com.example.coupontracker.util.ExtractionStrategy.HYBRID,
-                    executed = "legacy",
-                    surface = STRATEGY_SURFACE_SINGLE,
-                    reason = "hybrid_no_success"
-                )
-
-                performanceMonitor.recordExtractionAttempt(
-                    method = ExtractionMethod.HYBRID_FUSION,
-                    success = false,
-                    confidence = 0f,
-                    processingTimeMs = processingTime,
-                    fieldsExtracted = emptySet()
-                )
-                
-                // Fallback to LEGACY two-stage detection
-                scanWithLegacyPath(imageUri, bitmap, persistImmediately)
-            }
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "HYBRID: Exception during hybrid extraction", e)
-            logStrategyExecution(
-                requested = com.example.coupontracker.util.ExtractionStrategy.HYBRID,
-                executed = "legacy",
-                surface = STRATEGY_SURFACE_SINGLE,
-                reason = "hybrid_exception_${e.javaClass.simpleName}"
-            )
-            val processingTime = System.currentTimeMillis() - startTime
-
-            performanceMonitor.recordExtractionAttempt(
-                method = ExtractionMethod.HYBRID_FUSION,
-                success = false,
-                confidence = 0f,
-                processingTimeMs = processingTime,
-                fieldsExtracted = emptySet()
-            )
-            
-            // Fallback to LEGACY on exception
-            scanWithLegacyPath(imageUri, bitmap, persistImmediately)
-        }
-    }
-    
-    /**
-     * Fuse LLM and OCR results by choosing best field for each type
-     */
-    private fun fuseLlmAndOcrResults(
-        llmResult: ExtractResult.Good,
-        ocrResult: com.example.coupontracker.universal.UniversalExtractionResult,
-        imageUri: Uri
-    ): Coupon {
-        val llmInfo = llmResult.info
-        val ocrCoupon = ocrResult.coupon
-        
-        // For each field, choose the result with higher confidence
-        val llmConf = llmResult.signals.fieldConfidences
-        
-        // Store name: prefer LLM if confident
-        val storeName = if (llmConf.getOrDefault("storeName", 0f) > 0.6f && llmInfo.storeName.isNotBlank()) {
-            llmInfo.storeName
-        } else if (ocrCoupon.storeName != Coupon.Defaults.UNKNOWN_STORE) {
-            ocrCoupon.storeName
-        } else {
-            llmInfo.storeName.takeIf { it.isNotBlank() } ?: Coupon.Defaults.UNKNOWN_STORE
-        }
-        
-        // Coupon code: prefer higher confidence
-        val redeemCode = when {
-            llmConf.getOrDefault("code", 0f) > 0.7f && !llmInfo.redeemCode.isNullOrBlank() -> llmInfo.redeemCode
-            !ocrCoupon.redeemCode.isNullOrBlank() -> ocrCoupon.redeemCode
-            else -> llmInfo.redeemCode
-        }
-        
-        // Expiry date: prefer LLM if confident, else OCR (llmInfo.expiryDate is already a Date?)
-        val expiryDate = if (llmConf.getOrDefault("expiry", 0f) > 0.6f && llmInfo.expiryDate != null) {
-            llmInfo.expiryDate
-        } else {
-            ocrCoupon.expiryDate ?: llmInfo.expiryDate
-        }
-        
-        // Cashback detail: prefer confident LLM detail, otherwise use OCR-derived detail
-        val llmDetail = llmInfo.cashbackDetail?.takeIf { GenericFieldHeuristics.hasMeaningfulCashback(it) }
-        val ocrDetail = DescriptionUtils.extractCashbackLine(ocrCoupon.description)
-        val cashbackDetail = when {
-            llmConf.getOrDefault("cashback", 0f) > 0.6f && llmDetail != null -> llmDetail
-            GenericFieldHeuristics.hasMeaningfulCashback(ocrDetail) -> ocrDetail
-            else -> llmDetail ?: ocrDetail
-        }
-
-        // Description: prefer raw LLM text, otherwise fall back to OCR text, then append cashback detail
-        val description = listOf(llmInfo.description, ocrCoupon.description)
-            .map { it.trim() }
-            .firstOrNull { it.isNotBlank() }
-            ?: "Coupon offer"
-        val mergedDescription = DescriptionUtils.appendDetails(description, cashbackDetail)
-        
-        return Coupon(
-            storeName = storeName,
-            description = mergedDescription,
-            expiryDate = expiryDate,
-            redeemCode = redeemCode?.takeIf { it.isNotBlank() && it != "NEEDED" && it != "VOUCHER" },
-            imageUri = imageUri.toString(),
-            category = llmInfo.category ?: ocrCoupon.category,
-            status = Coupon.Status.ACTIVE
-        )
-    }
-
     /**
      * Process a captured bitmap to extract coupon information
      */

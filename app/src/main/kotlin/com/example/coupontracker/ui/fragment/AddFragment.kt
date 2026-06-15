@@ -510,7 +510,7 @@ class AddFragment : Fragment() {
             }
             else -> {
                 binding.llmStatusText.text = "Offline reader not set up"
-                binding.llmSizeText.text = "~2.4 GB required"
+                binding.llmSizeText.text = "~940 MB required"
                 binding.llmDownloadButton.visibility = View.VISIBLE
                 binding.llmDeleteButton.visibility = View.GONE
                 binding.llmDownloadButton.text = "Set up offline scanning"
@@ -531,7 +531,7 @@ class AddFragment : Fragment() {
                 "• Protects your privacy (all processing on-device)\n\n" +
                 "Requirements:\n" +
                 "• Android 8.0+ with 4GB+ RAM\n" +
-                "• ~2.4GB storage space\n" +
+                "• ~940 MB storage space\n" +
                 "• WiFi connection for initial download\n\n" +
                 "The reader is downloaded once and used offline for future coupon scanning."
             )
@@ -553,7 +553,7 @@ class AddFragment : Fragment() {
         
         lifecycleScope.launch {
             try {
-                val result = modelDownloadManager.downloadModel { progress ->
+                val result = modelDownloadManager.downloadQwen25Model { progress ->
                     // Update UI on main thread
                     if (isAdded) {
                         binding.llmDownloadProgress.setProgressCompat(progress.progressPercent, true)
@@ -618,7 +618,7 @@ class AddFragment : Fragment() {
             .setTitle("Delete offline reader")
             .setMessage(
                 "Are you sure you want to delete the offline coupon reader?\n\n" +
-                "This will free up ~2.4GB of storage space, but you'll need to download " +
+                "This will free up about 940 MB of storage space, but you'll need to download " +
                 "it again to use offline scanning."
             )
             .setPositiveButton("Delete") { _, _ ->

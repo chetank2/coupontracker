@@ -30,19 +30,11 @@ import com.example.coupontracker.ui.screen.SmartCaptureScreen
 import com.example.coupontracker.ui.screen.SmartCameraScreen
 import com.example.coupontracker.ui.screen.UnifiedCameraScreen
 import com.example.coupontracker.ui.screen.UnifiedUploadScreen
-import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 
 sealed class Screen(val route: String) {
     object Onboarding : Screen("onboarding")
     object Home : Screen("home")
-    // Legacy route - kept for backward compatibility
-    @Deprecated("Use CouponForm instead")
-    object AddCoupon : Screen("add_coupon?couponInfo={couponInfo}&imageUri={imageUri}") {
-        fun createRouteWithCouponInfo(couponInfo: CouponInfo?, imageUri: String = ""): String {
-            return "add_coupon?couponInfo=${android.net.Uri.encode(couponInfo.toString())}&imageUri=${android.net.Uri.encode(imageUri)}"
-        }
-    }
     object CouponDetail : Screen("coupon_detail/{couponId}") {
         fun createRoute(couponId: Long) = "coupon_detail/$couponId"
     }
@@ -121,35 +113,6 @@ fun AppNavigation(
 
         composable(Screen.Home.route) {
             HomeScreen(navController = navController)
-        }
-
-        composable(
-            route = Screen.AddCoupon.route,
-            arguments = listOf(
-                navArgument("couponInfo") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                },
-                navArgument("imageUri") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                }
-            )
-        ) { backStackEntry ->
-            // Redirect to CouponForm with the image URI if available
-            val imageUri = backStackEntry.arguments?.getString("imageUri")
-            if (imageUri != null && imageUri.isNotEmpty()) {
-                CouponFormScreen(
-                    navController = navController,
-                    imageUri = imageUri,
-                    isBatchMode = false
-                )
-            } else {
-                // Fallback to Home if no image URI
-                HomeScreen(navController = navController)
-            }
         }
 
         composable(

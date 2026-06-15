@@ -26,7 +26,6 @@ class ImageProcessor(
     private val context: Context,
     private val ocrEngine: OcrEngine,
     private val telemetryService: ExtractionTelemetryService,
-    private val injectedLocalLlmOcrService: LocalLlmOcrService? = null,
     private val progressiveExtractionService: com.example.coupontracker.extraction.ProgressiveExtractionService? = null
 ) {
     private val TAG = "ImageProcessor"
@@ -37,8 +36,6 @@ class ImageProcessor(
 
     // OCR services (legacy fallback)
     private var modelBasedOCRService: ModelBasedOCRService = ModelBasedOCRService(context, ocrEngine)
-    private var localLlmOcrService: LocalLlmOcrService = injectedLocalLlmOcrService ?: LocalLlmOcrService(context, ocrEngine)
-
     // Default to using the model-based OCR service
     private var useModelBasedOcr = true
 
