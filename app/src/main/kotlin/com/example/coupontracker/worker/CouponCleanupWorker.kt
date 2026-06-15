@@ -23,6 +23,7 @@ import com.example.coupontracker.util.CouponPostProcessor
 import com.example.coupontracker.util.ExtractResult
 import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.util.LocalLlmOcrService
+import com.example.coupontracker.util.OcrEvidenceValidator
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -159,17 +160,26 @@ class CouponCleanupWorker @AssistedInject constructor(
         val qwenDescription = info.description.takeIf(GenericFieldHeuristics::isMeaningfulDescription)
         val qwenCode = info.redeemCode?.trim()?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
         val currentCode = current.redeemCode?.trim()?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+        val qwenCodeSupported = OcrEvidenceValidator.isPhraseSupported(qwenCode, rawOcr)
+        val currentCodeSupported = OcrEvidenceValidator.isPhraseSupported(currentCode, rawOcr)
         val selectedCode = when {
-            currentCode.isNullOrBlank() && isSupportedByOcr(qwenCode, rawOcr) -> qwenCode
-            currentCode.isNullOrBlank() -> qwenCode
-            isSupportedByOcr(qwenCode, rawOcr) && qwenCode.equals(currentCode, ignoreCase = true) -> qwenCode
+            qwenCodeSupported && (currentCode.isNullOrBlank() || qwenCode.equals(currentCode, ignoreCase = true)) -> qwenCode
+            currentCodeSupported -> currentCode
+            qwenCodeSupported -> qwenCode
             else -> currentCode
         }
 
-        val selectedStore = info.storeName
+        val qwenStore = info.storeName.trim()
             .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
-            ?.takeIf { GenericFieldHeuristics.isGenericOrMissing(current.storeName) || current.storeName == Coupon.Defaults.UNKNOWN_STORE }
-            ?: current.storeName
+        val currentStore = current.storeName.trim()
+            .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
+        val qwenStoreSupported = OcrEvidenceValidator.isPhraseSupported(qwenStore, rawOcr)
+        val currentStoreSupported = OcrEvidenceValidator.isPhraseSupported(currentStore, rawOcr)
+        val selectedStore = when {
+            qwenStoreSupported -> qwenStore ?: Coupon.Defaults.UNKNOWN_STORE
+            currentStoreSupported -> currentStore ?: Coupon.Defaults.UNKNOWN_STORE
+            else -> Coupon.Defaults.UNKNOWN_STORE
+        }
 
         val descriptionWithCashback = DescriptionUtils.appendDetails(
             qwenDescription ?: current.description,
@@ -200,15 +210,38 @@ class CouponCleanupWorker @AssistedInject constructor(
             coupon = merged,
             context = CouponFixContext(ocrText = rawOcr)
         )
+        val refinedStoreSupported = OcrEvidenceValidator.isPhraseSupported(refined.storeName, rawOcr)
+        val refinedCode = refined.redeemCode?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+        val refinedCodeSupported = refinedCode.isNullOrBlank() ||
+            OcrEvidenceValidator.isPhraseSupported(refinedCode, rawOcr)
+        val unsupportedStore = !refinedStoreSupported &&
+            !GenericFieldHeuristics.isGenericOrMissing(refined.storeName) &&
+            refined.storeName != Coupon.Defaults.UNKNOWN_STORE
+        val unsupportedCode = !refinedCodeSupported
+        val missingCriticalFields = hasMissingCriticalFields(refined)
 
         return refined.copy(
-            cleanupStatus = Coupon.CleanupStatus.CLEANED,
+            cleanupStatus = if (unsupportedStore || unsupportedCode || missingCriticalFields) {
+                Coupon.CleanupStatus.FAILED
+            } else {
+                Coupon.CleanupStatus.CLEANED
+            },
             cleanupFinishedAt = merged.cleanupFinishedAt,
-            cleanupError = null,
-            lastCleanedBy = merged.lastCleanedBy,
-            extractionSource = merged.extractionSource,
+            cleanupError = when {
+                unsupportedStore -> OcrEvidenceValidator.unsupportedReason("store", refined.storeName)
+                unsupportedCode -> OcrEvidenceValidator.unsupportedReason("code", refinedCode)
+                missingCriticalFields -> "Reader could not verify enough coupon details from OCR text."
+                else -> null
+            },
+            lastCleanedBy = if (unsupportedStore || unsupportedCode || missingCriticalFields) null else merged.lastCleanedBy,
+            extractionSource = if (unsupportedStore || unsupportedCode || missingCriticalFields) {
+                current.extractionSource
+            } else {
+                merged.extractionSource
+            },
             normalizedDescription = CouponDedupUtils.normalizeDescription(refined.description),
-            needsAttention = refined.needsAttention && hasMissingCriticalFields(refined)
+            needsAttention = refined.needsAttention || unsupportedStore || unsupportedCode ||
+                missingCriticalFields
         )
     }
 
@@ -216,11 +249,6 @@ class CouponCleanupWorker @AssistedInject constructor(
         return coupon.storeName == Coupon.Defaults.UNKNOWN_STORE ||
             coupon.description.isBlank() ||
             (coupon.redeemCode.isNullOrBlank() && coupon.expiryDate == null)
-    }
-
-    private fun isSupportedByOcr(value: String?, rawOcr: String?): Boolean {
-        if (value.isNullOrBlank() || rawOcr.isNullOrBlank()) return false
-        return rawOcr.contains(value, ignoreCase = true)
     }
 
     companion object {
