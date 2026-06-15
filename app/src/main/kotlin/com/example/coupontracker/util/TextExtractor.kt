@@ -154,8 +154,10 @@ class TextExtractor {
         val brandMatcher = brandPattern.matcher(text)
         if (brandMatcher.find()) {
             val brand = brandMatcher.group(1)
-            safeLogDebug(TAG) { "Found brand from 'Brand:' pattern: $brand" }
-            return brand
+            if (StoreCandidateValidator.isAcceptable(brand, text)) {
+                safeLogDebug(TAG) { "Found brand from 'Brand:' pattern: $brand" }
+                return brand
+            }
         }
 
         val lowerText = text.lowercase(Locale.ROOT)
@@ -173,6 +175,9 @@ class TextExtractor {
 
         fun addCandidate(raw: String?, isTitleCase: Boolean, lineIndex: Int, line: String) {
             val candidate = cleanCandidate(raw) ?: return
+            if (!StoreCandidateValidator.isAcceptable(candidate, text)) {
+                return
+            }
             val normalized = candidate.lowercase(Locale.ROOT)
             if (COMMON_WORDS.contains(normalized)) {
                 return
@@ -284,6 +289,7 @@ class TextExtractor {
             val storeMatcher = pattern.matcher(text)
             if (storeMatcher.find()) {
                 val name = cleanCandidate(storeMatcher.group(1)) ?: continue
+                if (!StoreCandidateValidator.isAcceptable(name, text)) continue
                 safeLogDebug(TAG) { "Found store name from pattern: $name" }
                 return name
             }

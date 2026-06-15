@@ -135,6 +135,21 @@ class TextExtractorTest {
     }
 
     @Test
+    fun `extractStoreName rejects weak pm vit fragment and keeps real OCR brand`() {
+        val text = """
+            pm Vit
+            Gritzo
+            Flat off for kids Products on Gritzo
+            Code PHGZQZG2DCY9WB
+            ORDER NOW
+        """.trimIndent()
+
+        val result = extractor.extractStoreName(text)
+
+        assertEquals("Gritzo", result)
+    }
+
+    @Test
     fun `extractRedeemCode finds token on line after indicator`() {
         val text = """
             Stream exclusively on aha

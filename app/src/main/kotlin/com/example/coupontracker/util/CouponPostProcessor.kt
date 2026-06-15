@@ -22,6 +22,8 @@ object CouponPostProcessor {
 
     fun refine(coupon: Coupon, context: CouponFixContext = CouponFixContext()): Coupon {
         val ocrText = context.ocrText?.takeIf { it.isNotBlank() }
+        val hadUnsupportedStore = ocrText != null &&
+            currentStoreNeedsReview(coupon.storeName, ocrText)
 
         val refinedStore = resolveStoreName(coupon.storeName, ocrText)
         val refinedCode = resolveRedeemCode(coupon.redeemCode, ocrText)
@@ -40,19 +42,28 @@ object CouponPostProcessor {
             redeemCode = refinedCode,
             expiryDate = refinedExpiry,
             description = refinedDescription,
-            needsAttention = coupon.needsAttention || normalized.needsAttention,
+            needsAttention = coupon.needsAttention || normalized.needsAttention || hadUnsupportedStore,
         )
     }
 
+    private fun currentStoreNeedsReview(current: String, ocrText: String): Boolean {
+        return current.isNotBlank() &&
+            !GenericFieldHeuristics.isGenericOrMissing(current) &&
+            !StoreCandidateValidator.isAcceptable(current, ocrText)
+    }
+
     private fun resolveStoreName(current: String, ocrText: String?): String {
-        if (current.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(current)) {
+        if (current.isNotBlank() &&
+            !GenericFieldHeuristics.isGenericOrMissing(current) &&
+            (ocrText.isNullOrBlank() || StoreCandidateValidator.isAcceptable(current, ocrText))
+        ) {
             return current
         }
 
         if (!ocrText.isNullOrBlank()) {
             val candidate = textExtractor.extractStoreName(ocrText)
-            if (!candidate.isNullOrBlank() && !GenericFieldHeuristics.isGenericOrMissing(candidate)) {
-                return candidate
+            if (StoreCandidateValidator.isAcceptable(candidate, ocrText)) {
+                return candidate.orEmpty()
             }
         }
 

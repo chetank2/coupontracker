@@ -9,8 +9,8 @@ import com.example.coupontracker.universal.ExtractionContext
 import com.example.coupontracker.universal.UniversalExtractionService
 import com.example.coupontracker.util.CouponFixContext
 import com.example.coupontracker.util.CouponPostProcessor
-import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.util.MultiEngineOCR
+import com.example.coupontracker.util.StoreCandidateValidator
 import com.example.coupontracker.util.normalizeExpiryDate
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.Date
@@ -180,7 +180,7 @@ class OcrFirstCouponExtractor @Inject constructor(
                 line.isNotBlank() &&
                     line.length in 3..48 &&
                     line.any { it.isLetter() } &&
-                    !GenericFieldHeuristics.isGenericOrMissing(line)
+                    StoreCandidateValidator.isAcceptable(line, ocrText)
             }
 
         val brandHint = sequenceOf(
@@ -192,7 +192,7 @@ class OcrFirstCouponExtractor @Inject constructor(
             previousStoreName
         )
             .mapNotNull { candidate ->
-                candidate?.takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
+                candidate?.takeIf { StoreCandidateValidator.isAcceptable(it, ocrText) }
             }
             .firstOrNull()
 
