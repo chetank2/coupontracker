@@ -12,7 +12,7 @@ import com.example.coupontracker.util.MultiEngineOCR
  * (buttons, category headers, tags) that serve as coupon boundaries.
  * 
  * Use case: App screenshots with multiple coupons in grid or list layout
- * Examples: Amazon offers page, Myntra deals, PhonePe rewards
+ * Examples: merchant offers pages, rewards lists, and coupon wallets.
  */
 class OcrAnchorSegmenter(
     private val ocrEngine: OcrEngine

@@ -166,9 +166,9 @@ class StructuredFieldExtractor {
             // 3. Multi-word later = MEDIUM (could be description)
             // 4. Single word later = LOW
             val confidence = when {
-                wordCount == 1 && isInFirstFewLines -> 0.90f  // "Myntra", "Swiggy" at top
-                wordCount >= 2 && isInFirstFewLines -> 0.85f  // "Zepto Cafe" at top
-                wordCount >= 2 && position < 0.5f -> 0.70f    // "Big Fashion" in middle
+                wordCount == 1 && isInFirstFewLines -> 0.90f  // Single-word logo/header at top
+                wordCount >= 2 && isInFirstFewLines -> 0.85f  // Multi-word logo/header at top
+                wordCount >= 2 && position < 0.5f -> 0.70f    // Multi-word merchant in middle
                 wordCount == 1 && position < 0.3f -> 0.65f    // Single word early
                 else -> 0.50f                                  // Low confidence
             }
@@ -521,13 +521,13 @@ class StructuredFieldExtractor {
         // Too short or too long
         if (cleanName.length < 3 || cleanName.length > 25) return false
 
-        // Disallow names that look like overlays/watermarks (e.g., distorted Paytm text)
+        // Disallow names that look like overlays/watermarks.
         if (isLikelyWatermark(cleanName)) return false
 
         // Should include at least one alphabetic character
         if (!cleanName.any { it.isLetter() }) return false
 
-        // Must have at least one vowel (treat 'y' as vowel for brands like XYXX)
+        // Must have at least one vowel-like character.
         val hasVowel = cleanName.any { it.lowercaseChar() in "aeiouy" }
         if (!hasVowel) return false
 
@@ -545,7 +545,7 @@ class StructuredFieldExtractor {
         val letterCount = cleanName.count { it.isLetter() }
         if (digitCount > 0 && letterCount < 2) return false
 
-        // Reject OCR-like garbage: repeated character patterns, but allow valid brands like XYXX, TATA, NOON
+        // Reject OCR-like garbage: repeated character patterns.
         // Only reject if the name is very short (< 4) or if it has excessive repetition
         if (cleanName.length < 4) {
             val hasRepeatedChars = cleanName.lowercase().zipWithNext().any { (a, b) -> a == b && a.isLetter() }
@@ -638,4 +638,3 @@ class StructuredFieldExtractor {
         return null
     }
 }
-

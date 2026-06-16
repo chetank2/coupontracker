@@ -6,7 +6,7 @@ import android.util.Log
 /**
  * Screenshot Classifier
  * Classifies images to determine if they are:
- * - Multi-coupon app screenshots (Amazon offers, Myntra deals, etc.)
+ * - Multi-coupon app screenshots from any merchant or rewards app.
  * - Single screenshot captures
  * - Camera-captured photos
  * 
@@ -311,5 +311,4 @@ class ScreenshotClassifier {
         )
     }
 }
-
 

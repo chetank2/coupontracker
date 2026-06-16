@@ -91,8 +91,7 @@ object OcrTextCleaner {
         Regex("""\bSearching for a delive""", RegexOption.IGNORE_CASE),  // Delivery search
         Regex("""\bAdd Delivery Instructions\b""", RegexOption.IGNORE_CASE),  // Delivery UI
         
-        // Common delivery app UI elements
-        Regex("""\b(?:Swiggy|Zomato|Uber\s*Eats|DoorDash)\b""", RegexOption.IGNORE_CASE),
+        // Common delivery UI copy
         Regex("""\bfood at the earliest\b""", RegexOption.IGNORE_CASE)
     )
     
@@ -359,4 +358,3 @@ private fun String.removeCaseInsensitiveSuffix(suffix: String): String {
         this
     }
 }
-

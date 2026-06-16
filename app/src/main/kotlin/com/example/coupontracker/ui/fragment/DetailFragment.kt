@@ -275,12 +275,7 @@ class DetailFragment : Fragment() {
                                     .apply(requestOptions)
                                     .into(storeImage)
                             } ?: run {
-                                // For ABHIBUS, load a default image or logo
-                                if (coupon.storeName.equals("ABHIBUS", ignoreCase = true)) {
-                                    storeImage.setImageResource(R.drawable.ic_image_placeholder)
-                                } else {
-                                    storeImage.setImageResource(R.drawable.ic_image_placeholder)
-                                }
+                                storeImage.setImageResource(R.drawable.ic_image_placeholder)
                             }
                         }
                     }

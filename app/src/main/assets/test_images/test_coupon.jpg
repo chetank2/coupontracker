@@ -1,7 +1,7 @@
 Placeholder file - Replace with actual coupon image
 
 This file should be replaced with a real coupon image containing:
-- Store name (e.g., "Myntra", "Amazon")
+- Store name (e.g., "Sample Store", "Demo Brand")
 - Coupon code (e.g., "SAVE200", "FLAT50")
 - Expiry date (e.g., "31/12/2025")
 - Discount amount (e.g., "₹200 OFF", "50% Cashback")
@@ -11,4 +11,3 @@ Format: JPEG
 File size: 100KB - 2MB
 
 This image is used by ModelSelfTest to verify the imported MiniCPM model works correctly.
-

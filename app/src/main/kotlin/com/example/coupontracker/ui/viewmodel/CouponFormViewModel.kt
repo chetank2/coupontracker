@@ -52,6 +52,7 @@ class CouponFormViewModel @Inject constructor(
      * Track the currently running image processing request to avoid duplicate work.
      */
     private var currentlyProcessingImageUri: String? = null
+    private var editCouponId: Long? = null
 
     /**
      * Process an image URI to extract coupon information
@@ -98,6 +99,38 @@ class CouponFormViewModel @Inject constructor(
         }
     }
 
+    fun loadCouponForEdit(couponId: Long) {
+        if (couponId <= 0L || editCouponId == couponId && _uiState.value.couponInfo != null) {
+            return
+        }
+
+        editCouponId = couponId
+        updateState {
+            it.copy(
+                isProcessing = true,
+                error = null,
+                saveResult = null
+            )
+        }
+
+        viewModelScope.launch {
+            try {
+                val coupon = couponRepository.getCouponById(couponId)
+                    ?: throw IllegalStateException("Coupon not found")
+                updateState {
+                    it.copy(
+                        isProcessing = false,
+                        couponInfo = mapCouponToCouponInfo(coupon),
+                        persistedImageUri = coupon.imageUri,
+                        editingCoupon = coupon
+                    )
+                }
+            } catch (e: Exception) {
+                handleError(e, "Error loading coupon")
+            }
+        }
+    }
+
     /**
      * Save the coupon
      * @param storeName Store name
@@ -132,9 +165,37 @@ class CouponFormViewModel @Inject constructor(
                     )
                 }
 
+                val editingCoupon = _uiState.value.editingCoupon
+                if (editingCoupon != null) {
+                    val updatedCoupon = editingCoupon.copy(
+                        storeName = storeName,
+                        description = description,
+                        redeemCode = code.takeIf { it.isNotBlank() },
+                        expiryDate = expiryDate,
+                        category = category.takeIf { it.isNotBlank() },
+                        imageUri = _uiState.value.persistedImageUri ?: imageUri ?: editingCoupon.imageUri,
+                        normalizedDescription = CouponDedupUtils.normalizeDescription(description),
+                        cleanupStatus = Coupon.CleanupStatus.NONE,
+                        cleanupError = null,
+                        needsAttention = false,
+                        updatedAt = Date()
+                    )
+                    couponRepository.updateCoupon(updatedCoupon)
+                    updateState {
+                        it.copy(
+                            isSaving = false,
+                            isSaved = true,
+                            saveResult = CouponSaveResult.UPDATED,
+                            savedCoupon = updatedCoupon,
+                            editingCoupon = updatedCoupon,
+                            couponInfo = mapCouponToCouponInfo(updatedCoupon)
+                        )
+                    }
+                    return@launch
+                }
+
                 // Create and save coupon object
                 val persistedImageUri = _uiState.value.persistedImageUri ?: imageUri
-
                 val coupon = createCoupon(
                     storeName = storeName,
                     description = description,
@@ -260,10 +321,12 @@ data class CouponFormUiState(
     val error: String? = null,
     val saveResult: CouponSaveResult? = null,
     val savedCoupon: Coupon? = null,
-    val persistedImageUri: String? = null
+    val persistedImageUri: String? = null,
+    val editingCoupon: Coupon? = null
 )
 
 enum class CouponSaveResult {
     SAVED,
+    UPDATED,
     ALREADY_SAVED
 }

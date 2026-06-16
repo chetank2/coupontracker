@@ -784,8 +784,7 @@ class CouponPatternRecognizer(
         if (description.isBlank()) return null
 
         val paymentMethods = listOf(
-            "UPI", "Credit Card", "Debit Card", "Net Banking", "Wallet",
-            "PhonePe", "Google Pay", "Paytm", "Amazon Pay"
+            "UPI", "Credit Card", "Debit Card", "Net Banking", "Wallet"
         )
 
         for (method in paymentMethods) {

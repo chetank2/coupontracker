@@ -104,7 +104,8 @@ internal class FieldValidationCoordinator(
             description = bundle.description,
             redeemCode = bundle.redeemCode,
             structuredCandidates = structuredStoreCandidates,
-            fallbackStore = fallbackInfo?.storeName?.takeUnless { GenericFieldHeuristics.isGenericOrMissing(it) }
+            fallbackStore = fallbackInfo?.storeName?.takeUnless { GenericFieldHeuristics.isGenericOrMissing(it) },
+            rawOcrText = rawOcrText
         )
         bundle = bundle.copy(storeName = storeResolution.value)
         storeResolution.issue?.let { issues += it }

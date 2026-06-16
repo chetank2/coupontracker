@@ -158,10 +158,8 @@ class RegionBasedExtractor(
             // 2. Look for formatted code blocks (typically in CODE_REGION)
             // These are usually all caps+numbers and stand alone
             val codeBlockPatterns = listOf(
-                // Mivi-specific pattern (like "CredS80")
-                Pattern.compile("\\b(Cred[A-Z][0-9]{1,2})\\b", Pattern.CASE_INSENSITIVE),
-                // Generic coupon code pattern (uppercase letters + numbers, at least 5 chars)
-                Pattern.compile("\\b([A-Z0-9]{5,20})\\b")
+                Pattern.compile("\\b([A-Z0-9]{5,20})\\b"),
+                Pattern.compile("\\b([A-Za-z0-9]{5,20})\\b")
             )
 
             // Focus on the bottom area of text (CODE_REGION)
@@ -195,34 +193,6 @@ class RegionBasedExtractor(
                 }
             }
 
-            // 3. Special case for Mivi coupon (example in prompt)
-            if (fullText.contains("Mivi", ignoreCase = true) ||
-                fullText.contains("wireless earbuds", ignoreCase = true)) {
-
-                val miviPattern = Pattern.compile("\\b(Cred[A-Za-z][0-9]{1,3})\\b", Pattern.CASE_INSENSITIVE)
-                val miviMatcher = miviPattern.matcher(fullText)
-
-                if (miviMatcher.find()) {
-                    val miviCode = miviMatcher.group(1)
-                    if (miviCode != null) {
-                        Log.d(TAG, "Found Mivi coupon code: $miviCode")
-                        return miviCode.uppercase()
-                    }
-                }
-
-                // Extra pattern for just "Cred" followed by anything
-                val credPattern = Pattern.compile("\\b(Cred\\w{1,5})\\b", Pattern.CASE_INSENSITIVE)
-                val credMatcher = credPattern.matcher(fullText)
-
-                if (credMatcher.find()) {
-                    val credCode = credMatcher.group(1)
-                    if (credCode != null) {
-                        Log.d(TAG, "Found Cred-prefixed code: $credCode")
-                        return credCode.uppercase()
-                    }
-                }
-            }
-
             return null
         } catch (e: Exception) {
             Log.e(TAG, "Error extracting redeem code", e)
@@ -235,49 +205,6 @@ class RegionBasedExtractor(
      */
     private fun extractDescription(fullText: String, bitmap: Bitmap): String? {
         try {
-            // Description patterns specific to coupon types
-            val miviPattern = Pattern.compile(
-                "(?i)(\\d+%\\s+off\\s+on\\s+mivi\\s+wireless\\s+earbuds)",
-                Pattern.CASE_INSENSITIVE
-            )
-
-            // Check for Mivi-specific descriptions
-            if (fullText.contains("Mivi", ignoreCase = true)) {
-                val miviMatcher = miviPattern.matcher(fullText)
-                if (miviMatcher.find()) {
-                    val description = miviMatcher.group(1)
-                    if (!description.isNullOrBlank()) {
-                        Log.d(TAG, "Found Mivi specific description: $description")
-                        return description
-                    }
-                }
-
-                // Alternative pattern for "won X% off on"
-                val wonPattern = Pattern.compile(
-                    "(?i)(you\\s+won\\s+\\d+%\\s+off\\s+on.*?)(?:\\.|\\n|$)",
-                    Pattern.CASE_INSENSITIVE
-                )
-                val wonMatcher = wonPattern.matcher(fullText)
-                if (wonMatcher.find()) {
-                    val description = wonMatcher.group(1)
-                    if (!description.isNullOrBlank()) {
-                        Log.d(TAG, "Found 'you won' description: $description")
-                        return description
-                    }
-                }
-
-                // Check for percentage off pattern
-                val percentPattern = Pattern.compile("(\\d+%\\s+off\\s+on.*?)(?:\\.|\\n|$)")
-                val percentMatcher = percentPattern.matcher(fullText)
-                if (percentMatcher.find()) {
-                    val description = percentMatcher.group(1)
-                    if (!description.isNullOrBlank()) {
-                        Log.d(TAG, "Found percentage off description: $description")
-                        return description
-                    }
-                }
-            }
-
             // General description patterns (look in DESCRIPTION_REGION)
             val descriptionPatterns = listOf(
                 Pattern.compile("(?i)(you\\s+won.*?)(?:\\.|\\n|$)"),
@@ -354,7 +281,7 @@ class RegionBasedExtractor(
      */
     private fun extractCashbackDetail(fullText: String, bitmap: Bitmap): String? {
         try {
-            // Pattern for percentage discounts (like in the Mivi example: 80%)
+            // Pattern for percentage discounts.
             val percentagePatterns = listOf(
                 Pattern.compile("(\\d+)%\\s+off", Pattern.CASE_INSENSITIVE),
                 Pattern.compile("you\\s+won\\s+(\\d+)%", Pattern.CASE_INSENSITIVE)
@@ -400,15 +327,6 @@ class RegionBasedExtractor(
                 }
             }
 
-            // Special case for Mivi example in the prompt
-            if (fullText.contains("Mivi", ignoreCase = true) &&
-                fullText.contains("80", ignoreCase = true) &&
-                fullText.contains("%", ignoreCase = true)) {
-                val formatted = DescriptionUtils.formatCashbackDetail(80.0, "percent")
-                Log.d(TAG, "Using special case for Mivi: $formatted")
-                return formatted
-            }
-
             return null
         } catch (e: Exception) {
             Log.e(TAG, "Error extracting cashback detail", e)
@@ -431,45 +349,15 @@ class RegionBasedExtractor(
         data["rating"] = couponInfo.rating
         data["status"] = couponInfo.status
 
-        // RULE 1: If store name is com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE but text contains a known store, use that
+        // RULE 1: If store name is unknown, retry generic store extraction on the full OCR text.
         if (data["storeName"] == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE) {
-            // Look for known stores in text
-            val knownStores = listOf("Myntra", "ABHIBUS", "NEWMEE", "IXIGO", "BOAT", "XYXX", "Mivi")
-            for (store in knownStores) {
-                if (fullText.contains(store, ignoreCase = true)) {
-                    data["storeName"] = store
-                    Log.d(TAG, "Updated unknown store to: $store")
-                    break
-                }
+            textExtractor.extractStoreName(fullText)?.let { store ->
+                data["storeName"] = store
+                Log.d(TAG, "Updated unknown store from generic extractor: $store")
             }
         }
 
-        // RULE 2: Special case for Mivi coupon from prompt
-        if (fullText.contains("Mivi", ignoreCase = true) &&
-            fullText.contains("wireless earbuds", ignoreCase = true)) {
-
-            // Force store name
-            data["storeName"] = "Mivi"
-
-            // Look for "CredS80" code specifically
-            val miviCodePattern = Pattern.compile("\\b(Cred\\w{1,3}\\d{1,2})\\b", Pattern.CASE_INSENSITIVE)
-            val miviCodeMatcher = miviCodePattern.matcher(fullText)
-            if (miviCodeMatcher.find()) {
-                data["redeemCode"] = miviCodeMatcher.group(1)!!.uppercase()
-            }
-
-            // Set description
-            if (data["description"] == "") {
-                data["description"] = "You won 80% off on Mivi wireless earbuds"
-            }
-
-            // Set amount
-            if (data["cashbackDetail"] == null) {
-                data["cashbackDetail"] = DescriptionUtils.formatCashbackDetail(80.0, "percent")
-            }
-        }
-
-        // RULE 3: If we have a cashback detail but no description, create a synthetic one
+        // RULE 2: If we have a cashback detail but no description, create a synthetic one
         if (data["description"] == "" && data["cashbackDetail"] != null && data["storeName"] != com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE) {
             val detail = data["cashbackDetail"] as? String
             val store = data["storeName"] as? String ?: "the store"

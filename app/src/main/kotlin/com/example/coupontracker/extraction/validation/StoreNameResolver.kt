@@ -3,6 +3,7 @@ package com.example.coupontracker.extraction.validation
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.util.GenericFieldHeuristics
+import com.example.coupontracker.util.OcrEvidenceValidator
 
 data class StoreNameResolution(
     val value: String?,
@@ -26,10 +27,12 @@ internal class StoreNameResolver(
         description: String?,
         redeemCode: String?,
         structuredCandidates: List<FieldCandidate>,
-        fallbackStore: String?
+        fallbackStore: String?,
+        rawOcrText: String? = null
     ): StoreNameResolution {
         val llmAssessment = validator.assessCandidate(current, description, redeemCode, source = "llm")
-        if (llmAssessment.isAccepted) {
+        val llmHasOcrEvidence = isSupportedByOcr(llmAssessment.canonical ?: llmAssessment.original, rawOcrText)
+        if (llmAssessment.isAccepted && llmHasOcrEvidence) {
             val value = llmAssessment.canonical ?: llmAssessment.original
             return StoreNameResolution(
                 value = value,
@@ -43,6 +46,7 @@ internal class StoreNameResolver(
         }
 
         val structuredBest = structuredCandidates
+            .filter { candidate -> isSupportedByOcr(candidate.value, rawOcrText) }
             .map { candidate ->
                 candidate to validator.assessCandidate(
                     value = candidate.value,
@@ -81,7 +85,7 @@ internal class StoreNameResolver(
             source = "text_extractor"
         )
 
-        if (fallbackAssessment.isAccepted) {
+        if (fallbackAssessment.isAccepted && isSupportedByOcr(fallbackStore, rawOcrText)) {
             val canonical = fallbackAssessment.canonical ?: fallbackStore?.trim()
             val issue = FieldValidationIssue(
                 field = FieldType.STORE_NAME,
@@ -100,10 +104,16 @@ internal class StoreNameResolver(
             )
         }
 
-        val fallbackValue = llmAssessment.canonical ?: llmAssessment.original
+        val fallbackValue = (llmAssessment.canonical ?: llmAssessment.original)
+            ?.takeIf { llmHasOcrEvidence }
         val evidence = (llmAssessment.signals.takeIf { it.isNotEmpty() }
             ?: fallbackAssessment.signals)
             .map { it.detail }
+        val evidenceIssue = if (!llmHasOcrEvidence && !llmAssessment.original.isNullOrBlank()) {
+            "ocr_evidence_missing"
+        } else {
+            null
+        }
         val issue = FieldValidationIssue(
             field = FieldType.STORE_NAME,
             message = "Store name '${fallbackValue.orEmpty()}' failed validation and needs manual review",
@@ -118,8 +128,13 @@ internal class StoreNameResolver(
             source = "unresolved",
             evidence = evidence,
             needsAttention = true,
-            violations = llmAssessment.issues,
+            violations = llmAssessment.issues + listOfNotNull(evidenceIssue),
             confidence = null
         )
+    }
+
+    private fun isSupportedByOcr(candidate: String?, rawOcrText: String?): Boolean {
+        if (rawOcrText.isNullOrBlank()) return true
+        return OcrEvidenceValidator.isPhraseSupported(candidate, rawOcrText)
     }
 }

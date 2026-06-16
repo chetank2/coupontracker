@@ -16,6 +16,7 @@ class EnhancedOCRHelper(
 ) {
     
     private val mlKitRealTextRecognition = MLKitRealTextRecognition(ocrEngine)
+    private val textExtractor = TextExtractor()
     
     companion object {
         private const val TAG = "EnhancedOCRHelper"
@@ -23,25 +24,13 @@ class EnhancedOCRHelper(
         // Regex patterns for coupon information extraction
         private val STORE_PATTERN = Pattern.compile("(?i)(store|shop|merchant|retailer|brand|company|from)\\s*:?\\s*([A-Za-z0-9\\s&.'-]+)")
         
-        // Add specific pattern for Myntra store detection
-        private val MYNTRA_PATTERN = Pattern.compile("(?i)\\b(myntra)\\b")
-        
         private val CODE_PATTERN = Pattern.compile("(?i)(code|coupon|promo|voucher|redeem|use)\\s*:?\\s*([A-Za-z0-9\\-_]+)")
-        
-        // Add specific pattern for Myntra coupon codes which are typically longer
-        private val MYNTRA_CODE_PATTERN = Pattern.compile("\\b([A-Z0-9]{10,})\\b")
-        
+
         private val AMOUNT_PATTERN = Pattern.compile("(?i)(₹|Rs\\.?|\\$)?(\\d+(\\.\\d{1,2})?|\\d+(\\.\\d{1,2})?)\\s*%?\\s*(off|cashback|discount|reward|save)")
-        
-        // Myntra-specific amount pattern with "up to" format
-        private val MYNTRA_AMOUNT_PATTERN = Pattern.compile("(?i)(up to|flat|get)\\s+(₹|Rs\\.?)(\\d+)")
-        
+
         private val EXPIRY_PATTERN = Pattern.compile("(?i)(exp|expires|expiry|valid until|valid through|use by)\\s*:?\\s*(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})")
         
         private val DESCRIPTION_PATTERN = Pattern.compile("(?i)(description|details|offer|deal|get|save)\\s*:?\\s*([^\\n\\r.]+)")
-        
-        // Myntra-specific description pattern
-        private val MYNTRA_DESCRIPTION_PATTERN = Pattern.compile("(?i)(you won a voucher)([^\\n\\r.]+)")
     }
     
     /**
@@ -96,54 +85,22 @@ class EnhancedOCRHelper(
         
         Log.d(TAG, "Extracting info from text: $text")
         
-        // Check if this is likely a Myntra coupon
-        val isMyntraCoupon = text.contains("myntra", ignoreCase = true) || 
-                             text.contains("you won a voucher", ignoreCase = true)
-        
-        // Handle store name extraction with special case for Myntra
-        if (isMyntraCoupon) {
-            result["storeName"] = "Myntra"
-            Log.d(TAG, "Identified as Myntra coupon")
-        } else {
-            findMatch(STORE_PATTERN, text)?.let {
-                result["storeName"] = it.trim()
-                Log.d(TAG, "Found store name: ${it.trim()}")
-            }
+        findMatch(STORE_PATTERN, text)?.let {
+            result["storeName"] = it.trim()
+            Log.d(TAG, "Found store name: ${it.trim()}")
+        } ?: textExtractor.extractStoreName(text)?.let {
+            result["storeName"] = it
+            Log.d(TAG, "Found store name with generic extractor: $it")
         }
         
-        // Handle code extraction with special case for Myntra
         var codeFound = false
-        
-        if (isMyntraCoupon) {
-            // For Myntra, first look for their specific longer code format
-            val myntraMatcher = MYNTRA_CODE_PATTERN.matcher(text)
-            while (myntraMatcher.find()) {
-                val potentialCode = myntraMatcher.group(1)
-                // Ensure it has both letters and numbers for higher confidence
-                if (potentialCode != null &&
-                    potentialCode.contains(Regex("[A-Z]")) &&
-                    potentialCode.contains(Regex("[0-9]")) &&
-                    potentialCode.length >= 10) {
-                    val sanitized = RedeemCodeSanitizer.sanitize(potentialCode)
-                    if (sanitized != null) {
-                        result["code"] = sanitized
-                        codeFound = true
-                        Log.d(TAG, "Found Myntra coupon code: $potentialCode")
-                        break
-                    }
-                }
-            }
-        }
 
-        // If no code found yet, try standard pattern
-        if (!codeFound) {
-            findMatch(CODE_PATTERN, text)?.let {
-                val sanitized = RedeemCodeSanitizer.sanitize(it)
-                if (sanitized != null) {
-                    result["code"] = sanitized
-                    codeFound = true
-                    Log.d(TAG, "Found standard coupon code: ${it.trim()}")
-                }
+        findMatch(CODE_PATTERN, text)?.let {
+            val sanitized = RedeemCodeSanitizer.sanitize(it)
+            if (sanitized != null) {
+                result["code"] = sanitized
+                codeFound = true
+                Log.d(TAG, "Found standard coupon code: ${it.trim()}")
             }
         }
 
@@ -167,33 +124,17 @@ class EnhancedOCRHelper(
             }
         }
         
-        // Handle amount extraction with special case for Myntra
         var amountFound = false
-        
-        if (isMyntraCoupon) {
-            // For Myntra, look for their specific "up to ₹200" format
-            val myntraAmountMatcher = MYNTRA_AMOUNT_PATTERN.matcher(text)
-            if (myntraAmountMatcher.find() && myntraAmountMatcher.groupCount() >= 3) {
-                val amount = myntraAmountMatcher.group(3)
-                result["amount"] = "₹$amount"
-                amountFound = true
-                Log.d(TAG, "Found Myntra amount: ₹$amount")
+
+        findMatch(AMOUNT_PATTERN, text)?.let {
+            val amount = if (it.trim().startsWith("₹") || it.trim().startsWith("Rs") || it.trim().startsWith("$")) {
+                it.trim().replace("$", "₹").replace("Rs", "₹")
+            } else {
+                "₹$it"
             }
-        }
-        
-        // If no amount found yet, try standard pattern
-        if (!amountFound) {
-            findMatch(AMOUNT_PATTERN, text)?.let {
-                // Add ₹ symbol if it doesn't already have one
-                val amount = if (it.trim().startsWith("₹") || it.trim().startsWith("Rs") || it.trim().startsWith("$")) {
-                    it.trim().replace("$", "₹").replace("Rs", "₹")
-                } else {
-                    "₹$it"
-                }
-                result["amount"] = amount.trim()
-                amountFound = true
-                Log.d(TAG, "Found standard amount: $amount")
-            }
+            result["amount"] = amount.trim()
+            amountFound = true
+            Log.d(TAG, "Found standard amount: $amount")
         }
         
         // If still no amount found, try a simpler pattern
@@ -215,44 +156,14 @@ class EnhancedOCRHelper(
             Log.d(TAG, "Found expiry date: ${it.trim()}")
         }
         
-        // Handle description extraction with special case for Myntra
-        var descriptionFound = false
-        
-        if (isMyntraCoupon) {
-            // For Myntra, try to find their specific voucher description format
-            findMatch(MYNTRA_DESCRIPTION_PATTERN, text)?.let {
-                val description = it.trim() + " up to ₹" + (result["amount"] ?: "").replace("₹", "")
-                setDescription(result, description)
-                descriptionFound = true
-                Log.d(TAG, "Found Myntra description: $description")
-            }
-            
-            // If that fails, look for a phrase containing "voucher" and "up to"
-            if (!descriptionFound) {
-                val myntraDescRegex = "(?:you won a voucher|up to ₹\\d+)(.{5,30})".toRegex(RegexOption.IGNORE_CASE)
-                myntraDescRegex.find(text)?.let {
-                    val desc = it.groupValues[0].trim()
-                    if (desc.isNotBlank()) {
-                        setDescription(result, desc)
-                        descriptionFound = true
-                        Log.d(TAG, "Found Myntra description with alt pattern: $desc")
-                    }
-                }
-            }
-        }
-
-        // If no description found yet, try standard pattern
-        if (!descriptionFound) {
-            findMatch(DESCRIPTION_PATTERN, text)?.let {
-                setDescription(result, it.trim())
-                descriptionFound = true
-                Log.d(TAG, "Found standard description: ${it.trim()}")
-            }
+        findMatch(DESCRIPTION_PATTERN, text)?.let {
+            setDescription(result, it.trim())
+            Log.d(TAG, "Found standard description: ${it.trim()}")
         }
         
         // If we couldn't extract any information, provide some defaults
         if (result.isEmpty()) {
-            result["storeName"] = if (isMyntraCoupon) "Myntra" else com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
+            result["storeName"] = com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
             setDescription(result, "Scanned coupon")
         }
         

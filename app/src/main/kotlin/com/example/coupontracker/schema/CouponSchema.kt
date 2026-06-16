@@ -24,11 +24,11 @@ object CouponSchema {
                 required = true,
                 metadata = FieldMetadata(
                     description = "Brand or store name that issued the coupon",
-                    examples = listOf("Amazon", "Flipkart", "AJIO", "Myntra"),
+                    examples = listOf("Sample Store", "Example Mart", "Demo Brand"),
                     hints = listOf(
                         "Extract brand name only, not full company name",
                         "Prefer the issuing brand over partner or watermark text",
-                        "Use title case (e.g., 'Amazon' not 'AMAZON')",
+                        "Use title case when the OCR casing is clearly a style choice",
                         "If any brand, merchant, or app name appears in OCR, choose the best match instead of returning null"
                     ),
                     extractionHints = "Usually appears at the top or as a logo. May be in large text or header.",
@@ -130,7 +130,7 @@ object CouponSchema {
                 required = false,
                 metadata = FieldMetadata(
                     description = "Supporting snippets that justify the selected store name",
-                    examples = listOf("[\"PUMA\", \"Get Upto 50% Off\"]", "[\"AJIO\"]"),
+                    examples = listOf("[\"SAMPLE\", \"Get Upto 50% Off\"]", "[\"DEMO\"]"),
                     hints = listOf(
                         "Provide up to three short evidence strings",
                         "Use OCR fragments or reasoning phrases",
@@ -193,4 +193,3 @@ object CouponSchema {
      */
     fun getAllFieldNames(): List<String> = SCHEMA.fields.map { it.name }
 }
-

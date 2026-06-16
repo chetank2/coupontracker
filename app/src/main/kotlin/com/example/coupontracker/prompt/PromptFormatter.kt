@@ -80,9 +80,11 @@ object PromptFormatter {
             appendLine("Return one minified JSON object only.")
             appendLine("Keys: $requiredFields")
             appendLine("No markdown, comments, nulls, empty strings, or extra keys. Use \"unknown\" if missing.")
-            appendLine("storeName=merchant/brand. redeemCode=actual code only, uppercase, no spaces/CTA.")
-            appendLine("description=main offer wording. expiryDate=expiry wording from OCR.")
-            appendLine("storeNameSource=ocr|logo|heading|vision|unknown. storeNameEvidence=1-2 exact OCR snippets.")
+            appendLine("Use only text present in OCR. Do not correct brand names by guessing.")
+            appendLine("storeName=exact merchant/brand substring from OCR, or \"unknown\".")
+            appendLine("redeemCode=exact actual code substring from OCR, uppercase, no spaces/CTA.")
+            appendLine("description=main offer wording from OCR. expiryDate=expiry wording from OCR.")
+            appendLine("storeNameSource=ocr|heading|unknown. storeNameEvidence=1-2 exact OCR snippets.")
             append("<|im_end|>")
         }
     }
@@ -96,7 +98,7 @@ object PromptFormatter {
         )
         return buildString {
             appendLine("<|im_start|>user")
-            appendLine("Extract coupon fields from OCR ($metrics). Do not invent.")
+            appendLine("Extract coupon fields from OCR ($metrics). Do not invent or rename stores.")
             appendLine(truncatedOcr)
             append("<|im_end|>")
         }

@@ -1,13 +1,4 @@
 {
-  "entries": [
-    { "canonical": "The Man Company", "aliases": ["man company", "tmc", "themancompany"] },
-    { "canonical": "boAt", "aliases": ["boat"] },
-    { "canonical": "Myntra", "aliases": ["myntra"] },
-    { "canonical": "Times Prime", "aliases": ["timesprime", "times prime"] },
-    { "canonical": "Giva", "aliases": ["giva"] },
-    { "canonical": "Skullcandy", "aliases": ["skull candy", "skullcandy"] },
-    { "canonical": "Cellecor Gadgets Limited", "aliases": ["cellecor", "cellecor gadgets"] },
-    { "canonical": "Leaf", "aliases": ["leaf"] }
-  ],
+  "entries": [],
   "badWords": ["now", "shop", "join", "claim", "redeem", "offer", "deal", "coupon"]
 }

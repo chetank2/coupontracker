@@ -69,4 +69,69 @@ class PostOcrCouponNormalizerTest {
         assertEquals("₹499 on Beardo", result.description)
         assertFalse(result.description.orEmpty().contains("20%"))
     }
+
+    @Test
+    fun normalizerExtractsUsefulXYXXOfferFromWalletListOcr() {
+        val rawOcr = """
+            vouchers
+            active
+            18
+            lifetime
+            428
+            XYXX4.31
+            you
+            get
+            XYXX
+            polo
+            t-shirts
+            from
+            7599
+            50
+            cashback
+            via
+            CRED
+            pay
+            Redeem
+            Now
+            EXPIRES
+            IN
+            05
+            DAYS
+        """.trimIndent()
+
+        val result = PostOcrCouponNormalizer.normalize(
+            currentDescription = "cashback",
+            ocrText = rawOcr,
+            storeName = "XYXX",
+            redeemCode = null,
+        )
+
+        assertEquals("50 cashback", result.description)
+        assertEquals("Cashback: ₹50", result.cashbackDetail)
+    }
+
+    @Test
+    fun normalizerKeepsSplitFreebieOfferLinesTogether() {
+        val rawOcr = """
+            Lenskart
+            Gold Membership
+            Free*
+            Single vision lenses
+            Code
+            LENSFREE
+            Expires in 5 days
+        """.trimIndent()
+
+        val result = PostOcrCouponNormalizer.normalize(
+            currentDescription = "free*",
+            ocrText = rawOcr,
+            storeName = "Lenskart",
+            redeemCode = "LENSFREE",
+        )
+
+        assertEquals(
+            "Gold Membership\nFree\nSingle vision lenses",
+            result.description
+        )
+    }
 }

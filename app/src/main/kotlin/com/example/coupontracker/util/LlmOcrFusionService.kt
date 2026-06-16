@@ -431,8 +431,15 @@ class LlmOcrFusionService(
     }
     
     /**
-     * Universal code ranking - replaces brand-specific BrandAwareCouponValidator
+     * Universal code ranking without brand-specific validators.
      */
+    private data class CodeCandidate(
+        val text: String,
+        val baseMatch: Boolean,
+        val contextualMatch: Boolean,
+        val score: Double
+    )
+
     private fun rankCodesUniversally(
         codeTokens: List<String>,
         reference: String? = null

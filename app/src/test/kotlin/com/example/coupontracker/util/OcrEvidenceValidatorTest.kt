@@ -41,4 +41,11 @@ class OcrEvidenceValidatorTest {
 
         assertFalse(OcrEvidenceValidator.isPhraseSupported("pm", rawOcr))
     }
+
+    @Test
+    fun `short store name is not supported only because it appears inside coupon code`() {
+        val rawOcr = "Save 20 percent on annual plan Code AHAPPE20"
+
+        assertFalse(OcrEvidenceValidator.isPhraseSupported("Aha", rawOcr))
+    }
 }

@@ -557,7 +557,7 @@ class LocalLlmOcrService(
     private suspend fun runTextWarmupPrompt(): WarmupPromptMetrics {
         val warmupPrompt = """
             Return exactly one JSON object with keys storeName, description, redeemCode, expiryDate, storeNameSource, storeNameEvidence, needsAttention.
-            Never output null or empty strings; use the literal string "unknown" only if the field is truly missing. Keep storeNameEvidence as an array with up to three short snippets (or [] when nothing reliable exists). needsAttention should only be true when the store looks uncertain.
+            Use only text present in OCR. Do not correct, rename, or infer brand names. Never output null or empty strings; use the literal string "unknown" when the field is missing or not directly supported by OCR. Keep storeNameEvidence as exact OCR snippets, up to three short snippets, or [] when nothing reliable exists. needsAttention should be true when the store lacks exact OCR evidence.
         """.trimIndent()
         val warmupOcr = "WarmupCo weekend deal – 5% off everything. Redeem with code WARMUP5 before 31 Dec 2025."
 

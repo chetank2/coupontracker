@@ -73,21 +73,23 @@ object PostOcrCouponNormalizer {
         val cleanedLines = cleanLines(ocrText.orEmpty(), storeName, redeemCode)
         val current = cleanDescriptionLines(currentDescription, storeName, redeemCode)
 
-        val currentOffer = current.bestOfferLine(storeName)
-        val extractedOffer = cleanedLines.bestOfferLine(storeName)
-            ?: textExtractor.extractDescription(cleanedLines.joinToString("\n"))
-                ?.takeIf { isAcceptableDescription(it, storeName, redeemCode) }
+        val extractedOfferBlock = cleanedLines.bestOfferBlock(storeName)
+        val currentOfferBlock = current.bestOfferBlock(storeName)
+        val fallbackOffer = textExtractor.extractDescription(cleanedLines.joinToString("\n"))
+            ?.takeIf { isAcceptableDescription(it, storeName, redeemCode) }
 
-        val offer = listOf(currentOffer, extractedOffer)
-            .filterNotNull()
-            .map(::compactLine)
-            .firstOrNull { isAcceptableDescription(it, storeName, redeemCode) }
+        val offerLines = extractedOfferBlock
+            ?: currentOfferBlock
+            ?: fallbackOffer?.let { listOf(compactLine(it)) }
+            ?: emptyList()
+        val offer = offerLines.joinToString("\n")
+            .takeIf { it.isNotBlank() && offerLines.any { line -> isAcceptableDescription(line, storeName, redeemCode) } }
 
         val cashbackDetail = listOfNotNull(
-            offer?.let(DescriptionUtils::formatCashbackDetail),
+            offer?.let(::formatCashbackLine),
             cleanedLines.firstOrNull { line ->
                 line.contains("cashback", ignoreCase = true) && isOfferLine(line)
-            }?.let(DescriptionUtils::formatCashbackDetail),
+            }?.let(::formatCashbackLine),
         ).firstOrNull { GenericFieldHeuristics.hasMeaningfulCashback(it) }
 
         val terms = (cleanedLines + current)
@@ -102,7 +104,7 @@ object PostOcrCouponNormalizer {
         }
 
         val description = buildList {
-            if (offer != null) add(offer)
+            offerLines.forEach { add(it) }
             terms.forEach { add(it) }
         }.distinctBy { normalizeKey(it) }
             .joinToString("\n")
@@ -122,11 +124,15 @@ object PostOcrCouponNormalizer {
         redeemCode: String?,
     ): List<String> {
         val cleaned = cleaner.cleanForLlmExtraction(rawText).cleanedText
-        return cleaned
+        val compacted = cleaned
             .lineSequence()
             .flatMap { it.split("•").asSequence() }
-            .mapNotNull { raw ->
-                val line = compactLine(raw)
+            .map(::compactLine)
+            .filter { it.isNotBlank() }
+            .toList()
+
+        return mergeSplitCashbackLines(compacted)
+            .mapNotNull { line ->
                 line.takeIf { isUsefulLine(it, storeName, redeemCode) }
             }
             .distinctBy(::normalizeKey)
@@ -174,6 +180,7 @@ object PostOcrCouponNormalizer {
         val line = compactLine(value)
         if (!isUsefulLine(line, storeName, redeemCode)) return false
         if (!isOfferLine(line)) return false
+        if (line.matches(Regex("""(?i)^(cashback|discount|offer|off)$"""))) return false
         if (line.equals("Coupon offer", ignoreCase = true)) return false
         if (line.equals("Saved coupon", ignoreCase = true)) return false
         return true
@@ -194,6 +201,74 @@ object PostOcrCouponNormalizer {
                     .thenByDescending { -it.index }
             )
             ?.value
+    }
+
+    private fun List<String>.bestOfferBlock(storeName: String?): List<String>? {
+        val bestIndex = asSequence()
+            .mapIndexedNotNull { index, line ->
+                if (isOfferLine(line)) IndexedValue(index, line) else null
+            }
+            .maxWithOrNull(
+                compareBy<IndexedValue<String>> { scoreOfferLine(it.value, storeName) }
+                    .thenByDescending { -it.index }
+            )
+            ?.index ?: return null
+
+        val start = findOfferBlockStart(bestIndex)
+        val end = findOfferBlockEnd(bestIndex)
+        return subList(start, end + 1)
+            .filter(::isOfferContextLine)
+            .distinctBy(::normalizeKey)
+            .takeIf { lines -> lines.any(::isOfferLine) }
+    }
+
+    private fun List<String>.findOfferBlockStart(bestIndex: Int): Int {
+        var start = bestIndex
+        var included = 0
+        var index = bestIndex - 1
+        while (index >= 0 && included < 3) {
+            val line = this[index]
+            if (!isOfferContextLine(line) || isBoundaryLine(line)) break
+            if (isOfferLine(line)) break
+            start = index
+            included += 1
+            index -= 1
+        }
+        return start
+    }
+
+    private fun List<String>.findOfferBlockEnd(bestIndex: Int): Int {
+        var end = bestIndex
+        var included = 0
+        var index = bestIndex + 1
+        while (index < size && included < 4) {
+            val line = this[index]
+            if (!isOfferContextLine(line) || isBoundaryLine(line)) break
+            if (isOfferLine(line)) break
+            end = index
+            included += 1
+            index += 1
+        }
+        return end
+    }
+
+    private fun isOfferContextLine(line: String): Boolean {
+        if (line.length < 3 || line.length > 120) return false
+        if (line.all { it.isDigit() || it.isWhitespace() }) return false
+        if (junkLineRegex.matches(line)) return false
+        if (statusBarRegex.containsMatchIn(line)) return false
+        if (GenericFieldHeuristics.isGenericOrMissing(line)) return false
+        return true
+    }
+
+    private fun isBoundaryLine(line: String): Boolean {
+        if (codeLineRegex.containsMatchIn(line)) return true
+        if (expiryLineRegex.containsMatchIn(line)) return true
+        val normalized = normalizeKey(line)
+        if (normalized in setOf("via", "pay", "redeem", "from", "order", "now", "copy")) return true
+        if (Regex("""(?i)\b(?:bank|card|payment)\b""").containsMatchIn(line)) return true
+        if (Regex("""(?i)\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b\s+\d{1,2}""").containsMatchIn(line)) return true
+        return false
     }
 
     private fun scoreOfferLine(line: String, storeName: String?): Int {
@@ -219,10 +294,40 @@ object PostOcrCouponNormalizer {
 
     private fun isTermsLine(line: String): Boolean = termsLineRegex.containsMatchIn(line)
 
+    private fun formatCashbackLine(line: String): String? {
+        val splitCashback = Regex("""(?i)^\s*(\d{1,6})\s+cashback\s*$""").find(line)
+        if (splitCashback != null) {
+            return "Cashback: ₹${splitCashback.groupValues[1]}"
+        }
+        return DescriptionUtils.formatCashbackDetail(line)
+    }
+
+    private fun mergeSplitCashbackLines(lines: List<String>): List<String> {
+        val merged = mutableListOf<String>()
+        var index = 0
+        while (index < lines.size) {
+            val line = lines[index]
+            val next = lines.getOrNull(index + 1)
+            if (next != null &&
+                line.matches(Regex("""\d{1,6}""")) &&
+                next.equals("cashback", ignoreCase = true)
+            ) {
+                merged += "$line cashback"
+                index += 2
+            } else {
+                merged += line
+                index++
+            }
+        }
+        return merged
+    }
+
     private fun compactLine(raw: String): String {
         return raw
             .replace(Regex("""^[•*\-]+\s*"""), "")
             .replace(Regex("""(?i)(?<![A-Z0-9])z\s*(?=\d{2,}(?:[,\d]*)(?:\b|\s))"""), "₹")
+            .replace(Regex("""(?i)\b(\d{1,3})\s+percent\b"""), "$1%")
+            .replace(Regex("""(?i)\b(free|off|cashback|discount)\*"""), "$1")
             .replace(Regex("""(?i)\b(?:copy|copy code|tap to copy|apply code)\b"""), " ")
             .replace(Regex("""(?i)\bcashback\s*:?\s*0+(?:\.0+)?\b"""), " ")
             .replace(Regex("\\s+"), " ")

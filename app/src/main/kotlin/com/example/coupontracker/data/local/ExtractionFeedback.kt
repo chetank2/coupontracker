@@ -45,7 +45,7 @@ data class ExtractionFeedback(
     
     /**
      * Original extracted values (JSON)
-     * Example: {"code": "SAVE50", "expiry": "2025-12-31", "cashback": "500", "store": "Myntra"}
+     * Example: {"code": "SAVE50", "expiry": "2025-12-31", "cashback": "500", "store": "Sample Store"}
      */
     val originalValues: String,
     

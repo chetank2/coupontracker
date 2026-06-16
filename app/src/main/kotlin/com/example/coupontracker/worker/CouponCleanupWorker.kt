@@ -14,7 +14,6 @@ import androidx.work.workDataOf
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.CouponDedupUtils
-import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.model.ModelCatalog
 import com.example.coupontracker.ocr.OcrEngine
 import com.example.coupontracker.util.CouponFixContext
@@ -24,6 +23,8 @@ import com.example.coupontracker.util.ExtractResult
 import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.util.LocalLlmOcrService
 import com.example.coupontracker.util.OcrEvidenceValidator
+import com.example.coupontracker.util.PostOcrCouponNormalizer
+import com.example.coupontracker.util.TextExtractor
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +40,7 @@ class CouponCleanupWorker @AssistedInject constructor(
     private val localLlmOcrService: LocalLlmOcrService,
     private val ocrEngine: OcrEngine
 ) : CoroutineWorker(appContext, workerParams) {
+    private val textExtractor = TextExtractor()
 
     override suspend fun doWork(): Result {
         val couponId = inputData.getLong(KEY_COUPON_ID, 0L)
@@ -64,6 +66,11 @@ class CouponCleanupWorker @AssistedInject constructor(
                 ?: extractOcrText(coupon.imageUri)
             if (ocrText.isNullOrBlank()) {
                 markFailed(couponId, "Saved OCR text is unavailable")
+                return Result.success()
+            }
+
+            buildDeterministicCleanedCoupon(coupon, ocrText)?.let { cleaned ->
+                couponRepository.updateCoupon(cleaned)
                 return Result.success()
             }
 
@@ -155,6 +162,65 @@ class CouponCleanupWorker @AssistedInject constructor(
         }
     }
 
+    private fun buildDeterministicCleanedCoupon(current: Coupon, rawOcr: String): Coupon? {
+        val info = textExtractor.extractCouponInfoSync(rawOcr, current.createdAt)
+        val currentCode = current.redeemCode?.trim()
+            ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+            ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
+        val extractedCode = info.redeemCode?.trim()
+            ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+            ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
+        val selectedCode = extractedCode ?: currentCode
+
+        val extractedStore = info.storeName.trim()
+            .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
+            ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
+        val currentStore = current.storeName.trim()
+            .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
+            ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
+        val selectedStore = extractedStore ?: currentStore ?: return null
+
+        val scopedOcr = textExtractor.extractCouponBlockForStore(rawOcr, selectedStore) ?: rawOcr
+        val normalized = PostOcrCouponNormalizer.normalize(
+            currentDescription = current.description,
+            ocrText = scopedOcr,
+            storeName = selectedStore,
+            redeemCode = selectedCode
+        )
+        val extractedDescription = info.description.takeIf(GenericFieldHeuristics::isMeaningfulDescription)
+        val selectedDescription = normalized.description
+            ?: extractedDescription
+            ?: current.description.takeIf(GenericFieldHeuristics::isMeaningfulDescription)
+            ?: return null
+
+        val selectedExpiry = current.expiryDate ?: info.expiryDate
+        if (selectedCode.isNullOrBlank() && selectedExpiry == null) {
+            return null
+        }
+
+        return current.copy(
+            storeName = selectedStore,
+            description = selectedDescription,
+            expiryDate = selectedExpiry,
+            redeemCode = selectedCode,
+            category = current.category ?: info.category,
+            status = current.status ?: info.status ?: Coupon.Status.ACTIVE,
+            minimumPurchase = current.minimumPurchase ?: info.minimumPurchase,
+            maximumDiscount = current.maximumDiscount ?: info.maximumDiscount,
+            paymentMethod = current.paymentMethod ?: info.paymentMethod,
+            platformType = current.platformType ?: info.platformType,
+            usageLimit = current.usageLimit ?: info.usageLimit,
+            cleanupStatus = Coupon.CleanupStatus.CLEANED,
+            cleanupFinishedAt = Date(),
+            cleanupError = null,
+            lastCleanedBy = "OCR rules",
+            extractionSource = current.extractionSource,
+            normalizedDescription = CouponDedupUtils.normalizeDescription(selectedDescription),
+            needsAttention = normalized.needsAttention,
+            updatedAt = Date()
+        )
+    }
+
     private fun mergeCleanedCoupon(current: Coupon, info: CouponInfo): Coupon {
         val rawOcr = current.rawOcrText
         val qwenDescription = info.description.takeIf(GenericFieldHeuristics::isMeaningfulDescription)
@@ -181,14 +247,11 @@ class CouponCleanupWorker @AssistedInject constructor(
             else -> Coupon.Defaults.UNKNOWN_STORE
         }
 
-        val descriptionWithCashback = DescriptionUtils.appendDetails(
-            qwenDescription ?: current.description,
-            info.cashbackDetail
-        )
+        val selectedDescription = qwenDescription ?: current.description
 
         val merged = current.copy(
             storeName = selectedStore,
-            description = descriptionWithCashback,
+            description = selectedDescription,
             expiryDate = current.expiryDate ?: info.expiryDate,
             redeemCode = selectedCode,
             category = current.category ?: info.category,

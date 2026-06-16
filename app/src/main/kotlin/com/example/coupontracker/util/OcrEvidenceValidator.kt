@@ -22,7 +22,7 @@ object OcrEvidenceValidator {
         val compactCandidate = candidateTokens.joinToString("")
         val compactOcr = tokens(rawOcr).joinToString("")
 
-        if (compactCandidate.length >= 3 && compactOcr.contains(compactCandidate)) {
+        if (compactCandidate.length >= 4 && compactOcr.contains(compactCandidate)) {
             return true
         }
 

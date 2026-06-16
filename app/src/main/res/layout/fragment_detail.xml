@@ -58,7 +58,7 @@
                         android:textAppearance="?attr/textAppearanceHeadlineMedium"
                         android:textStyle="bold"
                         android:textColor="@color/text_primary"
-                        tools:text="Myntra" />
+                        tools:text="Sample Store" />
 
                     <TextView
                         android:id="@+id/description"
@@ -67,7 +67,7 @@
                         android:layout_marginTop="8dp"
                         android:textAppearance="?attr/textAppearanceBodyLarge"
                         android:textColor="@color/text_primary"
-                        tools:text="you won a voucher up to ₹200 off from Myntra" />
+                        tools:text="you won a voucher up to ₹200 off" />
 
                     <TextView
                         android:id="@+id/expiryDate"

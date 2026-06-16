@@ -27,6 +27,7 @@ class OCREngineImpl(
 
     private val enhancedOCRHelper = EnhancedOCRHelper(ocrEngine)
     private val mlKitTextRecognitionHelper = MLKitTextRecognitionHelper(ocrEngine)
+    private val textExtractor = TextExtractor()
 
     /**
      * Process an image and extract text using the best available OCR implementation
@@ -73,34 +74,22 @@ class OCREngineImpl(
      * This extracts coupon information including amount in rupees (₹)
      */
     fun extractCouponInfo(text: String): Map<String, String> {
-        val isMyntraCoupon = text.contains("myntra", ignoreCase = true) ||
-                           text.contains("you won a voucher", ignoreCase = true)
-
         try {
             Log.d(TAG, "Extracting coupon info with Enhanced OCR")
             val enhancedResult = enhancedOCRHelper.extractCouponInfo(text)
             if (enhancedResult.isNotEmpty()) {
-                // Handle Myntra coupons
-                val result = enhancedResult.toMutableMap()
-                if (isMyntraCoupon && result["storeName"] != "Myntra") {
-                    result["storeName"] = "Myntra"
-                }
-                return result
+                return enhancedResult
             }
         } catch (e: Exception) {
             Log.e(TAG, "Enhanced OCR extraction failed", e)
         }
 
-        // We've removed Google Cloud Vision API as we're using on-device OCR only
-
-        // Fallback to a basic extraction if all methods fail
+        val extracted = textExtractor.extractCouponInfoSync(text)
         val results = mutableMapOf<String, String>()
-        results["storeName"] = if (isMyntraCoupon) "Myntra" else com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
-        results["description"] = if (isMyntraCoupon) "Myntra coupon" else "Scanned coupon"
-        results["amount"] = "₹0"
-
-        // Try to extract code from text
-        results["code"] = extractBasicCode(text, isMyntraCoupon)
+        results["storeName"] = extracted.storeName.ifBlank { com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE }
+        results["description"] = extracted.description.ifBlank { "Scanned coupon" }
+        results["amount"] = extracted.cashbackDetail ?: "₹0"
+        results["code"] = extracted.redeemCode ?: extractBasicCode(text)
 
         return results
     }
@@ -108,18 +97,7 @@ class OCREngineImpl(
     /**
      * Simple method to extract a basic code from text
      */
-    private fun extractBasicCode(text: String, isMyntraCoupon: Boolean): String {
-        // For Myntra coupons look for long alphanumeric codes
-        if (isMyntraCoupon) {
-            val words = text.split("\\s+".toRegex())
-            for (word in words) {
-                if (word.length >= 10 && word.matches("[A-Z0-9]+".toRegex())) {
-                    return word.uppercase()
-                }
-            }
-        }
-
-        // For other coupons look for code: prefix
+    private fun extractBasicCode(text: String): String {
         val lines = text.split("\n")
         for (line in lines) {
             if (line.contains("code:", ignoreCase = true)) {
@@ -138,6 +116,6 @@ class OCREngineImpl(
             }
         }
 
-        return if (isMyntraCoupon) "MYNTRA" else "COUPON"
+        return ""
     }
 }

@@ -49,6 +49,7 @@ import com.example.coupontracker.ui.components.DateFormatter
 import com.example.coupontracker.ui.components.ExtractionDebugPanel
 import com.example.coupontracker.ui.components.GlassSurface
 import com.example.coupontracker.ui.components.StatusType
+import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.viewmodel.DetailViewModel
 import com.example.coupontracker.util.GenericFieldHeuristics
@@ -89,6 +90,12 @@ fun CouponDetailScreen(
                 },
                 actions = {
                     val shareEnabled = coupon != null
+                    IconButton(
+                        onClick = { coupon?.let { navController.navigate(Screen.CouponEdit.createRoute(it.id)) } },
+                        enabled = shareEnabled
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit coupon")
+                    }
                     IconButton(
                         onClick = { viewModel.cleanCoupon() },
                         enabled = shareEnabled

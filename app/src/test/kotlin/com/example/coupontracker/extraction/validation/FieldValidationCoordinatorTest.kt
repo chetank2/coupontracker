@@ -41,6 +41,57 @@ class FieldValidationCoordinatorTest {
     }
 
     @Test
+    fun `refine rejects llm store name when absent from OCR and keeps OCR fallback`() {
+        val bundle = FieldValueBundle(
+            storeName = "pm Vit",
+            description = "Flat off for kids products",
+            redeemCode = "PHGZQZG2DCY9WB",
+            expiryDateText = null
+        )
+
+        val summary = coordinator.refine(
+            bundle,
+            rawOcrText = """
+                Gritzo
+                Flat off for kids products
+                Code PHGZQZG2DCY9WB
+            """.trimIndent(),
+            captureTimestamp = null,
+            structuredCandidates = mapOf(
+                FieldType.STORE_NAME to listOf(FieldCandidate("Gritzo", 0.9f, "ocr_heading", null))
+            )
+        )
+
+        assertEquals("Gritzo", summary.fields.storeName)
+        assertEquals("Gritzo", summary.storeResolution.value)
+        assertTrue(summary.issues.any { it.field == FieldType.STORE_NAME })
+    }
+
+    @Test
+    fun `refine clears unsupported llm store name when no OCR fallback exists`() {
+        val bundle = FieldValueBundle(
+            storeName = "Aha",
+            description = "20% off annual plan",
+            redeemCode = "AHAPPE20",
+            expiryDateText = null
+        )
+
+        val summary = coordinator.refine(
+            bundle,
+            rawOcrText = """
+                Save 20 percent on annual plan
+                Code AHAPPE20
+            """.trimIndent(),
+            captureTimestamp = null,
+            structuredCandidates = emptyMap()
+        )
+
+        assertEquals(null, summary.fields.storeName)
+        assertTrue(summary.storeResolution.needsAttention)
+        assertTrue(summary.storeResolution.violations.contains("ocr_evidence_missing"))
+    }
+
+    @Test
     fun `refine fills missing description from text extractor`() {
         val bundle = FieldValueBundle(
             storeName = "Amazon",

@@ -28,11 +28,10 @@ import javax.inject.Singleton
  * Specialized pipeline for extracting multiple coupons from app screenshots
  * 
  * Optimized for:
- * - Amazon offers page
- * - Myntra deals
- * - PhonePe rewards
- * - Flipkart coupons
- * - Paytm cashback offers
+ * - Merchant offers pages
+ * - Rewards lists
+ * - Coupon wallets
+ * - Cashback offer screens
  * 
  * Flow:
  * 1. Classify screenshot type

@@ -150,6 +150,62 @@ class TextExtractorTest {
     }
 
     @Test
+    fun `extractStoreName normalizes wallet counter artifact without brand hardcode`() {
+        val text = """
+            vouchers
+            active
+            NOVA4.31
+            you
+            get
+            NOVA
+            polo
+            t-shirts
+            from
+            7599
+            50
+            cashback
+            via
+            CRED
+            pay
+        """.trimIndent()
+
+        val result = extractor.extractStoreName(text)
+
+        assertEquals("NOVA", result)
+    }
+
+    @Test
+    fun `extractCouponInfoSync scopes fields to matching store block in wallet OCR`() {
+        val baseDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse("2026-06-16")
+        val text = """
+            vouchers
+            active : 25 lifetime : 279
+            code: PBXWOF110K
+            Details
+            Redeem now
+            EXPIRES IN 29 DAYS
+            you won Lenskart Gold Max membership at just ₹49
+            Lenskart
+            4.47
+            code: AFFLCRDG-OKTYZX6-6TOZ
+            Details
+            Redeem now
+            EXPIRES IN 28 DAYS
+            another coupon card
+            code: OTHER123
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("Lenskart", result.storeName)
+        assertEquals("AFFLCRDG-OKTYZX6-6TOZ", result.redeemCode)
+        assertEquals("you won Lenskart Gold Max membership at just ₹49", result.description)
+
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        assertEquals("2026-07-15", formatter.format(result.expiryDate!!))
+    }
+
+    @Test
     fun `extractRedeemCode finds token on line after indicator`() {
         val text = """
             Stream exclusively on aha

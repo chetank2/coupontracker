@@ -38,6 +38,9 @@ sealed class Screen(val route: String) {
     object CouponDetail : Screen("coupon_detail/{couponId}") {
         fun createRoute(couponId: Long) = "coupon_detail/$couponId"
     }
+    object CouponEdit : Screen("coupon_edit/{couponId}") {
+        fun createRoute(couponId: Long) = "coupon_edit/$couponId"
+    }
     object Scanner : Screen("scanner")
     object SmartCapture : Screen("smart_capture")
     object SmartCamera : Screen("smart_camera")
@@ -130,6 +133,20 @@ fun AppNavigation(
             CouponDetailScreen(
                 navController = navController,
                 couponId = couponId
+            )
+        }
+
+        composable(
+            route = Screen.CouponEdit.route,
+            arguments = listOf(
+                navArgument("couponId") { type = NavType.LongType }
+            )
+        ) { backStackEntry ->
+            val couponId = backStackEntry.arguments?.getLong("couponId") ?: 0L
+            CouponFormScreen(
+                navController = navController,
+                imageUri = null,
+                editCouponId = couponId
             )
         }
 

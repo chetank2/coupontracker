@@ -55,6 +55,7 @@ private const val TAG = "CouponFormScreen"
 fun CouponFormScreen(
     navController: NavController,
     imageUri: String?,
+    editCouponId: Long? = null,
     isBatchMode: Boolean = false,
     viewModel: CouponFormViewModel = hiltViewModel(),
     scannerViewModel: ScannerViewModel? = null
@@ -77,8 +78,16 @@ fun CouponFormScreen(
     var expiryDateString by remember { mutableStateOf("") }
     var category by remember { mutableStateOf(uiState.couponInfo?.category ?: "") }
 
+    LaunchedEffect(editCouponId) {
+        val id = editCouponId ?: return@LaunchedEffect
+        if (id > 0L) {
+            viewModel.loadCouponForEdit(id)
+        }
+    }
+
     // Initialize with image URI
-    LaunchedEffect(imageUri, uiState.isProcessing, uiState.couponInfo) {
+    LaunchedEffect(imageUri, editCouponId, uiState.isProcessing, uiState.couponInfo) {
+        if ((editCouponId ?: 0L) > 0L) return@LaunchedEffect
         val uriString = imageUri?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
 
         val hasExtractedInfo = uiState.couponInfo != null
@@ -113,12 +122,15 @@ fun CouponFormScreen(
         val result = uiState.saveResult ?: return@LaunchedEffect
         val message = when (result) {
             CouponSaveResult.SAVED -> "Coupon saved successfully"
+            CouponSaveResult.UPDATED -> "Coupon updated"
             CouponSaveResult.ALREADY_SAVED -> "Coupon already saved"
         }
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         scannerViewModel?.clearPendingPreview()
 
-        if (isBatchMode) {
+        if ((editCouponId ?: 0L) > 0L) {
+            navController.popBackStack()
+        } else if (isBatchMode) {
             navController.navigate(Screen.BatchScanner.route) {
                 popUpTo(Screen.BatchScanner.route) { inclusive = true }
             }
@@ -132,7 +144,7 @@ fun CouponFormScreen(
     Scaffold(
         topBar = {
             BrandTopBar(
-                title = "Add coupon",
+                title = if ((editCouponId ?: 0L) > 0L) "Edit coupon" else "Add coupon",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
