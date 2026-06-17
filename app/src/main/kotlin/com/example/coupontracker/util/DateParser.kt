@@ -47,6 +47,28 @@ object DateParser {
             return calendar.time
         }
 
+        val expiresInWeeksPattern = Pattern.compile("(?i)expires?\\s+in\\s+(\\d+)\\s+weeks?")
+        val expiresInWeeksMatcher = expiresInWeeksPattern.matcher(text)
+        if (expiresInWeeksMatcher.find()) {
+            val weeksToAdd = expiresInWeeksMatcher.group(1)?.toIntOrNull() ?: 0
+            val calendar = Calendar.getInstance()
+            calendar.time = referenceDate
+            calendar.add(Calendar.WEEK_OF_YEAR, weeksToAdd)
+            Log.d(TAG, "Found expiry date from 'expires in X weeks' format: ${weeksToAdd} weeks from base date $referenceDate")
+            return calendar.time
+        }
+
+        val expiresInMonthsPattern = Pattern.compile("(?i)expires?\\s+in\\s+(\\d+)\\s+months?")
+        val expiresInMonthsMatcher = expiresInMonthsPattern.matcher(text)
+        if (expiresInMonthsMatcher.find()) {
+            val monthsToAdd = expiresInMonthsMatcher.group(1)?.toIntOrNull() ?: 0
+            val calendar = Calendar.getInstance()
+            calendar.time = referenceDate
+            calendar.add(Calendar.MONTH, monthsToAdd)
+            Log.d(TAG, "Found expiry date from 'expires in X months' format: ${monthsToAdd} months from base date $referenceDate")
+            return calendar.time
+        }
+
         // Try to parse the text as a date
         val datePatterns = listOf(
             "dd/MM/yyyy",

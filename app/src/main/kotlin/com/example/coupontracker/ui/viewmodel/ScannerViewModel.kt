@@ -282,6 +282,7 @@ class ScannerViewModel @Inject constructor(
     fun scanImage(imageUri: Uri, persistImmediately: Boolean = true) {
         viewModelScope.launch {
             var bitmap: Bitmap? = null
+            var bitmapHandedToUi = false
             try {
                 _uiState.value = ScannerUiState.Scanning()
                 
@@ -303,12 +304,11 @@ class ScannerViewModel @Inject constructor(
                     return@launch
                 }
 
-                logStrategyExecution(
-                    requested = strategy,
-                    executed = "ocr_first_manual_clean",
-                    surface = STRATEGY_SURFACE_SINGLE
+                bitmapHandedToUi = routeDetectedCouponCrops(
+                    imageUri = imageUri,
+                    bitmap = bitmap,
+                    persistImmediately = persistImmediately
                 )
-                scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error in enhanced scanning", e)
@@ -320,10 +320,77 @@ class ScannerViewModel @Inject constructor(
                 )
             } finally {
                 // V2: Release bitmap after processing completes
-                bitmap?.let { bm ->
+                bitmap?.takeUnless { bitmapHandedToUi }?.let { bm ->
                     bitmapManager.releaseBitmap(bm)
                     Log.d(TAG, "Released original bitmap for: $imageUri")
                 }
+            }
+        }
+    }
+
+    private suspend fun routeDetectedCouponCrops(
+        imageUri: Uri,
+        bitmap: Bitmap,
+        persistImmediately: Boolean
+    ): Boolean {
+        val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
+        val detector = twoStageDetector
+        if (detector == null) {
+            Log.w(TAG, "Single scan crop-first routing unavailable: ${detectorInitErrorMessage ?: "detector not initialized"}")
+            logStrategyExecution(
+                requested = strategy,
+                executed = "ocr_first_manual_clean",
+                surface = STRATEGY_SURFACE_SINGLE,
+                reason = "coupon_detector_unavailable"
+            )
+            scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
+            return false
+        }
+
+        val couponInstances = withContext(Dispatchers.IO) {
+            detector.detectMultiCoupons(bitmap)
+        }
+        Log.d(TAG, "Single scan crop-first detection found ${couponInstances.size} coupon(s)")
+
+        return when (couponInstances.size) {
+            0 -> {
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = "ocr_first_manual_clean",
+                    surface = STRATEGY_SURFACE_SINGLE,
+                    reason = "no_coupon_crop_detected"
+                )
+                scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
+                false
+            }
+            1 -> {
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = "ocr_first_card_crop",
+                    surface = STRATEGY_SURFACE_SINGLE,
+                    reason = "single_coupon_crop_detected"
+                )
+                processSingleCoupon(
+                    couponInstance = couponInstances.first(),
+                    imageUri = imageUri.toString(),
+                    persistImmediately = persistImmediately,
+                    captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
+                )
+                false
+            }
+            else -> {
+                logStrategyExecution(
+                    requested = strategy,
+                    executed = "multi_coupon_selection",
+                    surface = STRATEGY_SURFACE_SINGLE,
+                    reason = "multiple_coupon_crops_detected"
+                )
+                _uiState.value = ScannerUiState.MultiCouponDetected(
+                    couponInstances = couponInstances,
+                    originalBitmap = bitmap,
+                    imageUri = imageUri.toString()
+                )
+                true
             }
         }
     }
@@ -1218,12 +1285,22 @@ class ScannerViewModel @Inject constructor(
             
             // Create extraction context
             val context = buildUniversalExtractionContext(ocrText, ocrHints)
+            val ocrBlocks = runCatching {
+                ocrEngine.recognizeWithBoxes(bitmap).map { span ->
+                    com.example.coupontracker.extraction.TextBlock(
+                        text = span.text,
+                        bounds = android.graphics.RectF(span.boundingBox),
+                        confidence = span.confidence
+                    )
+                }
+            }.getOrDefault(emptyList())
             
             // Run universal extraction
             val extractionResult = universalExtractionService.extractCoupon(
                 image = bitmap,
                 ocrText = ocrText,
-                context = context
+                context = context,
+                ocrBlocks = ocrBlocks
             )
 
             val processingTime = System.currentTimeMillis() - startTime

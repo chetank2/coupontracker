@@ -2,8 +2,10 @@ package com.example.coupontracker.extraction.capture
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.RectF
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.extraction.TextBlock
 import com.example.coupontracker.ml.ScreenshotClassifier
 import com.example.coupontracker.universal.ExtractionCandidate
 import com.example.coupontracker.universal.ExtractionContext
@@ -47,10 +49,12 @@ class OcrFirstCouponExtractor @Inject constructor(
     ): OcrFirstExtractionResult {
         return when (val ocrResult = multiEngineOCR.processImage(bitmap)) {
             is MultiEngineOCR.OCRResult.Success -> {
+                val ocrBlocks = recognizeTextBlocks(bitmap)
                 extractFromOcr(
                     bitmap = bitmap,
                     ocrText = ocrResult.text,
                     ocrHints = ocrResult.extractedInfo,
+                    ocrBlocks = ocrBlocks,
                     imageUri = imageUri,
                     captureTimestamp = captureTimestamp
                 )
@@ -72,6 +76,7 @@ class OcrFirstCouponExtractor @Inject constructor(
         bitmap: Bitmap,
         ocrText: String,
         ocrHints: Map<String, String> = emptyMap(),
+        ocrBlocks: List<TextBlock> = emptyList(),
         imageUri: String?,
         captureTimestamp: Date? = null
     ): OcrFirstExtractionResult {
@@ -99,7 +104,8 @@ class OcrFirstCouponExtractor @Inject constructor(
         val extractionResult = universalExtractionService.extractCoupon(
             image = bitmap,
             ocrText = ocrText,
-            context = extractionContext
+            context = extractionContext,
+            ocrBlocks = ocrBlocks
         )
 
         if (!extractionResult.success || extractionResult.confidence <= OCR_ACCEPTANCE_CONFIDENCE) {
@@ -223,6 +229,18 @@ class OcrFirstCouponExtractor @Inject constructor(
         return extractedFields.entries.associate { (fieldType, candidate) ->
             fieldType.name.lowercase(Locale.ROOT) to candidate.confidence
         }
+    }
+
+    private suspend fun recognizeTextBlocks(bitmap: Bitmap): List<TextBlock> {
+        return runCatching {
+            ocrEngine.recognizeWithBoxes(bitmap).map { span ->
+                TextBlock(
+                    text = span.text,
+                    bounds = RectF(span.boundingBox),
+                    confidence = span.confidence
+                )
+            }
+        }.getOrDefault(emptyList())
     }
 
     private fun Coupon.ensureConfidenceBreakdown(breakdown: Map<String, Float>): Coupon {

@@ -8,6 +8,8 @@ import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.ProgressiveExtractionResult
 import com.example.coupontracker.extraction.ProgressiveExtractionService
+import com.example.coupontracker.extraction.TextBlock
+import com.example.coupontracker.extraction.validation.SpatialFieldConsistencyValidator
 import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.IndianDateParser
 import com.example.coupontracker.util.OcrTextCleaner
@@ -37,6 +39,8 @@ class UniversalExtractionService @Inject constructor(
     private val confidenceScorer: AdaptiveConfidenceScorer,
     private val progressiveExtractionService: ProgressiveExtractionService
 ) {
+    private val spatialValidator = SpatialFieldConsistencyValidator()
+
     companion object {
         private const val TAG = "UniversalExtractionService"
         private const val DEFAULT_THRESHOLD = 0.35f
@@ -78,12 +82,14 @@ class UniversalExtractionService @Inject constructor(
     suspend fun extractCoupon(
         image: Bitmap,
         ocrText: String,
-        context: ExtractionContext = ExtractionContext()
+        context: ExtractionContext = ExtractionContext(),
+        ocrBlocks: List<TextBlock> = emptyList()
     ): UniversalExtractionResult = withContext(Dispatchers.Default) {
         val cleanedOcr = OcrTextCleaner.cleanOcrText(ocrText).trim().ifBlank { ocrText }
         val contextWithText = context.copy(
             cleanedOcrText = cleanedOcr,
-            originalOcrText = ocrText
+            originalOcrText = ocrText,
+            ocrBlocks = ocrBlocks.ifEmpty { context.ocrBlocks }
         )
 
         val candidateBuckets = mutableMapOf<FieldType, MutableList<ExtractionCandidate>>()
@@ -101,6 +107,30 @@ class UniversalExtractionService @Inject constructor(
             val blendedFields = blendCandidates(allCandidates, cleanedOcr)
             val coupon = buildCouponFromFields(blendedFields, imageUri, cleanedOcr, contextWithText)
             val confidence = calculateOverallConfidence(blendedFields, candidateBuckets)
+            val spatialResult = spatialValidator.validate(
+                fields = blendedFields.mapValues { (_, candidate) ->
+                    FieldCandidate(
+                        value = candidate.text,
+                        confidence = candidate.confidence,
+                        source = candidate.source.name,
+                        context = candidate.context["source"] ?: candidate.context["pass"]
+                    )
+                },
+                ocrBlocks = contextWithText.ocrBlocks,
+                imageHeight = image.height
+            )
+
+            if (!spatialResult.consistent) {
+                Log.w(TAG, "Spatial validation failed: ${spatialResult.reason}")
+                return@withContext UniversalExtractionResult(
+                    coupon = coupon.copy(needsAttention = true),
+                    confidence = confidence.coerceAtMost(0.35f),
+                    extractedFields = blendedFields,
+                    allCandidates = allCandidates,
+                    success = false,
+                    error = spatialResult.reason
+                )
+            }
 
             UniversalExtractionResult(
                 coupon = coupon,
@@ -144,7 +174,7 @@ class UniversalExtractionService @Inject constructor(
                 androidContext = androidContext,
                 image = image,
                 ocrText = cleanedOcr,
-                ocrBlocks = emptyList(),
+                ocrBlocks = context.ocrBlocks,
                 imageUri = imageUri
             )
         } catch (e: Exception) {

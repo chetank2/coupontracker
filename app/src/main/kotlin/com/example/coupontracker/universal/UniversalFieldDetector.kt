@@ -525,5 +525,6 @@ data class ExtractionContext(
     val categoryHint: String? = null,
     val previousSuccesses: List<String> = emptyList(),
     val cleanedOcrText: String? = null,
-    val originalOcrText: String? = null
+    val originalOcrText: String? = null,
+    val ocrBlocks: List<com.example.coupontracker.extraction.TextBlock> = emptyList()
 )

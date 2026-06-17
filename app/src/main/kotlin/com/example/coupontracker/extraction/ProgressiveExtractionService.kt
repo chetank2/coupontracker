@@ -13,6 +13,7 @@ import com.example.coupontracker.util.CouponPostProcessor
 import com.example.coupontracker.util.ImageMetadataExtractor
 import com.example.coupontracker.util.IndianDateParser
 import com.example.coupontracker.util.GenericFieldHeuristics
+import com.example.coupontracker.extraction.validation.SpatialFieldConsistencyValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -49,6 +50,7 @@ class ProgressiveExtractionService @Inject constructor(
     // V2: Validation components for multi-coupon extraction
     private val confidenceScorer = ConfidenceScorer()
     private val extractionValidator = ExtractionValidator(confidenceScorer)
+    private val spatialValidator = SpatialFieldConsistencyValidator()
     private val llmPassEnabled = AtomicBoolean(false)
     
     companion object {
@@ -743,7 +745,21 @@ class ProgressiveExtractionService @Inject constructor(
             └─────────────────────────────────────────────────────────
         """.trimIndent())
         
-        val result = buildFinalResult(context, extractedFields, image, imageUri)
+        var result = buildFinalResult(context, extractedFields, image, imageUri)
+        val spatialResult = spatialValidator.validate(
+            fields = filterPrimaryFields(extractedFields),
+            ocrBlocks = context.ocrBlocks,
+            imageHeight = image.height
+        )
+        if (!spatialResult.consistent) {
+            Log.w(TAG, "Spatial validation failed: ${spatialResult.reason}")
+            result = result.copy(
+                coupon = result.coupon.copy(needsAttention = true),
+                confidence = result.confidence.coerceAtMost(0.35f),
+                success = false,
+                error = spatialResult.reason
+            )
+        }
         
         // V2: Validate extracted coupon with confidence scoring
         try {
