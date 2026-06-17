@@ -61,6 +61,7 @@ class SettingsViewModel @Inject constructor(
     sealed class CleanupState {
         object Idle : CleanupState()
         object Running : CleanupState()
+        object MetadataReset : CleanupState()
         data class Success(val removedCount: Int) : CleanupState()
         data class Error(val message: String) : CleanupState()
     }
@@ -101,6 +102,18 @@ class SettingsViewModel @Inject constructor(
                 _cleanupState.value = CleanupState.Success(duplicates.size)
             } catch (e: Exception) {
                 _cleanupState.value = CleanupState.Error(e.message ?: "Duplicate cleanup failed")
+            }
+        }
+    }
+
+    fun resetExtractionMetadata() {
+        viewModelScope.launch {
+            _cleanupState.value = CleanupState.Running
+            try {
+                couponRepository.clearAllExtractionMetadata()
+                _cleanupState.value = CleanupState.MetadataReset
+            } catch (e: Exception) {
+                _cleanupState.value = CleanupState.Error(e.message ?: "Metadata reset failed")
             }
         }
     }

@@ -4,11 +4,14 @@ import android.content.Context
 import android.graphics.Bitmap
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.ml.ScreenshotClassifier
 import com.example.coupontracker.universal.ExtractionCandidate
 import com.example.coupontracker.universal.ExtractionContext
 import com.example.coupontracker.universal.UniversalExtractionService
 import com.example.coupontracker.util.CouponFixContext
+import com.example.coupontracker.util.CouponExtractionConfidenceScorer
 import com.example.coupontracker.util.CouponPostProcessor
+import com.example.coupontracker.util.ExtractionRecommendation
 import com.example.coupontracker.util.MultiEngineOCR
 import com.example.coupontracker.util.StoreCandidateValidator
 import com.example.coupontracker.util.normalizeExpiryDate
@@ -32,6 +35,7 @@ class OcrFirstCouponExtractor @Inject constructor(
     private val ocrEngine: com.example.coupontracker.ocr.OcrEngine,
     private val universalExtractionService: UniversalExtractionService
 ) {
+    private val screenshotClassifier = ScreenshotClassifier()
     private val multiEngineOCR = MultiEngineOCR(context, ocrEngine).apply {
         setNetworkAvailability(true)
     }
@@ -39,8 +43,7 @@ class OcrFirstCouponExtractor @Inject constructor(
     suspend fun extract(
         bitmap: Bitmap,
         imageUri: String?,
-        captureTimestamp: Date? = null,
-        previousStoreName: String? = null
+        captureTimestamp: Date? = null
     ): OcrFirstExtractionResult {
         return when (val ocrResult = multiEngineOCR.processImage(bitmap)) {
             is MultiEngineOCR.OCRResult.Success -> {
@@ -49,8 +52,7 @@ class OcrFirstCouponExtractor @Inject constructor(
                     ocrText = ocrResult.text,
                     ocrHints = ocrResult.extractedInfo,
                     imageUri = imageUri,
-                    captureTimestamp = captureTimestamp,
-                    previousStoreName = previousStoreName
+                    captureTimestamp = captureTimestamp
                 )
             }
 
@@ -71,8 +73,7 @@ class OcrFirstCouponExtractor @Inject constructor(
         ocrText: String,
         ocrHints: Map<String, String> = emptyMap(),
         imageUri: String?,
-        captureTimestamp: Date? = null,
-        previousStoreName: String? = null
+        captureTimestamp: Date? = null
     ): OcrFirstExtractionResult {
         if (ocrText.isBlank()) {
             return createOcrOnlyResult(
@@ -84,7 +85,17 @@ class OcrFirstCouponExtractor @Inject constructor(
             )
         }
 
-        val extractionContext = buildExtractionContext(ocrText, ocrHints, previousStoreName)
+        if (!screenshotClassifier.isLikelySingleCoupon(ocrText)) {
+            return createOcrOnlyResult(
+                imageUri = imageUri,
+                ocrText = ocrText,
+                confidence = 0f,
+                captureTimestamp = captureTimestamp,
+                failureReason = "Multiple coupons detected. Review one coupon at a time."
+            )
+        }
+
+        val extractionContext = buildExtractionContext(ocrText, ocrHints)
         val extractionResult = universalExtractionService.extractCoupon(
             image = bitmap,
             ocrText = ocrText,
@@ -171,8 +182,7 @@ class OcrFirstCouponExtractor @Inject constructor(
 
     private fun buildExtractionContext(
         ocrText: String,
-        extractedInfo: Map<String, String>,
-        previousStoreName: String?
+        extractedInfo: Map<String, String>
     ): ExtractionContext {
         val fallbackBrand = ocrText.lineSequence()
             .map { it.trim() }
@@ -188,8 +198,7 @@ class OcrFirstCouponExtractor @Inject constructor(
             extractedInfo["brand"],
             extractedInfo["app"],
             extractedInfo["merchant"],
-            fallbackBrand,
-            previousStoreName
+            fallbackBrand
         )
             .mapNotNull { candidate ->
                 candidate?.takeIf { StoreCandidateValidator.isAcceptable(it, ocrText) }
@@ -230,8 +239,16 @@ class OcrFirstCouponExtractor @Inject constructor(
                 captureTimestamp = captureTimestamp
             )
         )
-        val normalizedExpiry = normalizeExpiryDate(refined.expiryDate, captureTimestamp)
-        return refined.copy(expiryDate = normalizedExpiry)
+        val normalized = refined.copy(expiryDate = normalizeExpiryDate(refined.expiryDate, captureTimestamp))
+        val assessment = CouponExtractionConfidenceScorer.score(normalized, ocrText)
+        return normalized.copy(
+            extractionQualityScore = assessment.score,
+            extractionConfidenceBreakdown = normalized.extractionConfidenceBreakdown.ifEmpty {
+                assessment.fieldConfidences
+            },
+            needsAttention = normalized.needsAttention ||
+                assessment.recommendation != ExtractionRecommendation.SAVE_DIRECTLY
+        )
     }
 
     private companion object {

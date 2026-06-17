@@ -10,7 +10,7 @@ import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.data.util.DescriptionUtils
-import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.extraction.rules.CouponInfo
 import com.example.coupontracker.util.CouponInputManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,6 +99,18 @@ class CouponFormViewModel @Inject constructor(
         }
     }
 
+    fun loadPreviewCoupon(coupon: Coupon) {
+        updateState {
+            it.copy(
+                isProcessing = false,
+                error = null,
+                saveResult = null,
+                couponInfo = mapCouponToCouponInfo(coupon),
+                persistedImageUri = coupon.imageUri
+            )
+        }
+    }
+
     fun loadCouponForEdit(couponId: Long) {
         if (couponId <= 0L || editCouponId == couponId && _uiState.value.couponInfo != null) {
             return
@@ -177,6 +189,7 @@ class CouponFormViewModel @Inject constructor(
                         normalizedDescription = CouponDedupUtils.normalizeDescription(description),
                         cleanupStatus = Coupon.CleanupStatus.NONE,
                         cleanupError = null,
+                        extractionSource = Coupon.ExtractionSource.USER_EDITED,
                         needsAttention = false,
                         updatedAt = Date()
                     )

@@ -22,17 +22,14 @@ class SmartCouponSanitizer(
 
     fun sanitize(
         fields: DeterministicCouponExtractor.Result,
-        fallbackCoupon: Coupon?,
         imageUri: String?,
         captureTimestamp: Date?
     ): SanitizedResult {
         val issues = mutableListOf<String>()
         val resolvedStore = storeCanon.resolve(fields.storeCandidate, fields.flatText, fields.offer)
-            ?: fallbackCoupon?.storeName?.takeIf { it.isNotBlank() }
         val canonicalStore = resolvedStore?.let { storeCanon.canonicalize(it) ?: it }
 
         val offerText = composer.normalizeOffer(fields.offer)
-            ?: fallbackCoupon?.description?.takeIf { it.isNotBlank() }
         if (offerText == null) {
             issues.add("Missing offer text")
         }
@@ -43,17 +40,16 @@ class SmartCouponSanitizer(
             issues.add("Store matched stopword")
         }
 
-        val code = fields.code ?: fallbackCoupon?.redeemCode?.takeIf { it.isNotBlank() }
+        val code = fields.code
         val sanitizedCode = code?.uppercase(Locale.ROOT)
 
         val expiryDate = fields.expiryDate
-            ?: fallbackCoupon?.expiryDate?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDate()
         val expiryDateConverted = expiryDate?.atStartOfDay(ZoneId.systemDefault())?.let { Date.from(it.toInstant()) }
 
         val description = composer.compose(offerText, canonicalStore)
 
-        val createdAt = fallbackCoupon?.createdAt ?: captureTimestamp ?: Date()
-        val baseCoupon = fallbackCoupon ?: Coupon(
+        val createdAt = captureTimestamp ?: Date()
+        val baseCoupon = Coupon(
             id = 0,
             storeName = canonicalStore ?: com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE,
             description = description,

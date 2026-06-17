@@ -7,8 +7,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,19 +24,59 @@ import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.theme.BrandTypography
 import com.example.coupontracker.util.SecurePreferencesManager
 
-private const val MODEL_LICENSE_URL = "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF"
+private const val QWEN_MODEL_PAGE_URL = "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF"
+private const val GEMMA_MODEL_PAGE_URL = "https://huggingface.co/google/gemma-3n-E2B-it-litert-preview"
+
+data class ModelLicenseGateConfig(
+    val title: String,
+    val checklistTitle: String,
+    val modelPageUrl: String,
+    val checklistItems: List<String>,
+    val alreadyAccepted: (SecurePreferencesManager) -> Boolean,
+    val markAccepted: (SecurePreferencesManager) -> Unit
+) {
+    companion object {
+        val Qwen = ModelLicenseGateConfig(
+            title = "Offline reader license",
+            checklistTitle = "Before downloading the Qwen2.5 offline reader",
+            modelPageUrl = QWEN_MODEL_PAGE_URL,
+            checklistItems = listOf(
+                "Review the model provider page",
+                "The download is about 940 MB",
+                "Coupon cleaning runs on this device"
+            ),
+            alreadyAccepted = { it.isMiniCpmLicenseAccepted() },
+            markAccepted = { it.setMiniCpmLicenseAccepted(true) }
+        )
+
+        val GemmaVision = ModelLicenseGateConfig(
+            title = "Gemma Vision access",
+            checklistTitle = "Before downloading Gemma Vision",
+            modelPageUrl = GEMMA_MODEL_PAGE_URL,
+            checklistItems = listOf(
+                "Open ${GEMMA_MODEL_PAGE_URL} and accept Google Gemma terms",
+                "The download is about 3.1 GB",
+                "Vision verification runs only when OCR confidence is low",
+                "If Hugging Face blocks download, import the downloaded .task file manually"
+            ),
+            alreadyAccepted = { it.isGemmaVisionLicenseAccepted() },
+            markAccepted = { it.setGemmaVisionLicenseAccepted(true) }
+        )
+    }
+}
 
 @Composable
 fun LicenseGateScreen(
     onLicenseAccepted: () -> Unit,
-    securePreferencesManager: SecurePreferencesManager
+    securePreferencesManager: SecurePreferencesManager,
+    config: ModelLicenseGateConfig = ModelLicenseGateConfig.Qwen
 ) {
     val context = LocalContext.current
     var agreedToTerms by remember { mutableStateOf(false) }
     
     // Check if already accepted
     LaunchedEffect(Unit) {
-        if (securePreferencesManager.isMiniCpmLicenseAccepted()) {
+        if (config.alreadyAccepted(securePreferencesManager)) {
             onLicenseAccepted()
         }
     }
@@ -56,7 +96,7 @@ fun LicenseGateScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Offline reader license",
+                text = config.title,
                 style = BrandTypography.DisplayMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
@@ -87,28 +127,18 @@ fun LicenseGateScreen(
                 verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
             ) {
                 Text(
-                    text = "Before downloading the Qwen2.5 offline reader",
+                    text = config.checklistTitle,
                     style = BrandTypography.TitleSmall,
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                Text(
-                    text = "1. Review the model provider page",
-                    style = BrandTypography.BodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
-                    text = "2. The download is about 940 MB",
-                    style = BrandTypography.BodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Text(
-                    text = "3. Coupon cleaning runs on this device",
-                    style = BrandTypography.BodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                config.checklistItems.forEachIndexed { index, item ->
+                    Text(
+                        text = "${index + 1}. $item",
+                        style = BrandTypography.BodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
@@ -117,11 +147,11 @@ fun LicenseGateScreen(
         BrandButton(
             text = "View model page",
             onClick = {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(MODEL_LICENSE_URL))
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(config.modelPageUrl))
                 context.startActivity(intent)
             },
             tier = BrandButtonTier.Secondary,
-            leadingIcon = Icons.Default.OpenInNew,
+            leadingIcon = Icons.AutoMirrored.Filled.OpenInNew,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = BrandSpacing.ContentEdge)
@@ -152,7 +182,7 @@ fun LicenseGateScreen(
         BrandButton(
             text = "Accept and continue",
             onClick = {
-                securePreferencesManager.setMiniCpmLicenseAccepted(true)
+                config.markAccepted(securePreferencesManager)
                 onLicenseAccepted()
             },
             enabled = agreedToTerms,

@@ -23,7 +23,8 @@ object GenericFieldHeuristics {
         val genericWords = setOf(
             // Generic UI labels
             "voucher", "vouchers", "coupon", "coupons", "offer", "offers",
-            "deal", "deals", "discount", "discounts", "promo", "promotion",
+            "deal", "deals", "discount", "discounts", "cashback", "cashbacks",
+            "promo", "promotion", "expires", "expired", "valid",
             
             // Generic descriptions  
             "details", "description", "info", "information", "text",

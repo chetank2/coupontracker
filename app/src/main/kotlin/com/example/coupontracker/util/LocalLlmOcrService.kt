@@ -1783,20 +1783,6 @@ class LocalLlmOcrService(
             throw IllegalArgumentException("Invalid JSON schema: ${issues.joinToString(", ")}")
         }
 
-        val fallbackStore = resolveStoreNameFallback(structuredCandidates, rawOcrText, captureTimestamp)
-        if (fallbackStore != null) {
-            Log.w(TAG, "Schema self-heal: injecting fallback store name '$fallbackStore'")
-            jsonObject.put("storeName", fallbackStore)
-            validationResult = SchemaValidator.validateObject(jsonObject, CouponSchema.SCHEMA)
-            if (validationResult is ValidationResult.Valid) {
-                Log.d(TAG, "Schema validation passed after storeName repair")
-                return jsonObject
-            }
-            Log.w(TAG, "Fallback store name '$fallbackStore' still failed schema validation: ${(validationResult as ValidationResult.Invalid).issues}")
-        } else {
-            Log.w(TAG, "No fallback store candidate available to repair schema")
-        }
-
         throw IllegalArgumentException("Invalid JSON schema: ${issues.joinToString(", ")}")
     }
 

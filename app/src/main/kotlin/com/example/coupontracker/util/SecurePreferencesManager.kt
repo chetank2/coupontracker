@@ -51,7 +51,11 @@ class SecurePreferencesManager @Inject constructor(
         const val KEY_LLM_DOWNLOAD_WIFI_ONLY = "llm_download_wifi_only"
         const val KEY_LLM_MODEL_BASE_URL_OVERRIDE = "llm_model_base_url_override"
         const val KEY_QWEN25_MODEL_BASE_URL_OVERRIDE = "qwen25_model_base_url_override"
+        const val KEY_GEMMA_VISION_MODEL_BASE_URL_OVERRIDE = "gemma_vision_model_base_url_override"
         const val KEY_MINICPM_LICENSE_ACCEPTED = "minicpm_license_accepted"
+        const val KEY_GEMMA_VISION_LICENSE_ACCEPTED = "gemma_vision_license_accepted"
+        const val KEY_QWEN_TEXT_CLEANER_ENABLED = "qwen_text_cleaner_enabled"
+        const val KEY_GEMMA_VISION_VERIFIER_ENABLED = "gemma_vision_verifier_enabled"
 
         // Key rotation period in days
         private const val KEY_ROTATION_PERIOD_DAYS = 90
@@ -466,6 +470,20 @@ class SecurePreferencesManager @Inject constructor(
             }
         }.apply()
     }
+
+    fun getGemmaVisionModelBaseUrlOverride(): String? {
+        return securePrefs.getString(KEY_GEMMA_VISION_MODEL_BASE_URL_OVERRIDE, null)?.takeIf { it.isNotBlank() }
+    }
+
+    fun setGemmaVisionModelBaseUrlOverride(baseUrl: String?) {
+        securePrefs.edit().apply {
+            if (baseUrl.isNullOrBlank()) {
+                remove(KEY_GEMMA_VISION_MODEL_BASE_URL_OVERRIDE)
+            } else {
+                putString(KEY_GEMMA_VISION_MODEL_BASE_URL_OVERRIDE, baseUrl)
+            }
+        }.apply()
+    }
     
     /**
      * Check if user has accepted MiniCPM license terms
@@ -479,6 +497,30 @@ class SecurePreferencesManager @Inject constructor(
      */
     fun setMiniCpmLicenseAccepted(accepted: Boolean) {
         saveBoolean(KEY_MINICPM_LICENSE_ACCEPTED, accepted)
+    }
+
+    fun isGemmaVisionLicenseAccepted(): Boolean {
+        return getBoolean(KEY_GEMMA_VISION_LICENSE_ACCEPTED, false)
+    }
+
+    fun setGemmaVisionLicenseAccepted(accepted: Boolean) {
+        saveBoolean(KEY_GEMMA_VISION_LICENSE_ACCEPTED, accepted)
+    }
+
+    fun isQwenTextCleanerEnabled(): Boolean {
+        return getBoolean(KEY_QWEN_TEXT_CLEANER_ENABLED, true)
+    }
+
+    fun setQwenTextCleanerEnabled(enabled: Boolean) {
+        saveBoolean(KEY_QWEN_TEXT_CLEANER_ENABLED, enabled)
+    }
+
+    fun isGemmaVisionVerifierEnabled(): Boolean {
+        return getBoolean(KEY_GEMMA_VISION_VERIFIER_ENABLED, true)
+    }
+
+    fun setGemmaVisionVerifierEnabled(enabled: Boolean) {
+        saveBoolean(KEY_GEMMA_VISION_VERIFIER_ENABLED, enabled)
     }
     
     /**

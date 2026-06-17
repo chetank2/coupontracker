@@ -17,11 +17,7 @@ class CouponFieldExtractor {
             // Look for logos/brand names typically at the start of coupons
             Pattern.compile("\\A([A-Z][a-z]+)\\b"),
             // Common explicit "from [merchant]" format
-            Pattern.compile("(?i)(?:from|at|by|shop)\\s+([A-Z][A-Za-z0-9\\s&.'-]{2,25})\\b"),
-            // Common merchant names - high confidence
-            Pattern.compile("(?i)\\b(myntra|amazon|flipkart|swiggy|zomato|uber|ola|makemytrip|paytm|phonepe|google|microsoft|apple|netflix|spotify)\\b"),
-            // Payment apps that issue coupons
-            Pattern.compile("(?i)\\b(gpay|googlepay|amazonpay|paytm|phonepe|mobikwik|freecharge)\\b")
+            Pattern.compile("(?i)(?:from|at|by|shop|redeem\\s+on|valid\\s+on)\\s+([A-Z][A-Za-z0-9\\s&.'-]{2,25})\\b")
         )
         
         // Coupon code patterns
@@ -130,29 +126,13 @@ class CouponFieldExtractor {
      * Extract merchant name
      */
     private fun extractMerchantName(text: String): ExtractedField? {
-        // First try high-confidence merchant patterns (popular brands)
-        val highConfidenceMatch = MERCHANT_PATTERNS[2].matcher(text).let {
-            if (it.find() && it.groupCount() >= 1) {
-                val match = it.group(1) ?: return@let null
-                ExtractedField(capitalizeWords(match), ConfidenceLevel.HIGH)
-            } else null
-        }
-        
-        if (highConfidenceMatch != null) {
-            return highConfidenceMatch
-        }
-        
-        // Try other patterns
         for ((index, pattern) in MERCHANT_PATTERNS.withIndex()) {
-            if (index == 2) continue // Skip the high confidence pattern we already tried
-            
             val matcher = pattern.matcher(text)
             if (matcher.find() && matcher.groupCount() >= 1) {
                 val match = matcher.group(1) ?: continue
                 val confidence = when (index) {
                     0 -> ConfidenceLevel.MEDIUM // First pattern (capitalized word at start)
                     1 -> ConfidenceLevel.HIGH   // Explicit "from [merchant]" format
-                    3 -> ConfidenceLevel.HIGH   // Payment apps
                     else -> ConfidenceLevel.MEDIUM
                 }
                 return ExtractedField(capitalizeWords(match), confidence)
@@ -415,4 +395,4 @@ enum class ConfidenceLevel {
     MEDIUM,     // Reasonable evidence this is correct
     LOW,        // Weak evidence, may be incorrect
     SYNTHETIC   // Artificially generated, not directly extracted
-} 
+}

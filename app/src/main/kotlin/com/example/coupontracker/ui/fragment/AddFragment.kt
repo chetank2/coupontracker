@@ -34,7 +34,7 @@ import com.example.coupontracker.R
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.databinding.FragmentAddBinding
 import com.example.coupontracker.ui.viewmodel.AddCouponViewModel
-import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.extraction.rules.CouponInfo
 import com.example.coupontracker.util.CouponInputManager
 import com.example.coupontracker.util.ExtractionLogBuffer
 import com.example.coupontracker.util.SecurePreferencesManager

@@ -11,7 +11,7 @@ import androidx.camera.core.ImageProxy
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 
-import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.extraction.rules.CouponInfo
 import com.example.coupontracker.util.ImageOptimizer
 import com.example.coupontracker.util.ImageProcessor
 import com.google.mlkit.vision.barcode.BarcodeScanner

@@ -269,25 +269,10 @@ class MultiCouponExtractionService @Inject constructor(
                 else -> ""
             }
 
-            val deterministicResult = deterministicExtractor.extract(regionText, candidate.mode)
+            val deterministicResult = deterministicExtractor.extract(regionText, candidate.mode, captureTimestamp)
 
-            val fallbackExtraction = if (deterministicResult.requiresFallback()) {
-                progressiveExtractionService.extractCoupon(
-                    androidContext = context,
-                    image = regionBitmap,
-                    ocrText = regionText,
-                    ocrBlocks = emptyList(),
-                    imageUri = imageUri ?: "multi_coupon_region_$regionIndex",
-                    captureTimestamp = captureTimestamp
-                )
-            } else {
-                null
-            }
-
-            val mergedFields = deterministicResult.withFallbackCoupon(fallbackExtraction?.coupon)
             val sanitized = sanitizer.sanitize(
-                fields = mergedFields,
-                fallbackCoupon = fallbackExtraction?.coupon,
+                fields = deterministicResult,
                 imageUri = imageUri,
                 captureTimestamp = captureTimestamp
             )
@@ -491,6 +476,17 @@ class MultiCouponExtractionService @Inject constructor(
         val fallbackText = runCatching { ocrEngine.recognize(bitmap) }
             .onFailure { Log.e(TAG, "Fallback OCR recognize failed", it) }
             .getOrElse { "" }
+
+        if (!screenshotClassifier.isLikelySingleCoupon(fallbackText)) {
+            Log.w(TAG, "Blocking full-OCR fallback because multiple coupons are visible")
+            return MultiCouponResult(
+                coupons = emptyList(),
+                screenshotType = ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP,
+                totalDetected = 0,
+                totalExtracted = 0,
+                totalFiltered = 1
+            )
+        }
 
         val fallbackUri = imageUri ?: "multi_coupon_fallback"
         val effectiveCaptureTimestamp = captureTimestamp

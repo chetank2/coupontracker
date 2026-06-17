@@ -1,7 +1,9 @@
 package com.example.coupontracker.ui.screen
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.components.ThemeSelector
 import com.example.coupontracker.ui.components.DataSafetyDialog
+import com.example.coupontracker.ui.viewmodel.ModelSetupTarget
 import com.example.coupontracker.ui.viewmodel.SettingsViewModel
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CheckCircle
@@ -54,6 +57,7 @@ import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.theme.BrandTypography
 
 // Using keys from SecurePreferencesManager
+private const val GEMMA_MODEL_PAGE_URL = "https://huggingface.co/google/gemma-3n-E2B-it-litert-preview"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -132,6 +136,9 @@ fun SettingsScreen(
             }
             is SettingsViewModel.CleanupState.Error -> {
                 Toast.makeText(context, state.message, Toast.LENGTH_SHORT).show()
+            }
+            SettingsViewModel.CleanupState.MetadataReset -> {
+                Toast.makeText(context, "Cleared stale extraction metadata", Toast.LENGTH_SHORT).show()
             }
             else -> Unit
         }
@@ -268,9 +275,16 @@ fun SettingsScreen(
                         subtitle = when (cleanupState) {
                             SettingsViewModel.CleanupState.Running -> "Checking saved coupons..."
                             is SettingsViewModel.CleanupState.Success -> "Last cleanup removed ${(cleanupState as SettingsViewModel.CleanupState.Success).removedCount} duplicate coupons."
+                            SettingsViewModel.CleanupState.MetadataReset -> "Stale extraction metadata was cleared."
                             else -> "Merge repeated scans of the same coupon."
                         },
                         onClick = { viewModel.cleanupDuplicateCoupons() },
+                    )
+                    SettingsDivider()
+                    SettingsRow(
+                        title = "Reset extraction metadata",
+                        subtitle = "Clear OCR/debug/verification state without deleting saved coupons.",
+                        onClick = { viewModel.resetExtractionMetadata() },
                     )
 
                     val commitHash = remember(BuildConfig.APP_VERSION) {
@@ -402,18 +416,32 @@ private fun ModelManagementCard() {
     
     val securePrefsManager = remember { SecurePreferencesManager(context) }
     var showLicenseGate by remember { mutableStateOf(false) }
+    var licenseGateConfig by remember { mutableStateOf(ModelLicenseGateConfig.Qwen) }
+    var pendingLicenseAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     var licenseAccepted by remember { mutableStateOf(securePrefsManager.isMiniCpmLicenseAccepted()) }
+    var gemmaLicenseAccepted by remember { mutableStateOf(securePrefsManager.isGemmaVisionLicenseAccepted()) }
+    var qwenCleanerEnabled by remember { mutableStateOf(securePrefsManager.isQwenTextCleanerEnabled()) }
+    var gemmaVerifierEnabled by remember { mutableStateOf(securePrefsManager.isGemmaVisionVerifierEnabled()) }
     
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri?.let { modelImportViewModel.importModel(it) }
     }
+
+    val gemmaVisionFilePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { modelImportViewModel.importGemmaVisionModel(it) }
+    }
     
     // License Gate Dialog
     if (showLicenseGate) {
         androidx.compose.ui.window.Dialog(
-            onDismissRequest = { showLicenseGate = false }
+            onDismissRequest = {
+                showLicenseGate = false
+                pendingLicenseAction = null
+            }
         ) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -422,12 +450,14 @@ private fun ModelManagementCard() {
             ) {
                 LicenseGateScreen(
                     onLicenseAccepted = {
-                        licenseAccepted = true
+                        licenseAccepted = securePrefsManager.isMiniCpmLicenseAccepted()
+                        gemmaLicenseAccepted = securePrefsManager.isGemmaVisionLicenseAccepted()
                         showLicenseGate = false
-                        // Proceed with download
-                        modelImportViewModel.downloadModel()
+                        pendingLicenseAction?.invoke()
+                        pendingLicenseAction = null
                     },
-                    securePreferencesManager = securePrefsManager
+                    securePreferencesManager = securePrefsManager,
+                    config = licenseGateConfig
                 )
             }
         }
@@ -479,6 +509,23 @@ private fun ModelManagementCard() {
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                SettingsRow(
+                    title = "Qwen text cleaner",
+                    subtitle = "Clean offer text only. It cannot overwrite code, expiry, or store.",
+                    trailing = {
+                        Switch(
+                            checked = qwenCleanerEnabled,
+                            onCheckedChange = { enabled ->
+                                qwenCleanerEnabled = enabled
+                                securePrefsManager.setQwenTextCleanerEnabled(enabled)
+                            },
+                            enabled = uiState.isModelInstalled && !uiState.isImporting
+                        )
+                    },
+                )
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 
@@ -510,8 +557,8 @@ private fun ModelManagementCard() {
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Import Progress
-            if (uiState.isImporting) {
+            // Qwen setup status
+            if (uiState.activeSetupTarget == ModelSetupTarget.QWEN && uiState.isImporting) {
                 LinearProgressIndicator(
                     progress = uiState.importProgress / 100f,
                     modifier = Modifier.fillMaxWidth()
@@ -523,12 +570,26 @@ private fun ModelManagementCard() {
                 )
             }
             
-            // Error Message
-            uiState.importError?.let { error ->
+            if (uiState.activeSetupTarget == ModelSetupTarget.QWEN) {
+                uiState.importError?.let { error ->
+                    Text(
+                        text = "Error: $error",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            }
+
+            if (uiState.activeSetupTarget == ModelSetupTarget.QWEN &&
+                !uiState.isImporting &&
+                uiState.importError == null &&
+                uiState.importMessage.isNotBlank()
+            ) {
                 Text(
-                    text = "Error: $error",
+                    text = uiState.importMessage,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
@@ -544,6 +605,8 @@ private fun ModelManagementCard() {
                             if (licenseAccepted) {
                                 modelImportViewModel.downloadModel()
                             } else {
+                                licenseGateConfig = ModelLicenseGateConfig.Qwen
+                                pendingLicenseAction = { modelImportViewModel.downloadModel() }
                                 showLicenseGate = true
                             }
                         },
@@ -609,6 +672,166 @@ private fun ModelManagementCard() {
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Remove")
                     }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
+                thickness = BrandSpacing.Hairline
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Gemma Vision verifier",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (uiState.isGemmaVisionInstalled) {
+                Text(
+                    text = "Ready",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFF4CAF50),
+                    fontWeight = FontWeight.Bold
+                )
+                val visionName = uiState.gemmaVisionInfo?.name ?: "Gemma Vision"
+                val visionSizeText = uiState.gemmaVisionSizeMB.takeIf { it > 0 }?.let { " • $it MB" }.orEmpty()
+                Text(
+                    text = "$visionName installed$visionSizeText",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                SettingsRow(
+                    title = "Gemma vision verifier",
+                    subtitle = "Use image verification only when OCR/rules are weak.",
+                    trailing = {
+                        Switch(
+                            checked = gemmaVerifierEnabled,
+                            onCheckedChange = { enabled ->
+                                gemmaVerifierEnabled = enabled
+                                securePrefsManager.setGemmaVisionVerifierEnabled(enabled)
+                            },
+                            enabled = uiState.isGemmaVisionInstalled && !uiState.isImporting
+                        )
+                    },
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = { modelImportViewModel.deleteGemmaVisionModel() },
+                    enabled = !uiState.isImporting,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.Error, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Remove Gemma Vision")
+                }
+            } else {
+                Text(
+                    text = "Used only when OCR confidence is low and the screenshot needs image verification.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GEMMA_MODEL_PAGE_URL)))
+                    },
+                    enabled = !uiState.isImporting,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.FileDownload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Open Gemma model page")
+                }
+
+                Text(
+                    text = GEMMA_MODEL_PAGE_URL,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (uiState.activeSetupTarget == ModelSetupTarget.GEMMA_VISION && uiState.isImporting) {
+                    LinearProgressIndicator(
+                        progress = uiState.importProgress / 100f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        text = uiState.importMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                if (uiState.activeSetupTarget == ModelSetupTarget.GEMMA_VISION) {
+                    uiState.importError?.let { error ->
+                        Text(
+                            text = "Error: $error",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        if (gemmaLicenseAccepted) {
+                            modelImportViewModel.downloadGemmaVisionModel()
+                        } else {
+                            licenseGateConfig = ModelLicenseGateConfig.GemmaVision
+                            pendingLicenseAction = { modelImportViewModel.downloadGemmaVisionModel() }
+                            showLicenseGate = true
+                        }
+                    },
+                    enabled = !uiState.isImporting,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Download Gemma Vision")
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = {
+                        gemmaVisionFilePicker.launch(
+                            arrayOf("application/octet-stream", "application/zip", "*/*")
+                        )
+                    },
+                    enabled = !uiState.isImporting,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.FileUpload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Import .task or setup zip")
                 }
             }
     }

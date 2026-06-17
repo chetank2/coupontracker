@@ -17,26 +17,6 @@ class ScreenshotClassifier {
     companion object {
         private const val TAG = "ScreenshotClassifier"
         
-        // Popular coupon/deal apps in India
-        private val APP_IDENTIFIERS = listOf(
-            // E-commerce
-            "amazon.in", "amazon", "flipkart", "myntra", "ajio", "meesho",
-            "shopclues", "snapdeal", "paytm mall", "tata cliq",
-            
-            // Payment/Wallet apps with offers
-            "phonepe", "paytm", "google pay", "gpay", "mobikwik",
-            "freecharge", "amazon pay",
-            
-            // Food delivery
-            "swiggy", "zomato", "uber eats", "dunzo",
-            
-            // Grocery/Quick commerce
-            "bigbasket", "grofers", "blinkit", "zepto", "instamart",
-            
-            // Travel/Booking
-            "makemytrip", "goibibo", "cleartrip", "yatra", "oyo", "airbnb"
-        ).map { it.lowercase() }
-        
         // Multi-coupon indicators (when these appear multiple times)
         private val MULTI_COUPON_INDICATORS = listOf(
             "collect now", "get offer", "claim", "redeem",
@@ -97,28 +77,23 @@ class ScreenshotClassifier {
         indicators["couponIndicatorUniqueCount"] = couponIndicatorStats.uniqueCount
         indicators["couponIndicatorMatches"] = couponIndicatorStats.matchedIndicators
         
-        // Check 2: App identifier presence
-        val appIdentified = identifyApp(normalizedText)
-        indicators["appName"] = appIdentified ?: "unknown"
-        
-        // Check 3: Screenshot metadata
+        // Check 2: Screenshot metadata
         val hasScreenshotMetadata = hasScreenshotMarkers(normalizedText)
         indicators["hasScreenshotMetadata"] = hasScreenshotMetadata
         
-        // Check 4: Aspect ratio (screenshots are typically portrait, 16:9 or taller)
+        // Check 3: Aspect ratio (screenshots are typically portrait, 16:9 or taller)
         val aspectRatio = bitmap.height.toFloat() / bitmap.width.toFloat()
         indicators["aspectRatio"] = aspectRatio
         val isPortrait = aspectRatio > 1.3f
         indicators["isPortrait"] = isPortrait
         
-        // Check 5: Image quality (screenshots are usually higher quality)
+        // Check 4: Image quality (screenshots are usually higher quality)
         val hasHighDensity = bitmap.width >= 720 && bitmap.height >= 1280
         indicators["hasHighDensity"] = hasHighDensity
         
         // Classification logic
         val strongCouponSignals = couponIndicatorStats.uniqueCount >= 5 && couponIndicatorStats.totalCount >= 7
         val moderateCouponSignals = couponIndicatorStats.uniqueCount >= 4 && couponIndicatorStats.totalCount >= 6
-        val hasKnownApp = appIdentified != null && appIdentified != "unknown"
 
         val singleCouponSignals = collectSingleCouponSignals(ocrText)
         indicators["codeCount"] = singleCouponSignals.codeMatches
@@ -127,23 +102,23 @@ class ScreenshotClassifier {
         indicators["uniqueCodeCount"] = singleCouponSignals.uniqueCodes
 
         var (type, confidence) = when {
-            // Multi-coupon app screenshot: multiple unique indicators + known app + portrait
-            strongCouponSignals && hasKnownApp && isPortrait -> {
-                Pair(ScreenshotType.MULTI_COUPON_APP, 0.92f)
-            }
-
             // Strong coupon signals with screenshot metadata (even without app name)
             strongCouponSignals && hasScreenshotMetadata && isPortrait -> {
                 Pair(ScreenshotType.MULTI_COUPON_APP, 0.88f)
             }
 
-            // Known app + moderate signals + metadata
-            moderateCouponSignals && hasKnownApp && hasScreenshotMetadata && isPortrait -> {
-                Pair(ScreenshotType.MULTI_COUPON_APP, 0.86f)
+            // Very strong repeated coupon language is enough without known-app lists.
+            strongCouponSignals && isPortrait -> {
+                Pair(ScreenshotType.MULTI_COUPON_APP, 0.84f)
+            }
+
+            // Moderate coupon signals + metadata
+            moderateCouponSignals && hasScreenshotMetadata && isPortrait -> {
+                Pair(ScreenshotType.MULTI_COUPON_APP, 0.82f)
             }
 
             // Single screenshot: typical screenshot characteristics but limited coupon signals
-            (hasScreenshotMetadata || hasKnownApp) && isPortrait -> {
+            hasScreenshotMetadata && isPortrait -> {
                 Pair(ScreenshotType.SINGLE_SCREENSHOT, 0.8f)
             }
 
@@ -153,7 +128,7 @@ class ScreenshotClassifier {
             }
 
             // Camera capture: landscape or missing screenshot markers
-            !isPortrait || (!hasScreenshotMetadata && !hasKnownApp) -> {
+            !isPortrait || !hasScreenshotMetadata -> {
                 Pair(ScreenshotType.CAMERA_CAPTURE, 0.75f)
             }
 
@@ -202,18 +177,6 @@ class ScreenshotClassifier {
             totalCount = total,
             matchedIndicators = matched
         )
-    }
-    
-    /**
-     * Identify app from OCR text
-     */
-    private fun identifyApp(text: String): String? {
-        for (app in APP_IDENTIFIERS) {
-            if (text.contains(app, ignoreCase = true)) {
-                return app
-            }
-        }
-        return null
     }
     
     /**
@@ -311,4 +274,3 @@ class ScreenshotClassifier {
         )
     }
 }
-

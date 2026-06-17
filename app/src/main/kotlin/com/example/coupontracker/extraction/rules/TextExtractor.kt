@@ -1,8 +1,13 @@
-package com.example.coupontracker.util
+package com.example.coupontracker.extraction.rules
 
 import android.util.Log
 import com.example.coupontracker.data.util.CurrencyUtils
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.util.GenericFieldHeuristics
+import com.example.coupontracker.util.LocalLlmOcrService
+import com.example.coupontracker.util.PlatformDetector
+import com.example.coupontracker.util.RedeemCodeSanitizer
+import com.example.coupontracker.util.StoreCandidateValidator
 import java.io.Serializable
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -105,15 +110,19 @@ class TextExtractor {
     fun extractCouponInfoSync(text: String, baseDate: Date? = null): CouponInfo {
         safeLogDebug(TAG) { "Extracting coupon info from text: ${text.take(100)}..." }
 
-        val storeName = extractStoreName(text)
+        val extractionText = prepareFieldExtractionText(text)
+        val storeName = extractStoreName(extractionText) ?: extractStoreName(text)
         val scopedText = storeName
-            ?.let { extractCouponBlockForStore(text, it) }
-            ?: text
-        val description = extractDescription(scopedText)
+            ?.let { extractCouponBlockForStore(extractionText, it) }
+            ?: extractionText
         val expiryDate = extractExpiryDate(scopedText, baseDate)
+            ?: extractExpiryDate(extractionText, baseDate)
             ?: extractExpiryDate(text, baseDate)
         val cashbackDetail = extractCashbackDetail(scopedText)
         val redeemCode = extractRedeemCode(scopedText)
+            ?: extractRedeemCodeFromSameCardFallback(extractionText, storeName)
+            ?: extractRedeemCodeFromSameCardFallback(text, storeName)
+        val description = extractDescription(scopedText, storeName, redeemCode)
         val category = extractCategory(scopedText)
         val rating = extractRating(scopedText)
         val status = extractStatus(scopedText)
@@ -247,9 +256,79 @@ class TextExtractor {
     private fun isCouponBlockChromeLine(line: String): Boolean {
         val normalized = normalizeBlockKey(line)
         if (normalized in setOf("vouchers", "active", "lifetime")) return true
+        if (isPhoneStatusBarNoise(line)) return true
         return Pattern.compile("(?i)\\b(vouchers?|active|lifetime)\\b.*\\d")
             .matcher(line)
             .find()
+    }
+
+    private fun prepareFieldExtractionText(text: String): String {
+        return trimLeadingPreviousCouponTail(text).lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .filterNot(::isPhoneStatusBarNoise)
+            .joinToString("\n")
+    }
+
+    private fun trimLeadingPreviousCouponTail(text: String): String {
+        val lines = text.lines().map { it.trim() }
+        val meaningfulLines = lines.filter { it.isNotBlank() }
+        if (meaningfulLines.size < 4) return text
+
+        val firstExpiryIndex = meaningfulLines.indexOfFirst(::isCouponBlockExpiryLine)
+        if (firstExpiryIndex <= 0) return text
+
+        val hasPreviousCode = meaningfulLines.take(firstExpiryIndex).any(::isCouponBlockCodeLine)
+        val hasSelectedOffer = meaningfulLines.drop(firstExpiryIndex + 1).take(8).any(::looksLikeSelectedCardOfferLine)
+        if (!hasPreviousCode || !hasSelectedOffer) return text
+
+        return meaningfulLines.drop(firstExpiryIndex).joinToString("\n")
+    }
+
+    private fun looksLikeSelectedCardOfferLine(line: String): Boolean {
+        return Pattern.compile(
+            "(?i)\\b(you\\s+won|get|save|flat|off|cashback|discount|bonus|reward|products?|membership|voucher)\\b|₹|rs\\.?",
+            Pattern.UNICODE_CASE
+        ).matcher(line).find()
+    }
+
+    private fun extractRedeemCodeFromSameCardFallback(text: String, storeName: String?): String? {
+        val prepared = prepareFieldExtractionText(text)
+        if (!canUseWholeTextCodeFallback(prepared, storeName)) {
+            return null
+        }
+        return extractRedeemCode(prepared)
+    }
+
+    private fun canUseWholeTextCodeFallback(text: String, storeName: String?): Boolean {
+        val lines = text.lines().map { it.trim() }.filter { it.isNotBlank() }
+        val codeIndex = lines.indexOfFirst(::isCouponBlockCodeLine)
+        if (codeIndex < 0) return false
+
+        val storeKey = storeName?.let(::normalizeBlockKey).orEmpty()
+        val anchorIndex = lines.indexOfFirst { line ->
+            (storeKey.isNotBlank() && normalizeBlockKey(line).contains(storeKey)) ||
+                looksLikeSelectedCardOfferLine(line)
+        }
+
+        if (anchorIndex >= 0 && codeIndex < anchorIndex) {
+            return false
+        }
+
+        return true
+    }
+
+    private fun isPhoneStatusBarNoise(line: String): Boolean {
+        val trimmed = line.trim()
+        if (trimmed.isBlank()) return false
+        val normalized = trimmed.replace("\\s+".toRegex(), " ")
+        val lower = normalized.lowercase(Locale.ROOT)
+        if (Regex("^\\d{1,2}:\\d{2}$").matches(normalized)) return true
+        if (Regex("(?i)^(?:yo|vo|volte)?\\s*5g\\s*\\d{0,3}%?\\s*[a-z]?$").matches(normalized)) return true
+        if (Regex("(?i)\\b(?:vo|yo|volte)\\s*5g\\b").containsMatchIn(normalized) && normalized.length <= 16) return true
+        if (Regex("^\\d{1,3}%$").matches(normalized)) return true
+        if (lower in setOf("5g", "4g", "lte", "volte", "vo 5g", "yo 5g")) return true
+        return false
     }
 
     /**
@@ -267,6 +346,11 @@ class TextExtractor {
                 safeLogDebug(TAG) { "Found brand from 'Brand:' pattern: $brand" }
                 return brand
             }
+        }
+
+        extractStoreFromOfferPhrase(text)?.let { offerStore ->
+            safeLogDebug(TAG) { "Found store name from offer phrase: $offerStore" }
+            return offerStore
         }
 
         val lowerText = text.lowercase(Locale.ROOT)
@@ -410,6 +494,41 @@ class TextExtractor {
         return null
     }
 
+    private fun extractStoreFromOfferPhrase(text: String): String? {
+        val patterns = listOf(
+            Pattern.compile(
+                "\\b(?i:off|cashback|discount|bonus|reward|membership|voucher)\\s+(?i:on)\\s+([\\p{Lu}][\\p{L}\\p{M}\\p{N}&.'-]{2,})(?=\\s|$)",
+                Pattern.UNICODE_CASE
+            ),
+            Pattern.compile(
+                "\\b(?i:on)\\s+([\\p{Lu}][\\p{L}\\p{M}\\p{N}&.'-]{2,})(?=\\s|$)",
+                Pattern.UNICODE_CASE
+            ),
+            Pattern.compile(
+                "\\b(?i:from)\\s+([\\p{Lu}][\\p{L}\\p{M}\\p{N}&.'-]{2,})(?=\\s|$)",
+                Pattern.UNICODE_CASE
+            )
+        )
+
+        val lines = prepareFieldExtractionText(text).lines()
+        for (line in lines) {
+            if (!line.contains(Regex("(?i)\\b(won|off|cashback|discount|bonus|reward|voucher|membership)\\b"))) {
+                continue
+            }
+            for (pattern in patterns) {
+                val matcher = pattern.matcher(line)
+                while (matcher.find()) {
+                    val candidate = cleanCandidate(matcher.group(1), text) ?: continue
+                    if (StoreCandidateValidator.isAcceptable(candidate, text)) {
+                        return candidate
+                    }
+                }
+            }
+        }
+
+        return null
+    }
+
     private fun inferDiscountType(detail: String?): String? {
         if (detail.isNullOrBlank()) return null
         val normalized = detail.lowercase(Locale.ROOT)
@@ -510,8 +629,13 @@ class TextExtractor {
      * @return The extracted description or null if not found
      */
     fun extractDescription(text: String): String? {
+        return extractDescription(text, storeName = null, redeemCode = null)
+    }
+
+    private fun extractDescription(text: String, storeName: String?, redeemCode: String?): String? {
+        val descriptionText = prepareDescriptionExtractionText(text, storeName, redeemCode)
         // FIRST: Check for multi-line "buy X get Y" patterns (high priority)
-        val lines = text.lines().map { it.trim() }.filter { it.isNotEmpty() }
+        val lines = descriptionText.lines().map { it.trim() }.filter { it.isNotEmpty() }
         for (i in lines.indices) {
             val line = lines[i]
             if (Pattern.compile("(?i)buy\\s+\\d+\\s+get\\s+\\d+").matcher(line).find()) {
@@ -533,9 +657,15 @@ class TextExtractor {
             }
         }
 
+        val multiLineWonOffer = extractMultiLineWonOffer(lines)
+        if (multiLineWonOffer != null) {
+            safeLogDebug(TAG) { "Found multi-line won offer description: $multiLineWonOffer" }
+            sanitizeDescription(multiLineWonOffer)?.let { return it }
+        }
+
         // Look for "Offer:" pattern
         val offerPattern = Pattern.compile("(?i)Offer:\\s*(.+?)(?=\\n|$)")
-        val offerMatcher = offerPattern.matcher(text)
+        val offerMatcher = offerPattern.matcher(descriptionText)
         if (offerMatcher.find()) {
             val offer = offerMatcher.group(1)?.trim()
             safeLogDebug(TAG) { "Found description from 'Offer:' pattern: $offer" }
@@ -544,7 +674,7 @@ class TextExtractor {
 
         // Look for "You won X products at ₹Y + ₹Z cashback" pattern
         val wonProductsPattern = Pattern.compile("(?i)(You\\s+won\\s+\\d+\\s+products.+?cashback.+?)(?=\\n|$)")
-        val wonProductsMatcher = wonProductsPattern.matcher(text)
+        val wonProductsMatcher = wonProductsPattern.matcher(descriptionText)
         if (wonProductsMatcher.find()) {
             val desc = wonProductsMatcher.group(1)?.trim()
             safeLogDebug(TAG) { "Found description from 'You won products' pattern: $desc" }
@@ -552,7 +682,7 @@ class TextExtractor {
         }
 
         val wonOfferPattern = Pattern.compile("(?i)(You\\s+won\\s+.+?)(?=\\n|$)")
-        val wonOfferMatcher = wonOfferPattern.matcher(text)
+        val wonOfferMatcher = wonOfferPattern.matcher(descriptionText)
         if (wonOfferMatcher.find()) {
             val desc = wonOfferMatcher.group(1)?.trim()
             safeLogDebug(TAG) { "Found description from 'You won' pattern: $desc" }
@@ -561,7 +691,7 @@ class TextExtractor {
 
         // Special case for coupons with "Get upto ₹X" pattern
         val getUptoPattern = Pattern.compile("(?i)(Get\\s+(?:up\\s+to|upto)\\s+(?:Rs\\.?|₹)\\d+(?:\\s+off)?)\\b")
-        val getUptoMatcher = getUptoPattern.matcher(text)
+        val getUptoMatcher = getUptoPattern.matcher(descriptionText)
         if (getUptoMatcher.find()) {
             val desc = getUptoMatcher.group(1)
             safeLogDebug(TAG) { "Found description from 'Get upto' pattern: $desc" }
@@ -570,7 +700,7 @@ class TextExtractor {
 
         // Look for "Up to X% off" pattern
         val upToPattern = Pattern.compile("(?i)((?:Up|Get) to \\d+%\\s+off.*?)(?=\\n|$)")
-        val upToMatcher = upToPattern.matcher(text)
+        val upToMatcher = upToPattern.matcher(descriptionText)
         if (upToMatcher.find()) {
             val desc = upToMatcher.group(1)?.trim()
             safeLogDebug(TAG) { "Found description from 'Up to X%' pattern: $desc" }
@@ -579,7 +709,7 @@ class TextExtractor {
 
         // Look for "Flat ₹X OFF" pattern
         val flatOffPattern = Pattern.compile("(?i)(Flat\\s+(?:Rs\\.?|₹)\\d+\\s+(?:off|OFF).*?)(?=\\n|$)")
-        val flatOffMatcher = flatOffPattern.matcher(text)
+        val flatOffMatcher = flatOffPattern.matcher(descriptionText)
         if (flatOffMatcher.find()) {
             val desc = flatOffMatcher.group(1)?.trim()
             safeLogDebug(TAG) { "Found description from 'Flat ₹X OFF' pattern: $desc" }
@@ -611,7 +741,7 @@ class TextExtractor {
         )
 
         for (pattern in discountPatterns) {
-            val matcher = pattern.matcher(text)
+            val matcher = pattern.matcher(descriptionText)
             while (matcher.find()) {
                 val desc = matcher.group(1)
                 safeLogDebug(TAG) { "Found description from discount pattern: $desc" }
@@ -620,14 +750,15 @@ class TextExtractor {
         }
 
         // If no specific discount pattern is found, consider the first sentence
-        val sentences = text.split(Pattern.compile("[.!?]"))
+        val sentences = descriptionText.split(Pattern.compile("[.!?]"))
         if (sentences.isNotEmpty() && sentences[0].length > 10) {
             val desc = sentences[0].trim()
             safeLogDebug(TAG) { "Using first sentence as description: $desc" }
             addCandidate(desc)
         }
 
-        val summaryFallback = buildMonetarySummary(text, lines)
+        val usefulTextFallback = buildUsefulDescriptionFallback(lines)
+        val summaryFallback = buildMonetarySummary(descriptionText, lines)
 
         val bestCandidate = candidates
             .filter { it.isMeaningfulDescription() }
@@ -637,11 +768,136 @@ class TextExtractor {
             return refineDescriptionCandidate(bestCandidate, summaryFallback)
         }
 
-        return summaryFallback
+        return usefulTextFallback ?: summaryFallback
+    }
+
+    private fun prepareDescriptionExtractionText(
+        text: String,
+        storeName: String? = null,
+        redeemCode: String? = null
+    ): String {
+        val normalizedStore = storeName?.let(::normalizeBlockKey).orEmpty()
+        val normalizedCode = redeemCode
+            ?.let { RedeemCodeSanitizer.sanitizePreserve(it) }
+            ?.let(::normalizeCodeKey)
+            .orEmpty()
+        val cleanedLines = prepareFieldExtractionText(text)
+            .lines()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+
+        return cleanedLines.mapNotNull { line ->
+            val normalizedLine = normalizeBlockKey(line)
+            val normalizedLineCode = normalizeCodeKey(line)
+            val cut = DESCRIPTION_BOUNDARY_PATTERN.matcher(line)
+            val bounded = if (cut.find()) line.substring(0, cut.start()).trim() else line
+            if (isCouponBlockCodeLine(line) && bounded.isBlank()) {
+                return@mapNotNull null
+            }
+            if (isCouponBlockActionLine(line) ||
+                isCouponBlockChromeLine(line) ||
+                isStandaloneCodeCandidate(line) ||
+                isRatingLine(line) ||
+                isCouponBlockExpiryLine(line) ||
+                (normalizedStore.isNotBlank() && normalizedLine == normalizedStore) ||
+                (normalizedCode.isNotBlank() && normalizedLineCode == normalizedCode)
+            ) {
+                return@mapNotNull null
+            }
+            bounded.takeIf { it.isNotBlank() }
+        }.joinToString("\n")
+    }
+
+    private fun buildUsefulDescriptionFallback(lines: List<String>): String? {
+        val useful = lines
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .filterNot { isLikelyStandaloneHeading(it) }
+
+        if (useful.isEmpty()) return null
+
+        val joined = useful.joinToString(" ")
+            .replace("\\s+".toRegex(), " ")
+            .trim()
+        return sanitizeDescription(joined)
+            ?.takeIf { it.isMeaningfulDescription() }
+    }
+
+    private fun isLikelyStandaloneHeading(line: String): Boolean {
+        val words = line.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        if (words.size > 2) return false
+        if (!line.any { it.isLetter() }) return true
+        if (GENERIC_HEADING_PATTERN.matcher(line).find()) return true
+        return words.size == 1 && !Regex("(?i)(off|cashback|discount|free|save|won|get|buy|₹|rs\\.?|\\d)").containsMatchIn(line)
+    }
+
+    private fun normalizeCodeKey(value: String): String {
+        return value.filter { it.isLetterOrDigit() || it == '-' || it == '_' }
+            .uppercase(Locale.ROOT)
+    }
+
+    private fun extractMultiLineWonOffer(lines: List<String>): String? {
+        val start = lines.indexOfFirst { line ->
+            Pattern.compile("(?i)^you\\s+won\\b").matcher(line).find()
+        }
+        if (start < 0) return null
+
+        val parts = mutableListOf<String>()
+        for (index in start until lines.size.coerceAtMost(start + 4)) {
+            val line = lines[index]
+            if (index > start && (
+                    isCouponBlockExpiryLine(line) ||
+                        isCouponBlockCodeLine(line) ||
+                        isCouponBlockActionLine(line) ||
+                        isCouponBlockChromeLine(line) ||
+                        isStandaloneCodeCandidate(line) ||
+                        isRatingLine(line) ||
+                        !isOfferContinuationLine(line)
+                    )
+            ) {
+                break
+            }
+            parts.add(line)
+        }
+
+        return parts.joinToString(" ")
+            .replace("\\s+".toRegex(), " ")
+            .trim()
+            .takeIf { it.isMeaningfulDescription() }
+    }
+
+    private fun isOfferContinuationLine(line: String): Boolean {
+        val trimmed = line.trim()
+        if (trimmed.isBlank()) return false
+        return Pattern.compile(
+            "(?i)^(?:on|for|with|above|min(?:imum)?|orders?|products?|plans?|membership|annual)\\b|\\b(?:off|cashback|discount|free|order|orders|above|minimum|min\\.?|₹|rs\\.?)\\b",
+            Pattern.UNICODE_CASE
+        ).matcher(trimmed).find()
+    }
+
+    private fun isStandaloneCodeCandidate(line: String): Boolean {
+        val trimmed = line.trim()
+        if (trimmed.contains(' ')) return false
+        if (!trimmed.any(Char::isLetter) || !trimmed.any(Char::isDigit)) return false
+        return Pattern.compile("^[A-Z0-9][A-Z0-9_-]{5,39}$", Pattern.UNICODE_CASE)
+            .matcher(trimmed)
+            .matches()
+    }
+
+    private fun isRatingLine(line: String): Boolean {
+        return Pattern.compile("^\\s*[0-5](?:[.,]\\d{1,2})?\\s*$")
+            .matcher(line)
+            .matches()
     }
 
     private fun sanitizeDescription(value: String?): String? {
-        val cleaned = LocalLlmOcrService.cleanDescription(value)
+        val bounded = value?.let { raw ->
+            val withoutInlineCode = raw.replace(Regex("(?i)\\b(?:coupon\\s+code|promo\\s+code|code)\\s*[:\\-–—].*$"), "")
+                .replace(Regex("""\s+\bDAYS\b\s*$"""), "")
+            val matcher = DESCRIPTION_BOUNDARY_PATTERN.matcher(withoutInlineCode)
+            if (matcher.find()) withoutInlineCode.substring(0, matcher.start()) else withoutInlineCode
+        }
+        val cleaned = LocalLlmOcrService.cleanDescription(bounded)
         return cleaned.ifBlank { null }
     }
 
@@ -1088,6 +1344,18 @@ class TextExtractor {
      * @return The extracted redeem code or null if not found
      */
     fun extractRedeemCode(text: String): String? {
+        val codeLinePattern = Pattern.compile("(?im)^\\s*code\\s*[-–—:]?\\s*(.+)$")
+        val codeLineMatcher = codeLinePattern.matcher(text)
+        if (codeLineMatcher.find()) {
+            val code = codeLineMatcher.group(1)
+            safeLogDebug(TAG) { "Found code from explicit code line: $code" }
+            RedeemCodeSanitizer.sanitizePreserve(code)?.let { sanitized ->
+                if (sanitized.length in 5..40) {
+                    return sanitized
+                }
+            }
+        }
+
         // First check for code: pattern (most common)
         val codePattern = Pattern.compile("(?i)code\\s*[-–—:]?\\s*([A-Z0-9][A-Z0-9_-]{4,}(?:[-–—][A-Z0-9][A-Z0-9_-]{2,})*)")
         val codeMatcher = codePattern.matcher(text)
@@ -1117,7 +1385,9 @@ class TextExtractor {
         while (allCapsDigitsMatcher.find()) {
             val potentialCode = allCapsDigitsMatcher.group(1)
             // Skip if it's likely not a code (too long or too short)
-            if ((potentialCode?.length ?: 0) in 6..20 && !COMMON_WORDS.contains(potentialCode?.lowercase() ?: "")) {
+            val codeLength = potentialCode?.length ?: 0
+            val looksLikeCode = potentialCode?.any(Char::isDigit) == true || codeLength >= 8
+            if (codeLength in 6..40 && looksLikeCode && !COMMON_WORDS.contains(potentialCode?.lowercase() ?: "")) {
                 safeLogDebug(TAG) { "Found code from all caps+digits pattern: $potentialCode" }
                 RedeemCodeSanitizer.sanitize(potentialCode)?.let { sanitized ->
                     return sanitized
@@ -1135,7 +1405,7 @@ class TextExtractor {
                 val afterIndicator = text.substring(indicatorIndex + indicator.length).trim()
                 val potentialCode = afterIndicator.split(Pattern.compile("\\s+"))[0]
 
-                if (potentialCode.length >= 5 && potentialCode.matches("[A-Z0-9]+".toRegex())) {
+                if (potentialCode.length >= 5 && potentialCode.matches("[A-Za-z0-9]+".toRegex())) {
                     safeLogDebug(TAG) { "Found code after indicator '$indicator': $potentialCode" }
                     RedeemCodeSanitizer.sanitize(potentialCode)?.let { sanitized ->
                         return sanitized
@@ -1266,9 +1536,9 @@ class TextExtractor {
      */
     fun extractMinimumPurchase(text: String): Double? {
         val patterns = listOf(
-            Pattern.compile("(?i)min(?:imum)?\\s+(?:order|purchase)\\s+(?:of)?\\s*(?:Rs\\.?|₹)?\\s*(\\d+(?:\\.\\d+)?)"),
-            Pattern.compile("(?i)(?:order|purchase)\\s+above\\s*(?:Rs\\.?|₹)?\\s*(\\d+(?:\\.\\d+)?)"),
-            Pattern.compile("(?i)valid\\s+on\\s+(?:orders|purchases)\\s+above\\s*(?:Rs\\.?|₹)?\\s*(\\d+(?:\\.\\d+)?)")
+            Pattern.compile("(?i)min(?:imum)?\\s+(?:order|purchase)\\s+(?:of)?\\s*(?:Rs\\.?\\s*|₹\\s*)?(\\d+(?:\\.\\d+)?)"),
+            Pattern.compile("(?i)(?:orders?|purchases?)\\s+above\\s*(?:Rs\\.?\\s*|₹\\s*)?(\\d+(?:\\.\\d+)?)"),
+            Pattern.compile("(?i)valid\\s+on\\s+(?:orders|purchases)\\s+above\\s*(?:Rs\\.?\\s*|₹\\s*)?(\\d+(?:\\.\\d+)?)")
         )
 
         for (pattern in patterns) {
@@ -1425,7 +1695,8 @@ class TextExtractor {
             "offer", "valid", "till", "from", "upto", "free", "save", "discount",
             "multi", "product", "products", "kit", "combo", "pack", "value", "special",
             "now", "today", "details", "redeem", "claim", "activate", "shop", "buy",
-            "view", "apply", "tap", "click", "pastm", "patm", "just"
+            "view", "apply", "tap", "click", "pastm", "patm", "just", "expires",
+            "expired", "cashback"
         )
 
         private val GENERIC_LEADING_STORE_TOKENS = setOf(
@@ -1441,6 +1712,10 @@ class TextExtractor {
         private val RUPEE_VALUE_PATTERN = "(?i)(?:₹|rs\\.?\\s*)?\\d[\\d,]{2,}(?=\\s*(?:cashback|off|discount|\\+|$))".toRegex()
         private val STORE_COUNTER_ARTIFACT_PATTERN =
             Pattern.compile("^([\\p{L}\\p{M}]{3,})(\\d+(?:[.,]\\d+)?)$", Pattern.UNICODE_CASE)
+        private val DESCRIPTION_BOUNDARY_PATTERN = Pattern.compile(
+            "(?i)\\b(?:details|offer\\s+details|redeem\\s+now|redeem|copy|copy\\s+code|use\\s+code|apply\\s+code|redeem\\s+code|code\\s*[:\\-–—]?|coupon\\s+code|promo\\s+code|expires?\\s+in|valid\\s+(?:till|until))\\b",
+            Pattern.UNICODE_CASE
+        )
 
         private val CATEGORIES = listOf(
             "Food", "Travel", "Shopping", "Electronics", "Fashion", "Beauty",

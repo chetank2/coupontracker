@@ -6,10 +6,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
+import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.util.CouponNotificationManager
-import com.example.coupontracker.worker.CouponCleanupWorker
+import com.example.coupontracker.util.SecurePreferencesManager
+import com.example.coupontracker.worker.VerifyCouponWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -22,6 +25,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -31,7 +35,8 @@ class DetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val repository: CouponRepository,
     private val notificationManager: CouponNotificationManager,
-    private val debugRepository: ExtractionDebugRepository
+    private val debugRepository: ExtractionDebugRepository,
+    private val securePreferencesManager: SecurePreferencesManager
 ) : ViewModel() {
 
     companion object {
@@ -71,7 +76,7 @@ class DetailViewModel @Inject constructor(
         }
     }
 
-    fun cleanCoupon() {
+    fun verifyCoupon() {
         viewModelScope.launch {
             _coupon.value?.let { coupon ->
                 repository.updateCoupon(
@@ -83,9 +88,135 @@ class DetailViewModel @Inject constructor(
                         updatedAt = Date()
                     )
                 )
-                CouponCleanupWorker.enqueueUserRequested(context, coupon.id)
+                VerifyCouponWorker.enqueueUserRequested(context, coupon.id)
             }
         }
+    }
+
+    fun cleanOfferText() {
+        viewModelScope.launch {
+            val coupon = _coupon.value ?: return@launch
+            val offerText = coupon.description.trim()
+            if (offerText.isBlank()) {
+                markOfferCleanFailed(coupon, "Offer text is empty.")
+                return@launch
+            }
+            if (!securePreferencesManager.isQwenTextCleanerEnabled()) {
+                markOfferCleanFailed(coupon, "Qwen text cleaner is turned off in Settings.")
+                return@launch
+            }
+
+            val runtime = LlmRuntimeManager.getInstance(context)
+            if (!runtime.isModelAvailable()) {
+                markOfferCleanFailed(coupon, "Qwen model is not installed. Set it up in Settings.")
+                return@launch
+            }
+
+            repository.updateCoupon(
+                coupon.copy(
+                    cleanupStatus = Coupon.CleanupStatus.RUNNING,
+                    cleanupError = null,
+                    cleanupStartedAt = Date(),
+                    cleanupFinishedAt = null,
+                    updatedAt = Date()
+                )
+            )
+
+            try {
+                val rawResponse = runtime.runTextInference(
+                    ocrText = offerText,
+                    prompt = buildOfferCleanerPrompt(coupon),
+                    keepLoaded = false,
+                    maxTokensOverride = 80
+                )
+                val cleanedOffer = extractOfferJson(rawResponse)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.takeUnless { it.equals("unknown", ignoreCase = true) }
+                    ?.takeIf { it.length <= 220 }
+
+                if (cleanedOffer == null) {
+                    markOfferCleanFailed(coupon, "Qwen did not return a valid cleaned offer.")
+                    return@launch
+                }
+
+                val latest = repository.getCouponById(coupon.id) ?: coupon
+                val updated = latest.copy(
+                    description = cleanedOffer,
+                    normalizedDescription = CouponDedupUtils.normalizeDescription(cleanedOffer),
+                    cleanupStatus = Coupon.CleanupStatus.CLEANED,
+                    cleanupStartedAt = latest.cleanupStartedAt,
+                    cleanupFinishedAt = Date(),
+                    cleanupError = null,
+                    lastCleanedBy = "Qwen offer cleaner",
+                    extractionRunPath = JSONObject()
+                        .put("stage", "offer_clean")
+                        .put("offer", "QWEN_TEXT")
+                        .put("protected_fields", "UNCHANGED")
+                        .toString(),
+                    extractionSource = Coupon.ExtractionSource.QWEN_CLEANED,
+                    updatedAt = Date()
+                )
+                repository.updateCoupon(updated)
+            } catch (error: Throwable) {
+                Log.e(TAG, "Offer clean failed", error)
+                markOfferCleanFailed(coupon, error.message ?: "Qwen offer clean failed.")
+            }
+        }
+    }
+
+    private suspend fun markOfferCleanFailed(coupon: Coupon, message: String) {
+        val latest = repository.getCouponById(coupon.id) ?: coupon
+        repository.updateCoupon(
+            latest.copy(
+                cleanupStatus = Coupon.CleanupStatus.FAILED,
+                cleanupError = message,
+                cleanupFinishedAt = Date(),
+                updatedAt = Date()
+            )
+        )
+    }
+
+    private fun buildOfferCleanerPrompt(coupon: Coupon): String {
+        val offerText = coupon.description.trim()
+        return """
+            You clean coupon offer text only.
+            Return one JSON object matching the app coupon schema:
+            {"storeName":"unknown","description":"...","redeemCode":"unknown","expiryDate":"unknown","storeNameSource":"unknown","storeNameEvidence":[],"needsAttention":false}
+
+            Rules:
+            - Put the cleaned offer sentence only in description.
+            - Set storeName, redeemCode, expiryDate, and storeNameSource to "unknown".
+            - Set storeNameEvidence to [].
+            - Set needsAttention to false.
+            - Rewrite only the offer sentence below for readability.
+            - Do not invent data.
+            - Do not change or output the app name: ${coupon.storeName}
+            - Do not change or output the coupon code: ${coupon.redeemCode ?: "null"}
+            - Do not change or output the expiry date.
+            - Do not add cashback, discount, terms, dates, or codes unless already present in the offer text.
+            - Keep the cleaned offer concise.
+
+            Offer text:
+            $offerText
+        """.trimIndent()
+    }
+
+    private fun extractOfferJson(rawResponse: String?): String? {
+        if (rawResponse.isNullOrBlank()) return null
+        val trimmed = rawResponse.trim()
+        val jsonText = if (trimmed.startsWith("{")) {
+            trimmed
+        } else {
+            val start = trimmed.indexOf('{')
+            val end = trimmed.lastIndexOf('}')
+            if (start >= 0 && end > start) trimmed.substring(start, end + 1) else return null
+        }
+        return runCatching {
+            val json = JSONObject(jsonText)
+            json.optString("offer").ifBlank {
+                json.optString("description")
+            }.trim()
+        }.getOrNull()
     }
 
     fun deleteCoupon() {

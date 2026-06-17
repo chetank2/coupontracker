@@ -22,6 +22,11 @@
 -keep class com.google.mlkit.** { *; }
 -keep class com.google.android.gms.vision.** { *; }
 
+# Keep MediaPipe GenAI classes used via reflection for Gemma vision/text.
+-keep class com.google.mediapipe.tasks.genai.llminference.** { *; }
+-keep class com.google.mediapipe.framework.image.** { *; }
+-dontwarn com.google.mediapipe.**
+
 # Keep Gson classes
 -keep class com.google.gson.** { *; }
 -keepattributes Signature

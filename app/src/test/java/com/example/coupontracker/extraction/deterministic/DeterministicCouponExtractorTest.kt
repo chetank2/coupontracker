@@ -5,6 +5,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
 
 class DeterministicCouponExtractorTest {
 
@@ -51,5 +53,27 @@ class DeterministicCouponExtractorTest {
 
         assertNotNull(result.offer)
         assertEquals("Upto 80% Off", result.offer)
+    }
+
+    @Test
+    fun `relative expiry uses capture timestamp as base date`() {
+        val captureTimestamp = LocalDate.of(2026, 6, 17)
+            .atStartOfDay(ZoneId.systemDefault())
+            .toInstant()
+            .let { java.util.Date.from(it) }
+        val text = """
+            You won ₹16,500 off on Toothsi aligners
+            code: CREDJACKAPR252C1KQC
+            EXPIRES IN 29 DAYS
+        """.trimIndent()
+
+        val result = extractor.extract(
+            rawText = text,
+            mode = CouponRegionizer.RegionMode.DEFAULT,
+            captureTimestamp = captureTimestamp
+        )
+
+        assertEquals("EXPIRES IN 29 DAYS", result.expiryText)
+        assertEquals(LocalDate.of(2026, 7, 16), result.expiryDate)
     }
 }

@@ -41,6 +41,30 @@ interface CouponDao {
     @Query("DELETE FROM coupons")
     suspend fun deleteAllCoupons()
 
+    @Query(
+        """
+        UPDATE coupons
+        SET
+            rawOcrText = NULL,
+            cleanupError = NULL,
+            lastCleanedBy = NULL,
+            extractionRunPath = NULL,
+            extractionSource = NULL,
+            extractionStage = NULL,
+            extractionTimestamp = NULL,
+            extractionQualityScore = NULL,
+            extractionConfidenceBreakdown = '{}',
+            cleanupStatus = 'NONE',
+            cleanupStartedAt = NULL,
+            cleanupFinishedAt = NULL,
+            ocrConfidence = NULL,
+            needsAttention = 0,
+            storeNameSource = NULL,
+            storeNameEvidence = '[]'
+        """
+    )
+    suspend fun clearAllExtractionMetadata()
+
     @Transaction
     suspend fun replaceAllCoupons(coupons: List<Coupon>): List<Long> {
         deleteAllCoupons()

@@ -4,6 +4,7 @@ import com.example.coupontracker.extraction.region.CouponRegionizer.RegionMode
 import com.example.coupontracker.util.IndianDateParser
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.Date
 import java.util.Locale
 
 /**
@@ -29,22 +30,6 @@ class DeterministicCouponExtractor(
             get() = !offer.isNullOrBlank() && !storeCandidate.isNullOrBlank()
 
         fun requiresFallback(): Boolean = !hasCriticalFields
-
-        fun withFallbackCoupon(coupon: com.example.coupontracker.data.model.Coupon?): Result {
-            if (coupon == null) return this
-            val fallbackOffer = offer ?: coupon.description.takeIf { it.isNotBlank() }
-            val fallbackStore = storeCandidate ?: coupon.storeName.takeIf { it.isNotBlank() }
-            val fallbackCode = code ?: coupon.redeemCode?.takeIf { it.isNotBlank() }
-            val fallbackExpiryDate = expiryDate ?: coupon.expiryDate?.toInstant()?.atZone(ZoneId.systemDefault())?.toLocalDate()
-            val fallbackExpiryText = expiryText ?: coupon.expiryDate?.let { coupon.expiryDate.toString() }
-            return copy(
-                offer = fallbackOffer,
-                storeCandidate = fallbackStore,
-                code = fallbackCode,
-                expiryDate = fallbackExpiryDate,
-                expiryText = fallbackExpiryText
-            )
-        }
     }
 
     private val offerPatterns = listOf(
@@ -56,12 +41,18 @@ class DeterministicCouponExtractor(
 
     private val codePattern = Regex("""(?=\b[A-Z0-9-]{6,}\b)(?=.*[A-Z])(?=.*\d)[A-Z0-9-]+""")
     private val expiryPattern = Regex("""(?i)(?:expires|valid\s*(?:till|until|by)|ends\s*on)\s*[:\-]?\s*(\d{1,2}\s*[A-Za-z]{3,9}\s*\d{4})""")
+    private val relativeExpiryPattern = Regex("""(?i)\bexpires?\s+in\s+(\d+)\s+days?\b""")
     private val codeStoplist = setOf("ONTIME", "NOW", "JOIN", "REDEEM")
 
-    fun extract(rawText: String, mode: RegionMode): Result {
+    fun extract(rawText: String, mode: RegionMode, captureTimestamp: Date? = null): Result {
         val normalized = normalizeText(rawText, mode)
         val flat = normalized.replace("\n", " ")
         val upperFlat = flat.uppercase(Locale.ROOT)
+        val baseDate = captureTimestamp
+            ?.toInstant()
+            ?.atZone(ZoneId.systemDefault())
+            ?.toLocalDate()
+            ?: LocalDate.now()
 
         val storeCandidate = storeCanon.findInText(flat) ?: storeCanon.findInText(rawText)
         val offerMatch = offerPatterns.firstOrNull { pattern -> pattern.find(flat) != null }
@@ -72,8 +63,15 @@ class DeterministicCouponExtractor(
             .firstOrNull { value -> value.uppercase(Locale.ROOT) !in codeStoplist }
         val expiryMatch = expiryPattern.find(flat)
         val expiryRaw = expiryMatch?.groupValues?.getOrNull(1)
-        val expiryDate = expiryRaw?.let { raw ->
-            IndianDateParser.parseExpiryIST(raw).date
+        val relativeExpiryMatch = relativeExpiryPattern.find(flat)
+        val relativeExpiryText = relativeExpiryMatch?.value
+        val expiryDate = when {
+            expiryRaw != null -> IndianDateParser.parseExpiryIST(expiryRaw, baseDate).date
+            relativeExpiryMatch != null -> {
+                val days = relativeExpiryMatch.groupValues.getOrNull(1)?.toLongOrNull()
+                days?.let { baseDate.plusDays(it) }
+            }
+            else -> null
         }
 
         return Result(
@@ -82,7 +80,7 @@ class DeterministicCouponExtractor(
             offer = offerText?.let { normalizeOffer(it) },
             storeCandidate = storeCandidate,
             code = codeCandidate,
-            expiryText = expiryRaw,
+            expiryText = expiryRaw ?: relativeExpiryText,
             expiryDate = expiryDate,
             offerMatched = offerMatch != null,
             codeMatched = codeCandidate != null

@@ -41,7 +41,7 @@ import androidx.navigation.NavController
 import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.viewmodel.UnifiedUploadViewModel
-import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.extraction.rules.CouponInfo
 
 /**
  * Screen for unified upload functionality (single image, multiple images, PDFs)

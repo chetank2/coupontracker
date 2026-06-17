@@ -111,9 +111,8 @@ class UniversalExtractionService @Inject constructor(
             )
         } catch (e: Exception) {
             Log.e(TAG, "Universal extraction failed", e)
-            val fallbackCoupon = createFallbackCoupon(cleanedOcr, contextWithText)
             UniversalExtractionResult(
-                coupon = fallbackCoupon,
+                coupon = createReviewOnlyCoupon(cleanedOcr),
                 confidence = 0.0f,
                 extractedFields = emptyMap(),
                 allCandidates = candidateBuckets.mapValues { it.value.toList() },
@@ -292,21 +291,6 @@ class UniversalExtractionService @Inject constructor(
                     context = mapOf("pass" to "context_default")
                 )
                 defaults[FieldType.DESCRIPTION] = listOf(scoreCandidate(FieldType.DESCRIPTION, candidate))
-            }
-        }
-
-        if (accumulator[FieldType.STORE_NAME].isNullOrEmpty()) {
-            val fallbackStore = extractStoreFromContext(cleanedOcr, context)
-                ?: context.brandHint
-                ?: cleanedOcr.lines().firstOrNull()?.takeIf { it.isNotBlank() }?.take(40)
-            fallbackStore?.let { store ->
-                val candidate = ExtractionCandidate(
-                    text = store.trim(),
-                    confidence = 0.36f,
-                    source = ExtractionSource.CONTEXT_CLUES,
-                    context = mapOf("pass" to "context_default_store")
-                )
-                defaults[FieldType.STORE_NAME] = listOf(scoreCandidate(FieldType.STORE_NAME, candidate))
             }
         }
 
@@ -679,15 +663,12 @@ class UniversalExtractionService @Inject constructor(
         return GENERIC_DESCRIPTION_PHRASES.any { normalized.contains(it) }
     }
 
-    private fun createFallbackCoupon(cleanedOcr: String, context: ExtractionContext): Coupon {
+    private fun createReviewOnlyCoupon(cleanedOcr: String): Coupon {
         val description = extractMeaningfulSnippet(cleanedOcr)
             ?: cleanedOcr.take(160).ifBlank { "Review required" }
-        val store = extractStoreFromContext(cleanedOcr, context)
-            ?: context.brandHint
-            ?: "Needs review"
 
         return Coupon(
-            storeName = store,
+            storeName = Coupon.Defaults.UNKNOWN_STORE,
             description = description,
             redeemCode = null,
             imageUri = null,

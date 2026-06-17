@@ -29,7 +29,7 @@ import com.example.coupontracker.databinding.FragmentScannerBinding
 import com.example.coupontracker.ui.activity.MultiCouponSelectionActivity
 import com.example.coupontracker.ui.viewmodel.ScannerViewModel
 import com.example.coupontracker.ui.viewmodel.ScannerUiState
-import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.extraction.rules.CouponInfo
 import com.google.android.material.snackbar.Snackbar
 import dagger.hilt.android.AndroidEntryPoint
 import java.io.File

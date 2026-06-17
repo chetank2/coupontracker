@@ -19,6 +19,7 @@ import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugScorer
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
+import com.example.coupontracker.extraction.rules.TextExtractor
 import com.example.coupontracker.universal.ExtractionContext
 import com.example.coupontracker.universal.ExtractionCandidate
 import com.example.coupontracker.universal.UniversalExtractionService
@@ -32,9 +33,12 @@ import com.example.coupontracker.ml.CouponInstance
 import com.example.coupontracker.util.AnalyticsTracker
 import com.example.coupontracker.util.BitmapManager
 import com.example.coupontracker.util.CouponFixContext
-import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.extraction.rules.CouponInfo
+import com.example.coupontracker.util.CouponExtractionConfidenceScorer
+import com.example.coupontracker.util.CouponCardOcrNormalizer
 import com.example.coupontracker.util.CouponPostProcessor
 import com.example.coupontracker.util.ExtractResult
+import com.example.coupontracker.util.ExtractionRecommendation
 import com.example.coupontracker.util.ExtractionConfig
 import com.example.coupontracker.util.ExtractionLogBuffer
 import com.example.coupontracker.util.ExtractionStage
@@ -42,6 +46,7 @@ import com.example.coupontracker.util.ExtractionTelemetryService
 import com.example.coupontracker.feedback.ValidatorFeedbackRecorder
 import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.util.IndianCurrencyParser
+import com.example.coupontracker.util.ImageMetadataExtractor
 import com.example.coupontracker.util.LlmProgressStage
 import com.example.coupontracker.util.MultiCouponDetectorState
 import com.example.coupontracker.util.MultiEngineOCR
@@ -49,6 +54,7 @@ import com.example.coupontracker.util.RunPath
 import com.example.coupontracker.util.UriPersistenceManager
 import com.example.coupontracker.util.LlmProgressUpdate
 import com.example.coupontracker.util.normalizeExpiryDate
+import com.example.coupontracker.worker.VerifyCouponWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +63,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -90,11 +98,16 @@ class ScannerViewModel @Inject constructor(
     private val detectorInitErrorMessage: String? = detectorInitializationResult.errorMessage
     private val uriPersistenceManager = UriPersistenceManager(context)
     private val fieldHeuristics: GenericFieldHeuristics = GenericFieldHeuristics
+    private val textExtractor = TextExtractor()
     private val manualOverrides = mutableMapOf<String, CouponInstance>()
     private var pendingPreview: PendingPreview? = null
 
     // Store extraction results for feedback learning
     private var lastExtractionResult: Pair<com.example.coupontracker.universal.UniversalExtractionResult, String>? = null
+
+    init {
+        multiEngineOCR.setNetworkAvailability(true)
+    }
 
     companion object {
         private const val TAG = "ScannerViewModel"
@@ -324,19 +337,14 @@ class ScannerViewModel @Inject constructor(
         Log.d(TAG, "OCR_FIRST: Running multi-engine OCR for comprehensive text extraction")
         
         try {
+            val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
             val persistedUri = uriPersistenceManager.persistUri(imageUri)
             val finalImageUri = resolveImageUri(persistedUri, imageUri)
-            val previousStore = lastExtractionResult
-                ?.first
-                ?.coupon
-                ?.storeName
-                ?.takeIf { it.isNotBlank() && !fieldHeuristics.isGenericOrMissing(it) }
 
             val extraction = ocrFirstCouponExtractor.extract(
                 bitmap = bitmap,
                 imageUri = finalImageUri,
-                captureTimestamp = null,
-                previousStoreName = previousStore
+                captureTimestamp = captureTimestamp
             )
             val finalCoupon = extraction.coupon
             val processingTime = System.currentTimeMillis() - startTime
@@ -431,7 +439,7 @@ class ScannerViewModel @Inject constructor(
                 extractionSource = Coupon.ExtractionSource.OCR_FAST
             ),
             ocrText = ocrText,
-            captureTimestamp = null
+            captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
         )
         val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
 
@@ -505,7 +513,8 @@ class ScannerViewModel @Inject constructor(
                         processSingleCoupon(
                             couponInstance = couponInstance,
                             imageUri = imageUri?.toString(),
-                            persistImmediately = persistImmediately
+                            persistImmediately = persistImmediately,
+                            captureTimestamp = imageUri?.let { ImageMetadataExtractor.extractCaptureTimestamp(context, it) }
                         )
                     }
                     else -> {
@@ -527,24 +536,27 @@ class ScannerViewModel @Inject constructor(
     private suspend fun processSingleCoupon(
         couponInstance: CouponInstance,
         imageUri: String?,
-        persistImmediately: Boolean
+        persistImmediately: Boolean,
+        captureTimestamp: Date? = extractCaptureTimestamp(imageUri)
     ) {
         try {
             Log.d(TAG, "Processing single coupon with ${couponInstance.fields.size} detected fields")
 
             // Extract text from detected fields using OCR
-            val extractionResult = extractTextFromFields(couponInstance)
+            val extractionResult = extractTextFromFields(couponInstance, captureTimestamp)
             val debugSnapshot = extractionResult.debugSnapshot
+            val scopedImageUri = persistCouponCrop(couponInstance.cropBitmap) ?: imageUri
 
             // Create coupon from extracted information
             val coupon = finalizeCoupon(
                 base = createCouponFromInstance(
                     couponInstance = couponInstance,
                     extractionResult = extractionResult,
-                    imageUri = imageUri
+                    imageUri = scopedImageUri,
+                    captureTimestamp = captureTimestamp
                 ),
                 ocrText = extractionResult.fullOcrText,
-                captureTimestamp = null
+                captureTimestamp = captureTimestamp
             )
 
             analyticsTracker.trackEvent(
@@ -635,9 +647,9 @@ class ScannerViewModel @Inject constructor(
                 analyticsResult = "created"
             }
         } else {
-            val fallbackCoupon = coupon.copy(id = savedCouponId)
-            _uiState.value = ScannerUiState.Saved(fallbackCoupon)
-            Log.d(TAG, "Coupon saved (fallback) with ID: $savedCouponId")
+            val savedCouponState = coupon.copy(id = savedCouponId)
+            _uiState.value = ScannerUiState.Saved(savedCouponState)
+            Log.d(TAG, "Coupon saved with ID: $savedCouponId")
         }
 
         analyticsTracker.trackEvent(
@@ -649,16 +661,42 @@ class ScannerViewModel @Inject constructor(
             )
         )
 
+        if (persistedFlag) {
+            maybeQueueAutomaticVerification(savedCoupon ?: coupon.copy(id = savedCouponId))
+        }
+
         return savedCouponId
     }
 
+    private suspend fun maybeQueueAutomaticVerification(coupon: Coupon) {
+        val assessment = CouponExtractionConfidenceScorer.score(coupon, coupon.rawOcrText)
+        if (assessment.recommendation != ExtractionRecommendation.VERIFY_WITH_VISION) {
+            return
+        }
+        if (coupon.cleanupStatus == Coupon.CleanupStatus.PENDING ||
+            coupon.cleanupStatus == Coupon.CleanupStatus.RUNNING ||
+            coupon.cleanupStatus == Coupon.CleanupStatus.CLEANED
+        ) {
+            return
+        }
+
+        couponRepository.updateCoupon(
+            coupon.copy(
+                cleanupStatus = Coupon.CleanupStatus.PENDING,
+                cleanupError = null,
+                cleanupStartedAt = null,
+                cleanupFinishedAt = null,
+                updatedAt = Date()
+            )
+        )
+        VerifyCouponWorker.enqueueAutomaticVerification(context, coupon.id)
+    }
+
     private fun shouldQueueCleanup(coupon: Coupon, confidence: Float): Boolean {
+        val assessment = CouponExtractionConfidenceScorer.score(coupon, coupon.rawOcrText)
         return confidence < OCR_CONFIDENCE_QUEUE_CLEANUP ||
-            coupon.needsAttention ||
-            coupon.storeName == Coupon.Defaults.UNKNOWN_STORE ||
-            coupon.redeemCode.isNullOrBlank() ||
-            coupon.expiryDate == null ||
-            !GenericFieldHeuristics.isMeaningfulDescription(coupon.description)
+            assessment.recommendation == ExtractionRecommendation.VERIFY_WITH_VISION ||
+            assessment.recommendation == ExtractionRecommendation.MANUAL_REVIEW
     }
 
     fun confirmPreviewSave(updatedCoupon: Coupon? = null) {
@@ -687,6 +725,8 @@ class ScannerViewModel @Inject constructor(
         pendingPreview = null
     }
 
+    fun getPendingPreviewCoupon(): Coupon? = pendingPreview?.coupon
+
     @VisibleForTesting
     internal fun setPendingPreviewForTest(coupon: Coupon, llmStatus: LlmProgress) {
         pendingPreview = PendingPreview(
@@ -705,12 +745,14 @@ class ScannerViewModel @Inject constructor(
             try {
                 _uiState.value = ScannerUiState.Scanning()
                 Log.d(TAG, "Processing selected coupon: ${selectedInstance.id}")
+                val captureTimestamp = extractCaptureTimestamp(originalImageUri)
 
                 // Process the selected coupon
                 processSingleCoupon(
                     couponInstance = selectedInstance,
                     imageUri = originalImageUri,
-                    persistImmediately = true
+                    persistImmediately = true,
+                    captureTimestamp = captureTimestamp
                 )
 
             } catch (e: Exception) {
@@ -761,6 +803,28 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    private suspend fun persistCouponCrop(bitmap: Bitmap): String? = withContext(Dispatchers.IO) {
+        runCatching {
+            val dir = File(context.filesDir, "coupon_crops").apply { mkdirs() }
+            val file = File(dir, "coupon_crop_${System.currentTimeMillis()}_${bitmap.width}x${bitmap.height}.jpg")
+            FileOutputStream(file).use { output ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)
+            }
+            Uri.fromFile(file).toString()
+        }.onFailure { error ->
+            Log.w(TAG, "Failed to persist coupon crop", error)
+        }.getOrNull()
+    }
+
+    private fun extractCaptureTimestamp(imageUri: String?): Date? {
+        if (imageUri.isNullOrBlank()) return null
+        return runCatching {
+            ImageMetadataExtractor.extractCaptureTimestamp(context, Uri.parse(imageUri))
+        }.onFailure { error ->
+            Log.w(TAG, "Failed to extract capture timestamp for $imageUri", error)
+        }.getOrNull()
+    }
+
     private fun getManualAdjustedInstances(
         instances: List<CouponInstance>,
         includeManualExtras: Boolean
@@ -798,14 +862,16 @@ class ScannerViewModel @Inject constructor(
         originalImageUri: String?
     ) {
         val processedResults = mutableListOf<CouponProcessingSummary>()
+        val captureTimestamp = extractCaptureTimestamp(originalImageUri)
 
         for ((index, instance) in couponInstances.withIndex()) {
             try {
-            val extractionResult = extractTextFromFields(instance)
+            val extractionResult = extractTextFromFields(instance, captureTimestamp)
+            val scopedImageUri = persistCouponCrop(instance.cropBitmap) ?: originalImageUri
             val coupon = finalizeCoupon(
-                base = createCouponFromInstance(instance, extractionResult, originalImageUri),
+                base = createCouponFromInstance(instance, extractionResult, scopedImageUri, captureTimestamp),
                 ocrText = extractionResult.fullOcrText,
-                captureTimestamp = null
+                captureTimestamp = captureTimestamp
             )
             val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
 
@@ -872,7 +938,10 @@ class ScannerViewModel @Inject constructor(
     /**
      * Extract text from detected fields using OCR with run-path telemetry
      */
-    private suspend fun extractTextFromFields(couponInstance: CouponInstance): FieldExtractionResult {
+    private suspend fun extractTextFromFields(
+        couponInstance: CouponInstance,
+        captureTimestamp: Date?
+    ): FieldExtractionResult {
         return withContext(Dispatchers.IO) {
             val startTime = System.currentTimeMillis()
             val extractedInfo = mutableMapOf<String, String>()
@@ -889,7 +958,7 @@ class ScannerViewModel @Inject constructor(
 
             try {
                 triedStages.add("OCR")
-                val fallbackResult = runFallbackOcr(couponInstance.cropBitmap)
+                val fallbackResult = runFallbackOcr(couponInstance.cropBitmap, captureTimestamp)
                 extractedInfo.putAll(fallbackResult.fields)
                 fullOcrText = fallbackResult.text
                 qualityScore = if (fallbackResult.fields.isNotEmpty()) 55 else 0
@@ -986,9 +1055,26 @@ class ScannerViewModel @Inject constructor(
         return storeWeak || descriptionWeak || duplicateStoreAndCode || (codeMissing && amountWeak)
     }
 
-    private suspend fun runFallbackOcr(bitmap: Bitmap): FallbackOcrResult {
+    private suspend fun runFallbackOcr(bitmap: Bitmap, captureTimestamp: Date?): FallbackOcrResult {
+        val boxedText = runCatching {
+            val spans = ocrEngine.recognizeWithBoxes(bitmap)
+            CouponCardOcrNormalizer.normalize(bitmap.width, bitmap.height, spans)
+        }.getOrNull()
+
+        if (!boxedText.isNullOrBlank()) {
+            val couponInfo = textExtractor.extractCouponInfoSync(boxedText, captureTimestamp)
+            val fields = mapCouponInfoToFields(couponInfo)
+            if (fields.isNotEmpty()) {
+                return FallbackOcrResult(fields, boxedText)
+            }
+        }
+
         return when (val result = multiEngineOCR.processImage(bitmap)) {
-            is MultiEngineOCR.OCRResult.Success -> FallbackOcrResult(result.extractedInfo, result.text)
+            is MultiEngineOCR.OCRResult.Success -> {
+                val couponInfo = textExtractor.extractCouponInfoSync(result.text, captureTimestamp)
+                val fields = mapCouponInfoToFields(couponInfo).ifEmpty { result.extractedInfo }
+                FallbackOcrResult(fields, result.text)
+            }
             is MultiEngineOCR.OCRResult.Error -> {
                 Log.w(TAG, "Fallback OCR failed: ${result.message}")
                 FallbackOcrResult(emptyMap(), null)
@@ -1000,58 +1086,6 @@ class ScannerViewModel @Inject constructor(
         val fields: Map<String, String>,
         val text: String?
     )
-
-    @VisibleForTesting
-    internal fun mergeValidatedFields(primary: MutableMap<String, String>, fallback: Map<String, String>) {
-        val fallbackCode = fallback["code"]?.trim()?.takeIf { it.isNotEmpty() }
-
-        fallback.forEach { (key, value) ->
-            val sanitized = value.trim()
-            if (sanitized.isEmpty()) {
-                return@forEach
-            }
-
-            val existing = primary[key]
-            val extractedCode = primary["code"]
-            if (shouldReplaceExisting(existing, sanitized, key, extractedCode, fallbackCode)) {
-                primary[key] = sanitized
-            }
-        }
-    }
-
-    @VisibleForTesting
-    internal fun shouldReplaceExisting(
-        existing: String?,
-        candidate: String,
-        key: String,
-        extractedCode: String?,
-        fallbackCode: String?
-    ): Boolean {
-        if (candidate.isBlank()) {
-            return false
-        }
-
-        if (key == "storeName") {
-            if (fieldHeuristics.areDuplicateFields(candidate, extractedCode) ||
-                fieldHeuristics.areDuplicateFields(candidate, fallbackCode)
-            ) {
-                return false
-            }
-        }
-
-        if (existing.isNullOrBlank()) {
-            return true
-        }
-
-        return when (key) {
-            "amount" -> !GenericFieldHeuristics.hasMeaningfulCashback(existing)
-            "minOrderAmount" -> {
-                val currentValue = extractNumericValue(existing)
-                GenericFieldHeuristics.isZeroOrMeaningless(currentValue)
-            }
-            else -> fieldHeuristics.isGenericOrMissing(existing)
-        }
-    }
 
     private fun extractNumericValue(value: String?): Double? {
         return IndianCurrencyParser.parseAmount(value)
@@ -1096,12 +1130,14 @@ class ScannerViewModel @Inject constructor(
     private fun createCouponFromInstance(
         couponInstance: CouponInstance,
         extractionResult: FieldExtractionResult,
-        imageUri: String?
+        imageUri: String?,
+        captureTimestamp: Date? = null
     ): Coupon {
         val extractedInfo = extractionResult.fields
 
         // Parse expiry date string to Date if available
-        val expiryDate = parseExpiryDate(extractedInfo["expiryDate"])
+        val expiryDate = DateParser.parseDate(extractedInfo["expiryDate"], captureTimestamp)
+            ?: parseExpiryDate(extractedInfo["expiryDate"])
 
         // Normalize cashback detail if present
         val cashbackDetail = extractedInfo["amount"]?.let { raw ->
@@ -1646,11 +1682,11 @@ class ScannerViewModel @Inject constructor(
             .lowercase()
         
         return when {
-            text.contains("food") || text.contains("restaurant") || text.contains("zomato") || text.contains("swiggy") -> "Food"
-            text.contains("fashion") || text.contains("clothing") || text.contains("myntra") -> "Fashion"
-            text.contains("grocery") || text.contains("bigbasket") || text.contains("grofers") -> "Grocery"
+            text.contains("food") || text.contains("restaurant") || text.contains("dining") || text.contains("meal") -> "Food"
+            text.contains("fashion") || text.contains("clothing") || text.contains("apparel") || text.contains("wear") -> "Fashion"
+            text.contains("grocery") || text.contains("groceries") || text.contains("supermarket") -> "Grocery"
             text.contains("travel") || text.contains("booking") || text.contains("hotel") -> "Travel"
-            text.contains("electronics") || text.contains("amazon") || text.contains("flipkart") -> "Electronics"
+            text.contains("electronics") || text.contains("mobile") || text.contains("appliance") -> "Electronics"
             else -> "Other"
         }
     }
@@ -1781,8 +1817,16 @@ class ScannerViewModel @Inject constructor(
                 captureTimestamp = captureTimestamp
             )
         )
-        val normalizedExpiry = normalizeExpiryDate(refined.expiryDate, captureTimestamp)
-        return refined.copy(expiryDate = normalizedExpiry)
+        val normalized = refined.copy(expiryDate = normalizeExpiryDate(refined.expiryDate, captureTimestamp))
+        val assessment = CouponExtractionConfidenceScorer.score(normalized, ocrText)
+        return normalized.copy(
+            extractionQualityScore = assessment.score,
+            extractionConfidenceBreakdown = normalized.extractionConfidenceBreakdown.ifEmpty {
+                assessment.fieldConfidences
+            },
+            needsAttention = normalized.needsAttention ||
+                assessment.recommendation != ExtractionRecommendation.SAVE_DIRECTLY
+        )
     }
 }
 

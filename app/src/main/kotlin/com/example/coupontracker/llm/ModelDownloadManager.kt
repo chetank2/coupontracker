@@ -48,6 +48,13 @@ class ModelDownloadManager(
         private const val QWEN25_VERSION = "2.5-1.5b-q4-instruct"
         private const val QWEN25_TOKENIZER_FALLBACK_BASE_URL =
             "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct/resolve/main"
+
+        // ===== GEMMA VISION MODEL =====
+        private const val GEMMA_VISION_BASE_URL =
+            "https://huggingface.co/google/gemma-3n-E2B-it-litert-preview/resolve/main"
+        private const val GEMMA_VISION_REMOTE_FILE = ModelPaths.GEMMA_VISION_REMOTE_MODEL_FILE
+        private const val GEMMA_VISION_VERSION = "gemma-3n-e2b-it-int4-litert-preview"
+        private const val GEMMA_VISION_MIN_SIZE = ModelPaths.GEMMA_VISION_MIN_SIZE_BYTES
         
         // ===== QWEN2 MODEL (LEGACY) =====
         private const val QWEN2_BASE_URL = "https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF/resolve/main"
@@ -247,6 +254,14 @@ class ModelDownloadManager(
             ?.trimEnd('/')
 
         return (override?.takeIf { it.isNotEmpty() } ?: QWEN25_BASE_URL).trimEnd('/')
+    }
+
+    private fun resolveGemmaVisionBaseUrl(): String {
+        val override = securePrefs.getGemmaVisionModelBaseUrlOverride()
+            ?.trim()
+            ?.trimEnd('/')
+
+        return (override?.takeIf { it.isNotEmpty() } ?: GEMMA_VISION_BASE_URL).trimEnd('/')
     }
     
     /**
@@ -627,6 +642,92 @@ class ModelDownloadManager(
             
         } catch (e: Exception) {
             Log.e(TAG, "Qwen2.5 model download failed", e)
+            DownloadResult.Error(resolveErrorMessage(e))
+        }
+    }
+
+    suspend fun downloadGemmaVisionModel(
+        progressCallback: (DownloadProgress) -> Unit
+    ): DownloadResult = withContext(Dispatchers.IO) {
+        try {
+            Log.d(TAG, "Starting Gemma Vision model download...")
+            if (!shouldProceedWithDownload()) {
+                val message = if (securePrefs.getLlmDownloadWifiOnly()) {
+                    "WiFi connection required for download"
+                } else {
+                    "No network connection available"
+                }
+                return@withContext DownloadResult.Error(message)
+            }
+
+            val gemmaDir = ModelPaths.gemmaDir(context)
+            val stagingDir = File(context.filesDir, "gemma.download.staging")
+            if (stagingDir.exists()) stagingDir.deleteRecursively()
+            stagingDir.mkdirs()
+
+            val requiredSpace = 4_000_000_000L
+            val availableSpace = context.filesDir.usableSpace
+            if (availableSpace < requiredSpace) {
+                stagingDir.deleteRecursively()
+                return@withContext DownloadResult.Error(
+                    "Insufficient storage: need ${formatBytes(requiredSpace)}, have ${formatBytes(availableSpace)}"
+                )
+            }
+
+            val downloadedFile = File(stagingDir, ModelPaths.GEMMA_VISION_MODEL_FILE)
+            progressCallback(DownloadProgress(0, "Downloading Gemma Vision model (~3.1 GB)..."))
+            val result = downloadFile(
+                url = "${resolveGemmaVisionBaseUrl()}/$GEMMA_VISION_REMOTE_FILE",
+                outputFile = downloadedFile,
+                progressCallback = { progress ->
+                    progressCallback(
+                        DownloadProgress(
+                            progress.progressPercent,
+                            "Gemma Vision... ${progress.statusMessage}"
+                        )
+                    )
+                }
+            )
+
+            result.getOrElse { error ->
+                downloadedFile.delete()
+                stagingDir.deleteRecursively()
+                val resolved = resolveErrorMessage(error)
+                val accessMessage = if (resolved.contains("HTTP 401") || resolved.contains("HTTP 403")) {
+                    "Gemma Vision download requires Hugging Face access to google/gemma-3n-E2B-it-litert-preview. Accept the Gemma license in Hugging Face, or import the downloaded .task file manually."
+                } else {
+                    "Gemma Vision download failed: $resolved"
+                }
+                return@withContext DownloadResult.Error(accessMessage)
+            }
+
+            progressCallback(DownloadProgress(99, "Verifying Gemma Vision..."))
+            if (downloadedFile.length() < GEMMA_VISION_MIN_SIZE) {
+                val size = downloadedFile.length()
+                downloadedFile.delete()
+                stagingDir.deleteRecursively()
+                return@withContext DownloadResult.Error(
+                    "Gemma Vision file is too small (${formatBytes(size)}). Download may be incomplete."
+                )
+            }
+
+            if (gemmaDir.exists()) gemmaDir.deleteRecursively()
+            gemmaDir.mkdirs()
+            downloadedFile.copyTo(File(gemmaDir, ModelPaths.GEMMA_VISION_MODEL_FILE), overwrite = true)
+            File(gemmaDir, ".vision_verified").writeText(
+                buildString {
+                    appendLine("Gemma Vision verified: $GEMMA_VISION_VERSION")
+                    appendLine("Timestamp: ${System.currentTimeMillis()}")
+                    appendLine("Source: google/gemma-3n-E2B-it-litert-preview/$GEMMA_VISION_REMOTE_FILE")
+                }
+            )
+            stagingDir.deleteRecursively()
+
+            val sizeMB = File(gemmaDir, ModelPaths.GEMMA_VISION_MODEL_FILE).length() / (1024f * 1024f)
+            progressCallback(DownloadProgress(100, "Gemma Vision download complete!"))
+            DownloadResult.Success(sizeMB, GEMMA_VISION_VERSION)
+        } catch (e: Exception) {
+            Log.e(TAG, "Gemma Vision model download failed", e)
             DownloadResult.Error(resolveErrorMessage(e))
         }
     }

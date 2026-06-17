@@ -3,7 +3,7 @@ package com.example.coupontracker.extraction.validation
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.util.GenericFieldHeuristics
-import com.example.coupontracker.util.TextExtractor
+import com.example.coupontracker.extraction.rules.TextExtractor
 import java.util.Date
 
 /**
@@ -104,7 +104,6 @@ internal class FieldValidationCoordinator(
             description = bundle.description,
             redeemCode = bundle.redeemCode,
             structuredCandidates = structuredStoreCandidates,
-            fallbackStore = fallbackInfo?.storeName?.takeUnless { GenericFieldHeuristics.isGenericOrMissing(it) },
             rawOcrText = rawOcrText
         )
         bundle = bundle.copy(storeName = storeResolution.value)

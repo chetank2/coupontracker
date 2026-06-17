@@ -10,7 +10,7 @@ import java.util.*
  * Field-level confidence scoring for extracted coupon data
  * Validates field values and assigns confidence scores based on:
  * - Format validation (regex patterns, length, character types)
- * - Dictionary matching (known brands, keywords)
+ * - Generic text-quality checks
  * - Semantic checks (future dates, reasonable amounts)
  */
 
@@ -76,26 +76,6 @@ class ConfidenceScorer {
             FieldType.DESCRIPTION
         )
         
-        // Known Indian brands/stores (top 100 popular brands)
-        private val KNOWN_BRANDS = setOf(
-            "amazon", "flipkart", "myntra", "ajio", "meesho", "swiggy", "zomato",
-            "phonepe", "paytm", "google pay", "gpay", "bhim", "nykaa", "bigbasket",
-            "grofers", "blinkit", "dunzo", "uber", "ola", "makemytrip", "goibibo",
-            "irctc", "bookmyshow", "netflix", "prime video", "hotstar", "zee5",
-            "sony liv", "jiocinema", "tata", "reliance", "boat", "noise", "realme",
-            "xiaomi", "samsung", "oppo", "vivo", "oneplus", "apple", "dell", "hp",
-            "lenovo", "asus", "decathlon", "nike", "adidas", "puma", "reebok",
-            "pantaloons", "westside", "lifestyle", "shoppers stop", "max", "reliance trends",
-            "dominos", "pizza hut", "kfc", "mcdonald's", "burger king", "subway",
-            "starbucks", "cafe coffee day", "ccd", "haldiram's", "bikanervala",
-            "tanishq", "malabar gold", "kalyan jewellers", "joyalukkas", "pg",
-            "titan", "fastrack", "sonata", "timex", "fossil", "casio", "skechers",
-            "crocs", "bata", "liberty", "red chief", "woodland", "lenskart",
-            "titan eye plus", "specsmakers", "kapiva", "himalaya", "dabur",
-            "patanjali", "mamaearth", "wow", "plum", "sugar", "lakme", "loreal",
-            "garnier", "maybelline", "colorbar", "tresemme", "dove", "ponds"
-        ).map { it.lowercase() }
-        
         // Valid currency symbols
         private val VALID_CURRENCIES = setOf("₹", "Rs", "Rs.", "INR", "$", "USD", "€", "EUR", "£", "GBP")
     }
@@ -117,7 +97,7 @@ class ConfidenceScorer {
             FieldType.STORE_NAME -> scoreStoreName(value, source)
             FieldType.COUPON_CODE -> scoreCouponCode(value, source)
             FieldType.AMOUNT -> scoreCashbackAmount(value, source)
-            FieldType.EXPIRY_DATE -> scoreExpiryDate(value, extractionContext, source)
+            FieldType.EXPIRY_DATE -> scoreExpiryDate(value, source)
             FieldType.DESCRIPTION -> scoreDescription(value, source)
             else -> FieldConfidence(field, value, 0.5f, source) // Default medium confidence
         }
@@ -136,13 +116,6 @@ class ConfidenceScorer {
             confidence -= 0.2f
         } else {
             confidence += 0.1f
-        }
-        
-        // Brand dictionary match (high confidence)
-        val normalizedValue = value.lowercase().trim()
-        if (KNOWN_BRANDS.any { normalizedValue.contains(it) }) {
-            notes.add("Matches known brand")
-            confidence += 0.4f
         }
         
         // Title case check (brands are usually title case)
@@ -293,7 +266,6 @@ class ConfidenceScorer {
      */
     private fun scoreExpiryDate(
         value: String,
-        context: ExtractionContext,
         source: ExtractionSource
     ): FieldConfidence {
         val notes = mutableListOf<String>()
@@ -452,4 +424,3 @@ class ConfidenceScorer {
         )
     }
 }
-

@@ -16,6 +16,7 @@ object RedeemCodeSanitizer {
         "USECODE",
         "USENOW",
         "TAPTOCOPY",
+        "TODAY",
         "NOW",
         "CLICK",
         "CLICKHERE"

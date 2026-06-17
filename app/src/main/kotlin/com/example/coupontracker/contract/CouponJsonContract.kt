@@ -72,8 +72,9 @@ object CouponJsonContract {
      * `validate()` separately.
      */
     fun enforce(jsonText: String): String {
+        val candidate = extractFirstJsonObject(jsonText)
         val obj = try {
-            JSONObject(jsonText)
+            JSONObject(candidate)
         } catch (e: JSONException) {
             return jsonText
         }
@@ -92,8 +93,9 @@ object CouponJsonContract {
      * when SchemaVersionFlag.isV2Enabled() is true; otherwise call `enforce`.
      */
     fun enforceWithV2(jsonText: String): String {
+        val candidate = extractFirstJsonObject(jsonText)
         val obj = try {
-            JSONObject(jsonText)
+            JSONObject(candidate)
         } catch (e: JSONException) {
             return jsonText
         }
@@ -105,5 +107,34 @@ object CouponJsonContract {
         }
         obj.remove("couponCode")
         return obj.toString()
+    }
+
+    internal fun extractFirstJsonObject(text: String): String {
+        val trimmed = text.trim()
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) return trimmed
+
+        var depth = 0
+        var start = -1
+        var inString = false
+        var escaped = false
+        trimmed.forEachIndexed { index, char ->
+            when {
+                escaped -> escaped = false
+                char == '\\' && inString -> escaped = true
+                char == '"' -> inString = !inString
+                inString -> Unit
+                char == '{' -> {
+                    if (depth == 0) start = index
+                    depth += 1
+                }
+                char == '}' && depth > 0 -> {
+                    depth -= 1
+                    if (depth == 0 && start >= 0) {
+                        return trimmed.substring(start, index + 1)
+                    }
+                }
+            }
+        }
+        return trimmed
     }
 }

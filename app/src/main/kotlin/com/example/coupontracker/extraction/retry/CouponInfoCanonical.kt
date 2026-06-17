@@ -1,7 +1,7 @@
 package com.example.coupontracker.extraction.retry
 
 import com.example.coupontracker.llm.CouponSchemaKeys
-import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.extraction.rules.CouponInfo
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat

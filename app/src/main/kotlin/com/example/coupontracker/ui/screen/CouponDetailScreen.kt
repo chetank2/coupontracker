@@ -97,10 +97,16 @@ fun CouponDetailScreen(
                         Icon(Icons.Default.Edit, contentDescription = "Edit coupon")
                     }
                     IconButton(
-                        onClick = { viewModel.cleanCoupon() },
+                        onClick = { viewModel.verifyCoupon() },
                         enabled = shareEnabled
                     ) {
-                        Icon(Icons.Default.AutoFixHigh, contentDescription = stringResource(R.string.content_clean_coupon))
+                        Icon(Icons.Default.CheckCircle, contentDescription = stringResource(R.string.content_clean_coupon))
+                    }
+                    IconButton(
+                        onClick = { viewModel.cleanOfferText() },
+                        enabled = shareEnabled
+                    ) {
+                        Icon(Icons.Default.AutoFixHigh, contentDescription = stringResource(R.string.content_clean_offer))
                     }
                     IconButton(onClick = {
                         coupon?.let { shareCoupon(context, it) }
@@ -133,7 +139,7 @@ fun CouponDetailScreen(
                         onTrackUsage = { viewModel.trackUsage() },
                         onSetReminderLeadTime = { minutes -> viewModel.setReminderLeadTime(minutes) },
                         onCancelReminder = { viewModel.cancelReminder() },
-                        onCleanCoupon = { viewModel.cleanCoupon() },
+                        onCleanCoupon = { viewModel.verifyCoupon() },
                         context = context,
                         debugSnapshot = debugSnapshot,
                         isDebugBuild = isDebugBuild
@@ -274,6 +280,22 @@ private fun CouponDetailContent(
             modifier = Modifier.fillMaxWidth()
         )
 
+        val discountText = remember(coupon.description) {
+            coupon.getCashbackDisplayText().takeIf { it.isNotBlank() }
+        }
+        val minimumOrderText = remember(coupon.minimumPurchase) {
+            coupon.minimumPurchase
+                ?.takeIf { it > 0.0 }
+                ?.let { amount -> "₹${amount.roundToInt()}" }
+        }
+        if (discountText != null || minimumOrderText != null) {
+            Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+            CouponStructuredFieldsCard(
+                discountText = discountText,
+                minimumOrderText = minimumOrderText
+            )
+        }
+
         Spacer(modifier = Modifier.height(BrandSpacing.Large))
 
         // Coupon code
@@ -369,6 +391,19 @@ private fun CouponDetailContent(
             }
         }
 
+        if (isDerivedRelativeExpiry(coupon.rawOcrText)) {
+            Spacer(modifier = Modifier.height(BrandSpacing.Small))
+            Text(
+                text = "Expiry derived from relative OCR text like \"expires in N days\".",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
+
+        CouponReviewSourceCard(coupon = coupon)
+
         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
         CouponActionButtons(
@@ -438,6 +473,115 @@ private fun CouponDetailContent(
         }
 
         Spacer(modifier = Modifier.height(BrandSpacing.Large))
+    }
+}
+
+@Composable
+private fun CouponStructuredFieldsCard(
+    discountText: String?,
+    minimumOrderText: String?,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(
+            modifier = Modifier.padding(BrandSpacing.Medium),
+            verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
+        ) {
+            Text(
+                text = "Extracted values",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            discountText?.let {
+                ReviewInfoRow(
+                    icon = Icons.Default.CurrencyRupee,
+                    label = "Discount",
+                    value = it
+                )
+            }
+            minimumOrderText?.let {
+                ReviewInfoRow(
+                    icon = Icons.Default.ShoppingCart,
+                    label = "Minimum order",
+                    value = it
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CouponReviewSourceCard(coupon: Coupon) {
+    val status = remember(coupon) { reviewStatusText(coupon) }
+    val source = remember(coupon) { extractionSourceLabel(coupon) }
+    val derivedExpiry = isDerivedRelativeExpiry(coupon.rawOcrText)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(BrandSpacing.Medium),
+            verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
+        ) {
+            Text(
+                text = "Review",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            ReviewInfoRow(
+                icon = if (coupon.needsAttention) Icons.Default.Warning else Icons.Default.CheckCircle,
+                label = "Status",
+                value = status
+            )
+            ReviewInfoRow(
+                icon = Icons.Default.Source,
+                label = "Source",
+                value = source
+            )
+            if (derivedExpiry) {
+                ReviewInfoRow(
+                    icon = Icons.Default.Event,
+                    label = "Expiry",
+                    value = "Derived from relative OCR"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReviewInfoRow(
+    icon: ImageVector,
+    label: String,
+    value: String,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(18.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(104.dp)
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
@@ -597,7 +741,7 @@ private fun CleanupStatusCard(
                         Coupon.CleanupStatus.RUNNING -> stringResource(R.string.coupon_cleaning_running_title)
                         Coupon.CleanupStatus.CLEANED -> stringResource(
                             R.string.coupon_cleaning_done_title,
-                            ModelCatalog.COUPON_READER_NAME
+                            coupon.lastCleanedBy ?: ModelCatalog.COUPON_READER_NAME
                         )
                         Coupon.CleanupStatus.FAILED -> stringResource(R.string.coupon_cleaning_failed_title)
                         else -> stringResource(R.string.coupon_cleaning_default_title)
@@ -1069,6 +1213,34 @@ private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.C
         statusMessage = statusMessage,
         telemetryAvailable = telemetryAvailable
     )
+}
+
+private fun isDerivedRelativeExpiry(rawOcrText: String?): Boolean {
+    if (rawOcrText.isNullOrBlank()) return false
+    return Regex("(?i)\\bexpires?\\s+in\\s+\\d+\\s+(?:days?|hours?)\\b").containsMatchIn(rawOcrText)
+}
+
+private fun reviewStatusText(coupon: Coupon): String {
+    return when {
+        coupon.needsAttention -> "Needs review"
+        coupon.cleanupStatus == Coupon.CleanupStatus.FAILED -> "Needs review"
+        coupon.cleanupStatus == Coupon.CleanupStatus.RUNNING ||
+            coupon.cleanupStatus == Coupon.CleanupStatus.PENDING -> "Checking"
+        coupon.cleanupStatus == Coupon.CleanupStatus.CLEANED -> "Checked, review before redeeming"
+        else -> "Review before redeeming"
+    }
+}
+
+private fun extractionSourceLabel(coupon: Coupon): String {
+    val source = coupon.extractionSource?.takeIf { it.isNotBlank() }
+        ?: coupon.lastCleanedBy?.takeIf { it.isNotBlank() }
+        ?: "OCR rules"
+    return source
+        .replace('_', ' ')
+        .lowercase(Locale.getDefault())
+        .replaceFirstChar { char ->
+            if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
+        }
 }
 
 private fun shareCoupon(context: Context, coupon: com.example.coupontracker.data.model.Coupon) {

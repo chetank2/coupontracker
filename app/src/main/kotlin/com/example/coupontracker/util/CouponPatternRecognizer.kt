@@ -13,7 +13,7 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.regex.Pattern
 import java.util.Date
-import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.extraction.rules.CouponInfo
 
 /**
  * Recognizes coupon elements using patterns learned from training data

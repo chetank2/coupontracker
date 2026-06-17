@@ -27,7 +27,6 @@ internal class StoreNameResolver(
         description: String?,
         redeemCode: String?,
         structuredCandidates: List<FieldCandidate>,
-        fallbackStore: String?,
         rawOcrText: String? = null
     ): StoreNameResolution {
         val llmAssessment = validator.assessCandidate(current, description, redeemCode, source = "llm")
@@ -78,37 +77,9 @@ internal class StoreNameResolver(
             )
         }
 
-        val fallbackAssessment = validator.assessCandidate(
-            value = fallbackStore,
-            description = description,
-            redeemCode = redeemCode,
-            source = "text_extractor"
-        )
-
-        if (fallbackAssessment.isAccepted && isSupportedByOcr(fallbackStore, rawOcrText)) {
-            val canonical = fallbackAssessment.canonical ?: fallbackStore?.trim()
-            val issue = FieldValidationIssue(
-                field = FieldType.STORE_NAME,
-                message = "Replaced invalid store name '${llmAssessment.original.orEmpty()}' with fallback '${canonical.orEmpty()}'",
-                severity = FieldValidationSeverity.ERROR,
-                replacementSource = "text_extractor"
-            )
-            return StoreNameResolution(
-                value = canonical,
-                issue = issue,
-                source = "text_extractor",
-                evidence = fallbackAssessment.signals.map { it.detail },
-                needsAttention = fallbackAssessment.needsAttention,
-                violations = llmAssessment.issues + fallbackAssessment.issues,
-                confidence = null
-            )
-        }
-
         val fallbackValue = (llmAssessment.canonical ?: llmAssessment.original)
             ?.takeIf { llmHasOcrEvidence }
-        val evidence = (llmAssessment.signals.takeIf { it.isNotEmpty() }
-            ?: fallbackAssessment.signals)
-            .map { it.detail }
+        val evidence = llmAssessment.signals.map { it.detail }
         val evidenceIssue = if (!llmHasOcrEvidence && !llmAssessment.original.isNullOrBlank()) {
             "ocr_evidence_missing"
         } else {

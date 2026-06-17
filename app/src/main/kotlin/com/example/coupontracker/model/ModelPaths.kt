@@ -19,6 +19,7 @@ object ModelPaths {
     const val MODEL_ID_QWEN25 = "qwen25_1.5b_instruct_q4"
     const val MODEL_ID_QWEN2 = "qwen2_1.5b_instruct_q4"
     const val MODEL_ID_MINICPM = "minicpm_llama3_v25_q4"
+    const val MODEL_ID_GEMMA_VISION = "gemma_vision"
     
     // ===== DEFAULT MODEL =====
     const val DEFAULT_MODEL_ID = MODEL_ID_QWEN25  // Qwen2.5 is now the default
@@ -28,6 +29,11 @@ object ModelPaths {
     const val QWEN2_MODEL_FILE = "qwen2-1_5b-instruct-q4_k_m.gguf"
     const val MINICPM_MODEL_FILE = "ggml-model-Q4_K_M.gguf"
     const val MINICPM_MMPROJ_FILE = "mmproj-model-f16.gguf"
+    const val GEMMA_VISION_MODEL_FILE = "gemma-3-vision.task"
+    const val GEMMA_VISION_REMOTE_MODEL_FILE = "gemma-3n-E2B-it-int4.task"
+    const val GEMMA_VISION_ENCODER_FILE = "gemma-3-vision-encoder.task"
+    const val GEMMA_VISION_ADAPTER_FILE = "gemma-3-vision-adapter.task"
+    const val GEMMA_VISION_MIN_SIZE_BYTES = 2_000_000_000L
     const val CONFIG_FILE = "mlc-chat-config.json"
     const val TOKENIZER_JSON = "tokenizer.json"
     const val TOKENIZER_MODEL = "tokenizer.model"
@@ -42,6 +48,8 @@ object ModelPaths {
      * Get root models directory
      */
     fun root(context: Context): File = File(context.filesDir, MODELS_ROOT)
+
+    fun gemmaDir(context: Context): File = File(context.filesDir, "gemma")
     
     /**
      * Get specific model directory
@@ -108,6 +116,7 @@ object ModelPaths {
         return when (modelId) {
             MODEL_ID_QWEN2 -> false  // Text-only
             MODEL_ID_MINICPM -> true // Vision-capable
+            MODEL_ID_GEMMA_VISION -> true
             else -> false
         }
     }
@@ -120,9 +129,46 @@ object ModelPaths {
             MODEL_ID_QWEN25 -> "Qwen2.5-1.5B-Instruct"
             MODEL_ID_QWEN2 -> "Qwen2-1.5B-Instruct"
             MODEL_ID_MINICPM -> "MiniCPM-Llama3-V2.5"
+            MODEL_ID_GEMMA_VISION -> "Gemma Vision"
             else -> "Qwen2.5-1.5B-Instruct"
         }
     }
+
+    fun isGemmaVisionInstalled(context: Context): Boolean {
+        val status = getGemmaVisionInstallStatus(context)
+        return status.installed
+    }
+
+    fun getGemmaVisionModelFile(context: Context): File {
+        val dir = gemmaDir(context)
+        val canonical = File(dir, GEMMA_VISION_MODEL_FILE)
+        if (canonical.exists()) return canonical
+        return File(dir, GEMMA_VISION_REMOTE_MODEL_FILE)
+    }
+
+    fun getGemmaVisionInstallStatus(context: Context): GemmaVisionInstallStatus {
+        val dir = gemmaDir(context)
+        val verified = File(dir, ".vision_verified")
+        val model = getGemmaVisionModelFile(context)
+        return when {
+            !dir.exists() -> GemmaVisionInstallStatus(false, "Gemma Vision directory is missing.")
+            !verified.exists() -> GemmaVisionInstallStatus(false, "Gemma Vision verification marker is missing.")
+            !model.exists() -> GemmaVisionInstallStatus(false, "Gemma Vision task file is missing.")
+            model.length() < GEMMA_VISION_MIN_SIZE_BYTES -> {
+                GemmaVisionInstallStatus(
+                    false,
+                    "Gemma Vision task file is incomplete (${model.length()} bytes). Download or import it again."
+                )
+            }
+            else -> GemmaVisionInstallStatus(true, "Gemma Vision is installed.", model)
+        }
+    }
+
+    data class GemmaVisionInstallStatus(
+        val installed: Boolean,
+        val message: String,
+        val modelFile: File? = null
+    )
     
     /**
      * Get human-readable model size

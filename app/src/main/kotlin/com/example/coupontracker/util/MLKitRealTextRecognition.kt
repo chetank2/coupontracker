@@ -40,8 +40,12 @@ class MLKitRealTextRecognition(
                     MediaStore.Images.Media.getBitmap(context.contentResolver, imageUri)
                 }
                 
-                // Process with Tesseract
-                val text = ocrEngine.recognize(bitmap)
+                val spans = ocrEngine.recognizeWithBoxes(bitmap)
+                val text = if (spans.isNotEmpty()) {
+                    OcrChromeFilter.filterAndFlatten(bitmap, spans)
+                } else {
+                    ocrEngine.recognize(bitmap)
+                }
                 
                 // Clean up
                 bitmap.recycle()
@@ -63,6 +67,11 @@ class MLKitRealTextRecognition(
      * Process image from bitmap using Tesseract OCR
      */
     suspend fun processImageFromBitmap(bitmap: Bitmap): String {
-        return ocrEngine.recognize(bitmap)
+        val spans = ocrEngine.recognizeWithBoxes(bitmap)
+        return if (spans.isNotEmpty()) {
+            OcrChromeFilter.filterAndFlatten(bitmap, spans)
+        } else {
+            ocrEngine.recognize(bitmap)
+        }
     }
 }

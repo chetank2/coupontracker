@@ -124,5 +124,8 @@ data class Coupon(
     object ExtractionSource {
         const val OCR_FAST = "OCR_FAST"
         const val QWEN_CLEANED = "QWEN_CLEANED"
+        const val OCR_VERIFIED = "OCR_VERIFIED"
+        const val VISION_VERIFIED = "VISION_VERIFIED"
+        const val USER_EDITED = "USER_EDITED"
     }
 }

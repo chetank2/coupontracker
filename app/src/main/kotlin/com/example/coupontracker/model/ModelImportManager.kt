@@ -242,6 +242,85 @@ class ModelImportManager @Inject constructor(
             ImportResult.Failed("Import failed: ${e.message}", e)
         }
     }
+
+    suspend fun importGemmaVisionModel(
+        uri: Uri,
+        onProgress: (ImportResult.Progress) -> Unit
+    ): ImportResult = withContext(Dispatchers.IO) {
+        val gemmaDir = ModelPaths.gemmaDir(context)
+        val stagingDir = File(context.filesDir, "gemma$STAGING_SUFFIX")
+        try {
+            onProgress(ImportResult.Progress(5, "Preparing Gemma Vision import..."))
+            if (stagingDir.exists()) stagingDir.deleteRecursively()
+            stagingDir.mkdirs()
+
+            val normalizedDir = File(stagingDir, "normalized").apply { mkdirs() }
+            if (isZipUri(uri)) {
+                onProgress(ImportResult.Progress(15, "Extracting Gemma Vision files..."))
+                extractZipSecurely(uri, stagingDir, onProgress)
+
+                val required = findExtractedGemmaFile(stagingDir, ModelPaths.GEMMA_VISION_MODEL_FILE)
+                    ?: findExtractedGemmaFile(stagingDir, ModelPaths.GEMMA_VISION_REMOTE_MODEL_FILE)
+                    ?: return@withContext ImportResult.Failed(
+                        "Missing Gemma Vision task file. Import ${ModelPaths.GEMMA_VISION_MODEL_FILE} or ${ModelPaths.GEMMA_VISION_REMOTE_MODEL_FILE}."
+                    )
+                required.copyTo(File(normalizedDir, ModelPaths.GEMMA_VISION_MODEL_FILE), overwrite = true)
+
+                findExtractedGemmaFile(stagingDir, ModelPaths.GEMMA_VISION_ENCODER_FILE)
+                    ?.copyTo(File(normalizedDir, ModelPaths.GEMMA_VISION_ENCODER_FILE), overwrite = true)
+                findExtractedGemmaFile(stagingDir, ModelPaths.GEMMA_VISION_ADAPTER_FILE)
+                    ?.copyTo(File(normalizedDir, ModelPaths.GEMMA_VISION_ADAPTER_FILE), overwrite = true)
+            } else {
+                onProgress(ImportResult.Progress(15, "Copying Gemma Vision task file..."))
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    File(normalizedDir, ModelPaths.GEMMA_VISION_MODEL_FILE).outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                } ?: return@withContext ImportResult.Failed("Could not read selected Gemma Vision file")
+            }
+
+            val modelFile = File(normalizedDir, ModelPaths.GEMMA_VISION_MODEL_FILE)
+            if (modelFile.length() < ModelPaths.GEMMA_VISION_MIN_SIZE_BYTES) {
+                return@withContext ImportResult.Failed(
+                    "${ModelPaths.GEMMA_VISION_MODEL_FILE} is incomplete (${modelFile.length()} bytes). Import the full Gemma Vision .task file."
+                )
+            }
+
+            onProgress(ImportResult.Progress(90, "Installing Gemma Vision..."))
+            if (gemmaDir.exists()) gemmaDir.deleteRecursively()
+            gemmaDir.mkdirs()
+            normalizedDir.listFiles().orEmpty().forEach { file ->
+                file.copyTo(File(gemmaDir, file.name), overwrite = true)
+            }
+            File(gemmaDir, ".vision_verified").writeText("${System.currentTimeMillis()}")
+
+            val manifest = ModelManifest(
+                name = ModelCatalog.GEMMA_VISION_READER_NAME,
+                version = ModelPaths.MODEL_ID_GEMMA_VISION,
+                platform = "android-mediapipe",
+                quantization = "task",
+                requiresRuntimeVersion = "mediapipe-tasks-genai-0.10.27",
+                files = gemmaDir.listFiles().orEmpty()
+                    .filter { it.isFile && !it.name.startsWith(".") }
+                    .map { file ->
+                        FileEntry(
+                            path = file.name,
+                            size = file.length(),
+                            sha256 = "",
+                            required = file.name == ModelPaths.GEMMA_VISION_MODEL_FILE
+                        )
+                    }
+            )
+            val sizeMB = (calculateDirectorySize(gemmaDir) / 1_000_000).toInt()
+            onProgress(ImportResult.Progress(100, "Gemma Vision import complete"))
+            ImportResult.Success(manifest, sizeMB)
+        } catch (e: Exception) {
+            Log.e(TAG, "Gemma Vision import failed", e)
+            ImportResult.Failed("Gemma Vision import failed: ${e.message}", e)
+        } finally {
+            cleanupStaging(stagingDir)
+        }
+    }
     
     /**
      * Extract ZIP with zip-slip protection
@@ -356,6 +435,21 @@ class ModelImportManager @Inject constructor(
             Log.w(TAG, "Failed to cleanup staging directory", e)
         }
     }
+
+    private fun findExtractedGemmaFile(root: File, filename: String): File? {
+        return root.walkTopDown()
+            .filter { it.isFile && it.name == filename }
+            .maxByOrNull { it.length() }
+    }
+
+    private fun isZipUri(uri: Uri): Boolean {
+        return runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val header = ByteArray(2)
+                input.read(header) == 2 && header[0] == 'P'.code.toByte() && header[1] == 'K'.code.toByte()
+            } == true
+        }.getOrDefault(false)
+    }
     
     private fun createDefaultManifest(): ModelManifest {
         val modelId = ModelPaths.DEFAULT_MODEL_ID
@@ -429,6 +523,46 @@ class ModelImportManager @Inject constructor(
     fun getInstalledModelSizeMB(): Int {
         if (!isModelInstalled()) return 0
         return (calculateDirectorySize(ModelPaths.modelDir(context)) / 1_000_000).toInt()
+    }
+
+    fun isGemmaVisionInstalled(): Boolean = ModelPaths.isGemmaVisionInstalled(context)
+
+    fun getGemmaVisionSizeMB(): Int {
+        if (!isGemmaVisionInstalled()) return 0
+        return (calculateDirectorySize(ModelPaths.gemmaDir(context)) / 1_000_000).toInt()
+    }
+
+    fun getGemmaVisionManifest(): ModelManifest? {
+        if (!isGemmaVisionInstalled()) return null
+        val dir = ModelPaths.gemmaDir(context)
+        return ModelManifest(
+            name = ModelCatalog.GEMMA_VISION_READER_NAME,
+            version = ModelPaths.MODEL_ID_GEMMA_VISION,
+            platform = "android-mediapipe",
+            quantization = "task",
+            requiresRuntimeVersion = "mediapipe-tasks-genai-0.10.27",
+            files = dir.listFiles().orEmpty()
+                .filter { it.isFile && !it.name.startsWith(".") }
+                .map { file ->
+                    FileEntry(
+                        path = file.name,
+                        size = file.length(),
+                        sha256 = "",
+                        required = file.name == ModelPaths.GEMMA_VISION_MODEL_FILE
+                    )
+                }
+        )
+    }
+
+    fun deleteGemmaVisionModel(): Boolean {
+        return try {
+            val dir = ModelPaths.gemmaDir(context)
+            if (dir.exists()) dir.deleteRecursively()
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Error deleting Gemma Vision model", e)
+            false
+        }
     }
     
     /**

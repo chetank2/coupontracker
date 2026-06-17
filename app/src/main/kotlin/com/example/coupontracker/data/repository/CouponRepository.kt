@@ -16,6 +16,7 @@ interface CouponRepository {
     suspend fun updateCoupon(coupon: Coupon)
     suspend fun deleteCoupon(coupon: Coupon)
     suspend fun deleteAllCoupons()
+    suspend fun clearAllExtractionMetadata()
     suspend fun replaceAllCoupons(coupons: List<Coupon>): Int
 
     // New methods

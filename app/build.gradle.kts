@@ -362,7 +362,8 @@ dependencies {
     
     // Keep barcode scanning if needed (uses bundled model)
     implementation("com.google.mlkit:barcode-scanning:17.2.0")
-    implementation("com.google.mediapipe:tasks-genai:0.10.14")
+    implementation("com.google.mediapipe:tasks-genai:0.10.27")
+    implementation("com.google.mediapipe:tasks-core:0.10.14")
 
     implementation("com.google.code.gson:gson:2.10.1")
 

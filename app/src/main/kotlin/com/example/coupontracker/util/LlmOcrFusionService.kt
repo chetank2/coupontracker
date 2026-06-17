@@ -3,7 +3,7 @@ package com.example.coupontracker.util
 import android.graphics.Bitmap
 import android.util.Log
 import com.example.coupontracker.data.util.DescriptionUtils
-import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.extraction.rules.CouponInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext

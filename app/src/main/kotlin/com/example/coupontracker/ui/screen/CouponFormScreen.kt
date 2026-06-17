@@ -85,9 +85,17 @@ fun CouponFormScreen(
         }
     }
 
-    // Initialize with image URI
-    LaunchedEffect(imageUri, editCouponId, uiState.isProcessing, uiState.couponInfo) {
+    LaunchedEffect(scannerViewModel, editCouponId) {
         if ((editCouponId ?: 0L) > 0L) return@LaunchedEffect
+        scannerViewModel?.getPendingPreviewCoupon()?.let { previewCoupon ->
+            viewModel.loadPreviewCoupon(previewCoupon)
+        }
+    }
+
+    // Initialize with image URI
+    LaunchedEffect(imageUri, editCouponId, uiState.isProcessing, uiState.couponInfo, scannerViewModel) {
+        if ((editCouponId ?: 0L) > 0L) return@LaunchedEffect
+        if (scannerViewModel?.getPendingPreviewCoupon() != null) return@LaunchedEffect
         val uriString = imageUri?.takeIf { it.isNotEmpty() } ?: return@LaunchedEffect
 
         val hasExtractedInfo = uiState.couponInfo != null
@@ -144,7 +152,7 @@ fun CouponFormScreen(
     Scaffold(
         topBar = {
             BrandTopBar(
-                title = if ((editCouponId ?: 0L) > 0L) "Edit coupon" else "Add coupon",
+                title = if ((editCouponId ?: 0L) > 0L) "Edit coupon" else "Review coupon",
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

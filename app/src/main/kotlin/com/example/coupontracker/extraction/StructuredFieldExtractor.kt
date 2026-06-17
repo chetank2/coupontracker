@@ -29,17 +29,11 @@ class StructuredFieldExtractor {
 
         // Payment methods - NOT store names
         private val PAYMENT_METHODS = setOf(
-            "CRED", "UPI", "CARD", "WALLET", "PAYTM", "GPAY", "PHONEPE", "BHIM",
-            "CASH", "COD", "NET", "BANKING", "DEBIT", "CREDIT"
+            "UPI", "CARD", "WALLET", "CASH", "COD", "NET", "BANKING", "DEBIT", "CREDIT"
         )
 
         private val WATERMARK_WORDS = setOf(
-            "PASTM", "PAYTM", "PAYTIN", "PAITM", "PAYMM", "PAYTMM", "PAYIN",
             "SHARE", "DETAILS", "TERMS", "NOW", "TODAY"
-        )
-
-        private val WATERMARK_CANONICAL = setOf(
-            "paytm", "gpay", "phonepe"
         )
 
         private inline fun safeLogDebug(tag: String, message: () -> String) {
@@ -116,12 +110,13 @@ class StructuredFieldExtractor {
         
         // Strategy 2: ALL CAPS words (likely brand names) - prioritize early text + validate
         val allCapsPattern = Regex("""\b([A-Z]{2,})\b""")
-        allCapsPattern.findAll(context.ocrText).forEachIndexed { index, match ->
+        allCapsPattern.findAll(context.ocrText).forEach { match ->
             val word = match.value
             if (
                 word !in COMMON_WORDS &&
                 word.uppercase() !in PAYMENT_METHODS &&
                 !isLikelyWatermark(word) &&
+                !isWalletHeaderLine(context.ocrText, match.range) &&
                 word.length in 3..15 &&
                 isValidBrandName(word)
             ) {
@@ -154,6 +149,7 @@ class StructuredFieldExtractor {
             
             // Validate brand name quality (reject OCR garbage like "Pastm Patm")
             if (!isValidBrandName(storeName) || isLikelyWatermark(storeName)) return@forEach
+            if (isWalletHeaderLine(context.ocrText, match.range)) return@forEach
             
             // Calculate position-based confidence
             val position = match.range.first.toFloat() / context.ocrText.length
@@ -189,7 +185,7 @@ class StructuredFieldExtractor {
         val wordFrequency = mutableMapOf<String, Int>()
         Regex("""\b([A-Z][A-Za-z]{2,})\b""").findAll(context.ocrText).forEach { match ->
             val word = match.value
-            if (word !in COMMON_WORDS) {
+            if (word !in COMMON_WORDS && !isWalletHeaderLine(context.ocrText, match.range)) {
                 wordFrequency[word] = wordFrequency.getOrDefault(word, 0) + 1
             }
         }
@@ -283,7 +279,6 @@ class StructuredFieldExtractor {
             // Valid percentages are 1-100 AND not part of UI chrome
             if (percentage in 1..100 && !uiNoisePattern.containsMatchIn(matchContext)) {
                 // Extra validation: check if percentage appears in first 3 lines (likely UI chrome)
-                val lines = context.ocrText.lines()
                 val matchLine = context.ocrText.substring(0, match.range.first).count { it == '\n' }
                 
                 // Reduce confidence if in first 3 lines and isolated (likely status bar)
@@ -568,37 +563,14 @@ class StructuredFieldExtractor {
         val upper = name.uppercase(Locale.US)
         if (upper in WATERMARK_WORDS) return true
 
-        val normalized = name.lowercase(Locale.US)
-        WATERMARK_CANONICAL.forEach { canonical ->
-            if (editDistance(normalized, canonical) <= 1) {
-                return true
-            }
-        }
-
         return false
     }
 
-    private fun editDistance(a: String, b: String): Int {
-        if (a == b) return 0
-        if (a.isEmpty()) return b.length
-        if (b.isEmpty()) return a.length
-
-        val dp = Array(a.length + 1) { IntArray(b.length + 1) }
-        for (i in 0..a.length) dp[i][0] = i
-        for (j in 0..b.length) dp[0][j] = j
-
-        for (i in 1..a.length) {
-            for (j in 1..b.length) {
-                val cost = if (a[i - 1] == b[j - 1]) 0 else 1
-                dp[i][j] = minOf(
-                    dp[i - 1][j] + 1,
-                    dp[i][j - 1] + 1,
-                    dp[i - 1][j - 1] + cost
-                )
-            }
-        }
-
-        return dp[a.length][b.length]
+    private fun isWalletHeaderLine(text: String, range: IntRange): Boolean {
+        val lineStart = text.lastIndexOf('\n', range.first).let { if (it == -1) 0 else it + 1 }
+        val lineEnd = text.indexOf('\n', range.last).let { if (it == -1) text.length else it }
+        val line = text.substring(lineStart, lineEnd).lowercase(Locale.US)
+        return listOf("reward", "wallet", "active", "available").any { line.contains(it) }
     }
 
     private fun normalizeAbsoluteDate(raw: String): String? {

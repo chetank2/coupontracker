@@ -1,7 +1,7 @@
 package com.example.coupontracker.extraction.retry
 
 import com.example.coupontracker.llm.CouponSchemaKeys
-import com.example.coupontracker.util.CouponInfo
+import com.example.coupontracker.extraction.rules.CouponInfo
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

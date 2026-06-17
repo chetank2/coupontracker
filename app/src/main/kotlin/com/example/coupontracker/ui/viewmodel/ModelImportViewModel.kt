@@ -15,11 +15,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+enum class ModelSetupTarget {
+    QWEN,
+    GEMMA_VISION
+}
+
 data class ModelImportUiState(
     val isModelInstalled: Boolean = false,
+    val isGemmaVisionInstalled: Boolean = false,
     val modelInfo: ModelManifest? = null,
+    val gemmaVisionInfo: ModelManifest? = null,
     val modelSizeMB: Int = 0,
+    val gemmaVisionSizeMB: Int = 0,
     val isImporting: Boolean = false,
+    val activeSetupTarget: ModelSetupTarget? = null,
     val importProgress: Int = 0,
     val importMessage: String = "",
     val importError: String? = null,
@@ -46,16 +55,22 @@ class ModelImportViewModel @Inject constructor(
     
     fun checkInstalledModel() {
         val installed = modelImportManager.isModelInstalled()
+        val gemmaInstalled = modelImportManager.isGemmaVisionInstalled()
         val info = if (installed) modelImportManager.getInstalledModelInfo() else null
+        val gemmaInfo = if (gemmaInstalled) modelImportManager.getGemmaVisionManifest() else null
         val sizeMB = if (installed) modelImportManager.getInstalledModelSizeMB() else 0
+        val gemmaSizeMB = if (gemmaInstalled) modelImportManager.getGemmaVisionSizeMB() else 0
         if (installed && sizeMB > 0) {
             securePreferencesManager.setLlmModelSizeMB(sizeMB.toFloat())
         }
         
         _uiState.value = _uiState.value.copy(
             isModelInstalled = installed,
+            isGemmaVisionInstalled = gemmaInstalled,
             modelInfo = info,
-            modelSizeMB = sizeMB
+            gemmaVisionInfo = gemmaInfo,
+            modelSizeMB = sizeMB,
+            gemmaVisionSizeMB = gemmaSizeMB
         )
     }
     
@@ -63,6 +78,7 @@ class ModelImportViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
                 isImporting = true,
+                activeSetupTarget = ModelSetupTarget.QWEN,
                 importProgress = 0,
                 importMessage = "Starting import...",
                 importError = null
@@ -79,6 +95,7 @@ class ModelImportViewModel @Inject constructor(
                 is ImportResult.Success -> {
                     _uiState.value = _uiState.value.copy(
                         isImporting = false,
+                        activeSetupTarget = ModelSetupTarget.QWEN,
                         isModelInstalled = true,
                         modelInfo = result.manifest,
                         modelSizeMB = result.sizeMB,
@@ -95,6 +112,48 @@ class ModelImportViewModel @Inject constructor(
                 is ImportResult.Failed -> {
                     _uiState.value = _uiState.value.copy(
                         isImporting = false,
+                        activeSetupTarget = ModelSetupTarget.QWEN,
+                        importError = result.reason
+                    )
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun importGemmaVisionModel(uri: Uri) {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(
+                isImporting = true,
+                activeSetupTarget = ModelSetupTarget.GEMMA_VISION,
+                importProgress = 0,
+                importMessage = "Starting Gemma Vision import...",
+                importError = null
+            )
+
+            val result = modelImportManager.importGemmaVisionModel(uri) { progress ->
+                _uiState.value = _uiState.value.copy(
+                    importProgress = progress.percent,
+                    importMessage = progress.message
+                )
+            }
+
+            when (result) {
+                is ImportResult.Success -> {
+                    _uiState.value = _uiState.value.copy(
+                        isImporting = false,
+                        activeSetupTarget = ModelSetupTarget.GEMMA_VISION,
+                        isGemmaVisionInstalled = true,
+                        gemmaVisionInfo = result.manifest,
+                        gemmaVisionSizeMB = result.sizeMB,
+                        importProgress = 100,
+                        importMessage = "Gemma Vision import complete"
+                    )
+                }
+                is ImportResult.Failed -> {
+                    _uiState.value = _uiState.value.copy(
+                        isImporting = false,
+                        activeSetupTarget = ModelSetupTarget.GEMMA_VISION,
                         importError = result.reason
                     )
                 }
@@ -134,10 +193,86 @@ class ModelImportViewModel @Inject constructor(
             securePreferencesManager.setLlmModelDownloaded(false)
             _uiState.value = _uiState.value.copy(
                 isModelInstalled = false,
+                isGemmaVisionInstalled = modelImportManager.isGemmaVisionInstalled(),
                 modelInfo = null,
+                gemmaVisionInfo = modelImportManager.getGemmaVisionManifest(),
                 modelSizeMB = 0,
+                gemmaVisionSizeMB = modelImportManager.getGemmaVisionSizeMB(),
                 selfTestResult = null
             )
+        }
+    }
+
+    fun deleteGemmaVisionModel() {
+        viewModelScope.launch {
+            modelImportManager.deleteGemmaVisionModel()
+            _uiState.value = _uiState.value.copy(
+                isGemmaVisionInstalled = false,
+                gemmaVisionInfo = null,
+                gemmaVisionSizeMB = 0,
+                activeSetupTarget = null,
+                importError = null
+            )
+        }
+    }
+
+    fun downloadGemmaVisionModel() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        isImporting = true,
+                        activeSetupTarget = ModelSetupTarget.GEMMA_VISION,
+                        importProgress = 0,
+                        importMessage = "Starting Gemma Vision download...",
+                        importError = null
+                    )
+                }
+
+                val result = modelDownloadManager.downloadGemmaVisionModel { progress ->
+                    viewModelScope.launch(Dispatchers.Main) {
+                        _uiState.value = _uiState.value.copy(
+                            importProgress = progress.progressPercent.coerceAtLeast(0),
+                            importMessage = progress.statusMessage
+                        )
+                    }
+                }
+
+                when (result) {
+                    is com.example.coupontracker.llm.DownloadResult.Success -> {
+                        withContext(Dispatchers.Main) {
+                            _uiState.value = _uiState.value.copy(
+                                isImporting = false,
+                                activeSetupTarget = ModelSetupTarget.GEMMA_VISION,
+                                isGemmaVisionInstalled = true,
+                                gemmaVisionInfo = modelImportManager.getGemmaVisionManifest(),
+                                gemmaVisionSizeMB = result.modelSizeMB.toInt(),
+                                importProgress = 100,
+                                importMessage = "Gemma Vision download complete"
+                            )
+                            checkInstalledModel()
+                        }
+                    }
+                    is com.example.coupontracker.llm.DownloadResult.Error -> {
+                        withContext(Dispatchers.Main) {
+                            _uiState.value = _uiState.value.copy(
+                                isImporting = false,
+                                activeSetupTarget = ModelSetupTarget.GEMMA_VISION,
+                                importError = result.message
+                            )
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("ModelImportViewModel", "Gemma Vision download failed", e)
+                withContext(Dispatchers.Main) {
+                    _uiState.value = _uiState.value.copy(
+                        isImporting = false,
+                        activeSetupTarget = ModelSetupTarget.GEMMA_VISION,
+                        importError = "Gemma Vision download failed: ${e.message}"
+                    )
+                }
+            }
         }
     }
     
@@ -155,6 +290,7 @@ class ModelImportViewModel @Inject constructor(
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
                         isImporting = true,
+                        activeSetupTarget = ModelSetupTarget.QWEN,
                         importProgress = 0,
                         importMessage = getApplication<Application>().getString(
                             R.string.model_setup_preparing,
@@ -181,6 +317,7 @@ class ModelImportViewModel @Inject constructor(
                             securePreferencesManager.setLlmModelSizeMB(result.modelSizeMB.toFloat())
                             _uiState.value = _uiState.value.copy(
                                 isImporting = false,
+                                activeSetupTarget = ModelSetupTarget.QWEN,
                                 isModelInstalled = true,
                                 modelSizeMB = result.modelSizeMB.toInt(),
                                 importProgress = 100,
@@ -198,6 +335,7 @@ class ModelImportViewModel @Inject constructor(
                         withContext(Dispatchers.Main) {
                             _uiState.value = _uiState.value.copy(
                                 isImporting = false,
+                                activeSetupTarget = ModelSetupTarget.QWEN,
                                 importError = result.message
                             )
                         }
@@ -209,6 +347,7 @@ class ModelImportViewModel @Inject constructor(
                 withContext(Dispatchers.Main) {
                     _uiState.value = _uiState.value.copy(
                         isImporting = false,
+                        activeSetupTarget = ModelSetupTarget.QWEN,
                         importError = "Download failed: ${e.message}"
                     )
                 }

@@ -2,9 +2,11 @@ package com.example.coupontracker.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Test
 import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
 import java.util.Locale
 
 class TextExtractorTest {
@@ -230,6 +232,262 @@ class TextExtractorTest {
         val result = extractor.extractRedeemCode(text)
 
         assertEquals("AFFLPHG-UFPJ-TDOAB", result)
+    }
+
+    @Test
+    fun `extractRedeemCode reads mixed case split explicit code line`() {
+        val text = """
+            KAPIVA
+            Flat off on all Kapiva Products
+            Code: KAPSUMUIWNPe pQv Copy
+            BUY NOW
+        """.trimIndent()
+
+        val result = extractor.extractRedeemCode(text)
+
+        assertEquals("KAPSUMUIWNPEPQV", result)
+    }
+
+    @Test
+    fun `extractRedeemCode does not use short merchant token as fallback code`() {
+        val text = """
+            KAPIVA
+            Flat off on all Kapiva Products
+            BUY NOW
+        """.trimIndent()
+
+        val result = extractor.extractRedeemCode(text)
+
+        assertEquals(null, result)
+    }
+
+    @Test
+    fun `extractCouponInfo falls back to full OCR when scoped store block misses code`() {
+        val text = """
+            Vouchers
+            active
+            18
+            lifetime
+            428
+            LEAF
+            Details
+            Leaf
+            code:
+            CREDJP70
+            you
+            won
+            16099
+            off
+            on
+            Leaf
+            Halo
+            Smart
+            Ring
+            Expires in 13 days
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text)
+
+        assertEquals("LEAF", result.storeName)
+        assertEquals("CREDJP70", result.redeemCode)
+    }
+
+    @Test
+    fun `extractCouponInfo keeps BigBasket offer separate from code actions and status bar noise`() {
+        val baseDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse("2026-06-17")
+        val text = """
+            9:41
+            bbnow
+            BigBasket
+            You won flat ₹150 off
+            on orders above ₹400 on BigBasket Details code:
+            BBNOWCRED3-GZGE7F7BAHEXFY
+            Details
+            Redeem Now
+            Expires in 06 days
+            Vo 5G O
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("BigBasket", result.storeName)
+        assertEquals("You won flat ₹150 off on orders above ₹400 on BigBasket", result.description)
+        assertEquals("BBNOWCRED3-GZGE7F7BAHEXFY", result.redeemCode)
+        assertEquals("Cashback: ₹150 off", result.cashbackDetail)
+        assertEquals(400.0, result.minimumPurchase!!, 0.0)
+
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        assertEquals("2026-06-23", formatter.format(result.expiryDate as Date))
+    }
+
+    @Test
+    fun `extractCouponInfo prefers merchant in offer over wallet watermark and uses capture date`() {
+        val baseDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse("2026-06-17")
+        val text = """
+            8:05
+            Pautm
+            vouchers
+            active : 25 lifetime : 279
+            EXPIRES IN 29 DAYS
+            you won ₹16,500 off on Toothsi aligners DAYS
+            Toothsi
+            4.33
+            code: CREDJACKAPR252C1KQC
+            Details
+            Redeem now
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("Toothsi", result.storeName)
+        assertEquals("you won ₹16,500 off on Toothsi aligners", result.description)
+        assertEquals("CREDJACKAPR252C1KQC", result.redeemCode)
+
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        assertEquals("2026-07-16", formatter.format(result.expiryDate as Date))
+    }
+
+    @Test
+    fun `extractCouponInfo rejects previous card code and parses selected card hour expiry`() {
+        val baseDate = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).parse("2026-06-18 17:57")
+        val text = """
+            code: CRDLUKES799
+            Details
+            Redeem Now
+            EXPIRES IN 14 HOURS
+            you won 5 products at ₹999 + ₹150 cashback via CRED pay on XYXX
+            XYXX
+            4.31
+            Details
+            Redeem Now
+            EXPIRES IN 07 DAYS
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("XYXX", result.storeName)
+        assertEquals("you won 5 products at ₹999 + ₹150 cashback via CRED pay on XYXX", result.description)
+        assertNull(result.redeemCode)
+
+        val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+        assertEquals("2026-06-19 07:57", formatter.format(result.expiryDate as Date))
+    }
+
+    @Test
+    fun `extractStoreName rejects standalone cashback as merchant`() {
+        val result = extractor.extractStoreName("cashback")
+
+        assertNull(result)
+    }
+
+    @Test
+    fun `extractCouponInfo falls back to useful OCR description after removing protected fields`() {
+        val text = """
+            12:58
+            ShopEasy
+            Applicable on selected products
+            Maximum discount ₹200
+            Valid for first order
+            Code: EASY200
+            Copy
+            Expires in 2 days
+            100%
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text)
+
+        assertEquals("ShopEasy", result.storeName)
+        assertEquals("Applicable on selected products Maximum discount ₹200 Valid for first order", result.description)
+        assertEquals("EASY200", result.redeemCode)
+    }
+
+    @Test
+    fun `extractCouponInfo handles varied app coupons with generic rules`() {
+        data class Case(
+            val text: String,
+            val store: String,
+            val code: String?,
+            val description: String
+        )
+
+        val cases = listOf(
+            Case(
+                text = """
+                    Myntra
+                    Flat 50% off on selected styles
+                    Coupon Code: MYNTRA50
+                    Copy Code
+                    Valid till 30 Jun 2026
+                """.trimIndent(),
+                store = "Myntra",
+                code = "MYNTRA50",
+                description = "Flat 50% off on selected styles"
+            ),
+            Case(
+                text = """
+                    Swiggy
+                    Get ₹120 off on food orders above ₹299
+                    Use code SWIGGY120
+                    Redeem Now
+                """.trimIndent(),
+                store = "Swiggy",
+                code = "SWIGGY120",
+                description = "Get ₹120 off on food orders above ₹299"
+            ),
+            Case(
+                text = """
+                    Zomato
+                    Applicable on selected restaurants
+                    Maximum discount ₹100
+                    Code: ZOMATO100
+                    Details
+                """.trimIndent(),
+                store = "Zomato",
+                code = "ZOMATO100",
+                description = "Applicable on selected restaurants Maximum discount ₹100"
+            ),
+            Case(
+                text = """
+                    Amazon
+                    Extra 10% off on electronics
+                    Promo code: AMAZON10
+                    5G
+                    Copy
+                """.trimIndent(),
+                store = "Amazon",
+                code = "AMAZON10",
+                description = "Extra 10% off on electronics"
+            ),
+            Case(
+                text = """
+                    Flipkart
+                    Save ₹500 on mobile phones
+                    Code FLIP500
+                    Details
+                """.trimIndent(),
+                store = "Flipkart",
+                code = "FLIP500",
+                description = "Save ₹500 on mobile phones"
+            ),
+            Case(
+                text = """
+                    Aha
+                    Stream annual plan at just ₹399
+                    Use code AHA399
+                    Redeem Now
+                """.trimIndent(),
+                store = "Aha",
+                code = "AHA399",
+                description = "Stream annual plan at just ₹399"
+            )
+        )
+
+        cases.forEach { case ->
+            val result = extractor.extractCouponInfoSync(case.text)
+            assertEquals(case.store, result.storeName)
+            assertEquals(case.code, result.redeemCode)
+            assertEquals(case.description, result.description)
+        }
     }
 
     @Test

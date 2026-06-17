@@ -47,7 +47,7 @@ class AdvancedOCRPipeline(
                 processCouponImage(bitmap)
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon image from URI", e)
-                createFallbackCoupon("Error: ${e.message}")
+                throw e
             }
         }
     }
@@ -96,7 +96,7 @@ class AdvancedOCRPipeline(
 
             if (bestText.isBlank()) {
                 Log.w(TAG, "No text extracted from any OCR engine")
-                return@coroutineScope createFallbackCoupon("No text extracted")
+                throw IllegalStateException("No text extracted")
             }
 
             // 5. Extract structured fields with confidence levels
@@ -131,7 +131,7 @@ class AdvancedOCRPipeline(
             couponData
         } catch (e: Exception) {
             Log.e(TAG, "Error processing coupon image", e)
-            createFallbackCoupon("Error: ${e.message}")
+            throw e
         }
     }
 
@@ -157,18 +157,4 @@ class AdvancedOCRPipeline(
 
     // We've removed Google Cloud Vision API as we're using on-device OCR only
 
-    /**
-     * Create a fallback coupon when extraction fails
-     */
-    private fun createFallbackCoupon(reason: String): CouponData {
-        return CouponData(
-            merchantName = "Extraction Failed",
-            code = "RETRY",
-            amount = "₹0",
-            expiryDate = null,
-            description = "Failed to extract coupon: $reason",
-            terms = null,
-            extractionScore = 0
-        )
-    }
 }
