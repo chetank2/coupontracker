@@ -50,4 +50,31 @@ class GenericFieldHeuristicsTest {
     fun `currency amount is meaningful cashback`() {
         assertTrue(GenericFieldHeuristics.hasMeaningfulCashback("₹100"))
     }
+
+    @Test
+    fun `numbered purchase intent is meaningful description`() {
+        assertTrue(GenericFieldHeuristics.isMeaningfulDescription("Buy any 4 products at merchant website"))
+    }
+
+    @Test
+    fun `expiry badge fragments are not meaningful fields`() {
+        assertTrue(GenericFieldHeuristics.isGenericOrMissing("HOURS"))
+        assertTrue(GenericFieldHeuristics.isGenericOrMissing("IN 04 HOURS"))
+        assertFalse(GenericFieldHeuristics.isMeaningfulDescription("IN 04 X O IN O4"))
+    }
+
+    @Test
+    fun `date fragments are not meaningful descriptions`() {
+        assertFalse(GenericFieldHeuristics.isMeaningfulDescription("5TH"))
+        assertFalse(GenericFieldHeuristics.isMeaningfulDescription("05 May, 2025"))
+        assertFalse(GenericFieldHeuristics.isMeaningfulDescription("Ends 5th May"))
+    }
+
+    @Test
+    fun `savings descriptions require concrete value`() {
+        assertFalse(GenericFieldHeuristics.isMeaningfulDescription("you won off"))
+        assertFalse(GenericFieldHeuristics.isMeaningfulDescription("you won off Onion Shampoo ZEN"))
+        assertTrue(GenericFieldHeuristics.isMeaningfulDescription("you won 80% off on Skullcandy"))
+        assertTrue(GenericFieldHeuristics.isMeaningfulDescription("you've won neck fan at ₹1100"))
+    }
 }

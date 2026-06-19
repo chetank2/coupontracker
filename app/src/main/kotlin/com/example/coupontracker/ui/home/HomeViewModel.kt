@@ -1,9 +1,10 @@
-package com.example.coupontracker.ui.viewmodel
+package com.example.coupontracker.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.SortOrder
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.preferences.SecurePreferencesManager
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
@@ -11,8 +12,8 @@ import com.example.coupontracker.ui.model.CouponStatusFilter
 import com.example.coupontracker.ui.model.ExpiryRange
 import com.example.coupontracker.ui.model.FilterState
 import com.example.coupontracker.ui.theme.BrandSpacing
-import com.example.coupontracker.ui.viewmodel.ModelImportUiState
-import com.example.coupontracker.ui.viewmodel.ModelImportViewModel
+import com.example.coupontracker.ui.modelsettings.ModelImportUiState
+import com.example.coupontracker.ui.modelsettings.ModelImportViewModel
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -61,7 +62,7 @@ data class HomeUiState(
 class HomeViewModel @Inject constructor(
     private val couponRepository: CouponRepository,
     private val modelImportManager: com.example.coupontracker.model.ModelImportManager,
-    private val securePreferencesManager: com.example.coupontracker.util.SecurePreferencesManager,
+    private val securePreferencesManager: SecurePreferencesManager,
     private val debugRepository: ExtractionDebugRepository
 ) : ViewModel() {
 

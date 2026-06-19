@@ -13,7 +13,7 @@ import androidx.navigation.fragment.findNavController
 import com.example.coupontracker.data.model.Settings
 import com.example.coupontracker.data.model.SortOrder
 import com.example.coupontracker.databinding.FragmentSettingsBinding
-import com.example.coupontracker.ui.viewmodel.SettingsViewModel
+import com.example.coupontracker.ui.settings.SettingsViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 

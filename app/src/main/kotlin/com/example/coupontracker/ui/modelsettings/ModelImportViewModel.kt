@@ -1,10 +1,11 @@
-package com.example.coupontracker.ui.viewmodel
+package com.example.coupontracker.ui.modelsettings
 
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.R
+import com.example.coupontracker.data.preferences.SecurePreferencesManager
 import com.example.coupontracker.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -43,16 +44,16 @@ class ModelImportViewModel @Inject constructor(
     private val modelSelfTest: ModelSelfTest,
     private val modelDownloadManager: com.example.coupontracker.llm.ModelDownloadManager,
     private val secureDownloader: com.example.coupontracker.network.SecureModelDownloader,
-    private val securePreferencesManager: com.example.coupontracker.util.SecurePreferencesManager
+    private val securePreferencesManager: SecurePreferencesManager
 ) : AndroidViewModel(application) {
-    
+
     private val _uiState = MutableStateFlow(ModelImportUiState())
     val uiState: StateFlow<ModelImportUiState> = _uiState.asStateFlow()
-    
+
     init {
         checkInstalledModel()
     }
-    
+
     fun checkInstalledModel() {
         val installed = modelImportManager.isModelInstalled()
         val gemmaInstalled = modelImportManager.isGemmaVisionInstalled()
@@ -63,7 +64,7 @@ class ModelImportViewModel @Inject constructor(
         if (installed && sizeMB > 0) {
             securePreferencesManager.setLlmModelSizeMB(sizeMB.toFloat())
         }
-        
+
         _uiState.value = _uiState.value.copy(
             isModelInstalled = installed,
             isGemmaVisionInstalled = gemmaInstalled,
@@ -73,7 +74,7 @@ class ModelImportViewModel @Inject constructor(
             gemmaVisionSizeMB = gemmaSizeMB
         )
     }
-    
+
     fun importModel(uri: Uri) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
@@ -83,14 +84,14 @@ class ModelImportViewModel @Inject constructor(
                 importMessage = "Starting import...",
                 importError = null
             )
-            
+
             val result = modelImportManager.importModel(uri) { progress ->
                 _uiState.value = _uiState.value.copy(
                     importProgress = progress.percent,
                     importMessage = progress.message
                 )
             }
-            
+
             when (result) {
                 is ImportResult.Success -> {
                     _uiState.value = _uiState.value.copy(
@@ -105,7 +106,7 @@ class ModelImportViewModel @Inject constructor(
 
                     securePreferencesManager.setLlmModelVersion(result.manifest.version)
                     securePreferencesManager.setLlmModelSizeMB(result.sizeMB.toFloat())
-                    
+
                     // Auto-run self-test after successful import
                     runSelfTest()
                 }
@@ -161,7 +162,7 @@ class ModelImportViewModel @Inject constructor(
             }
         }
     }
-    
+
     fun runSelfTest() {
         viewModelScope.launch(Dispatchers.IO) {
             // Update UI state on main thread
@@ -171,10 +172,10 @@ class ModelImportViewModel @Inject constructor(
                     selfTestResult = null
                 )
             }
-            
+
             // Run heavy model loading on IO thread (prevents ANR)
             val result = modelSelfTest.runSelfTest()
-            
+
             // Update UI state on main thread
             withContext(Dispatchers.Main) {
                 _uiState.value = _uiState.value.copy(
@@ -184,7 +185,7 @@ class ModelImportViewModel @Inject constructor(
             }
         }
     }
-    
+
     fun deleteModel() {
         viewModelScope.launch {
             modelImportManager.deleteModel()
@@ -275,11 +276,11 @@ class ModelImportViewModel @Inject constructor(
             }
         }
     }
-    
+
     fun clearError() {
         _uiState.value = _uiState.value.copy(importError = null)
     }
-    
+
     /**
      * Download the Qwen2.5 text model used by the explicit Clean action.
      * Capture remains OCR-first; this model is only used after the user asks to clean a saved coupon.
@@ -300,7 +301,7 @@ class ModelImportViewModel @Inject constructor(
                         importError = null
                     )
                 }
-                
+
                 val result = modelDownloadManager.downloadQwen25Model { progress ->
                     viewModelScope.launch(Dispatchers.Main) {
                         _uiState.value = _uiState.value.copy(
@@ -309,7 +310,7 @@ class ModelImportViewModel @Inject constructor(
                         )
                     }
                 }
-                
+
                 when (result) {
                     is com.example.coupontracker.llm.DownloadResult.Success -> {
                         withContext(Dispatchers.Main) {
@@ -323,10 +324,10 @@ class ModelImportViewModel @Inject constructor(
                                 importProgress = 100,
                                 importMessage = "Download complete"
                             )
-                            
+
                             // Check for updated model info
                             checkInstalledModel()
-                            
+
                             // Auto-run self-test
                             runSelfTest()
                         }
@@ -341,7 +342,7 @@ class ModelImportViewModel @Inject constructor(
                         }
                     }
                 }
-                
+
             } catch (e: Exception) {
                 android.util.Log.e("ModelImportViewModel", "Download failed", e)
                 withContext(Dispatchers.Main) {

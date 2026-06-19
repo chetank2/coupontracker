@@ -184,8 +184,8 @@ class GemmaVisionRuntime @Inject constructor(
         const val VISION_ENCODER_RELATIVE_PATH = "gemma/gemma-3-vision-encoder.task"
         const val VISION_ADAPTER_RELATIVE_PATH = "gemma/gemma-3-vision-adapter.task"
         const val DEFAULT_MAX_TOKENS = 512
-        private const val RESPONSE_TIMEOUT_MS = 75_000L
-        private const val MAX_VISION_IMAGE_EDGE = 768
+        private const val RESPONSE_TIMEOUT_MS = 130_000L
+        private const val MAX_VISION_IMAGE_EDGE = 512
         private val BITMAP_IMAGE_BUILDER_CLASS_CANDIDATES = listOf(
             "com.google.mediapipe.framework.image.BitmapImageBuilder"
         )

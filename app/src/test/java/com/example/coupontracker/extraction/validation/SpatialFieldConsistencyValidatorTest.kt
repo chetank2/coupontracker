@@ -57,6 +57,27 @@ class SpatialFieldConsistencyValidatorTest {
         assertTrue(result.reason.orEmpty(), result.consistent)
     }
 
+    @Test
+    fun `accepts full screen duplicate store anchor when tight card anchors exist`() {
+        val fields = mapOf(
+            FieldType.STORE_NAME to candidate("PUMA"),
+            FieldType.DESCRIPTION to candidate("Get Upto 50% Off Extra 33% Off"),
+            FieldType.COUPON_CODE to candidate("KQSKLBLBIR"),
+            FieldType.EXPIRY_DATE to candidate("2025-05-05")
+        )
+        val blocks = listOf(
+            block("PUMA", 56f, 82f),
+            block("Rewards header", 160f, 190f),
+            block("Get Upto 50% Off Extra 33% Off at PUMA", 1067f, 1108f),
+            block("KQSKLBLBIR", 1212f, 1242f),
+            block("Expires on 05 May, 2025", 1280f, 1312f)
+        )
+
+        val result = validator.validate(fields, blocks, imageHeight = 1700)
+
+        assertTrue(result.reason.orEmpty(), result.consistent)
+    }
+
     private fun candidate(value: String): FieldCandidate {
         return FieldCandidate(
             value = value,

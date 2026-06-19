@@ -1,4 +1,4 @@
-package com.example.coupontracker.ui.screen
+package com.example.coupontracker.ui.settings
 
 import android.content.Intent
 import android.net.Uri

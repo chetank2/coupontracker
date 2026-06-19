@@ -1,4 +1,4 @@
-package com.example.coupontracker.ui.screen
+package com.example.coupontracker.ui.home
 
 import android.content.Context
 import androidx.compose.foundation.background
@@ -82,8 +82,6 @@ import com.example.coupontracker.ui.model.hasActiveFilters
 import com.example.coupontracker.ui.model.toCouponCardModel
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.BrandSpacing
-import com.example.coupontracker.ui.viewmodel.HomeViewModel
-import com.example.coupontracker.ui.viewmodel.ModelAvailabilityStatus
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

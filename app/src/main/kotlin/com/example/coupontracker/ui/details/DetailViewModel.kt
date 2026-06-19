@@ -1,17 +1,17 @@
-package com.example.coupontracker.ui.viewmodel
+package com.example.coupontracker.ui.details
 
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.preferences.SecurePreferencesManager
 import com.example.coupontracker.data.repository.CouponRepository
-import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
+import com.example.coupontracker.extraction.merge.ModelCleanupMergePolicy
 import com.example.coupontracker.llm.LlmRuntimeManager
 import com.example.coupontracker.util.CouponNotificationManager
-import com.example.coupontracker.util.SecurePreferencesManager
 import com.example.coupontracker.worker.VerifyCouponWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -97,6 +97,7 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             val coupon = _coupon.value ?: return@launch
             val offerText = coupon.description.trim()
+            val cleanupInput = coupon.rawOcrText?.trim()?.takeIf { it.isNotBlank() } ?: offerText
             if (offerText.isBlank()) {
                 markOfferCleanFailed(coupon, "Offer text is empty.")
                 return@launch
@@ -124,38 +125,27 @@ class DetailViewModel @Inject constructor(
 
             try {
                 val rawResponse = runtime.runTextInference(
-                    ocrText = offerText,
+                    ocrText = cleanupInput,
                     prompt = buildOfferCleanerPrompt(coupon),
                     keepLoaded = false,
-                    maxTokensOverride = 80
+                    maxTokensOverride = 140
                 )
-                val cleanedOffer = extractOfferJson(rawResponse)
-                    ?.takeIf { it.isNotBlank() }
-                    ?.takeUnless { it.equals("unknown", ignoreCase = true) }
-                    ?.takeIf { it.length <= 220 }
+                val modelJson = extractOfferJsonObject(rawResponse)
 
-                if (cleanedOffer == null) {
+                if (modelJson == null) {
                     markOfferCleanFailed(coupon, "Qwen did not return a valid cleaned offer.")
                     return@launch
                 }
 
                 val latest = repository.getCouponById(coupon.id) ?: coupon
-                val updated = latest.copy(
-                    description = cleanedOffer,
-                    normalizedDescription = CouponDedupUtils.normalizeDescription(cleanedOffer),
-                    cleanupStatus = Coupon.CleanupStatus.CLEANED,
-                    cleanupStartedAt = latest.cleanupStartedAt,
-                    cleanupFinishedAt = Date(),
-                    cleanupError = null,
-                    lastCleanedBy = "Qwen offer cleaner",
-                    extractionRunPath = JSONObject()
-                        .put("stage", "offer_clean")
-                        .put("offer", "QWEN_TEXT")
-                        .put("protected_fields", "UNCHANGED")
-                        .toString(),
-                    extractionSource = Coupon.ExtractionSource.QWEN_CLEANED,
-                    updatedAt = Date()
+                val mergeResult = ModelCleanupMergePolicy.mergeQwenTextCleanup(
+                    current = latest,
+                    modelJson = modelJson,
+                    cleanupInputText = cleanupInput,
+                    cleanedBy = "Qwen offer cleaner"
                 )
+                Log.i(TAG, "Qwen cleanup merge decisions: ${mergeResult.runPath}")
+                val updated = mergeResult.coupon
                 repository.updateCoupon(updated)
             } catch (error: Throwable) {
                 Log.e(TAG, "Offer clean failed", error)
@@ -185,23 +175,29 @@ class DetailViewModel @Inject constructor(
 
             Rules:
             - Put the cleaned offer sentence only in description.
-            - Set storeName, redeemCode, expiryDate, and storeNameSource to "unknown".
-            - Set storeNameEvidence to [].
-            - Set needsAttention to false.
+            - Use the full OCR context below to avoid inventing weak fields.
+            - Keep storeName and redeemCode exactly as the current app values when visible in OCR.
+            - expiryDate must be ISO yyyy-MM-dd when certain from OCR; otherwise "unknown".
+            - storeNameEvidence must contain exact OCR snippets for storeName, or [] when unsupported.
+            - Set needsAttention to true if any returned field lacks exact OCR support.
             - Rewrite only the offer sentence below for readability.
             - Do not invent data.
             - Do not change or output the app name: ${coupon.storeName}
             - Do not change or output the coupon code: ${coupon.redeemCode ?: "null"}
             - Do not change or output the expiry date.
             - Do not add cashback, discount, terms, dates, or codes unless already present in the offer text.
+            - Never use footer/context text like About, Scratch card received, timestamps, AM/PM, or website labels as the offer.
             - Keep the cleaned offer concise.
 
             Offer text:
             $offerText
+
+            Full OCR context:
+            ${coupon.rawOcrText?.trim()?.takeIf { it.isNotBlank() } ?: offerText}
         """.trimIndent()
     }
 
-    private fun extractOfferJson(rawResponse: String?): String? {
+    private fun extractOfferJsonObject(rawResponse: String?): JSONObject? {
         if (rawResponse.isNullOrBlank()) return null
         val trimmed = rawResponse.trim()
         val jsonText = if (trimmed.startsWith("{")) {
@@ -211,12 +207,7 @@ class DetailViewModel @Inject constructor(
             val end = trimmed.lastIndexOf('}')
             if (start >= 0 && end > start) trimmed.substring(start, end + 1) else return null
         }
-        return runCatching {
-            val json = JSONObject(jsonText)
-            json.optString("offer").ifBlank {
-                json.optString("description")
-            }.trim()
-        }.getOrNull()
+        return runCatching { JSONObject(jsonText) }.getOrNull()
     }
 
     fun deleteCoupon() {

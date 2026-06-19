@@ -1,4 +1,4 @@
-package com.example.coupontracker.ui.screen
+package com.example.coupontracker.ui.review
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -35,7 +35,7 @@ fun MultiCouponPreviewScreen(
 ) {
     var coupons by remember { mutableStateOf(extractionResult.coupons.toMutableList()) }
     var isSaving by remember { mutableStateOf(false) }
-    
+
     Scaffold(
         topBar = {
             BrandTopBar(
@@ -64,7 +64,7 @@ fun MultiCouponPreviewScreen(
                     ) {
                         Text("Cancel")
                     }
-                    
+
                     Button(
                         onClick = {
                             isSaving = true
@@ -108,20 +108,20 @@ fun MultiCouponPreviewScreen(
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     SummaryRow("Screenshot Type:", extractionResult.screenshotType.name)
                     SummaryRow("Detected Regions:", "${extractionResult.totalDetected}")
                     SummaryRow("Successfully Extracted:", "${extractionResult.totalExtracted}")
                     if (extractionResult.totalFiltered > 0) {
                         SummaryRow(
-                            "Filtered (Low Quality):", 
+                            "Filtered (Low Quality):",
                             "${extractionResult.totalFiltered}",
                             isWarning = true
                         )
                     }
                 }
             }
-            
+
             // Coupon List
             if (coupons.isEmpty()) {
                 EmptyStateContent()
@@ -164,7 +164,7 @@ private fun SummaryRow(
             text = value,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
-            color = if (isWarning) MaterialTheme.colorScheme.error 
+            color = if (isWarning) MaterialTheme.colorScheme.error
                    else MaterialTheme.colorScheme.onSecondaryContainer
         )
     }
@@ -177,18 +177,18 @@ private fun CouponPreviewCard(
 ) {
     val coupon = couponWithConfidence.coupon
     val quality = couponWithConfidence.extractionQuality
-    
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
             containerColor = when (quality) {
                 ExtractionValidator.ExtractionQuality.EXCELLENT,
-                ExtractionValidator.ExtractionQuality.GOOD -> 
+                ExtractionValidator.ExtractionQuality.GOOD ->
                     MaterialTheme.colorScheme.surface
-                ExtractionValidator.ExtractionQuality.ACCEPTABLE -> 
+                ExtractionValidator.ExtractionQuality.ACCEPTABLE ->
                     MaterialTheme.colorScheme.surfaceVariant
-                else -> 
+                else ->
                     MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
             }
         )
@@ -206,7 +206,7 @@ private fun CouponPreviewCard(
                     quality = quality,
                     confidence = couponWithConfidence.confidence
                 )
-                
+
                 IconButton(onClick = onRemove) {
                     Icon(
                         Icons.Default.Delete,
@@ -215,9 +215,9 @@ private fun CouponPreviewCard(
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             // Store Name
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -235,9 +235,9 @@ private fun CouponPreviewCard(
                     fontWeight = FontWeight.Bold
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             // Description
             if (coupon.description.isNotBlank()) {
                 Text(
@@ -247,7 +247,7 @@ private fun CouponPreviewCard(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
-            
+
             // Coupon Code
             if (!coupon.redeemCode.isNullOrBlank()) {
                 Row(
@@ -269,7 +269,7 @@ private fun CouponPreviewCard(
                 }
                 Spacer(modifier = Modifier.height(4.dp))
             }
-            
+
             DescriptionUtils.extractCashbackLine(coupon.description)?.let { detail ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -288,13 +288,13 @@ private fun CouponPreviewCard(
                     )
                 }
             }
-            
+
             // Warnings (if any)
             if (couponWithConfidence.warnings.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 couponWithConfidence.warnings.take(2).forEach { warning ->
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -324,18 +324,18 @@ private fun QualityBadge(
     confidence: Float
 ) {
     val (color, icon, label) = when (quality) {
-        ExtractionValidator.ExtractionQuality.EXCELLENT -> 
+        ExtractionValidator.ExtractionQuality.EXCELLENT ->
             Triple(MaterialTheme.colorScheme.primary, Icons.Default.CheckCircle, "Excellent")
-        ExtractionValidator.ExtractionQuality.GOOD -> 
+        ExtractionValidator.ExtractionQuality.GOOD ->
             Triple(MaterialTheme.colorScheme.tertiary, Icons.Default.ThumbUp, "Good")
-        ExtractionValidator.ExtractionQuality.ACCEPTABLE -> 
+        ExtractionValidator.ExtractionQuality.ACCEPTABLE ->
             Triple(MaterialTheme.colorScheme.secondary, Icons.Default.Check, "OK")
-        ExtractionValidator.ExtractionQuality.POOR -> 
+        ExtractionValidator.ExtractionQuality.POOR ->
             Triple(MaterialTheme.colorScheme.error, Icons.Default.Warning, "Low Quality")
-        ExtractionValidator.ExtractionQuality.FAILED -> 
+        ExtractionValidator.ExtractionQuality.FAILED ->
             Triple(MaterialTheme.colorScheme.error, Icons.Default.Error, "Failed")
     }
-    
+
     Surface(
         color = color.copy(alpha = 0.15f),
         shape = RoundedCornerShape(12.dp)

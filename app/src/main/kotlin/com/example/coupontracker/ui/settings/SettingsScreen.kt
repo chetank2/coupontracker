@@ -1,4 +1,4 @@
-package com.example.coupontracker.ui.screen
+package com.example.coupontracker.ui.settings
 
 import android.Manifest
 import android.content.Intent
@@ -27,9 +27,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.coupontracker.data.preferences.SecurePreferencesManager
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.util.ModelMetadataReader
-import com.example.coupontracker.util.SecurePreferencesManager
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -41,8 +41,10 @@ import androidx.compose.ui.unit.sp
 import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.components.ThemeSelector
 import com.example.coupontracker.ui.components.DataSafetyDialog
-import com.example.coupontracker.ui.viewmodel.ModelSetupTarget
-import com.example.coupontracker.ui.viewmodel.SettingsViewModel
+import com.example.coupontracker.ui.modelsettings.LicenseGateScreen
+import com.example.coupontracker.ui.modelsettings.ModelImportViewModel
+import com.example.coupontracker.ui.modelsettings.ModelLicenseGateConfig
+import com.example.coupontracker.ui.modelsettings.ModelSetupTarget
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
@@ -92,21 +94,21 @@ fun SettingsScreen(
     }
 
     // Use a lazy initialization to avoid ANR
-    val securePreferencesManager = remember { 
+    val securePreferencesManager = remember {
         SecurePreferencesManager(context)
     }
-    
+
     // Get model version in background to avoid ANR
     var modelVersion by remember { mutableStateOf("Loading...") }
     var numPatterns by remember { mutableStateOf(0) }
-    
+
     LaunchedEffect(Unit) {
         // Move expensive operations to background thread
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 // Initialize SecurePreferencesManager in background
                 securePreferencesManager.initialize()
-                
+
                 val modelMetadataReader = ModelMetadataReader(context)
                 val (version, patterns) = modelMetadataReader.getModelVersion()
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -411,9 +413,9 @@ private fun CompactValue(text: String) {
 @Composable
 private fun ModelManagementCard() {
     val context = LocalContext.current
-    val modelImportViewModel: com.example.coupontracker.ui.viewmodel.ModelImportViewModel = hiltViewModel()
+    val modelImportViewModel: ModelImportViewModel = hiltViewModel()
     val uiState by modelImportViewModel.uiState.collectAsState()
-    
+
     val securePrefsManager = remember { SecurePreferencesManager(context) }
     var showLicenseGate by remember { mutableStateOf(false) }
     var licenseGateConfig by remember { mutableStateOf(ModelLicenseGateConfig.Qwen) }
@@ -422,7 +424,7 @@ private fun ModelManagementCard() {
     var gemmaLicenseAccepted by remember { mutableStateOf(securePrefsManager.isGemmaVisionLicenseAccepted()) }
     var qwenCleanerEnabled by remember { mutableStateOf(securePrefsManager.isQwenTextCleanerEnabled()) }
     var gemmaVerifierEnabled by remember { mutableStateOf(securePrefsManager.isGemmaVisionVerifierEnabled()) }
-    
+
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -434,7 +436,7 @@ private fun ModelManagementCard() {
     ) { uri ->
         uri?.let { modelImportViewModel.importGemmaVisionModel(it) }
     }
-    
+
     // License Gate Dialog
     if (showLicenseGate) {
         androidx.compose.ui.window.Dialog(
@@ -462,7 +464,7 @@ private fun ModelManagementCard() {
             }
         }
     }
-    
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -482,9 +484,9 @@ private fun ModelManagementCard() {
                     fontWeight = FontWeight.Bold
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             // Model Status
             if (uiState.isModelInstalled) {
                 // Installed status
@@ -526,9 +528,9 @@ private fun ModelManagementCard() {
                         )
                     },
                 )
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 uiState.selfTestResult?.let { result ->
                     when (result) {
                         is com.example.coupontracker.model.SelfTestResult.Success -> {
@@ -554,9 +556,9 @@ private fun ModelManagementCard() {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             // Qwen setup status
             if (uiState.activeSetupTarget == ModelSetupTarget.QWEN && uiState.isImporting) {
                 LinearProgressIndicator(
@@ -569,7 +571,7 @@ private fun ModelManagementCard() {
                     modifier = Modifier.padding(top = 4.dp)
                 )
             }
-            
+
             if (uiState.activeSetupTarget == ModelSetupTarget.QWEN) {
                 uiState.importError?.let { error ->
                     Text(
@@ -593,9 +595,9 @@ private fun ModelManagementCard() {
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             // Action Buttons
             if (!uiState.isModelInstalled) {
                 // Import/Download options when model not installed
@@ -617,9 +619,9 @@ private fun ModelManagementCard() {
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Set up Qwen model")
                     }
-                    
+
                     Spacer(modifier = Modifier.height(8.dp))
-                    
+
                     OutlinedButton(
                         onClick = {
                             filePicker.launch(arrayOf("application/zip", "application/octet-stream"))
@@ -658,7 +660,7 @@ private fun ModelManagementCard() {
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Check")
                     }
-                    
+
                     // Delete Button
                     OutlinedButton(
                         onClick = { modelImportViewModel.deleteModel() },
@@ -844,7 +846,7 @@ private fun BackupRestoreCard(
 ) {
     val context = LocalContext.current
     val backupState by viewModel.backupState.collectAsState()
-    
+
     // File pickers
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/octet-stream")
@@ -852,14 +854,14 @@ private fun BackupRestoreCard(
         onPickerReturn()
         uri?.let { viewModel.exportBackup(it) }
     }
-    
+
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         onPickerReturn()
         uri?.let { viewModel.importBackup(it) }
     }
-    
+
     // Show result dialog
     when (val state = backupState) {
         is SettingsViewModel.BackupState.Success -> {
@@ -884,7 +886,7 @@ private fun BackupRestoreCard(
         }
         else -> {}
     }
-    
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -904,17 +906,17 @@ private fun BackupRestoreCard(
                     fontWeight = FontWeight.Bold
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             Text(
                 text = "Export your coupons to an encrypted backup file or restore from a previous backup.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Export/Import Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -948,7 +950,7 @@ private fun BackupRestoreCard(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Export")
                 }
-                
+
                 // Import Button
                 Button(
                     onClick = {
@@ -975,9 +977,9 @@ private fun BackupRestoreCard(
                     Text("Import")
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             // Security note
             Row(
                 verticalAlignment = Alignment.CenterVertically

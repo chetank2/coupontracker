@@ -1,4 +1,4 @@
-package com.example.coupontracker.ui.screen
+package com.example.coupontracker.ui.details
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -51,7 +51,6 @@ import com.example.coupontracker.ui.components.GlassSurface
 import com.example.coupontracker.ui.components.StatusType
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.BrandSpacing
-import com.example.coupontracker.ui.viewmodel.DetailViewModel
 import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.data.util.DescriptionUtils
 import java.util.Date
@@ -433,7 +432,7 @@ private fun CouponDetailContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = if (coupon.getCashbackInfo().type == CashbackType.PERCENT) 
+                    imageVector = if (coupon.getCashbackInfo().type == CashbackType.PERCENT)
                         Icons.Default.Percent else Icons.Default.CurrencyRupee,
                     contentDescription = null
                 )

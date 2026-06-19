@@ -30,17 +30,19 @@ class SpatialFieldConsistencyValidator {
             return Result(consistent = true)
         }
 
-        val anchors = fields
+        val anchorCandidates = fields
             .filterKeys { it in PRIMARY_FIELDS }
-            .mapNotNull { (field, candidate) ->
-                findAnchor(field, candidate.value, ocrBlocks)?.let { field to it }
-            }
-            .toMap()
+            .mapValues { (field, candidate) -> findAnchors(field, candidate.value, ocrBlocks) }
+            .filterValues { it.isNotEmpty() }
 
-        if (anchors.size < 2) {
-            return Result(consistent = true, matchedAnchors = anchors)
+        if (anchorCandidates.size < 2) {
+            return Result(
+                consistent = true,
+                matchedAnchors = anchorCandidates.mapValues { (_, candidates) -> candidates.first() }
+            )
         }
 
+        val anchors = chooseTightestAnchorSet(anchorCandidates)
         val centers = anchors.mapValues { (_, rect) -> rect.centerY() }
         val minY = centers.values.minOrNull() ?: return Result(consistent = true, matchedAnchors = anchors)
         val maxY = centers.values.maxOrNull() ?: return Result(consistent = true, matchedAnchors = anchors)
@@ -79,37 +81,69 @@ class SpatialFieldConsistencyValidator {
         return Result(consistent = true, matchedAnchors = anchors)
     }
 
-    private fun findAnchor(
+    private fun findAnchors(
         field: FieldType,
         value: String,
         ocrBlocks: List<TextBlock>
-    ): RectF? {
+    ): List<RectF> {
         val normalizedValue = normalize(value)
-        if (normalizedValue.isBlank()) return null
+        if (normalizedValue.isBlank()) return emptyList()
+
+        val matches = mutableListOf<RectF>()
 
         if (field == FieldType.EXPIRY_DATE) {
-            ocrBlocks.firstOrNull { block ->
+            ocrBlocks.filterToBounds(matches) { block ->
                 val text = normalize(block.text)
                 EXPIRY_WORDS.any { text.contains(it) }
-            }?.let { return it.bounds }
+            }
         }
 
-        ocrBlocks.firstOrNull { block ->
+        ocrBlocks.filterToBounds(matches) { block ->
             val text = normalize(block.text)
             text.contains(normalizedValue) || normalizedValue.contains(text)
-        }?.let { return it.bounds }
+        }
 
         val tokens = normalizedValue
             .split(' ')
             .filter { it.length >= 3 }
             .take(5)
-        if (tokens.isEmpty()) return null
+        if (tokens.isNotEmpty()) {
+            ocrBlocks.filterToBounds(matches) { block ->
+                val text = normalize(block.text)
+                val hits = tokens.count { token -> text.contains(token) }
+                hits >= minOf(2, tokens.size)
+            }
+        }
 
-        return ocrBlocks.firstOrNull { block ->
-            val text = normalize(block.text)
-            val hits = tokens.count { token -> text.contains(token) }
-            hits >= minOf(2, tokens.size)
-        }?.bounds
+        return matches
+            .distinctBy { rect -> "${rect.left}:${rect.top}:${rect.right}:${rect.bottom}" }
+            .take(MAX_ANCHOR_CANDIDATES)
+    }
+
+    private fun List<TextBlock>.filterToBounds(
+        output: MutableList<RectF>,
+        predicate: (TextBlock) -> Boolean
+    ) {
+        forEach { block ->
+            if (predicate(block)) output += block.bounds
+        }
+    }
+
+    private fun chooseTightestAnchorSet(anchorCandidates: Map<FieldType, List<RectF>>): Map<FieldType, RectF> {
+        var combinations = listOf(emptyMap<FieldType, RectF>())
+        anchorCandidates.forEach { (field, candidates) ->
+            combinations = combinations.flatMap { partial ->
+                candidates.map { candidate -> partial + (field to candidate) }
+            }
+        }
+        return combinations.minByOrNull(::verticalSpread) ?: anchorCandidates.mapValues { (_, candidates) -> candidates.first() }
+    }
+
+    private fun verticalSpread(anchors: Map<FieldType, RectF>): Float {
+        val centers = anchors.values.map { it.centerY() }
+        val minY = centers.minOrNull() ?: return 0f
+        val maxY = centers.maxOrNull() ?: return 0f
+        return maxY - minY
     }
 
     private fun normalize(value: String): String {
@@ -130,5 +164,6 @@ class SpatialFieldConsistencyValidator {
         private val EXPIRY_WORDS = setOf("expires", "expiry", "valid", "validity")
         private const val MAX_VERTICAL_SPREAD_RATIO = 0.55f
         private const val MIN_VERTICAL_SPREAD_PX = 220f
+        private const val MAX_ANCHOR_CANDIDATES = 6
     }
 }

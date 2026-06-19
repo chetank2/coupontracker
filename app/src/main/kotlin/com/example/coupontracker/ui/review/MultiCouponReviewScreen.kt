@@ -1,4 +1,4 @@
-package com.example.coupontracker.ui.screen
+package com.example.coupontracker.ui.review
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -26,7 +26,6 @@ import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.theme.BrandTypography
-import com.example.coupontracker.ui.viewmodel.MultiCouponReviewViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

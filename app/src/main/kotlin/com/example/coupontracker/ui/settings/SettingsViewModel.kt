@@ -1,4 +1,4 @@
-package com.example.coupontracker.ui.viewmodel
+package com.example.coupontracker.ui.settings
 
 import android.net.Uri
 import androidx.lifecycle.ViewModel
@@ -157,11 +157,11 @@ class SettingsViewModel @Inject constructor(
     fun exportBackup(uri: Uri) {
         viewModelScope.launch {
             _backupState.value = BackupState.Exporting
-            
+
             try {
                 // Get all coupons
                 val coupons = couponRepository.getAllCoupons().first()
-                
+
                 // Export using secure backup manager
                 when (val result = secureBackupManager.exportSecureBackup(uri, coupons)) {
                     is SecureBackupManager.BackupResult.Success -> {
@@ -183,16 +183,16 @@ class SettingsViewModel @Inject constructor(
     fun importBackup(uri: Uri) {
         viewModelScope.launch {
             _backupState.value = BackupState.Importing
-            
+
             try {
                 // Read coupons from backup
                 val coupons = secureBackupManager.readCouponsFromBackup(uri)
-                
+
                 if (coupons.isEmpty()) {
                     _backupState.value = BackupState.Error("Backup file is empty or invalid")
                     return@launch
                 }
-                
+
                 // Import coupons atomically (replace existing data)
                 val insertedCount = couponRepository.replaceAllCoupons(coupons)
 

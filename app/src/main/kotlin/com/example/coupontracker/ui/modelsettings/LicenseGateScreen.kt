@@ -1,4 +1,4 @@
-package com.example.coupontracker.ui.screen
+package com.example.coupontracker.ui.modelsettings
 
 import android.content.Intent
 import android.net.Uri
@@ -22,7 +22,7 @@ import com.example.coupontracker.ui.components.BrandTopBar
 import com.example.coupontracker.ui.theme.BrandShapes
 import com.example.coupontracker.ui.theme.BrandSpacing
 import com.example.coupontracker.ui.theme.BrandTypography
-import com.example.coupontracker.util.SecurePreferencesManager
+import com.example.coupontracker.data.preferences.SecurePreferencesManager
 
 private const val QWEN_MODEL_PAGE_URL = "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF"
 private const val GEMMA_MODEL_PAGE_URL = "https://huggingface.co/google/gemma-3n-E2B-it-litert-preview"
@@ -73,14 +73,14 @@ fun LicenseGateScreen(
 ) {
     val context = LocalContext.current
     var agreedToTerms by remember { mutableStateOf(false) }
-    
+
     // Check if already accepted
     LaunchedEffect(Unit) {
         if (config.alreadyAccepted(securePreferencesManager)) {
             onLicenseAccepted()
         }
     }
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()

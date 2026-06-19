@@ -1,5 +1,6 @@
 package com.example.coupontracker.util
 
+import com.example.coupontracker.extraction.quality.CouponFieldNoise
 import java.util.Locale
 
 object StoreCandidateValidator {
@@ -7,19 +8,30 @@ object StoreCandidateValidator {
     private val noiseTokens = setOf(
         "am", "pm", "vit", "otp", "upi", "url", "www", "com", "app",
         "now", "new", "get", "off", "for", "the", "and", "use", "code",
-        "cashback", "cred", "pay", "via", "expires", "expired", "valid"
+        "cashback", "cred", "pay", "via", "expires", "expired", "valid",
+        "expiry", "hour", "hours", "hr", "hrs", "day", "days", "week",
+        "weeks", "month", "months", "in"
     )
 
     fun isAcceptable(candidate: String?, rawOcr: String? = null): Boolean {
         if (candidate.isNullOrBlank()) return false
+        if (CouponFieldNoise.isExpiryBadgeOrFragment(candidate)) return false
         if (GenericFieldHeuristics.isGenericOrMissing(candidate)) return false
 
         val tokens = tokens(candidate)
         if (tokens.isEmpty()) return false
-        if (tokens.any { it in noiseTokens }) return false
+        val tokensForNoiseCheck = if (tokens.size > 1 && tokens.first() == "the") {
+            tokens.drop(1)
+        } else {
+            tokens
+        }
+        if (tokensForNoiseCheck.any { it in noiseTokens }) return false
 
         val letterTokens = tokens.filter { token -> token.any(Char::isLetter) }
         if (letterTokens.isEmpty()) return false
+        if (tokens.any { token -> token.any(Char::isLetter) && token.any(Char::isDigit) }) {
+            return false
+        }
 
         if (letterTokens.size > 1 && letterTokens.any { it.length <= 2 }) {
             return false

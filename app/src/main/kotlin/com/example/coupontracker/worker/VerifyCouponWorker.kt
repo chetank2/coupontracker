@@ -1,7 +1,9 @@
 package com.example.coupontracker.worker
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Rect
 import android.net.Uri
 import android.util.Log
 import androidx.hilt.work.HiltWorker
@@ -15,15 +17,17 @@ import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.extraction.model.GemmaVisionCouponModel
+import com.example.coupontracker.extraction.quality.OfferTextQuality
 import com.example.coupontracker.llm.CouponSchemaKeys
 import com.example.coupontracker.model.ModelCatalog
 import com.example.coupontracker.model.ModelPaths
 import com.example.coupontracker.ocr.OcrEngine
+import com.example.coupontracker.ocr.OcrTextSpan
 import com.example.coupontracker.util.CouponExtractionConfidenceScorer
 import com.example.coupontracker.extraction.rules.CouponInfo
-import com.example.coupontracker.util.DateParser
 import com.example.coupontracker.util.ExtractionRecommendation
 import com.example.coupontracker.util.GenericFieldHeuristics
+import com.example.coupontracker.util.ModelExpiryNormalizer
 import com.example.coupontracker.util.OcrEvidenceValidator
 import com.example.coupontracker.util.PostOcrCouponNormalizer
 import com.example.coupontracker.util.SecurePreferencesManager
@@ -35,6 +39,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import java.util.Date
+import java.util.Locale
 
 @HiltWorker
 class VerifyCouponWorker @AssistedInject constructor(
@@ -76,12 +81,18 @@ class VerifyCouponWorker @AssistedInject constructor(
                 return Result.success()
             }
 
+            val gemmaEnabled = securePreferencesManager.isGemmaVisionVerifierEnabled()
+            val gemmaStatus = ModelPaths.getGemmaVisionInstallStatus(applicationContext)
+            val shouldRunVision = userRequested && gemmaEnabled && gemmaStatus.installed
+
             buildDeterministicCleanedCoupon(coupon, ocrText)?.let { cleaned ->
                 couponRepository.updateCoupon(cleaned)
-                return Result.success()
+                if (!shouldRunVision) {
+                    return Result.success()
+                }
             }
 
-            if (!securePreferencesManager.isGemmaVisionVerifierEnabled()) {
+            if (!gemmaEnabled) {
                 markFailed(
                     couponId,
                     "Gemma Vision verifier is turned off in Settings."
@@ -89,7 +100,6 @@ class VerifyCouponWorker @AssistedInject constructor(
                 return Result.success()
             }
 
-            val gemmaStatus = ModelPaths.getGemmaVisionInstallStatus(applicationContext)
             if (!gemmaStatus.installed) {
                 markFailed(
                     couponId,
@@ -103,20 +113,24 @@ class VerifyCouponWorker @AssistedInject constructor(
                 markFailed(couponId, "Saved image is unavailable for vision verification.")
                 return Result.success()
             }
+            val visionBitmap = prepareVisionBitmap(bitmap, coupon, ocrText)
             try {
                 val visionResult = withTimeout(CLEANUP_TIMEOUT_MS) {
                     gemmaVisionCouponModel.extractFromImage(
-                        image = bitmap,
+                        image = visionBitmap,
                         ocrText = ocrText,
                         prompt = buildVisionVerificationPrompt()
                     )
                 }
                 val current = couponRepository.getCouponById(couponId) ?: return Result.success()
-                val visionInfo = parseCanonicalJsonToCouponInfo(visionResult.canonicalJson, current.createdAt)
+                val visionInfo = parseCanonicalJsonToCouponInfo(visionResult.canonicalJson)
                 val verified = mergeVisionVerifiedCoupon(current, visionInfo, ocrText)
                 couponRepository.updateCoupon(verified)
                 Result.success()
             } finally {
+                if (visionBitmap !== bitmap && !visionBitmap.isRecycled) {
+                    visionBitmap.recycle()
+                }
                 bitmap.recycle()
             }
         } catch (t: Throwable) {
@@ -125,6 +139,97 @@ class VerifyCouponWorker @AssistedInject constructor(
             Result.success()
         }
     }
+
+    private suspend fun prepareVisionBitmap(source: Bitmap, coupon: Coupon, rawOcr: String): Bitmap {
+        val crop = runCatching { cropBitmapToCouponEvidence(source, coupon, rawOcr) }
+            .onFailure { Log.w(TAG, "Could not create target crop for Gemma Vision", it) }
+            .getOrNull()
+        if (crop == null) {
+            Log.d(TAG, "Gemma Vision using original bitmap ${source.width}x${source.height}")
+            return source
+        }
+        Log.d(
+            TAG,
+            "Gemma Vision using OCR-targeted crop ${source.width}x${source.height} -> ${crop.width}x${crop.height}"
+        )
+        return crop
+    }
+
+    private suspend fun cropBitmapToCouponEvidence(source: Bitmap, coupon: Coupon, rawOcr: String): Bitmap? {
+        val spans = withContext(Dispatchers.IO) { ocrEngine.recognizeWithBoxes(source) }
+            .filter { it.text.isNotBlank() && !it.boundingBox.isEmpty }
+        if (spans.isEmpty()) return null
+
+        val anchorSpans = spans.filter { span -> isCouponAnchorSpan(span, coupon, rawOcr) }
+        val exactCodeAnchors = coupon.redeemCode
+            ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+            ?.let { code -> anchorSpans.count { normalizeEvidence(it.text).contains(normalizeEvidence(code)) } }
+            ?: 0
+        if (anchorSpans.size < MIN_VISION_CROP_ANCHORS && exactCodeAnchors == 0) return null
+
+        val minAnchorY = anchorSpans.minOf { it.boundingBox.top }
+        val maxAnchorY = anchorSpans.maxOf { it.boundingBox.bottom }
+        val verticalPadding = (source.height * VISION_CROP_VERTICAL_PADDING_RATIO).toInt()
+            .coerceAtLeast(MIN_VISION_CROP_PADDING_PX)
+        val cropTop = (minAnchorY - verticalPadding).coerceAtLeast(0)
+        val cropBottom = (maxAnchorY + verticalPadding).coerceAtMost(source.height)
+        val cropHeight = cropBottom - cropTop
+        if (cropHeight <= 0 || cropHeight >= source.height * MAX_VISION_CROP_HEIGHT_RATIO) return null
+
+        val horizontalBounds = spans
+            .filter { centerY(it.boundingBox) in cropTop..cropBottom }
+            .map { it.boundingBox }
+        val cropLeft = (horizontalBounds.minOfOrNull { it.left } ?: 0)
+            .minus((source.width * VISION_CROP_HORIZONTAL_PADDING_RATIO).toInt())
+            .coerceAtLeast(0)
+        val cropRight = (horizontalBounds.maxOfOrNull { it.right } ?: source.width)
+            .plus((source.width * VISION_CROP_HORIZONTAL_PADDING_RATIO).toInt())
+            .coerceAtMost(source.width)
+        val cropWidth = cropRight - cropLeft
+        if (cropWidth <= 0) return null
+
+        return Bitmap.createBitmap(source, cropLeft, cropTop, cropWidth, cropHeight)
+    }
+
+    private fun isCouponAnchorSpan(span: OcrTextSpan, coupon: Coupon, rawOcr: String): Boolean {
+        val text = normalizeEvidence(span.text)
+        if (text.isBlank()) return false
+
+        coupon.redeemCode
+            ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+            ?.let { code ->
+                if (text.contains(normalizeEvidence(code))) return true
+            }
+
+        val storeTokens = evidenceTokens(coupon.storeName)
+        if (storeTokens.any { token -> text.contains(token) }) return true
+
+        val descriptionTokens = evidenceTokens(coupon.description)
+            .filterNot { it in GENERIC_DESCRIPTION_ANCHORS }
+        if (descriptionTokens.any { token -> text.contains(token) }) return true
+
+        val scopedOcr = textExtractor.extractCouponBlockForStore(rawOcr, coupon.storeName).orEmpty()
+        val scopedTokens = evidenceTokens(scopedOcr)
+        return scopedTokens.take(MAX_SCOPED_ANCHOR_TOKENS).any { token -> text.contains(token) }
+    }
+
+    private fun evidenceTokens(value: String?): List<String> {
+        return normalizeEvidence(value.orEmpty())
+            .split(" ")
+            .map { it.trim() }
+            .filter { it.length >= MIN_EVIDENCE_TOKEN_LENGTH }
+            .filterNot { it in GENERIC_DESCRIPTION_ANCHORS }
+            .distinct()
+    }
+
+    private fun normalizeEvidence(value: String): String {
+        return value.lowercase(Locale.ROOT)
+            .replace(Regex("""[^a-z0-9]+"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+    }
+
+    private fun centerY(rect: Rect): Int = (rect.top + rect.bottom) / 2
 
     private suspend fun decodeBitmap(imageUri: String?) = withContext(Dispatchers.IO) {
         if (imageUri.isNullOrBlank()) return@withContext null
@@ -190,10 +295,14 @@ class VerifyCouponWorker @AssistedInject constructor(
         val extractedCode = info.redeemCode?.trim()
             ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
             ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
-        val selectedCode = extractedCode ?: current.redeemCode
+        val currentStrongCode = current.redeemCode
+            ?.takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+            ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
+        val selectedCode = extractedCode ?: currentStrongCode ?: current.redeemCode
             ?.takeIf { allowUserEditedFallback && it.isNotBlank() }
         val codeSource = when {
             extractedCode != null -> FIELD_SOURCE_OCR_RULE
+            currentStrongCode != null -> FIELD_SOURCE_PRESERVED
             selectedCode != null && allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
             else -> FIELD_SOURCE_MISSING
         }
@@ -201,11 +310,15 @@ class VerifyCouponWorker @AssistedInject constructor(
         val extractedStore = info.storeName.trim()
             .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
             ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
-        val selectedStore = extractedStore ?: current.storeName
+        val currentStrongStore = current.storeName
+            .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
+            .takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
+        val selectedStore = extractedStore ?: currentStrongStore ?: current.storeName
             .takeIf { allowUserEditedFallback && it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
             ?: return null
         val storeSource = when {
             extractedStore != null -> FIELD_SOURCE_OCR_RULE
+            currentStrongStore != null -> FIELD_SOURCE_PRESERVED
             allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
             else -> FIELD_SOURCE_MISSING
         }
@@ -218,19 +331,27 @@ class VerifyCouponWorker @AssistedInject constructor(
             redeemCode = selectedCode
         )
         val extractedDescription = info.description.takeIf(GenericFieldHeuristics::isMeaningfulDescription)
+            ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) || hasSupportedDescriptionTokens(it, rawOcr) }
+        val currentStrongDescription = current.description
+            .takeIf(GenericFieldHeuristics::isMeaningfulDescription)
+            ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) || hasSupportedDescriptionTokens(it, rawOcr) }
         val selectedDescription = normalized.description
             ?: extractedDescription
+            ?: currentStrongDescription
             ?: current.description.takeIf { allowUserEditedFallback && GenericFieldHeuristics.isMeaningfulDescription(it) }
             ?: return null
         val descriptionSource = when {
             normalized.description != null || extractedDescription != null -> FIELD_SOURCE_OCR_RULE
+            currentStrongDescription != null -> FIELD_SOURCE_PRESERVED
             allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
             else -> FIELD_SOURCE_MISSING
         }
 
-        val selectedExpiry = info.expiryDate ?: current.expiryDate.takeIf { allowUserEditedFallback }
+        val currentStrongExpiry = current.expiryDate
+        val selectedExpiry = info.expiryDate ?: currentStrongExpiry ?: current.expiryDate.takeIf { allowUserEditedFallback }
         val expirySource = when {
             info.expiryDate != null -> FIELD_SOURCE_OCR_RULE
+            currentStrongExpiry != null -> FIELD_SOURCE_PRESERVED
             selectedExpiry != null && allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
             else -> FIELD_SOURCE_MISSING
         }
@@ -293,14 +414,28 @@ class VerifyCouponWorker @AssistedInject constructor(
         val allowUserEditedFallback = current.extractionSource == Coupon.ExtractionSource.USER_EDITED
         val selectedStore = info.storeName.trim()
             .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
+            ?.takeIf { rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
+            ?: current.storeName.takeIf {
+                it.isNotBlank() &&
+                    !GenericFieldHeuristics.isGenericOrMissing(it) &&
+                    (rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr))
+            }
             ?: current.storeName.takeIf { allowUserEditedFallback && it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
         val selectedDescription = info.description
             .takeIf(GenericFieldHeuristics::isMeaningfulDescription)
+            ?.takeIf { rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr) || hasSupportedDescriptionTokens(it, rawOcr) }
+            ?: current.description
+                .takeIf(GenericFieldHeuristics::isMeaningfulDescription)
+                ?.takeIf { rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr) || hasSupportedDescriptionTokens(it, rawOcr) }
             ?: current.description.takeIf { allowUserEditedFallback && GenericFieldHeuristics.isMeaningfulDescription(it) }
         val selectedCode = info.redeemCode?.trim()
             ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+            ?.takeIf { rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
+            ?: current.redeemCode
+                ?.takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+                ?.takeIf { rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
             ?: current.redeemCode?.takeIf { allowUserEditedFallback && it.isNotBlank() }
-        val selectedExpiry = info.expiryDate ?: current.expiryDate.takeIf { allowUserEditedFallback }
+        val selectedExpiry = info.expiryDate ?: current.expiryDate ?: current.expiryDate.takeIf { allowUserEditedFallback }
         val missingCriticalFields = selectedStore == null ||
             selectedStore == Coupon.Defaults.UNKNOWN_STORE ||
             selectedDescription == null ||
@@ -331,6 +466,44 @@ class VerifyCouponWorker @AssistedInject constructor(
         }
         val verifiedStore = selectedStore ?: return current
         val verifiedDescription = selectedDescription ?: return current
+        val storeSource = if (
+            info.storeName.isNotBlank() &&
+            !GenericFieldHeuristics.isGenericOrMissing(info.storeName) &&
+            (rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(info.storeName, rawOcr))
+        ) {
+            FIELD_SOURCE_VISION
+        } else {
+            FIELD_SOURCE_PRESERVED
+        }
+        val descriptionSource = if (
+            GenericFieldHeuristics.isMeaningfulDescription(info.description) &&
+            OfferTextQuality.isLikelyOfferText(info.description) &&
+            (rawOcr.isNullOrBlank() ||
+                OcrEvidenceValidator.isPhraseSupported(info.description, rawOcr) ||
+                hasSupportedDescriptionTokens(info.description, rawOcr))
+        ) {
+            FIELD_SOURCE_VISION
+        } else {
+            FIELD_SOURCE_PRESERVED
+        }
+        val codeSource = when {
+            info.redeemCode?.trim()?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) } != null -> FIELD_SOURCE_VISION
+            selectedCode != null && allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
+            selectedCode != null -> FIELD_SOURCE_PRESERVED
+            else -> FIELD_SOURCE_MISSING
+        }
+        val expirySource = when {
+            info.expiryDate != null -> FIELD_SOURCE_VISION
+            selectedExpiry != null && allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
+            selectedExpiry != null -> FIELD_SOURCE_PRESERVED
+            else -> FIELD_SOURCE_MISSING
+        }
+        val coreFieldsPreserved = storeSource == FIELD_SOURCE_PRESERVED || descriptionSource == FIELD_SOURCE_PRESERVED
+        val extractionSource = when {
+            allowUserEditedFallback -> Coupon.ExtractionSource.USER_EDITED
+            coreFieldsPreserved -> current.extractionSource ?: Coupon.ExtractionSource.OCR_VERIFIED
+            else -> Coupon.ExtractionSource.VISION_VERIFIED
+        }
 
         val verified = current.copy(
             storeName = verifiedStore,
@@ -348,40 +521,61 @@ class VerifyCouponWorker @AssistedInject constructor(
             cleanupFinishedAt = Date(),
             cleanupError = null,
             lastCleanedBy = ModelCatalog.GEMMA_VISION_READER_NAME,
-            extractionSource = if (allowUserEditedFallback) Coupon.ExtractionSource.USER_EDITED else Coupon.ExtractionSource.VISION_VERIFIED,
+            extractionSource = extractionSource,
             extractionRunPath = buildFieldSourceRunPath(
                 stage = "vision_cleanup",
-                storeSource = if (info.storeName.isNotBlank()) FIELD_SOURCE_VISION else FIELD_SOURCE_USER_EDITED,
-                descriptionSource = if (GenericFieldHeuristics.isMeaningfulDescription(info.description)) FIELD_SOURCE_VISION else FIELD_SOURCE_USER_EDITED,
-                codeSource = when {
-                    info.redeemCode?.trim()?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) } != null -> FIELD_SOURCE_VISION
-                    selectedCode != null && allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
-                    else -> FIELD_SOURCE_MISSING
-                },
-                expirySource = when {
-                    info.expiryDate != null -> FIELD_SOURCE_VISION
-                    selectedExpiry != null && allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
-                    else -> FIELD_SOURCE_MISSING
-                }
+                storeSource = storeSource,
+                descriptionSource = descriptionSource,
+                codeSource = codeSource,
+                expirySource = expirySource
             ),
             normalizedDescription = CouponDedupUtils.normalizeDescription(verifiedDescription),
-            needsAttention = info.needsAttention || allowUserEditedFallback,
+            needsAttention = info.needsAttention || allowUserEditedFallback || coreFieldsPreserved,
             updatedAt = Date()
         )
         return withConfidenceAssessment(verified, rawOcr)
     }
 
-    private fun parseCanonicalJsonToCouponInfo(json: String, baseDate: Date?): CouponInfo {
+    private fun parseCanonicalJsonToCouponInfo(json: String): CouponInfo {
         val obj = JSONObject(json)
         val expiryText = obj.optNullableString(CouponSchemaKeys.EXPIRY_DATE)
+        val expiryDate = ModelExpiryNormalizer.parse(expiryText)
+        if (!expiryText.isNullOrBlank() && expiryDate == null && !expiryText.equals("unknown", ignoreCase = true)) {
+            Log.w(TAG, "Could not normalize model expiryDate='$expiryText'")
+        }
+        val storeName = obj.optNullableString(CouponSchemaKeys.STORE_NAME).orEmpty()
+        val evidence = obj.optJSONArray(CouponSchemaKeys.STORE_NAME_EVIDENCE)?.let { array ->
+            buildList {
+                for (index in 0 until array.length()) {
+                    array.optString(index).trim().takeIf { it.isNotBlank() }?.let(::add)
+                }
+            }
+        }.orEmpty()
+        val evidenceWeak = storeName.isBlank() ||
+            GenericFieldHeuristics.isGenericOrMissing(storeName) ||
+            obj.optNullableString(CouponSchemaKeys.STORE_NAME_SOURCE).equals("unknown", ignoreCase = true) ||
+            evidence.isEmpty()
         return CouponInfo(
-            storeName = obj.optNullableString(CouponSchemaKeys.STORE_NAME).orEmpty(),
+            storeName = storeName,
             description = obj.optNullableString(CouponSchemaKeys.DESCRIPTION).orEmpty(),
-            expiryDate = DateParser.parseDate(expiryText, baseDate),
+            expiryDate = expiryDate,
             redeemCode = obj.optNullableString(CouponSchemaKeys.REDEEM_CODE),
-            needsAttention = obj.optBoolean(CouponSchemaKeys.NEEDS_ATTENTION, false),
-            storeNameSource = obj.optNullableString(CouponSchemaKeys.STORE_NAME_SOURCE)
+            needsAttention = obj.optBoolean(CouponSchemaKeys.NEEDS_ATTENTION, false) || evidenceWeak,
+            storeNameSource = obj.optNullableString(CouponSchemaKeys.STORE_NAME_SOURCE),
+            storeNameEvidence = evidence
         )
+    }
+
+    private fun hasSupportedDescriptionTokens(description: String, rawOcr: String?): Boolean {
+        if (rawOcr.isNullOrBlank()) return true
+        val ocrTokens = rawOcr.lowercase(Locale.ROOT)
+        val supportedCount = description
+            .lowercase(Locale.ROOT)
+            .split(Regex("\\s+"))
+            .map { it.trim(',', '.', '*', ':', ';', '(', ')') }
+            .filter { it.length >= 3 }
+            .count { token -> ocrTokens.contains(token) }
+        return supportedCount >= 3
     }
 
     private fun JSONObject.optNullableString(key: String): String? {
@@ -413,11 +607,31 @@ class VerifyCouponWorker @AssistedInject constructor(
         private const val KEY_COUPON_ID = "coupon_id"
         private const val KEY_USER_REQUESTED = "user_requested"
         private const val KEY_AUTOMATIC_VERIFICATION = "automatic_verification"
-        private const val CLEANUP_TIMEOUT_MS = 90_000L
+        private const val CLEANUP_TIMEOUT_MS = 180_000L
+        private const val MIN_VISION_CROP_ANCHORS = 2
+        private const val MIN_VISION_CROP_PADDING_PX = 120
+        private const val MIN_EVIDENCE_TOKEN_LENGTH = 4
+        private const val MAX_SCOPED_ANCHOR_TOKENS = 18
+        private const val VISION_CROP_VERTICAL_PADDING_RATIO = 0.08f
+        private const val VISION_CROP_HORIZONTAL_PADDING_RATIO = 0.04f
+        private const val MAX_VISION_CROP_HEIGHT_RATIO = 0.9f
         private const val FIELD_SOURCE_OCR_RULE = "OCR_RULE"
         private const val FIELD_SOURCE_VISION = "VISION"
         private const val FIELD_SOURCE_MISSING = "MISSING"
         private const val FIELD_SOURCE_USER_EDITED = "USER_EDITED"
+        private const val FIELD_SOURCE_PRESERVED = "PRESERVED"
+        private val GENERIC_DESCRIPTION_ANCHORS = setOf(
+            "coupon",
+            "offer",
+            "details",
+            "redeem",
+            "cashback",
+            "valid",
+            "expires",
+            "prime",
+            "more",
+            "with"
+        )
 
         fun enqueueUserRequested(context: Context, couponId: Long) {
             val request = OneTimeWorkRequestBuilder<VerifyCouponWorker>()

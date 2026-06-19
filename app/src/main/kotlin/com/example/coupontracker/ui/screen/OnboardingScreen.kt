@@ -55,8 +55,8 @@ import com.example.coupontracker.ui.components.TextBrandButton
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.BrandColors
 import com.example.coupontracker.ui.theme.BrandSpacing
-import com.example.coupontracker.ui.viewmodel.ModelImportUiState
-import com.example.coupontracker.ui.viewmodel.ModelImportViewModel
+import com.example.coupontracker.ui.modelsettings.ModelImportUiState
+import com.example.coupontracker.ui.modelsettings.ModelImportViewModel
 
 @Composable
 private fun CouponOnboardingLayout(

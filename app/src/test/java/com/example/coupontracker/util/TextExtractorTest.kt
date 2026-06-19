@@ -65,6 +65,86 @@ class TextExtractorTest {
     }
 
     @Test
+    fun `extractCouponInfoSync prefers commercial merchant phrase and offer line over footer noise`() {
+        val text = """
+            8:19
+            X
+            Paytm
+            M
+            Lhe
+            Man
+            CompanvJE
+            MAN
+            COHDANY
+            BLANC
+            POUR
+            HOMME
+            EALU
+            DE
+            TOILETTE
+            Buy any 4 products at
+            699*
+            from The Man Company website
+            Code: TMCPE6990425SQTJ
+            Expires on 31 May, 2025, 11:59 PM
+            About The Man Company
+            Scratch card received on offer
+            May, 2025, PM
+            o
+            vo
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text)
+
+        assertEquals("The Man Company", result.storeName)
+        assertEquals("TMCPE6990425SQTJ", result.redeemCode)
+        assertEquals("Buy any 4 products at 699* from The Man Company website", result.description)
+    }
+
+    @Test
+    fun `extractCouponInfoSync rejects expiry badge as store and description`() {
+        val baseDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse("2026-06-18 22:53:50")
+        val text = """
+            PokerBaazi
+            Details
+            PokerBaazi
+            code:
+            PBJP75
+            you won 100% bonus up to 775,000
+            on your first deposit from
+            PokerBaazi
+            EXPIRES
+            IN
+            04
+            HOURS
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("PokerBaazi", result.storeName)
+        assertNull(result.toString(), result.redeemCode)
+        assertEquals("you won 100% bonus up to 775,000 on your first deposit from PokerBaazi", result.description)
+        assertNotNull(result.expiryDate)
+    }
+
+    @Test
+    fun `extractRedeemCode supports lowercase code label followed by next line`() {
+        val result = extractor.extractRedeemCode(
+            """
+                code:
+                PBJP75
+                you won 100% bonus up to 775,000
+                EXPIRES
+                IN
+                04
+                HOURS
+            """.trimIndent()
+        )
+
+        assertEquals("PBJP75", result)
+    }
+
+    @Test
     fun `extractDescription combines multi-line offer text`() {
         val text = """
             Buy 2 Get 2 FREE*
@@ -374,6 +454,39 @@ class TextExtractorTest {
     }
 
     @Test
+    fun `extractCouponInfo ignores wallet header merchant noise for visible coupon card`() {
+        val baseDate = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).parse("2026-06-19 09:38")
+        val text = """
+            7:27
+            NamM
+            vouchers
+            active
+            :
+            25
+            lifetime
+            :
+            279
+            Details
+            ${'$'}Skulcandy
+            code:
+            CRSD
+            Skullcandy
+            Details
+            you won 80% off on Skullcandy
+            EXPIRES IN 12 DAYS
+            mamaearth
+            Onion
+            Shampoo
+            ZEN
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("Skullcandy", result.storeName)
+        assertEquals("you won 80% off on Skullcandy", result.description)
+    }
+
+    @Test
     fun `extractStoreName rejects standalone cashback as merchant`() {
         val result = extractor.extractStoreName("cashback")
 
@@ -488,6 +601,42 @@ class TextExtractorTest {
             assertEquals(case.code, result.redeemCode)
             assertEquals(case.description, result.description)
         }
+    }
+
+    @Test
+    fun `extractCouponInfo prefers numbered purchase offer over date and footer noise`() {
+        val text = """
+            Paytm
+            Lhe Man
+            CompanvJE
+            MAN COHDANY
+            BLANC POUR HOMME EALU DE TOILETTE
+            Buy any 4 products at The Man Company website
+            Code: TMCPE6990425SQTJ
+            Expires on 31 May, 2025, 11:59 PM
+            About The Company
+            Scratch card received on offer
+            o vo
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text)
+
+        assertEquals("The Man Company", result.storeName)
+        assertEquals("TMCPE6990425SQTJ", result.redeemCode)
+        assertEquals("Buy any 4 products at The Man Company website", result.description)
+    }
+
+    @Test
+    fun `extractStoreName strengthens partial merchant token from commercial OCR context`() {
+        val text = """
+            Lhe Man
+            MAN COHDANY
+            Buy any 4 products at The Man Company website
+        """.trimIndent()
+
+        val result = extractor.extractStoreName(text)
+
+        assertEquals("The Man Company", result)
     }
 
     @Test

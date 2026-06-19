@@ -55,7 +55,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import com.example.coupontracker.ui.viewmodel.ModelImportViewModel
+import com.example.coupontracker.ui.modelsettings.ModelImportViewModel
 
 @AndroidEntryPoint
 class AddFragment : Fragment() {

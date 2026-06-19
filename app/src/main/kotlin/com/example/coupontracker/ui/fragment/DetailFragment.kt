@@ -29,7 +29,7 @@ import com.bumptech.glide.request.RequestOptions
 import com.example.coupontracker.R
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.databinding.FragmentDetailBinding
-import com.example.coupontracker.ui.viewmodel.DetailViewModel
+import com.example.coupontracker.ui.details.DetailViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
