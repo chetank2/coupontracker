@@ -5,6 +5,7 @@
 ### Core Documentation
 - **[Implementation Status](IMPLEMENTATION_STATUS.md)** - Current project status and branch information
 - **[LLM Integration](LLM_INTEGRATION.md)** - MiniCPM-Llama3-V2.5 integration details
+- **[Project Knowledge Diary](PROJECT_KNOWLEDGE_DIARY.md)** - Full project history, lessons, failures, and current rules
 
 ### Archived Documentation
 The `archive/` folder contains historical development documentation that was used during the project development but is no longer actively maintained:

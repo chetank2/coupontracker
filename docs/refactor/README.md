@@ -40,6 +40,7 @@ Gradle checks from `AGENTS.md`.
 
 ## Knowledge Diary
 
+- [Full project knowledge diary](../PROJECT_KNOWLEDGE_DIARY.md)
 - [2026-06-19 Refactor and extraction reliability diary](knowledge-diary-2026-06-19.md)
 
 ## Current Implementation Status
