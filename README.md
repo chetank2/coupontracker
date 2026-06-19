@@ -191,23 +191,24 @@ Both jobs can take several minutes to finish after a pull request is opened or u
 
 ## 📚 Documentation
 
-### Active Documentation
-- [README.md](./README.md) - Project overview and setup
-- [CONTRIBUTING.md](./CONTRIBUTING.md) - Contribution guidelines
-- [Branch Management Policy](./docs/BRANCH_MANAGEMENT_POLICY.md) - Git workflow
-- [Implementation Status](./docs/IMPLEMENTATION_STATUS.md) - Current status
-- [LLM Integration](./docs/LLM_INTEGRATION.md) - AI/ML documentation
+Start with the two-level knowledge base:
 
-### Archived Documentation
-Historical documentation has been organized into `docs/archive/`:
-- **architecture/** - Architecture diagrams and design documents
-- **implementation/** - Implementation plans and progress trackers
-- **fixes/** - Bug fixes and debugging documentation
-- **testing/** - Testing reports and verification documents
-- **releases/** - Release notes and delivery summaries
-- **sessions/** - Development session notes
+- [Knowledge Base](./docs/KNOWLEDGE_BASE.md) - main documentation entry point
+- [High-Level Knowledge Base](./docs/knowledge-base/high-level/README.md) - fast orientation
+- [Detailed Knowledge Base](./docs/knowledge-base/detailed/README.md) - topic-based implementation index
+- [Project Knowledge Diary](./docs/PROJECT_KNOWLEDGE_DIARY.md) - full project history and lessons
 
-See [docs/archive/README.md](./docs/archive/README.md) for the complete index.
+Current specialist docs:
+
+- [Coupon Extraction Rules](./docs/ai_guardrails/COUPON_EXTRACTION_RULES.md)
+- [AI Editing Checklist](./docs/ai_guardrails/AI_EDITING_CHECKLIST.md)
+- [Refactor Documentation](./docs/refactor/README.md)
+- [LLM Integration](./docs/LLM_INTEGRATION.md)
+- [Branch Management Policy](./docs/BRANCH_MANAGEMENT_POLICY.md)
+
+Historical documentation is kept in [docs/archive](./docs/archive/README.md).
+Use it for context only; current source code and current knowledge-base docs win
+when old docs conflict with current behavior.
 
 ## 🏆 Production Ready
 

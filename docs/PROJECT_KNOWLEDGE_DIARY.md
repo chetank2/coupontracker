@@ -627,6 +627,10 @@ If adb reports no devices, reconnect/unlock the phone and retry.
 Use these docs together:
 
 - `README.md` for high-level product overview.
+- `docs/KNOWLEDGE_BASE.md` for the current two-level documentation entry point.
+- `docs/knowledge-base/high-level/README.md` for fast project orientation.
+- `docs/knowledge-base/detailed/README.md` for implementation-oriented topic
+  indexes.
 - `docs/IMPLEMENTATION_STATUS.md` for historical MiniCPM/LLM status.
 - `docs/LLM_INTEGRATION.md` for local model integration details.
 - `docs/extraction_pipeline.md` for extraction flow.
