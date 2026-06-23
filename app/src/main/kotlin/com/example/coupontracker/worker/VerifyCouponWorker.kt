@@ -343,19 +343,24 @@ class VerifyCouponWorker @AssistedInject constructor(
             storeName = selectedStore,
             redeemCode = selectedCode
         )
-        val extractedDescription = info.description.takeIf(GenericFieldHeuristics::isMeaningfulDescription)
+        val normalizedDescription = normalized.description
+            ?.takeIf(::isSupportedCleanupDescription)
+            ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) || hasSupportedDescriptionTokens(it, rawOcr) }
+        val extractedDescription = info.description.takeIf(::isSupportedCleanupDescription)
             ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) || hasSupportedDescriptionTokens(it, rawOcr) }
         val currentStrongDescription = current.description
-            .takeIf(GenericFieldHeuristics::isMeaningfulDescription)
+            .takeIf(::isSupportedCleanupDescription)
             ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) || hasSupportedDescriptionTokens(it, rawOcr) }
-        val selectedDescription = normalized.description
-            ?: extractedDescription
-            ?: currentStrongDescription
+        val selectedDescription = selectBestCleanupDescription(
+            normalizedDescription,
+            extractedDescription,
+            currentStrongDescription
+        )
             ?: current.description.takeIf { allowUserEditedFallback && GenericFieldHeuristics.isMeaningfulDescription(it) }
             ?: return null
         val descriptionSource = when {
-            normalized.description != null || extractedDescription != null -> FIELD_SOURCE_OCR_RULE
-            currentStrongDescription != null -> FIELD_SOURCE_PRESERVED
+            selectedDescription == normalizedDescription || selectedDescription == extractedDescription -> FIELD_SOURCE_OCR_RULE
+            selectedDescription == currentStrongDescription -> FIELD_SOURCE_PRESERVED
             allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
             else -> FIELD_SOURCE_MISSING
         }
@@ -405,6 +410,22 @@ class VerifyCouponWorker @AssistedInject constructor(
             updatedAt = Date()
         )
         return withConfidenceAssessment(verified, rawOcr)
+    }
+
+    private fun isSupportedCleanupDescription(value: String?): Boolean {
+        return GenericFieldHeuristics.isMeaningfulDescription(value) &&
+            OfferTextQuality.isLikelyOfferText(value) &&
+            !OfferTextQuality.isLikelyDateOrContextNoise(value)
+    }
+
+    private fun selectBestCleanupDescription(vararg candidates: String?): String? {
+        return candidates
+            .filterNotNull()
+            .distinctBy { it.trim().lowercase(Locale.ROOT) }
+            .maxWithOrNull(
+                compareBy<String> { OfferTextQuality.score(it) }
+                    .thenBy { it.length }
+            )
     }
 
     private fun buildFieldSourceRunPath(

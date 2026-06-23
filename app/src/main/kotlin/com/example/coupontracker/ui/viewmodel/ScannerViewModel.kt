@@ -18,6 +18,7 @@ import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugScorer
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
+import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.rules.TextExtractor
@@ -89,6 +90,7 @@ class ScannerViewModel @Inject constructor(
     private val performanceMonitor: ExtractionPerformanceMonitor,
     private val analyticsTracker: AnalyticsTracker,
     private val ocrFirstCouponExtractor: OcrFirstCouponExtractor,
+    private val multiCouponExtractionService: MultiCouponExtractionService,
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Injected bitmap memory management
     private val debugRepository: ExtractionDebugRepository,
     private val validatorFeedbackRecorder: ValidatorFeedbackRecorder
@@ -342,12 +344,9 @@ class ScannerViewModel @Inject constructor(
         val detector = twoStageDetector
         if (detector == null) {
             Log.w(TAG, "Single scan crop-first routing unavailable: ${detectorInitErrorMessage ?: "detector not initialized"}")
-            logStrategyExecution(
-                requested = strategy,
-                executed = "ocr_first_manual_clean",
-                surface = STRATEGY_SURFACE_SINGLE,
-                reason = "coupon_detector_unavailable"
-            )
+            if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, "coupon_detector_unavailable")) {
+                return false
+            }
             scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
             return false
         }
@@ -359,12 +358,9 @@ class ScannerViewModel @Inject constructor(
 
         return when (couponInstances.size) {
             0 -> {
-                logStrategyExecution(
-                    requested = strategy,
-                    executed = "ocr_first_manual_clean",
-                    surface = STRATEGY_SURFACE_SINGLE,
-                    reason = "no_coupon_crop_detected"
-                )
+                if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, "no_coupon_crop_detected")) {
+                    return false
+                }
                 scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
                 false
             }
@@ -398,6 +394,97 @@ class ScannerViewModel @Inject constructor(
                 true
             }
         }
+    }
+
+    private suspend fun routeLayoutDetectedCoupons(
+        imageUri: Uri,
+        bitmap: Bitmap,
+        persistImmediately: Boolean,
+        reason: String
+    ): Boolean {
+        val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
+        val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
+        val persistedUri = uriPersistenceManager.persistUri(imageUri)
+        val finalImageUri = resolveImageUri(persistedUri, imageUri)
+
+        logStrategyExecution(
+            requested = strategy,
+            executed = "layout_multi_coupon_probe",
+            surface = STRATEGY_SURFACE_SINGLE,
+            reason = reason
+        )
+
+        val multiResult = runCatching {
+            multiCouponExtractionService.extractMultipleCoupons(
+                bitmap = bitmap,
+                imageUri = finalImageUri,
+                captureTimestamp = captureTimestamp,
+                allowProgressiveFallback = false
+            )
+        }.getOrElse { error ->
+            Log.e(TAG, "Layout multi-coupon probe failed", error)
+            null
+        }
+
+        val extractedCoupons = multiResult?.coupons.orEmpty()
+        if (extractedCoupons.isEmpty()) {
+            logStrategyExecution(
+                requested = strategy,
+                executed = "ocr_first_manual_clean",
+                surface = STRATEGY_SURFACE_SINGLE,
+                reason = "${reason}_layout_no_candidates"
+            )
+            return false
+        }
+
+        logStrategyExecution(
+            requested = strategy,
+            executed = if (extractedCoupons.size > 1) "layout_multi_coupon_extraction" else "layout_single_coupon_extraction",
+            surface = STRATEGY_SURFACE_SINGLE,
+            reason = "${reason}_layout_detected_${extractedCoupons.size}"
+        )
+
+        if (!persistImmediately) {
+            val best = extractedCoupons.maxByOrNull { it.confidence } ?: return false
+            val coupon = best.coupon.copy(
+                createdAt = captureTimestamp ?: best.coupon.createdAt,
+                updatedAt = Date()
+            )
+            pendingPreview = PendingPreview(
+                coupon = coupon,
+                normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description),
+                llmStatus = if (best.warnings.isEmpty()) LlmProgress.SUCCESS else LlmProgress.NEEDS_REVIEW,
+                debugSnapshot = null
+            )
+            _uiState.value = ScannerUiState.Success(coupon, pendingPreview!!.llmStatus)
+            return true
+        }
+
+        val processedResults = mutableListOf<CouponProcessingSummary>()
+        for (result in extractedCoupons) {
+            val coupon = result.coupon.copy(
+                createdAt = captureTimestamp ?: result.coupon.createdAt,
+                updatedAt = Date()
+            )
+            val savedId = persistCoupon(
+                coupon = coupon,
+                normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description),
+                llmStatus = if (result.warnings.isEmpty()) LlmProgress.SUCCESS else LlmProgress.NEEDS_REVIEW,
+                debugSnapshot = null
+            )
+            val savedCoupon = couponRepository.getCouponById(savedId) ?: coupon.copy(id = savedId)
+            processedResults.add(
+                CouponProcessingSummary(
+                    coupon = savedCoupon,
+                    llmStatus = if (result.warnings.isEmpty()) LlmProgress.SUCCESS else LlmProgress.NEEDS_REVIEW
+                )
+            )
+        }
+
+        if (processedResults.size > 1) {
+            _uiState.value = ScannerUiState.AllCouponsSaved(processedResults)
+        }
+        return true
     }
     
     /**
@@ -703,7 +790,7 @@ class ScannerViewModel @Inject constructor(
         var persistedFlag = true
 
         if (savedCoupon != null) {
-            val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt ?: savedCoupon.createdAt)
+            val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt)
 
             if (isDuplicate) {
                 _uiState.value = ScannerUiState.AlreadySaved(savedCoupon, llmStatus)

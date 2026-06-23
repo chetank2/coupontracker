@@ -9,6 +9,13 @@ import com.example.coupontracker.extraction.deterministic.DescriptionComposer
 import com.example.coupontracker.extraction.deterministic.DeterministicCouponExtractor
 import com.example.coupontracker.extraction.deterministic.SmartCouponSanitizer
 import com.example.coupontracker.extraction.deterministic.StoreCanon
+import com.example.coupontracker.extraction.layout.CouponLayoutDetectionPipeline
+import com.example.coupontracker.extraction.layout.CouponLayoutValidationConfig
+import com.example.coupontracker.extraction.layout.CouponLayoutValidator
+import com.example.coupontracker.extraction.layout.HeuristicCouponLayoutDetector
+import com.example.coupontracker.extraction.layout.LayoutDetectionContext
+import com.example.coupontracker.extraction.layout.VlmCouponLayoutDetector
+import com.example.coupontracker.extraction.model.ModelSelector
 import com.example.coupontracker.extraction.region.CouponRegionizer
 import com.example.coupontracker.extraction.region.CouponRegionizerConfig
 import com.example.coupontracker.ml.HybridCouponDetector
@@ -46,7 +53,8 @@ class MultiCouponExtractionService @Inject constructor(
     private val ocrEngine: OcrEngine,
     private val progressiveExtractionService: ProgressiveExtractionService,
     private val confidenceScorer: ConfidenceScorer,
-    private val extractionValidator: ExtractionValidator
+    private val extractionValidator: ExtractionValidator,
+    private val modelSelector: ModelSelector
 ) {
     
     private val screenshotClassifier = ScreenshotClassifier()
@@ -61,6 +69,19 @@ class MultiCouponExtractionService @Inject constructor(
     )
     private val descriptionComposer = DescriptionComposer(storeCanon)
     private val sanitizer = SmartCouponSanitizer(storeCanon, descriptionComposer)
+    private val layoutValidationConfig = CouponLayoutValidationConfig(
+        maxCards = MAX_COUPONS_PER_SCREENSHOT,
+        allowPartialCards = false,
+        allowSingleFallback = false
+    )
+    private val layoutPipeline = CouponLayoutDetectionPipeline(
+        detectors = listOf(
+            VlmCouponLayoutDetector(modelSelector),
+            HeuristicCouponLayoutDetector(regionizer)
+        ),
+        validator = CouponLayoutValidator(layoutValidationConfig),
+        config = layoutValidationConfig
+    )
 
     init {
         // Multi-engine OCR should remain available for multi-coupon screenshots even when
@@ -348,11 +369,6 @@ class MultiCouponExtractionService @Inject constructor(
             // Quick classification
             val classification = screenshotClassifier.classify(bitmap, fullText)
 
-            if (!hybridDetector.isContourDetectorOperational()) {
-                Log.d(TAG, "Two-stage detector unavailable; routing to single-coupon pipeline")
-                return@withContext false
-            }
-
             // Use multi-coupon extraction if:
             // 1. Classified as MULTI_COUPON_APP with high confidence
             // 2. Or has multiple coupon indicators (fallback check)
@@ -413,32 +429,50 @@ class MultiCouponExtractionService @Inject constructor(
         Log.d(TAG, "Classification finished in ${classifyMillis}ms")
         Log.d(TAG, "Classification: ${classification.type} (confidence: ${classification.confidence})")
 
-        if (!hybridDetector.isContourDetectorOperational()) {
-            Log.w(
-                TAG,
-                "Two-stage detector unavailable or stubbed; falling back to progressive pipeline (type=${classification.type}, confidence=${classification.confidence})"
-            )
-            return BootstrapOutcome.NeedsFallback("two_stage_detector_unavailable")
-        }
-
         Log.d(TAG, "Step 3: Detecting coupon regions...")
         val detectStart = SystemClock.elapsedRealtime()
-        val couponRegions = hybridDetector.detectCoupons(bitmap, ocrSuccess)
+        val couponRegions = if (hybridDetector.isContourDetectorOperational()) {
+            hybridDetector.detectCoupons(bitmap, ocrSuccess)
+        } else {
+            Log.w(
+                TAG,
+                "Two-stage detector unavailable or stubbed; layout pipeline will use VLM/heuristic fallback " +
+                    "(type=${classification.type}, confidence=${classification.confidence})"
+            )
+            emptyList()
+        }
         val detectMillis = SystemClock.elapsedRealtime() - detectStart
         Log.d(TAG, "Hybrid detector finished in ${detectMillis}ms")
         Log.d(TAG, "Detected ${couponRegions.size} coupon region(s)")
 
-        val regionCandidates = timeStage("Regionizer") {
-            regionizer.regionize(
+        val layoutDetection = timeStageSuspend("Layout detection pipeline") {
+            layoutPipeline.detect(
                 bitmap = bitmap,
-                screenshotType = classification.type,
-                ocrText = fullText,
-                fallbackRegions = couponRegions
+                context = LayoutDetectionContext(
+                    screenshotType = classification.type,
+                    ocrText = fullText,
+                    fallbackRegions = couponRegions
+                )
+            )
+        }
+        Log.d(
+            TAG,
+            "Layout detection source=${layoutDetection.source} " +
+                "accepted=${layoutDetection.cards.size} raw=${layoutDetection.diagnostics.rawCardCount} " +
+                "fallback=${layoutDetection.diagnostics.fallbackUsed}"
+        )
+
+        val regionCandidates = layoutDetection.cards.mapIndexed { index, card ->
+            CouponRegionizer.RegionCandidate(
+                bounds = card.bounds,
+                mode = card.regionMode,
+                sourceRegion = card.sourceRegion,
+                index = index
             )
         }
 
         if (regionCandidates.isEmpty()) {
-            Log.w(TAG, "Regionizer produced no candidates; falling back to progressive extraction")
+            Log.w(TAG, "Layout pipeline produced no candidates; falling back to progressive extraction")
             return BootstrapOutcome.NeedsFallback("no region candidates")
         }
 

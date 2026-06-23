@@ -3,6 +3,7 @@ package com.example.coupontracker.di
 import android.content.Context
 import com.example.coupontracker.data.local.ExtractionFeedbackDao
 import com.example.coupontracker.extraction.*
+import com.example.coupontracker.extraction.model.ModelSelector
 import com.example.coupontracker.learning.ExtractionLearningIntegration
 import com.example.coupontracker.learning.ParameterChangeLogger
 import com.example.coupontracker.universal.PatternLearningEngine
@@ -109,14 +110,16 @@ object ExtractionModule {
         ocrEngine: com.example.coupontracker.ocr.OcrEngine,
         progressiveExtractionService: ProgressiveExtractionService,
         confidenceScorer: ConfidenceScorer,
-        extractionValidator: ExtractionValidator
+        extractionValidator: ExtractionValidator,
+        modelSelector: ModelSelector
     ): MultiCouponExtractionService {
         return MultiCouponExtractionService(
             context = context,
             ocrEngine = ocrEngine,
             progressiveExtractionService = progressiveExtractionService,
             confidenceScorer = confidenceScorer,
-            extractionValidator = extractionValidator
+            extractionValidator = extractionValidator,
+            modelSelector = modelSelector
         )
     }
 }
