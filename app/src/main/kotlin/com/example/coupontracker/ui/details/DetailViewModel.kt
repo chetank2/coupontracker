@@ -161,9 +161,19 @@ class DetailViewModel @Inject constructor(
                 cleanupStatus = Coupon.CleanupStatus.FAILED,
                 cleanupError = message,
                 cleanupFinishedAt = Date(),
+                lastCleanedBy = null,
+                extractionSource = latest.extractionSource.withoutTrustedModelSource(),
                 updatedAt = Date()
             )
         )
+    }
+
+    private fun String?.withoutTrustedModelSource(): String? {
+        return when (this) {
+            Coupon.ExtractionSource.VISION_VERIFIED,
+            Coupon.ExtractionSource.QWEN_CLEANED -> null
+            else -> this
+        }
     }
 
     private fun buildOfferCleanerPrompt(coupon: Coupon): String {

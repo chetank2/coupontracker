@@ -48,7 +48,7 @@ object CouponCodeExtractor {
         while (allCapsDigitsMatcher.find()) {
             val potentialCode = allCapsDigitsMatcher.group(1)
             val codeLength = potentialCode?.length ?: 0
-            val looksLikeCode = potentialCode?.any(Char::isDigit) == true || codeLength >= 8
+            val looksLikeCode = potentialCode?.any(Char::isDigit) == true
             if (codeLength in 6..40 && looksLikeCode && !COMMON_WORDS.contains(potentialCode?.lowercase(Locale.ROOT) ?: "")) {
                 RedeemCodeSanitizer.sanitize(potentialCode)
                     ?.takeUnless(GenericFieldHeuristics::isGenericOrMissingCode)
@@ -64,7 +64,9 @@ object CouponCodeExtractor {
                 val potentialCode = afterIndicator.split(Pattern.compile("\\s+"))[0]
 
                 if (potentialCode.length >= 5 && potentialCode.matches("[A-Za-z0-9]+".toRegex())) {
-                    RedeemCodeSanitizer.sanitize(potentialCode)?.let { return it }
+                    RedeemCodeSanitizer.sanitize(potentialCode)
+                        ?.takeUnless(GenericFieldHeuristics::isGenericOrMissingCode)
+                        ?.let { return it }
                 }
             }
         }

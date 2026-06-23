@@ -27,9 +27,9 @@ class ModelStrategyConfigTest {
     }
 
     @Test
-    fun `LOW_CONFIDENCE_RETRY and EXPERIMENT default to DEFAULT value`() {
+    fun `LOW_CONFIDENCE_RETRY defaults to Gemma vision and EXPERIMENT defaults to Qwen text`() {
         val config = ModelStrategyConfig(prefsReturning())
-        assertEquals(ModelMode.TEXT_QWEN, config.modeFor(ModelRole.LOW_CONFIDENCE_RETRY))
+        assertEquals(ModelMode.VLM_GEMMA, config.modeFor(ModelRole.LOW_CONFIDENCE_RETRY))
         assertEquals(ModelMode.TEXT_QWEN, config.modeFor(ModelRole.EXPERIMENT))
     }
 
@@ -39,6 +39,26 @@ class ModelStrategyConfigTest {
             prefsReturning(mapOf("role.EXPERIMENT" to "TEXT_GEMMA"))
         )
         assertEquals(ModelMode.TEXT_GEMMA, config.modeFor(ModelRole.EXPERIMENT))
+    }
+
+    @Test
+    fun `text retry preference is preserved to disable image retry`() {
+        listOf(ModelMode.TEXT_QWEN, ModelMode.TEXT_GEMMA).forEach { mode ->
+            val config = ModelStrategyConfig(
+                prefsReturning(mapOf("role.LOW_CONFIDENCE_RETRY" to mode.name))
+            )
+
+            assertEquals(mode, config.modeFor(ModelRole.LOW_CONFIDENCE_RETRY))
+        }
+    }
+
+    @Test
+    fun `vision retry preference is preserved`() {
+        val config = ModelStrategyConfig(
+            prefsReturning(mapOf("role.LOW_CONFIDENCE_RETRY" to "VLM_QWEN"))
+        )
+
+        assertEquals(ModelMode.VLM_QWEN, config.modeFor(ModelRole.LOW_CONFIDENCE_RETRY))
     }
 
     @Test

@@ -15,7 +15,7 @@ class QwenVlmCouponModel @Inject constructor(
     override suspend fun extractFromText(
         ocrText: String, prompt: String, grammar: String?
     ): ModelExtractionResult {
-        throw NotImplementedError("QwenVlmCouponModel is vision-only; use QwenTextCouponModel for text.")
+        throw UnsupportedOperationException("QwenVlmCouponModel is vision-only; use QwenTextCouponModel for text.")
     }
 
     override suspend fun extractFromImage(

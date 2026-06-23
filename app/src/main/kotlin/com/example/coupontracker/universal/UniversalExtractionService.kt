@@ -9,6 +9,8 @@ import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.ProgressiveExtractionResult
 import com.example.coupontracker.extraction.ProgressiveExtractionService
 import com.example.coupontracker.extraction.TextBlock
+import com.example.coupontracker.extraction.validation.CouponFieldBundleValidator
+import com.example.coupontracker.extraction.validation.FieldValueBundle
 import com.example.coupontracker.extraction.validation.SpatialFieldConsistencyValidator
 import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.IndianDateParser
@@ -16,6 +18,7 @@ import com.example.coupontracker.util.OcrTextCleaner
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.util.Date
@@ -40,6 +43,7 @@ class UniversalExtractionService @Inject constructor(
     private val progressiveExtractionService: ProgressiveExtractionService
 ) {
     private val spatialValidator = SpatialFieldConsistencyValidator()
+    private val bundleValidator = CouponFieldBundleValidator(spatialValidator)
 
     companion object {
         private const val TAG = "UniversalExtractionService"
@@ -104,21 +108,41 @@ class UniversalExtractionService @Inject constructor(
             runDefaultPass(cleanedOcr, contextWithText, candidateBuckets)
 
             val allCandidates = candidateBuckets.mapValues { it.value.toList() }
-            val blendedFields = blendCandidates(allCandidates, cleanedOcr)
+            val blendedFields = blendCandidates(allCandidates, cleanedOcr, contextWithText)
             val coupon = buildCouponFromFields(blendedFields, imageUri, cleanedOcr, contextWithText)
             val confidence = calculateOverallConfidence(blendedFields, candidateBuckets)
-            val spatialResult = spatialValidator.validate(
-                fields = blendedFields.mapValues { (_, candidate) ->
-                    FieldCandidate(
-                        value = candidate.text,
-                        confidence = candidate.confidence,
-                        source = candidate.source.name,
-                        context = candidate.context["source"] ?: candidate.context["pass"]
-                    )
-                },
+            val fieldCandidates = blendedFields.mapValues { (_, candidate) ->
+                FieldCandidate(
+                    value = candidate.text,
+                    confidence = candidate.confidence,
+                    source = candidate.source.name,
+                    context = candidate.context["source"] ?: candidate.context["pass"]
+                )
+            }
+            val bundleValidation = bundleValidator.validate(
+                bundle = FieldValueBundle(
+                    storeName = coupon.storeName,
+                    description = coupon.description,
+                    redeemCode = coupon.redeemCode,
+                    expiryDateText = blendedFields[FieldType.EXPIRY_DATE]?.text
+                ),
+                fields = fieldCandidates,
+                rawOcrText = cleanedOcr,
                 ocrBlocks = contextWithText.ocrBlocks,
                 imageHeight = image.height
             )
+            val spatialResult = bundleValidation.spatialResult
+            if (bundleValidation.needsAttention) {
+                Log.w(TAG, "Final bundle validation needs review: ${bundleValidation.reason}")
+                return@withContext UniversalExtractionResult(
+                    coupon = coupon.copy(needsAttention = true),
+                    confidence = confidence.coerceAtMost(if (bundleValidation.trusted) 0.6f else 0.35f),
+                    extractedFields = blendedFields,
+                    allCandidates = allCandidates,
+                    success = bundleValidation.trusted && blendedFields.isNotEmpty(),
+                    error = bundleValidation.reason
+                )
+            }
 
             if (!spatialResult.consistent) {
                 Log.w(TAG, "Spatial validation failed: ${spatialResult.reason}")
@@ -143,7 +167,7 @@ class UniversalExtractionService @Inject constructor(
             Log.e(TAG, "Universal extraction failed", e)
             UniversalExtractionResult(
                 coupon = createReviewOnlyCoupon(cleanedOcr),
-                confidence = 0.0f,
+                confidence = 0f,
                 extractedFields = emptyMap(),
                 allCandidates = candidateBuckets.mapValues { it.value.toList() },
                 success = false,
@@ -238,7 +262,14 @@ class UniversalExtractionService @Inject constructor(
         val heuristics = mutableMapOf<FieldType, List<ExtractionCandidate>>()
 
         if (FieldType.EXPIRY_DATE in missingFields) {
-            val parseResult = IndianDateParser.extractExpiryFromText(cleanedOcr)
+            val expirySourceText = listOfNotNull(
+                cleanedOcr,
+                context.originalOcrText
+            ).joinToString("\n")
+            val parseResult = IndianDateParser.extractExpiryFromText(
+                expirySourceText,
+                context.baseLocalDate()
+            )
             if (parseResult.date != null) {
                 val isoDate = parseResult.date.toString()
                 val candidate = ExtractionCandidate(
@@ -369,7 +400,8 @@ class UniversalExtractionService @Inject constructor(
 
     private fun blendCandidates(
         candidateBuckets: Map<FieldType, List<ExtractionCandidate>>,
-        cleanedOcr: String
+        cleanedOcr: String,
+        context: ExtractionContext
     ): Map<FieldType, ExtractionCandidate> {
         val blended = mutableMapOf<FieldType, ExtractionCandidate>()
         for ((fieldType, candidates) in candidateBuckets) {
@@ -381,7 +413,13 @@ class UniversalExtractionService @Inject constructor(
             for (candidate in candidates.sortedByDescending { it.confidence }) {
                 val normalized = normalizeForField(fieldType, candidate.text)
                 val consensusBoost = ((normalizedCounts[normalized] ?: 1) - 1) * 0.08f
-                val validated = applyFieldValidation(fieldType, candidate.text, candidate.confidence + consensusBoost, cleanedOcr)
+                val validated = applyFieldValidation(
+                    fieldType = fieldType,
+                    text = candidate.text,
+                    baseConfidence = candidate.confidence + consensusBoost,
+                    cleanedOcr = cleanedOcr,
+                    context = context
+                )
                 val threshold = FIELD_THRESHOLDS[fieldType] ?: DEFAULT_THRESHOLD
 
                 if (validated >= threshold && validated >= bestScore) {
@@ -433,7 +471,8 @@ class UniversalExtractionService @Inject constructor(
         fieldType: FieldType,
         text: String,
         baseConfidence: Float,
-        cleanedOcr: String
+        cleanedOcr: String,
+        context: ExtractionContext
     ): Float {
         var confidence = baseConfidence
         when (fieldType) {
@@ -454,11 +493,12 @@ class UniversalExtractionService @Inject constructor(
                 }
             }
             FieldType.EXPIRY_DATE -> {
-                val parseResult = IndianDateParser.extractExpiryFromText(text)
+                val baseDate = context.baseLocalDate()
+                val parseResult = IndianDateParser.extractExpiryFromText(text, baseDate)
                 if (parseResult.date != null) {
                     confidence = max(confidence, parseResult.confidence)
                 } else {
-                    val fallback = IndianDateParser.extractExpiryFromText(cleanedOcr)
+                    val fallback = IndianDateParser.extractExpiryFromText(cleanedOcr, baseDate)
                     if (fallback.date == null) {
                         confidence *= 0.6f
                     }
@@ -517,7 +557,13 @@ class UniversalExtractionService @Inject constructor(
             ?.text
             ?.takeIf { !it.equals("NO_CODE_NEEDED", ignoreCase = true) }
 
-        val expiryDate = extractedFields[FieldType.EXPIRY_DATE]?.text?.let { parseExpiryDate(it) }
+        val expiryFallbackText = listOfNotNull(
+            cleanedOcr,
+            context.originalOcrText
+        ).joinToString("\n")
+        val expiryDate = extractedFields[FieldType.EXPIRY_DATE]?.text
+            ?.let { parseExpiryDate(it, context.captureTimestamp, expiryFallbackText) }
+            ?: parseExpiryDate(expiryFallbackText, context.captureTimestamp, expiryFallbackText)
 
         val amountCandidate = extractedFields[FieldType.AMOUNT]
         val cashbackDetail = amountCandidate
@@ -579,10 +625,21 @@ class UniversalExtractionService @Inject constructor(
         }
     }
 
-    private fun parseExpiryDate(dateText: String): Date? {
+    private fun parseExpiryDate(
+        dateText: String,
+        captureTimestamp: Date?,
+        fallbackText: String
+    ): Date? {
         return try {
-            val parseResult = IndianDateParser.extractExpiryFromText(dateText)
-            val localDate = parseResult.date ?: IndianDateParser.parseExpiryIST(dateText).date
+            val baseDate = captureTimestamp?.toInstant()
+                ?.atZone(ZoneId.of("Asia/Kolkata"))
+                ?.toLocalDate()
+                ?: LocalDate.now()
+            val parseResult = IndianDateParser.extractExpiryFromText(dateText, baseDate)
+            val fallback = IndianDateParser.extractExpiryFromText(fallbackText, baseDate)
+            val localDate = parseResult.date
+                ?: IndianDateParser.parseExpiryIST(dateText, baseDate).date
+                ?: fallback.date
             localDate?.let {
                 val zone = ZoneId.of("Asia/Kolkata")
                 val endOfDay = it.atTime(LocalTime.of(23, 59, 59))
@@ -592,6 +649,14 @@ class UniversalExtractionService @Inject constructor(
             Log.w(TAG, "Failed to parse expiry date: $dateText", e)
             null
         }
+    }
+
+    private fun ExtractionContext.baseLocalDate(): LocalDate {
+        return captureTimestamp
+            ?.toInstant()
+            ?.atZone(ZoneId.of("Asia/Kolkata"))
+            ?.toLocalDate()
+            ?: LocalDate.now()
     }
 
     private fun convertProgressiveCandidates(

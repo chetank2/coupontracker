@@ -43,7 +43,7 @@ class GemmaTextCouponModelTest {
         assertTrue(thrown is IllegalStateException)
     }
 
-    @Test(expected = NotImplementedError::class)
+    @Test(expected = UnsupportedOperationException::class)
     fun `extractFromImage not supported`() = runBlocking {
         val model = GemmaTextCouponModel(mockk())
         model.extractFromImage(mockk<Bitmap>(relaxed = true), null, "prompt")

@@ -6,6 +6,8 @@ import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.ocr.OcrEngine
 import com.example.coupontracker.util.IndianDateParser
 import com.example.coupontracker.util.IndianCurrencyParser
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.*
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -120,7 +122,8 @@ class UniversalFieldDetector @Inject constructor(
         val candidates = mutableListOf<ExtractionCandidate>()
         
         // Use enhanced Indian date parser
-        val parseResult = IndianDateParser.extractExpiryFromText(text)
+        val baseDate = context.baseLocalDate()
+        val parseResult = IndianDateParser.extractExpiryFromText(text, baseDate)
         if (parseResult.date != null) {
             candidates.add(
                 ExtractionCandidate(
@@ -135,7 +138,7 @@ class UniversalFieldDetector @Inject constructor(
         // Look for dates in specific regions
         layout.expiryRegion?.let { region ->
             val regionText = extractTextFromRegion(image, region)
-            val regionParseResult = IndianDateParser.extractExpiryFromText(regionText)
+            val regionParseResult = IndianDateParser.extractExpiryFromText(regionText, baseDate)
             if (regionParseResult.date != null && regionParseResult.confidence > parseResult.confidence) {
                 candidates.add(
                     ExtractionCandidate(
@@ -157,6 +160,14 @@ class UniversalFieldDetector @Inject constructor(
             .distinctBy { it.text }
             .filter { it.confidence >= MIN_CONFIDENCE_THRESHOLD }
             .sortedByDescending { it.confidence }
+    }
+
+    private fun ExtractionContext.baseLocalDate(): LocalDate {
+        return captureTimestamp
+            ?.toInstant()
+            ?.atZone(ZoneId.of("Asia/Kolkata"))
+            ?.toLocalDate()
+            ?: LocalDate.now()
     }
 
     /**
@@ -526,5 +537,6 @@ data class ExtractionContext(
     val previousSuccesses: List<String> = emptyList(),
     val cleanedOcrText: String? = null,
     val originalOcrText: String? = null,
-    val ocrBlocks: List<com.example.coupontracker.extraction.TextBlock> = emptyList()
+    val ocrBlocks: List<com.example.coupontracker.extraction.TextBlock> = emptyList(),
+    val captureTimestamp: Date? = null
 )

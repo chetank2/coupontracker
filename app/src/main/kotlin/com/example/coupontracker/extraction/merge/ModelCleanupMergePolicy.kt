@@ -24,6 +24,7 @@ data class ModelCleanupMergeResult(
  */
 object ModelCleanupMergePolicy {
     private val ISO_DATE = Regex("""^\d{4}-\d{2}-\d{2}$""")
+    private const val CLEANUP_REJECTED_ERROR = "Model cleanup rejected by evidence policy"
 
     fun mergeQwenTextCleanup(
         current: Coupon,
@@ -36,7 +37,7 @@ object ModelCleanupMergePolicy {
         val regressed = mutableListOf<String>()
         val fieldDecisions = JSONObject()
 
-        val selectedDescription = selectDescription(current, modelJson, ocrText, fieldDecisions, regressed)
+        val descriptionSelection = selectDescription(current, modelJson, ocrText, fieldDecisions, regressed)
 
         evaluateStoreName(current, modelJson, ocrText, fieldDecisions, regressed)
         evaluateRedeemCode(current, modelJson, ocrText, fieldDecisions, regressed)
@@ -48,6 +49,8 @@ object ModelCleanupMergePolicy {
             modelNeedsAttention ||
             modelEvidenceWeak ||
             regressed.isNotEmpty()
+        val acceptedModelChange = descriptionSelection.acceptedModelChange
+        val trustedCleanup = acceptedModelChange && !needsAttention
 
         val runPath = JSONObject()
             .put("stage", "qwen_text_cleanup")
@@ -61,23 +64,34 @@ object ModelCleanupMergePolicy {
             .put("expiryDate", fieldDecisions.getJSONObject(CouponSchemaKeys.EXPIRY_DATE))
             .put("modelEvidence", if (modelEvidenceWeak) "WEAK_OR_EMPTY" else "PRESENT")
             .put("regressedFields", JSONArray(regressed))
+            .put("acceptedModelChange", acceptedModelChange)
+            .put("cleanupDecision", if (trustedCleanup) "accepted" else "rejected_preserved")
             .toString()
 
         val updated = current.copy(
-            description = selectedDescription,
-            normalizedDescription = CouponDedupUtils.normalizeDescription(selectedDescription),
-            cleanupStatus = Coupon.CleanupStatus.CLEANED,
+            description = descriptionSelection.value,
+            normalizedDescription = CouponDedupUtils.normalizeDescription(descriptionSelection.value),
+            cleanupStatus = if (trustedCleanup) Coupon.CleanupStatus.CLEANED else Coupon.CleanupStatus.FAILED,
             cleanupStartedAt = current.cleanupStartedAt,
             cleanupFinishedAt = now,
-            cleanupError = null,
-            lastCleanedBy = cleanedBy,
+            cleanupError = if (trustedCleanup) null else CLEANUP_REJECTED_ERROR,
+            lastCleanedBy = if (trustedCleanup) cleanedBy else null,
             extractionRunPath = runPath,
-            extractionSource = Coupon.ExtractionSource.QWEN_CLEANED,
+            extractionSource = if (trustedCleanup) {
+                Coupon.ExtractionSource.QWEN_CLEANED
+            } else {
+                current.extractionSource
+            },
             needsAttention = needsAttention,
             updatedAt = now
         )
         return ModelCleanupMergeResult(updated, runPath, regressed)
     }
+
+    private data class DescriptionSelection(
+        val value: String,
+        val acceptedModelChange: Boolean
+    )
 
     private fun selectDescription(
         current: Coupon,
@@ -85,7 +99,7 @@ object ModelCleanupMergePolicy {
         ocrText: String,
         fieldDecisions: JSONObject,
         regressed: MutableList<String>
-    ): String {
+    ): DescriptionSelection {
         val candidate = modelJson.optNullableString("offer")
             ?: modelJson.optNullableString(CouponSchemaKeys.DESCRIPTION)
         val accepted = candidate
@@ -100,6 +114,7 @@ object ModelCleanupMergePolicy {
         if (candidate != null && accepted == null) {
             regressed += CouponSchemaKeys.DESCRIPTION
         }
+        val acceptedModelChange = accepted != null && !sameText(accepted, current.description)
         fieldDecisions.put(
             CouponSchemaKeys.DESCRIPTION,
             JSONObject()
@@ -110,7 +125,7 @@ object ModelCleanupMergePolicy {
                 .put("numbersSupported", candidate?.let { hasSupportedNumbers(it, ocrText, current.description) } ?: false)
                 .put("decision", if (accepted != null) "accepted" else "rejected_or_missing")
         )
-        return selected
+        return DescriptionSelection(selected, acceptedModelChange)
     }
 
     private fun evaluateStoreName(

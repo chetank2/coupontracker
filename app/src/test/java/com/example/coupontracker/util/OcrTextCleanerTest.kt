@@ -27,5 +27,17 @@ class OcrTextCleanerTest {
 
         assertEquals(expected, result.cleanedText)
     }
-}
 
+    @Test
+    fun `cleanOcrText preserves relative expiry lines`() {
+        val raw = """
+            PORTRONICS
+            EXPIRES IN 10 DAYS
+            Code OCE10
+        """.trimIndent()
+
+        val result = OcrTextCleaner.cleanOcrText(raw)
+
+        assertEquals(raw, result)
+    }
+}

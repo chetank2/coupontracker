@@ -22,7 +22,7 @@ class GemmaVisionCouponModel @Inject constructor(
         prompt: String,
         grammar: String?
     ): ModelExtractionResult {
-        throw NotImplementedError(
+        throw UnsupportedOperationException(
             "GemmaVisionCouponModel is vision-only; use GemmaTextCouponModel for text."
         )
     }

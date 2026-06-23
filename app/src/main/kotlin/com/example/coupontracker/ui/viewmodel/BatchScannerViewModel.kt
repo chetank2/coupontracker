@@ -16,6 +16,7 @@ import com.example.coupontracker.util.AnalyticsTracker
 import com.example.coupontracker.util.CouponInputManager
 import com.example.coupontracker.ml.MultiCouponDetectorDisabledException
 import com.example.coupontracker.util.ExtractionTelemetryService
+import com.example.coupontracker.util.ImageMetadataExtractor
 import com.example.coupontracker.util.MultiCouponDetectorState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -511,16 +512,27 @@ class BatchScannerViewModel @Inject constructor(
         bitmap: android.graphics.Bitmap
     ): Coupon {
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val persistedUri = persistUri(uri)
+            val captureTimestamp = extractCaptureTimestamp(persistedUri, uri)
             val extraction = ocrFirstCouponExtractor.extract(
                 bitmap = bitmap,
-                imageUri = persistUri(uri),
-                captureTimestamp = null
+                imageUri = persistedUri,
+                captureTimestamp = captureTimestamp
             )
             if (!extraction.success) {
                 Log.w(TAG, "OCR_FIRST low confidence; returning shared OCR review result")
             }
             extraction.coupon
         }
+    }
+
+    private fun extractCaptureTimestamp(persistedUri: String?, originalUri: Uri): java.util.Date? {
+        return runCatching {
+            persistedUri?.let { ImageMetadataExtractor.extractCaptureTimestamp(context, Uri.parse(it)) }
+        }.getOrNull()
+            ?: runCatching {
+                ImageMetadataExtractor.extractCaptureTimestamp(context, originalUri)
+            }.getOrNull()
     }
 
     private suspend fun logStrategyExecution(

@@ -100,7 +100,7 @@ class OcrFirstCouponExtractor @Inject constructor(
             )
         }
 
-        val extractionContext = buildExtractionContext(ocrText, ocrHints)
+        val extractionContext = buildExtractionContext(ocrText, ocrHints, captureTimestamp)
         val extractionResult = universalExtractionService.extractCoupon(
             image = bitmap,
             ocrText = ocrText,
@@ -188,7 +188,8 @@ class OcrFirstCouponExtractor @Inject constructor(
 
     private fun buildExtractionContext(
         ocrText: String,
-        extractedInfo: Map<String, String>
+        extractedInfo: Map<String, String>,
+        captureTimestamp: Date?
     ): ExtractionContext {
         val fallbackBrand = ocrText.lineSequence()
             .map { it.trim() }
@@ -216,7 +217,8 @@ class OcrFirstCouponExtractor @Inject constructor(
         return ExtractionContext(
             brandHint = brandHint,
             categoryHint = categoryHint,
-            previousSuccesses = brandHint?.let { listOf(it) } ?: emptyList()
+            previousSuccesses = brandHint?.let { listOf(it) } ?: emptyList(),
+            captureTimestamp = captureTimestamp
         )
     }
 

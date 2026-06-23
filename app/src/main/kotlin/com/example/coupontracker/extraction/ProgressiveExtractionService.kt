@@ -10,9 +10,12 @@ import com.example.coupontracker.universal.PatternLearningEngine
 import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.CouponFixContext
 import com.example.coupontracker.util.CouponPostProcessor
+import com.example.coupontracker.util.DateParser
 import com.example.coupontracker.util.ImageMetadataExtractor
 import com.example.coupontracker.util.IndianDateParser
 import com.example.coupontracker.util.GenericFieldHeuristics
+import com.example.coupontracker.extraction.validation.CouponFieldBundleValidator
+import com.example.coupontracker.extraction.validation.FieldValueBundle
 import com.example.coupontracker.extraction.validation.SpatialFieldConsistencyValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -51,6 +54,7 @@ class ProgressiveExtractionService @Inject constructor(
     private val confidenceScorer = ConfidenceScorer()
     private val extractionValidator = ExtractionValidator(confidenceScorer)
     private val spatialValidator = SpatialFieldConsistencyValidator()
+    private val bundleValidator = CouponFieldBundleValidator(spatialValidator)
     private val llmPassEnabled = AtomicBoolean(false)
     
     companion object {
@@ -660,8 +664,6 @@ class ProgressiveExtractionService @Inject constructor(
         captureTimestamp: Date?,
         fallbackText: String
     ): Date? {
-        parseDate(rawValue)?.let { return it }
-
         val zone = ZoneId.systemDefault()
         val baseDate = captureTimestamp?.toInstant()?.atZone(zone)?.toLocalDate() ?: LocalDate.now()
 
@@ -669,6 +671,8 @@ class ProgressiveExtractionService @Inject constructor(
         if (direct != null) {
             return Date.from(direct.atStartOfDay(zone).toInstant())
         }
+
+        DateParser.parseDate(rawValue, captureTimestamp)?.let { return it }
 
         val fallback = IndianDateParser.extractExpiryFromText(fallbackText, baseDate).date
         return fallback?.let { Date.from(it.atStartOfDay(zone).toInstant()) }
@@ -746,18 +750,25 @@ class ProgressiveExtractionService @Inject constructor(
         """.trimIndent())
         
         var result = buildFinalResult(context, extractedFields, image, imageUri)
-        val spatialResult = spatialValidator.validate(
+        val bundleValidation = bundleValidator.validate(
+            bundle = FieldValueBundle(
+                storeName = result.coupon.storeName,
+                description = result.coupon.description,
+                redeemCode = result.coupon.redeemCode,
+                expiryDateText = result.coupon.expiryDate?.let { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(it) }
+            ),
             fields = filterPrimaryFields(extractedFields),
+            rawOcrText = context.ocrText,
             ocrBlocks = context.ocrBlocks,
             imageHeight = image.height
         )
-        if (!spatialResult.consistent) {
-            Log.w(TAG, "Spatial validation failed: ${spatialResult.reason}")
+        if (bundleValidation.needsAttention) {
+            Log.w(TAG, "Final bundle validation needs review: ${bundleValidation.reason}")
             result = result.copy(
                 coupon = result.coupon.copy(needsAttention = true),
-                confidence = result.confidence.coerceAtMost(0.35f),
-                success = false,
-                error = spatialResult.reason
+                confidence = result.confidence.coerceAtMost(if (bundleValidation.trusted) 0.6f else 0.35f),
+                success = result.success && bundleValidation.trusted,
+                error = bundleValidation.reason
             )
         }
         

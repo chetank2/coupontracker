@@ -82,6 +82,30 @@ class UniversalExtractionServiceTest {
     }
 
     @Test
+    fun `relative expiry uses capture timestamp instead of current date`() = runBlocking {
+        val screenshotDate = Date.from(
+            LocalDate.of(2025, 5, 2)
+                .atStartOfDay(ZoneId.of("Asia/Kolkata"))
+                .toInstant()
+        )
+        val ocrText = "PORTRONICS\nEXPIRES IN 10 DAYS\nCode OCE10"
+
+        coEvery {
+            progressiveExtractionService.extractCoupon(any(), any(), any(), any(), any(), any())
+        } returns emptyProgressiveResult()
+
+        val result = service.extractCoupon(
+            image = bitmap,
+            ocrText = ocrText,
+            context = ExtractionContext(captureTimestamp = screenshotDate)
+        )
+
+        val couponDate = requireNotNull(result.coupon.expiryDate)
+        val actualDate = couponDate.toInstant().atZone(ZoneId.of("Asia/Kolkata")).toLocalDate()
+        assertEquals(LocalDate.of(2025, 5, 12), actualDate)
+    }
+
+    @Test
     fun `compound rupee amounts are preserved and summed`() = runBlocking {
         val ocrText = "MEGA DEAL\n₹599 + ₹50 cashback on orders above ₹999"
 

@@ -28,6 +28,10 @@ ai/
   normalize, and return reviewable coupon state.
 - Multi-coupon image: detect card regions, crop each region, run the same
   per-crop pipeline, dedupe by canonical store/code/expiry, and surface review.
+- Relative expiry phrases are metadata-dependent. `expires in N days`,
+  `expires in N weeks`, and similar phrases must use the screenshot capture
+  timestamp as the base date through every scanner, batch, progressive,
+  universal, model, and cleanup path.
 - VLM/model retry may assist low-confidence fields only after OCR evidence and
   merge rules are available.
 - Cleanup must be separate from capture and must preserve the original OCR text,
@@ -45,7 +49,8 @@ Current inputs include `extraction/ProgressiveExtractionService.kt`,
 
 Use fixture OCR text, fixture cropped images, and multi-coupon screenshots.
 Assert crop-first routing, field provenance, dedupe behavior, and no placeholder
-promotion. Keep canary expected outputs updated only when behavior changes are
+promotion. Include relative-expiry fixtures with historical screenshot
+timestamps. Keep canary expected outputs updated only when behavior changes are
 intentional and reviewed.
 
 ## Risks
@@ -59,4 +64,3 @@ duplicate coupon saves, lost provenance, and inconsistent fallback order.
 There is one documented capture pipeline contract, all paths preserve crop-first
 behavior, model cleanup is separate, and tests prove multi-coupon crops are the
 input to per-coupon extraction.
-

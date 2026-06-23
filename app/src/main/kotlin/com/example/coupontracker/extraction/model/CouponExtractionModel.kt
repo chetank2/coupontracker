@@ -13,7 +13,8 @@ interface CouponExtractionModel {
 
     /**
      * Extract from OCR text. MUST return JSON conforming to
-     * `CouponJsonContract.RECOGNIZED_KEYS` or throw.
+     * `CouponJsonContract.RECOGNIZED_KEYS` or throw. Adapters that do not
+     * support text MUST throw UnsupportedOperationException from here.
      */
     suspend fun extractFromText(
         ocrText: String,

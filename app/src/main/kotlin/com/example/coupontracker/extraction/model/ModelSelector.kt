@@ -29,5 +29,22 @@ class ModelSelector @Inject constructor(
         return byMode[mode] ?: throw ModelSelectorException(role, mode)
     }
 
+    fun selectText(role: ModelRole): CouponExtractionModel {
+        val configuredMode = config.modeFor(role)
+        val mode = when (configuredMode) {
+            ModelMode.TEXT_QWEN,
+            ModelMode.TEXT_GEMMA -> configuredMode
+            else -> TEXT_FALLBACK_ORDER.firstOrNull { it in byMode }
+                ?: throw ModelSelectorException(role, configuredMode)
+        }
+        return byMode[mode] ?: throw ModelSelectorException(role, mode)
+    }
+
+    fun selectMode(mode: ModelMode): CouponExtractionModel? = byMode[mode]
+
     fun availableModes(): Set<ModelMode> = byMode.keys
+
+    companion object {
+        private val TEXT_FALLBACK_ORDER = listOf(ModelMode.TEXT_QWEN, ModelMode.TEXT_GEMMA)
+    }
 }

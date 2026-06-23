@@ -49,6 +49,8 @@ import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -709,7 +711,7 @@ class LocalLlmOcrService(
                 maxTokensOverride = maxTokensOverride
             )
         }
-        val adapter = selector.select(com.example.coupontracker.extraction.model.ModelRole.DEFAULT)
+        val adapter = selector.selectText(com.example.coupontracker.extraction.model.ModelRole.DEFAULT)
         return try {
             adapter.extractFromText(
                 ocrText = rawOcrText,
@@ -1695,19 +1697,24 @@ class LocalLlmOcrService(
             val storeSource = storeResolution.source
 
             // Parse expiry date with enhanced pattern matching
+            val expiryBaseDate = captureTimestamp
+                ?.toInstant()
+                ?.atZone(ZoneId.of("Asia/Kolkata"))
+                ?.toLocalDate()
+                ?: LocalDate.now(ZoneId.of("Asia/Kolkata"))
             val parsedExpiryDate = candidateExpiry?.let { dateStr ->
                 try {
                     // First try extracting from the full text (in case LLM gave us a sentence)
-                    var parseResult = IndianDateParser.extractExpiryFromText(dateStr)
+                    var parseResult = IndianDateParser.extractExpiryFromText(dateStr, expiryBaseDate)
                     
                     // If that fails, try parsing the string directly
                     if (parseResult.date == null) {
-                        parseResult = IndianDateParser.parseExpiryIST(dateStr)
+                        parseResult = IndianDateParser.parseExpiryIST(dateStr, expiryBaseDate)
                     }
                     
                     // Also try extracting from the full description as a fallback
                     if (parseResult.date == null || parseResult.confidence < 0.5f) {
-                        val descriptionResult = IndianDateParser.extractExpiryFromText(description)
+                        val descriptionResult = IndianDateParser.extractExpiryFromText(description, expiryBaseDate)
                         if (descriptionResult.confidence > parseResult.confidence) {
                             parseResult = descriptionResult
                         }
@@ -1724,11 +1731,11 @@ class LocalLlmOcrService(
                             java.util.Date.from(parsedDate.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
                         } else {
                             Log.w(TAG, "Discarding very low confidence expiry: $dateStr (confidence: ${parseResult.confidence})")
-                            DateParser.parseDate(dateStr)
+                            DateParser.parseDate(dateStr, captureTimestamp)
                         }
                     } else {
                         Log.w(TAG, "Failed to resolve expiry date after parsing attempts: $dateStr")
-                        DateParser.parseDate(dateStr)
+                        DateParser.parseDate(dateStr, captureTimestamp)
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to parse expiry date: $dateStr", e)

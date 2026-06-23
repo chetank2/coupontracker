@@ -27,6 +27,7 @@ import com.example.coupontracker.util.CouponExtractionConfidenceScorer
 import com.example.coupontracker.extraction.rules.CouponInfo
 import com.example.coupontracker.util.ExtractionRecommendation
 import com.example.coupontracker.util.GenericFieldHeuristics
+import com.example.coupontracker.util.ImageMetadataExtractor
 import com.example.coupontracker.util.ModelExpiryNormalizer
 import com.example.coupontracker.util.OcrEvidenceValidator
 import com.example.coupontracker.util.PostOcrCouponNormalizer
@@ -113,23 +114,27 @@ class VerifyCouponWorker @AssistedInject constructor(
                 markFailed(couponId, "Saved image is unavailable for vision verification.")
                 return Result.success()
             }
-            val visionBitmap = prepareVisionBitmap(bitmap, coupon, ocrText)
+            val visionInput = prepareVisionBitmap(bitmap, coupon, ocrText)
             try {
                 val visionResult = withTimeout(CLEANUP_TIMEOUT_MS) {
                     gemmaVisionCouponModel.extractFromImage(
-                        image = visionBitmap,
+                        image = visionInput.bitmap,
                         ocrText = ocrText,
                         prompt = buildVisionVerificationPrompt()
                     )
                 }
                 val current = couponRepository.getCouponById(couponId) ?: return Result.success()
-                val visionInfo = parseCanonicalJsonToCouponInfo(visionResult.canonicalJson)
-                val verified = mergeVisionVerifiedCoupon(current, visionInfo, ocrText)
+                val captureTimestamp = extractCaptureTimestamp(current)
+                val visionInfo = parseCanonicalJsonToCouponInfo(
+                    json = visionResult.canonicalJson,
+                    captureTimestamp = captureTimestamp
+                )
+                val verified = mergeVisionVerifiedCoupon(current, visionInfo, ocrText, visionInput.usedTargetedCrop)
                 couponRepository.updateCoupon(verified)
                 Result.success()
             } finally {
-                if (visionBitmap !== bitmap && !visionBitmap.isRecycled) {
-                    visionBitmap.recycle()
+                if (visionInput.bitmap !== bitmap && !visionInput.bitmap.isRecycled) {
+                    visionInput.bitmap.recycle()
                 }
                 bitmap.recycle()
             }
@@ -140,19 +145,24 @@ class VerifyCouponWorker @AssistedInject constructor(
         }
     }
 
-    private suspend fun prepareVisionBitmap(source: Bitmap, coupon: Coupon, rawOcr: String): Bitmap {
+    private data class VisionInput(
+        val bitmap: Bitmap,
+        val usedTargetedCrop: Boolean
+    )
+
+    private suspend fun prepareVisionBitmap(source: Bitmap, coupon: Coupon, rawOcr: String): VisionInput {
         val crop = runCatching { cropBitmapToCouponEvidence(source, coupon, rawOcr) }
-            .onFailure { Log.w(TAG, "Could not create target crop for Gemma Vision", it) }
+            .onFailure { Log.w(TAG, "Could not create target crop for Gemma Vision: ${it.message}") }
             .getOrNull()
         if (crop == null) {
             Log.d(TAG, "Gemma Vision using original bitmap ${source.width}x${source.height}")
-            return source
+            return VisionInput(source, usedTargetedCrop = false)
         }
         Log.d(
             TAG,
             "Gemma Vision using OCR-targeted crop ${source.width}x${source.height} -> ${crop.width}x${crop.height}"
         )
-        return crop
+        return VisionInput(crop, usedTargetedCrop = true)
     }
 
     private suspend fun cropBitmapToCouponEvidence(source: Bitmap, coupon: Coupon, rawOcr: String): Bitmap? {
@@ -258,6 +268,8 @@ class VerifyCouponWorker @AssistedInject constructor(
                 cleanupStatus = Coupon.CleanupStatus.FAILED,
                 cleanupFinishedAt = Date(),
                 cleanupError = message,
+                lastCleanedBy = null,
+                extractionSource = current.extractionSource.withoutTrustedModelSource(),
                 updatedAt = Date()
             )
         )
@@ -291,7 +303,8 @@ class VerifyCouponWorker @AssistedInject constructor(
 
     private fun buildDeterministicCleanedCoupon(current: Coupon, rawOcr: String): Coupon? {
         val allowUserEditedFallback = current.extractionSource == Coupon.ExtractionSource.USER_EDITED
-        val info = textExtractor.extractCouponInfoSync(rawOcr, current.createdAt)
+        val captureTimestamp = extractCaptureTimestamp(current) ?: current.createdAt
+        val info = textExtractor.extractCouponInfoSync(rawOcr, captureTimestamp)
         val extractedCode = info.redeemCode?.trim()
             ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
             ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
@@ -410,7 +423,12 @@ class VerifyCouponWorker @AssistedInject constructor(
             .toString()
     }
 
-    private fun mergeVisionVerifiedCoupon(current: Coupon, info: CouponInfo, rawOcr: String?): Coupon {
+    private fun mergeVisionVerifiedCoupon(
+        current: Coupon,
+        info: CouponInfo,
+        rawOcr: String?,
+        usedTargetedCrop: Boolean
+    ): Coupon {
         val allowUserEditedFallback = current.extractionSource == Coupon.ExtractionSource.USER_EDITED
         val selectedStore = info.storeName.trim()
             .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
@@ -453,6 +471,7 @@ class VerifyCouponWorker @AssistedInject constructor(
                 cleanupFinishedAt = Date(),
                 cleanupError = null,
                 lastCleanedBy = null,
+                extractionSource = current.extractionSource.withoutTrustedModelSource(),
                 extractionRunPath = buildFieldSourceRunPath(
                     stage = "vision_cleanup_failed",
                     storeSource = if (selectedStore != null) FIELD_SOURCE_VISION else FIELD_SOURCE_MISSING,
@@ -487,7 +506,9 @@ class VerifyCouponWorker @AssistedInject constructor(
             FIELD_SOURCE_PRESERVED
         }
         val codeSource = when {
-            info.redeemCode?.trim()?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) } != null -> FIELD_SOURCE_VISION
+            info.redeemCode?.trim()
+                ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
+                ?.takeIf { rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr) } != null -> FIELD_SOURCE_VISION
             selectedCode != null && allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
             selectedCode != null -> FIELD_SOURCE_PRESERVED
             else -> FIELD_SOURCE_MISSING
@@ -498,11 +519,37 @@ class VerifyCouponWorker @AssistedInject constructor(
             selectedExpiry != null -> FIELD_SOURCE_PRESERVED
             else -> FIELD_SOURCE_MISSING
         }
-        val coreFieldsPreserved = storeSource == FIELD_SOURCE_PRESERVED || descriptionSource == FIELD_SOURCE_PRESERVED
+        val actionFieldVisionSupported = codeSource == FIELD_SOURCE_VISION || expirySource == FIELD_SOURCE_VISION
+        val strictVisionVerified = usedTargetedCrop &&
+            storeSource == FIELD_SOURCE_VISION &&
+            descriptionSource == FIELD_SOURCE_VISION &&
+            actionFieldVisionSupported
         val extractionSource = when {
             allowUserEditedFallback -> Coupon.ExtractionSource.USER_EDITED
-            coreFieldsPreserved -> current.extractionSource ?: Coupon.ExtractionSource.OCR_VERIFIED
+            !strictVisionVerified -> current.extractionSource.withoutTrustedModelSource() ?: Coupon.ExtractionSource.OCR_VERIFIED
             else -> Coupon.ExtractionSource.VISION_VERIFIED
+        }
+        val cleanupAccepted = strictVisionVerified && !info.needsAttention && !allowUserEditedFallback
+        val runPath = buildFieldSourceRunPath(
+            stage = "vision_cleanup",
+            storeSource = storeSource,
+            descriptionSource = descriptionSource,
+            codeSource = codeSource,
+            expirySource = expirySource
+        )
+
+        if (!cleanupAccepted) {
+            val preserved = current.copy(
+                cleanupStatus = Coupon.CleanupStatus.FAILED,
+                cleanupFinishedAt = Date(),
+                cleanupError = "Vision verification needs review",
+                lastCleanedBy = null,
+                extractionSource = extractionSource,
+                extractionRunPath = runPath,
+                needsAttention = true,
+                updatedAt = Date()
+            )
+            return withConfidenceAssessment(preserved, rawOcr)
         }
 
         val verified = current.copy(
@@ -517,29 +564,34 @@ class VerifyCouponWorker @AssistedInject constructor(
             paymentMethod = info.paymentMethod,
             platformType = info.platformType,
             usageLimit = info.usageLimit,
-            cleanupStatus = Coupon.CleanupStatus.CLEANED,
+            cleanupStatus = if (cleanupAccepted) Coupon.CleanupStatus.CLEANED else Coupon.CleanupStatus.FAILED,
             cleanupFinishedAt = Date(),
-            cleanupError = null,
-            lastCleanedBy = ModelCatalog.GEMMA_VISION_READER_NAME,
+            cleanupError = if (cleanupAccepted) null else "Vision verification needs review",
+            lastCleanedBy = if (cleanupAccepted) ModelCatalog.GEMMA_VISION_READER_NAME else null,
             extractionSource = extractionSource,
-            extractionRunPath = buildFieldSourceRunPath(
-                stage = "vision_cleanup",
-                storeSource = storeSource,
-                descriptionSource = descriptionSource,
-                codeSource = codeSource,
-                expirySource = expirySource
-            ),
+            extractionRunPath = runPath,
             normalizedDescription = CouponDedupUtils.normalizeDescription(verifiedDescription),
-            needsAttention = info.needsAttention || allowUserEditedFallback || coreFieldsPreserved,
+            needsAttention = info.needsAttention || allowUserEditedFallback || !strictVisionVerified,
             updatedAt = Date()
         )
         return withConfidenceAssessment(verified, rawOcr)
     }
 
-    private fun parseCanonicalJsonToCouponInfo(json: String): CouponInfo {
+    private fun String?.withoutTrustedModelSource(): String? {
+        return when (this) {
+            Coupon.ExtractionSource.VISION_VERIFIED,
+            Coupon.ExtractionSource.QWEN_CLEANED -> null
+            else -> this
+        }
+    }
+
+    private fun parseCanonicalJsonToCouponInfo(
+        json: String,
+        captureTimestamp: Date?
+    ): CouponInfo {
         val obj = JSONObject(json)
         val expiryText = obj.optNullableString(CouponSchemaKeys.EXPIRY_DATE)
-        val expiryDate = ModelExpiryNormalizer.parse(expiryText)
+        val expiryDate = ModelExpiryNormalizer.parse(expiryText, captureTimestamp)
         if (!expiryText.isNullOrBlank() && expiryDate == null && !expiryText.equals("unknown", ignoreCase = true)) {
             Log.w(TAG, "Could not normalize model expiryDate='$expiryText'")
         }
@@ -564,6 +616,13 @@ class VerifyCouponWorker @AssistedInject constructor(
             storeNameSource = obj.optNullableString(CouponSchemaKeys.STORE_NAME_SOURCE),
             storeNameEvidence = evidence
         )
+    }
+
+    private fun extractCaptureTimestamp(coupon: Coupon): Date? {
+        val uri = coupon.imageUri?.takeIf { it.isNotBlank() } ?: return null
+        return runCatching {
+            ImageMetadataExtractor.extractCaptureTimestamp(applicationContext, Uri.parse(uri))
+        }.getOrNull()
     }
 
     private fun hasSupportedDescriptionTokens(description: String, rawOcr: String?): Boolean {

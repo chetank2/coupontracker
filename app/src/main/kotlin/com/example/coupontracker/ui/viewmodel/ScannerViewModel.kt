@@ -19,7 +19,10 @@ import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugScorer
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
+import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.rules.TextExtractor
+import com.example.coupontracker.extraction.validation.CouponFieldBundleValidator
+import com.example.coupontracker.extraction.validation.FieldValueBundle
 import com.example.coupontracker.universal.ExtractionContext
 import com.example.coupontracker.universal.ExtractionCandidate
 import com.example.coupontracker.universal.UniversalExtractionService
@@ -71,6 +74,8 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import com.example.coupontracker.util.DateParser
+import org.json.JSONArray
+import org.json.JSONObject
 import javax.inject.Inject
 
 @HiltViewModel
@@ -742,7 +747,7 @@ class ScannerViewModel @Inject constructor(
         }
         if (coupon.cleanupStatus == Coupon.CleanupStatus.PENDING ||
             coupon.cleanupStatus == Coupon.CleanupStatus.RUNNING ||
-            coupon.cleanupStatus == Coupon.CleanupStatus.CLEANED
+            coupon.hasTrustedCleanup()
         ) {
             return
         }
@@ -757,6 +762,16 @@ class ScannerViewModel @Inject constructor(
             )
         )
         VerifyCouponWorker.enqueueAutomaticVerification(context, coupon.id)
+    }
+
+    private fun Coupon.hasTrustedCleanup(): Boolean {
+        return cleanupStatus == Coupon.CleanupStatus.CLEANED &&
+            !needsAttention &&
+            extractionSource in setOf(
+                Coupon.ExtractionSource.VISION_VERIFIED,
+                Coupon.ExtractionSource.QWEN_CLEANED,
+                Coupon.ExtractionSource.OCR_VERIFIED
+            )
     }
 
     private fun shouldQueueCleanup(coupon: Coupon, confidence: Float): Boolean {
@@ -1224,7 +1239,7 @@ class ScannerViewModel @Inject constructor(
         val baseDescription = extractedInfo["description"] ?: extractedInfo["benefit"] ?: "Multi-coupon detected"
         val mergedDescription = DescriptionUtils.appendDetails(baseDescription, cashbackDetail)
 
-        return Coupon(
+        val baseCoupon = Coupon(
             storeName = extractedInfo["storeName"] ?: extractedInfo["app"] ?: Coupon.Defaults.UNKNOWN_STORE,
             description = mergedDescription,
             expiryDate = expiryDate,
@@ -1240,8 +1255,89 @@ class ScannerViewModel @Inject constructor(
             extractionConfidenceBreakdown = extractionResult.fieldConfidences,
             extractionStage = extractionResult.sourceStage?.name,
             extractionRunPath = runPathSummary,
+            rawOcrText = extractionResult.fullOcrText,
+            extractionSource = Coupon.ExtractionSource.OCR_FAST,
             extractionTimestamp = Date()
         )
+        return validateDetectedCouponInstance(
+            coupon = baseCoupon,
+            extractionResult = extractionResult,
+            expiryDateText = extractedInfo["expiryDate"]
+        )
+    }
+
+    private fun validateDetectedCouponInstance(
+        coupon: Coupon,
+        extractionResult: FieldExtractionResult,
+        expiryDateText: String?
+    ): Coupon {
+        val validation = CouponFieldBundleValidator().validate(
+            bundle = FieldValueBundle(
+                storeName = coupon.storeName,
+                description = coupon.description,
+                redeemCode = coupon.redeemCode,
+                expiryDateText = expiryDateText
+            ),
+            fields = buildDetectedFieldCandidates(coupon, extractionResult, expiryDateText),
+            rawOcrText = extractionResult.fullOcrText,
+            ocrBlocks = emptyList(),
+            imageHeight = 0
+        )
+
+        val issueMessages = validation.issues.map { "${it.field.name}:${it.message}" }
+        val hasError = validation.issues.any { it.severity == CouponFieldBundleValidator.Severity.ERROR } ||
+            !validation.spatialResult.consistent
+        val multiCouponRegion = issueMessages.any { it.contains("multiple_coupon_sections_in_single_region") }
+        val invalidCode = issueMessages.any {
+            it.contains("COUPON_CODE:") || it.contains("store_duplicates_code") || it.contains("description_duplicates_code")
+        }
+        val runPath = JSONObject()
+            .put("stage", "detected_coupon_instance")
+            .put("validator", "CouponFieldBundleValidator")
+            .put("trusted", validation.trusted)
+            .put("needsAttention", validation.needsAttention)
+            .put("issues", JSONArray(issueMessages))
+            .toString()
+
+        return coupon.copy(
+            redeemCode = if (multiCouponRegion || invalidCode) null else coupon.redeemCode,
+            expiryDate = if (multiCouponRegion) null else coupon.expiryDate,
+            needsAttention = coupon.needsAttention || validation.needsAttention,
+            cleanupStatus = if (validation.needsAttention) Coupon.CleanupStatus.FAILED else coupon.cleanupStatus,
+            cleanupError = validation.reason,
+            extractionSource = if (validation.trusted && !hasError) Coupon.ExtractionSource.OCR_VERIFIED else null,
+            extractionRunPath = runPath
+        )
+    }
+
+    private fun buildDetectedFieldCandidates(
+        coupon: Coupon,
+        extractionResult: FieldExtractionResult,
+        expiryDateText: String?
+    ): Map<FieldType, FieldCandidate> {
+        fun confidenceFor(fieldName: String): Float {
+            return extractionResult.fieldConfidences[fieldName]
+                ?: extractionResult.fieldConfidences[fieldName.lowercase(Locale.ROOT)]
+                ?: 0.55f
+        }
+
+        return buildMap {
+            put(
+                FieldType.STORE_NAME,
+                FieldCandidate(coupon.storeName, confidenceFor("storeName"), "detected_coupon_ocr", null)
+            )
+            put(
+                FieldType.DESCRIPTION,
+                FieldCandidate(coupon.description, confidenceFor("description"), "detected_coupon_ocr", null)
+            )
+            coupon.redeemCode?.takeIf { it.isNotBlank() }?.let { code ->
+                put(FieldType.COUPON_CODE, FieldCandidate(code, confidenceFor("code"), "detected_coupon_ocr", null))
+            }
+            val expiryCandidate = expiryDateText?.takeIf { it.isNotBlank() } ?: coupon.expiryDate?.toString()
+            expiryCandidate?.let { expiry ->
+                put(FieldType.EXPIRY_DATE, FieldCandidate(expiry, confidenceFor("expiryDate"), "detected_coupon_ocr", null))
+            }
+        }
     }
 
     /**
@@ -1252,6 +1348,7 @@ class ScannerViewModel @Inject constructor(
         
         try {
             Log.d(TAG, "Attempting universal extraction")
+            val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
             
             // Extract text using OCR for universal extraction
             var ocrHints: Map<String, String>? = null
@@ -1284,7 +1381,7 @@ class ScannerViewModel @Inject constructor(
             }
             
             // Create extraction context
-            val context = buildUniversalExtractionContext(ocrText, ocrHints)
+            val context = buildUniversalExtractionContext(ocrText, ocrHints, captureTimestamp)
             val ocrBlocks = runCatching {
                 ocrEngine.recognizeWithBoxes(bitmap).map { span ->
                     com.example.coupontracker.extraction.TextBlock(
@@ -1429,7 +1526,12 @@ class ScannerViewModel @Inject constructor(
                             )
                         )
                     } else {
-                        val coupon = createCouponFromExtractedInfo(extractedInfo, finalUri.toString())
+                        val coupon = createCouponFromExtractedInfo(
+                            extractedInfo = extractedInfo,
+                            imageUri = finalUri.toString(),
+                            rawOcrText = result.text,
+                            captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, finalUri)
+                        )
                         val debugSnapshot = ExtractionDebugScorer.fromTraditionalOcr(extractedInfo)
                         val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
                         pendingPreview = PendingPreview(
@@ -1504,7 +1606,12 @@ class ScannerViewModel @Inject constructor(
                             )
                         )
                     } else {
-                        val coupon = createCouponFromExtractedInfo(extractedInfo, imageUri?.toString())
+                        val coupon = createCouponFromExtractedInfo(
+                            extractedInfo = extractedInfo,
+                            imageUri = imageUri?.toString(),
+                            rawOcrText = result.text,
+                            captureTimestamp = imageUri?.let { ImageMetadataExtractor.extractCaptureTimestamp(context, it) }
+                        )
                         val debugSnapshot = ExtractionDebugScorer.fromTraditionalOcr(extractedInfo)
                         val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
                         pendingPreview = PendingPreview(
@@ -1587,9 +1694,16 @@ class ScannerViewModel @Inject constructor(
     /**
      * Legacy method - Create a Coupon object from the extracted information
      */
-    private fun createCouponFromExtractedInfo(extractedInfo: Map<String, String>, imageUri: String? = null): Coupon {
+    private fun createCouponFromExtractedInfo(
+        extractedInfo: Map<String, String>,
+        imageUri: String? = null,
+        rawOcrText: String? = null,
+        captureTimestamp: Date? = null
+    ): Coupon {
         // Parse expiry date string to Date if available
-        val expiryDate = parseExpiryDate(extractedInfo["expiryDate"])
+        val expiryDate = DateParser.parseDate(extractedInfo["expiryDate"], captureTimestamp)
+            ?: rawOcrText?.let { DateParser.parseDate(it, captureTimestamp) }
+            ?: parseExpiryDate(extractedInfo["expiryDate"])
 
         val cashbackDetail = extractedInfo["amount"]?.let { raw ->
             DescriptionUtils.formatCashbackDetail(raw) ?: raw
@@ -1598,15 +1712,78 @@ class ScannerViewModel @Inject constructor(
         val baseDescription = extractedInfo["description"] ?: "No description"
         val mergedDescription = DescriptionUtils.appendDetails(baseDescription, cashbackDetail)
 
-        return Coupon(
+        val baseCoupon = Coupon(
             storeName = extractedInfo["storeName"] ?: Coupon.Defaults.UNKNOWN_STORE,
             description = mergedDescription,
             expiryDate = expiryDate,
             redeemCode = extractedInfo["code"],
             imageUri = imageUri,
             category = determineCategory(extractedInfo),
-            status = "ACTIVE"
+            status = Coupon.Status.ACTIVE,
+            rawOcrText = rawOcrText,
+            extractionSource = Coupon.ExtractionSource.OCR_FAST
         )
+        return validateFallbackCoupon(
+            coupon = baseCoupon,
+            rawOcrText = rawOcrText,
+            expiryDateText = extractedInfo["expiryDate"]
+        )
+    }
+
+    private fun validateFallbackCoupon(
+        coupon: Coupon,
+        rawOcrText: String?,
+        expiryDateText: String?
+    ): Coupon {
+        val validation = CouponFieldBundleValidator().validate(
+            bundle = FieldValueBundle(
+                storeName = coupon.storeName,
+                description = coupon.description,
+                redeemCode = coupon.redeemCode,
+                expiryDateText = expiryDateText
+            ),
+            fields = buildFallbackFieldCandidates(coupon, expiryDateText),
+            rawOcrText = rawOcrText,
+            ocrBlocks = emptyList(),
+            imageHeight = 0
+        )
+        val runPath = JSONObject()
+            .put("stage", "traditional_ocr_fallback")
+            .put("validator", "CouponFieldBundleValidator")
+            .put("trusted", validation.trusted)
+            .put("needsAttention", validation.needsAttention)
+            .put("issues", JSONArray(validation.issues.map { "${it.field.name}:${it.message}" }))
+            .toString()
+        return coupon.copy(
+            extractionRunPath = runPath,
+            needsAttention = coupon.needsAttention || validation.needsAttention,
+            cleanupStatus = if (validation.needsAttention) Coupon.CleanupStatus.FAILED else coupon.cleanupStatus,
+            cleanupError = validation.reason,
+            extractionSource = if (validation.trusted) coupon.extractionSource else null
+        )
+    }
+
+    private fun buildFallbackFieldCandidates(
+        coupon: Coupon,
+        expiryDateText: String?
+    ): Map<FieldType, FieldCandidate> {
+        return buildMap {
+            put(
+                FieldType.STORE_NAME,
+                FieldCandidate(coupon.storeName, 0.5f, "traditional_ocr", null)
+            )
+            put(
+                FieldType.DESCRIPTION,
+                FieldCandidate(coupon.description, 0.5f, "traditional_ocr", null)
+            )
+            coupon.redeemCode?.takeIf { it.isNotBlank() }?.let { code ->
+                put(FieldType.COUPON_CODE, FieldCandidate(code, 0.5f, "traditional_ocr", null))
+            }
+            val expiryCandidate = expiryDateText?.takeIf { it.isNotBlank() } ?: coupon.expiryDate?.toString()
+            expiryCandidate?.let { expiry ->
+                put(FieldType.EXPIRY_DATE, FieldCandidate(expiry, 0.5f, "traditional_ocr", null))
+            }
+        }
     }
 
     /**
@@ -1805,7 +1982,8 @@ class ScannerViewModel @Inject constructor(
 
     private fun buildUniversalExtractionContext(
         ocrText: String,
-        extractedInfo: Map<String, String>?
+        extractedInfo: Map<String, String>?,
+        captureTimestamp: Date?
     ): ExtractionContext {
         val fallbackBrand = ocrText.lineSequence()
             .map { it.trim() }
@@ -1844,7 +2022,8 @@ class ScannerViewModel @Inject constructor(
         return ExtractionContext(
             brandHint = brandHint,
             categoryHint = categoryHint,
-            previousSuccesses = previousSuccesses
+            previousSuccesses = previousSuccesses,
+            captureTimestamp = captureTimestamp
         )
     }
 

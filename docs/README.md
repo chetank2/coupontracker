@@ -27,6 +27,7 @@ levels: high-level orientation and detailed topic indexes.
 - [Training and annotation](knowledge-base/detailed/training-and-annotation.md)
 - [Store, privacy, and publishing](knowledge-base/detailed/store-and-publishing.md)
 - [Git, branches, and maintenance](knowledge-base/detailed/git-and-branches.md)
+- [Global AI engineering principles](knowledge-base/detailed/global-ai-engineering-principles.md)
 - [Historical archive](knowledge-base/detailed/historical-archive.md)
 
 ## Historical Docs

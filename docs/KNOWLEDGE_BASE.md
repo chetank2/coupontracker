@@ -39,6 +39,10 @@ Read the detailed knowledge base when you need to change:
 - store publishing docs,
 - training or annotation workflows.
 
+Read [Global AI Engineering Principles](knowledge-base/detailed/global-ai-engineering-principles.md)
+when you need the country-agnostic, model-agnostic standard for how a coupon
+extraction app should work beyond this specific repository.
+
 ## Current Priority
 
 The current active product focus is the Android coupon wallet and extraction

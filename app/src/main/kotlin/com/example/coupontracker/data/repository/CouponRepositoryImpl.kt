@@ -171,6 +171,9 @@ class CouponRepositoryImpl @Inject constructor(
     }
 
     private fun mergeCoupons(existing: Coupon, incoming: Coupon): Coupon {
+        val incomingClearsTrustedCleanup = incoming.needsAttention ||
+            incoming.cleanupStatus == Coupon.CleanupStatus.FAILED
+
         return incoming.copy(
             id = existing.id,
             expiryDate = incoming.expiryDate ?: existing.expiryDate,
@@ -200,11 +203,23 @@ class CouponRepositoryImpl @Inject constructor(
             cleanupStatus = incoming.cleanupStatus,
             cleanupStartedAt = incoming.cleanupStartedAt ?: existing.cleanupStartedAt,
             cleanupFinishedAt = incoming.cleanupFinishedAt ?: existing.cleanupFinishedAt,
-            cleanupError = incoming.cleanupError ?: existing.cleanupError,
-            lastCleanedBy = incoming.lastCleanedBy ?: existing.lastCleanedBy,
+            cleanupError = when {
+                incoming.cleanupStatus == Coupon.CleanupStatus.FAILED -> incoming.cleanupError
+                incomingClearsTrustedCleanup -> incoming.cleanupError
+                else -> incoming.cleanupError ?: existing.cleanupError
+            },
+            lastCleanedBy = if (incomingClearsTrustedCleanup) {
+                incoming.lastCleanedBy
+            } else {
+                incoming.lastCleanedBy ?: existing.lastCleanedBy
+            },
             rawOcrText = incoming.rawOcrText ?: existing.rawOcrText,
             ocrConfidence = incoming.ocrConfidence ?: existing.ocrConfidence,
-            extractionSource = incoming.extractionSource ?: existing.extractionSource,
+            extractionSource = if (incomingClearsTrustedCleanup) {
+                incoming.extractionSource
+            } else {
+                incoming.extractionSource ?: existing.extractionSource
+            },
             createdAt = existing.createdAt,
             updatedAt = Date()
         )

@@ -25,7 +25,7 @@ class MiniCpmVlmCouponModel @Inject constructor(
         prompt: String,
         grammar: String?
     ): ModelExtractionResult {
-        throw NotImplementedError("MiniCpmVlmCouponModel is vision-only.")
+        throw UnsupportedOperationException("MiniCpmVlmCouponModel is vision-only.")
     }
 
     override suspend fun extractFromImage(

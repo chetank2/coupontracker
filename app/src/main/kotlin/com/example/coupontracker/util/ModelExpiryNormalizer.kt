@@ -42,8 +42,13 @@ object ModelExpiryNormalizer {
         formatter("dd/MM/uu")
     )
 
-    fun parse(value: String?): Date? {
+    fun parse(value: String?, captureTimestamp: Date? = null): Date? {
         val cleaned = clean(value) ?: return null
+        val baseDate = captureTimestamp
+            ?.toInstant()
+            ?.atZone(zoneId)
+            ?.toLocalDate()
+            ?: LocalDate.now(zoneId)
         val explicitCandidate = when {
             isoRegex.matches(cleaned) -> cleaned
             else -> explicitTextDateRegex.find(cleaned)?.groupValues?.getOrNull(1)
@@ -51,12 +56,12 @@ object ModelExpiryNormalizer {
                 ?: cleaned
         }
         return parseExplicitDate(explicitCandidate)
-            ?: IndianDateParser.extractExpiryFromText(cleaned).date?.toDate()
-            ?: IndianDateParser.parseExpiryIST(cleaned).date?.toDate()
+            ?: IndianDateParser.extractExpiryFromText(cleaned, baseDate).date?.toDate()
+            ?: IndianDateParser.parseExpiryIST(cleaned, baseDate).date?.toDate()
     }
 
-    fun toIsoDate(value: String?): String? {
-        val date = parse(value) ?: return null
+    fun toIsoDate(value: String?, captureTimestamp: Date? = null): String? {
+        val date = parse(value, captureTimestamp) ?: return null
         return date.toInstant().atZone(zoneId).toLocalDate().toString()
     }
 

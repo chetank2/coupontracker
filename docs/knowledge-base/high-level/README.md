@@ -90,6 +90,11 @@ Fields should not be trusted unless they are supported by:
 - field-specific validation,
 - model contract validation when model output is used.
 
+Expiry is a protected field. If the coupon says only `expires in N days`,
+calculate the saved expiry from the screenshot capture timestamp plus `N` days.
+Use current device time only when screenshot metadata is unavailable, and keep
+the coupon reviewable if that fallback changes trust.
+
 ## Current Model Rule
 
 Qwen/Gemma/MiniCPM can propose or clean fields.

@@ -20,7 +20,7 @@ object OcrTextCleaner {
     
     // Banner labels commonly found in coupon screenshots
     private val BANNER_PATTERNS = listOf(
-        "expires today", "expires in", "expiring soon", "collect now", "details",
+        "collect now", "details",
         "view terms", "apply", "activate", "claim", "get offer", "redeem now",
         "save now", "shop now", "buy now", "add to cart", "view offer",
         "terms & conditions", "terms and conditions", "see details", "read more",

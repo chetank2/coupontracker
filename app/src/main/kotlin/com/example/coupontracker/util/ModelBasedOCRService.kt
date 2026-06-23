@@ -81,7 +81,7 @@ class ModelBasedOCRService(
                 val directInfo = couponPatternRecognizer.convertToCouponInfo(patternResults)
 
                 // Fill in any missing fields with OCR results
-                fillMissingFields(directInfo, mlKitText)
+                fillMissingFields(directInfo, mlKitText, captureTimestamp)
             } else {
                 // Fall back to traditional OCR approach
                 combineResults(mlKitText, patternResults, captureTimestamp)
@@ -100,7 +100,11 @@ class ModelBasedOCRService(
      * Fill in missing fields in CouponInfo using OCR results
      * Now treats generic UI words as "missing" so ML Kit can provide real data
      */
-    private fun fillMissingFields(info: CouponInfo, mlKitText: String): CouponInfo {
+    private fun fillMissingFields(
+        info: CouponInfo,
+        mlKitText: String,
+        captureTimestamp: Date?
+    ): CouponInfo {
         return info.copy(
             storeName = if (GenericFieldHeuristics.isGenericOrMissing(info.storeName)) {
                 extractStoreName(mlKitText) ?: info.storeName
@@ -116,7 +120,7 @@ class ModelBasedOCRService(
             
             expiryDate = if (info.expiryDate == null) {
                 val dateStr = extractExpiryDate(mlKitText)
-                if (dateStr != null) DateParser.parseDate(dateStr) else null
+                if (dateStr != null) DateParser.parseDate(dateStr, captureTimestamp) else null
             } else info.expiryDate,
             
             cashbackDetail = if (!GenericFieldHeuristics.hasMeaningfulCashback(info.cashbackDetail) &&

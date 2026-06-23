@@ -7,6 +7,9 @@ import com.example.coupontracker.extraction.rules.CouponInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Date
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -31,7 +34,8 @@ class LlmOcrFusionService(
     suspend fun fuseResults(
         bitmap: Bitmap,
         llmResult: CouponInfo,
-        brand: String?
+        brand: String?,
+        captureTimestamp: Date? = null
     ): CouponInfo = withContext(Dispatchers.IO) {
         
         Log.d(TAG, "Starting LLM-OCR fusion for brand: $brand")
@@ -42,7 +46,7 @@ class LlmOcrFusionService(
             
             // Fuse each field independently
             val fusedCode = fuseCode(llmResult.redeemCode, ocrSpans, brand)
-            val fusedExpiry = fuseExpiryDate(llmResult.expiryDate, ocrSpans)
+            val fusedExpiry = fuseExpiryDate(llmResult.expiryDate, ocrSpans, captureTimestamp)
             val fusedDetail = fuseCashbackDetail(llmResult.cashbackDetail, ocrSpans, brand)
             
             // Return fused result
@@ -259,7 +263,17 @@ class LlmOcrFusionService(
     /**
      * Fuse expiry dates with OCR validation, preserving LLM confidence
      */
-    private fun fuseExpiryDate(llmExpiry: java.util.Date?, ocrSpans: List<TextSpan>): java.util.Date? {
+    private fun fuseExpiryDate(
+        llmExpiry: java.util.Date?,
+        ocrSpans: List<TextSpan>,
+        captureTimestamp: Date?
+    ): java.util.Date? {
+        val zone = ZoneId.of("Asia/Kolkata")
+        val baseDate = captureTimestamp
+            ?.toInstant()
+            ?.atZone(zone)
+            ?.toLocalDate()
+            ?: LocalDate.now(zone)
         // Extract OCR date candidates near expiry keywords
         val ocrDateCandidates = ocrSpans
             .nearKeywords(EXPIRY_KEYWORDS, maxDistance = 300)
@@ -267,6 +281,7 @@ class LlmOcrFusionService(
                 // Extract potential date strings near expiry keywords
                 val text = span.text
                 val datePatterns = listOf(
+                    Regex("(?i)(?:expires?|expiring|valid)\\s+(?:in|within)\\s+\\d+\\s+(?:hours?|days?|weeks?|months?)"),
                     Regex("\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4}"),
                     Regex("\\d{1,2}\\s+[A-Za-z]{3,9}\\s*\\d{2,4}"),
                     Regex("[A-Za-z]{3,9}\\s+\\d{1,2},?\\s*\\d{4}")
@@ -282,14 +297,20 @@ class LlmOcrFusionService(
             // LLM has no expiry, use best OCR candidate
             llmExpiry == null && ocrDateCandidates.isNotEmpty() -> {
                 val bestCandidate = ocrDateCandidates.maxByOrNull { candidate ->
-                    IndianDateParser.parseExpiryIST(candidate).confidence
+                    val extracted = IndianDateParser.extractExpiryFromText(candidate, baseDate)
+                    val parsed = IndianDateParser.parseExpiryIST(candidate, baseDate)
+                    maxOf(extracted.confidence, parsed.confidence)
                 }
                 
                 if (bestCandidate != null) {
-                    val parseResult = IndianDateParser.parseExpiryIST(bestCandidate)
-                    if (parseResult.confidence > 0.7f && parseResult.date != null) {
+                    var parseResult = IndianDateParser.extractExpiryFromText(bestCandidate, baseDate)
+                    if (parseResult.date == null) {
+                        parseResult = IndianDateParser.parseExpiryIST(bestCandidate, baseDate)
+                    }
+                    val parsedDate = parseResult.date
+                    if (parseResult.confidence > 0.7f && parsedDate != null) {
                         Log.d(TAG, "Using OCR expiry (no LLM): $bestCandidate")
-                        java.util.Date.from(parseResult.date.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
+                        java.util.Date.from(parsedDate.atStartOfDay(zone).toInstant())
                     } else {
                         null
                     }
@@ -323,16 +344,22 @@ class LlmOcrFusionService(
                     Log.d(TAG, "LLM expiry has low confidence ($llmConfidence), checking OCR alternatives")
                     
                     val bestOcrCandidate = ocrDateCandidates.maxByOrNull { candidate ->
-                        IndianDateParser.parseExpiryIST(candidate).confidence
+                        val extracted = IndianDateParser.extractExpiryFromText(candidate, baseDate)
+                        val parsed = IndianDateParser.parseExpiryIST(candidate, baseDate)
+                        maxOf(extracted.confidence, parsed.confidence)
                     }
                     
                     if (bestOcrCandidate != null) {
-                        val ocrParseResult = IndianDateParser.parseExpiryIST(bestOcrCandidate)
+                        var ocrParseResult = IndianDateParser.extractExpiryFromText(bestOcrCandidate, baseDate)
+                        if (ocrParseResult.date == null) {
+                            ocrParseResult = IndianDateParser.parseExpiryIST(bestOcrCandidate, baseDate)
+                        }
                         
                         // Only replace if OCR is significantly better
-                        if (ocrParseResult.confidence > llmConfidence + 0.3f && ocrParseResult.date != null) {
+                        val parsedOcrDate = ocrParseResult.date
+                        if (ocrParseResult.confidence > llmConfidence + 0.3f && parsedOcrDate != null) {
                             Log.d(TAG, "Using OCR expiry (much better confidence): $bestOcrCandidate (${ocrParseResult.confidence}) vs LLM (${llmConfidence})")
-                            java.util.Date.from(ocrParseResult.date.atStartOfDay(java.time.ZoneId.of("Asia/Kolkata")).toInstant())
+                            java.util.Date.from(parsedOcrDate.atStartOfDay(zone).toInstant())
                         } else {
                             Log.d(TAG, "Keeping LLM expiry despite low confidence: OCR not significantly better")
                             llmExpiry

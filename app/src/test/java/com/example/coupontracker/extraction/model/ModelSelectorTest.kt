@@ -42,6 +42,30 @@ class ModelSelectorTest {
     }
 
     @Test
+    fun `selectText returns configured text adapter`() {
+        val qwen = adapter(ModelMode.TEXT_QWEN)
+        val gemma = adapter(ModelMode.TEXT_GEMMA)
+        val config = mockk<ModelStrategyConfig>()
+        every { config.modeFor(ModelRole.DEFAULT) } returns ModelMode.TEXT_GEMMA
+
+        val selector = ModelSelector(adapters = setOf(qwen, gemma), config = config)
+
+        assertSame(gemma, selector.selectText(ModelRole.DEFAULT))
+    }
+
+    @Test
+    fun `selectText falls back to text adapter when role is configured to VLM`() {
+        val qwen = adapter(ModelMode.TEXT_QWEN)
+        val vlm = adapter(ModelMode.VLM_GEMMA)
+        val config = mockk<ModelStrategyConfig>()
+        every { config.modeFor(ModelRole.DEFAULT) } returns ModelMode.VLM_GEMMA
+
+        val selector = ModelSelector(adapters = setOf(qwen, vlm), config = config)
+
+        assertSame(qwen, selector.selectText(ModelRole.DEFAULT))
+    }
+
+    @Test
     fun `duplicate adapter modes rejected at construction`() {
         val a = adapter(ModelMode.TEXT_QWEN)
         val b = adapter(ModelMode.TEXT_QWEN)

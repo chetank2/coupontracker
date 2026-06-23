@@ -32,7 +32,7 @@ class ModelStrategyConfig(
 
     private fun defaultFor(role: ModelRole): ModelMode = when (role) {
         ModelRole.DEFAULT -> ModelMode.TEXT_QWEN
-        ModelRole.LOW_CONFIDENCE_RETRY -> ModelMode.TEXT_QWEN
+        ModelRole.LOW_CONFIDENCE_RETRY -> ModelMode.VLM_GEMMA
         ModelRole.EXPERIMENT -> ModelMode.TEXT_QWEN
         ModelRole.BENCHMARK -> ModelMode.BENCHMARK_REPLAY
     }

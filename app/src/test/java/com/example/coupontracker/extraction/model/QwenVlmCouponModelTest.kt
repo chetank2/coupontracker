@@ -31,7 +31,7 @@ class QwenVlmCouponModelTest {
         }
     }
 
-    @Test(expected = NotImplementedError::class)
+    @Test(expected = UnsupportedOperationException::class)
     fun `extractFromText throws`() = runBlocking {
         val model = QwenVlmCouponModel(mockk())
         model.extractFromText("ocr", "prompt", null)

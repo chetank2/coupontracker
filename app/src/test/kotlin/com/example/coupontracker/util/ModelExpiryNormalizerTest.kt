@@ -3,6 +3,9 @@ package com.example.coupontracker.util
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Date
 
 class ModelExpiryNormalizerTest {
 
@@ -19,5 +22,19 @@ class ModelExpiryNormalizerTest {
     @Test
     fun `ignores unknown model date`() {
         assertNull(ModelExpiryNormalizer.toIsoDate("unknown"))
+    }
+
+    @Test
+    fun `relative model date uses capture timestamp`() {
+        val screenshotDate = Date.from(
+            LocalDate.of(2025, 5, 2)
+                .atStartOfDay(ZoneId.of("Asia/Kolkata"))
+                .toInstant()
+        )
+
+        assertEquals(
+            "2025-05-12",
+            ModelExpiryNormalizer.toIsoDate("Expires in 10 days", screenshotDate)
+        )
     }
 }

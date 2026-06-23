@@ -13,6 +13,7 @@ Use it when you need to modify code or investigate a behavior.
 - [Training and Annotation](training-and-annotation.md)
 - [Store, Privacy, and Publishing](store-and-publishing.md)
 - [Git, Branches, and Maintenance](git-and-branches.md)
+- [Global AI Engineering Principles](global-ai-engineering-principles.md)
 - [Historical Archive](historical-archive.md)
 
 ## How To Use This Level

@@ -43,7 +43,7 @@ class GemmaTextCouponModel @Inject constructor(
         ocrText: String?,
         prompt: String
     ): ModelExtractionResult {
-        throw NotImplementedError(
+        throw UnsupportedOperationException(
             "GemmaTextCouponModel does not support vision. See Plan 5 (VLM retry)."
         )
     }
