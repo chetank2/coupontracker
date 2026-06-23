@@ -18,4 +18,29 @@ class TextExtractorRobolectricTest {
         val result = extractor.extractStoreName(text)
         assertEquals("OTTplay", result)
     }
+
+    @Test
+    fun extractStoreName_ignoresWalletStatusTabs() {
+        val text = """
+            vouchers
+            (5)
+            ACTIVE
+            VOUCHERS
+            (5)
+            LH
+            HDFC
+            BANK
+            PIXEL
+            PLAY
+            offer
+            details
+            terms
+            EXPIRES IN 18 DAYS
+            3. the credit card offered is lifetime free with no joining or annual fee
+        """.trimIndent()
+
+        val result = extractor.extractStoreName(text)
+
+        assertEquals("HDFC", result)
+    }
 }

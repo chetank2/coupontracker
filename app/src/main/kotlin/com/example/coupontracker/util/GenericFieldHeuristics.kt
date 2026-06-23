@@ -40,7 +40,8 @@ object GenericFieldHeuristics {
             "deal", "deals", "discount", "discounts", "cashback", "cashbacks",
             "promo", "promotion", "expires", "expired", "valid",
             "expiry", "hour", "hours", "hr", "hrs", "day", "days",
-            "week", "weeks", "month", "months", "in",
+            "week", "weeks", "month", "months", "in", "active", "inactive",
+            "available", "claimed", "unclaimed", "redeemed", "unredeemed",
             
             // Generic descriptions  
             "details", "description", "info", "information", "text",

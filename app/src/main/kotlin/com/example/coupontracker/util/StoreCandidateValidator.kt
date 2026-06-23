@@ -10,7 +10,10 @@ object StoreCandidateValidator {
         "now", "new", "get", "off", "for", "the", "and", "use", "code",
         "cashback", "cred", "pay", "via", "expires", "expired", "valid",
         "expiry", "hour", "hours", "hr", "hrs", "day", "days", "week",
-        "weeks", "month", "months", "in"
+        "weeks", "month", "months", "in", "active", "inactive",
+        "available", "claimed", "unclaimed", "redeemed", "unredeemed",
+        "voucher", "vouchers", "offer", "offers", "details", "terms",
+        "conditions"
     )
 
     fun isAcceptable(candidate: String?, rawOcr: String? = null): Boolean {

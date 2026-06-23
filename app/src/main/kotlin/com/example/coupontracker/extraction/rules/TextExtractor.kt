@@ -687,13 +687,20 @@ class TextExtractor {
         }
 
         val lower = cleaned.lowercase(Locale.ROOT)
+        val allCapsAcronym = cleaned
+            .filter { it.isLetterOrDigit() }
+            .let { compact ->
+                compact.length in 3..8 &&
+                    compact.any(Char::isLetter) &&
+                    compact.all { !it.isLetter() || it.isUpperCase() }
+            }
 
-        if (!lower.any { it in "aeiouy" }) {
+        if (!allCapsAcronym && !lower.any { it in "aeiouy" }) {
             return null
         }
 
         val trailingConsonants = lower.takeLastWhile { it.isLetter() && it !in "aeiouy" }
-        if (trailingConsonants.length >= 3) {
+        if (!allCapsAcronym && trailingConsonants.length >= 3) {
             return null
         }
 

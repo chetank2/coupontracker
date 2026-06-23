@@ -64,6 +64,13 @@ class GenericFieldHeuristicsTest {
     }
 
     @Test
+    fun `wallet status labels are generic fields`() {
+        assertTrue(GenericFieldHeuristics.isGenericOrMissing("ACTIVE"))
+        assertTrue(GenericFieldHeuristics.isGenericOrMissing("claimed"))
+        assertTrue(GenericFieldHeuristics.isGenericOrMissing("unredeemed"))
+    }
+
+    @Test
     fun `date fragments are not meaningful descriptions`() {
         assertFalse(GenericFieldHeuristics.isMeaningfulDescription("5TH"))
         assertFalse(GenericFieldHeuristics.isMeaningfulDescription("05 May, 2025"))
