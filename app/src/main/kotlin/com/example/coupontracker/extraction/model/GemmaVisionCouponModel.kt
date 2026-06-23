@@ -13,7 +13,7 @@ import kotlin.system.measureTimeMillis
  */
 class GemmaVisionCouponModel @Inject constructor(
     private val runtime: GemmaVisionRuntime
-) : CouponExtractionModel {
+) : CouponExtractionModel, RawVisionExtractionModel {
 
     override val mode: ModelMode = ModelMode.VLM_GEMMA
 
@@ -32,6 +32,19 @@ class GemmaVisionCouponModel @Inject constructor(
         ocrText: String?,
         prompt: String
     ): ModelExtractionResult {
+        val rawResult = extractRawFromImage(image, ocrText, prompt)
+        return ModelExtractionResult(
+            canonicalJson = CouponJsonContract.enforce(rawResult.canonicalJson),
+            latencyMs = rawResult.latencyMs,
+            usedFallback = false
+        )
+    }
+
+    override suspend fun extractRawFromImage(
+        image: Bitmap,
+        ocrText: String?,
+        prompt: String
+    ): ModelExtractionResult {
         lateinit var raw: String
         val latency = measureTimeMillis {
             val multimodalPrompt = buildMultimodalPrompt(prompt, ocrText)
@@ -44,7 +57,7 @@ class GemmaVisionCouponModel @Inject constructor(
         val rawResponse = raw.takeIf { it.isNotBlank() }
             ?: throw IllegalStateException("Gemma Vision returned an empty response.")
         return ModelExtractionResult(
-            canonicalJson = CouponJsonContract.enforce(rawResponse),
+            canonicalJson = rawResponse,
             latencyMs = latency,
             usedFallback = false
         )

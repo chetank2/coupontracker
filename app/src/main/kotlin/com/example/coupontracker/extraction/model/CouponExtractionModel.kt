@@ -33,6 +33,20 @@ interface CouponExtractionModel {
     ): ModelExtractionResult
 }
 
+/**
+ * Optional capability for vision adapters that can return raw model output.
+ * Use this for non-coupon JSON tasks such as layout detection where
+ * `CouponJsonContract` enforcement would intentionally strip task-specific
+ * keys.
+ */
+interface RawVisionExtractionModel {
+    suspend fun extractRawFromImage(
+        image: Bitmap,
+        ocrText: String?,
+        prompt: String
+    ): ModelExtractionResult
+}
+
 data class ModelExtractionResult(
     val canonicalJson: String,
     val latencyMs: Long,

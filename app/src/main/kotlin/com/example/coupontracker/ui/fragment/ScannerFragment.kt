@@ -245,6 +245,17 @@ class ScannerFragment : Fragment() {
 
                         multiCouponSelectionLauncher.launch(selectionIntent)
                     }
+                    is ScannerUiState.MultiCouponPreview -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.progressMessage.visibility = View.GONE
+                        binding.captureButton.isEnabled = true
+
+                        Snackbar.make(
+                            binding.root,
+                            "Detected ${state.extractedCoupons.size} coupons for review",
+                            Snackbar.LENGTH_LONG
+                        ).show()
+                    }
                     is ScannerUiState.AllCouponsSaved -> {
                         binding.progressBar.visibility = View.GONE
                         binding.progressMessage.visibility = View.GONE
@@ -365,4 +376,4 @@ class ScannerFragment : Fragment() {
         cameraExecutor.shutdown()
         _binding = null
     }
-} 
+}

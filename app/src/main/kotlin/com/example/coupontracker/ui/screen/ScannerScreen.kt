@@ -482,6 +482,15 @@ fun ScannerScreen(
                                     }
                                 }
 
+                                if (state is ScannerUiState.MultiCouponPreview) {
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "Detected ${state.extractedCoupons.size} coupons for review",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+
                                 // Show error message
                                 if (state is ScannerUiState.Error) {
                                     Spacer(modifier = Modifier.height(16.dp))

@@ -445,18 +445,27 @@ class ScannerViewModel @Inject constructor(
         )
 
         if (!persistImmediately) {
-            val best = extractedCoupons.maxByOrNull { it.confidence } ?: return false
-            val coupon = best.coupon.copy(
-                createdAt = captureTimestamp ?: best.coupon.createdAt,
-                updatedAt = Date()
-            )
-            pendingPreview = PendingPreview(
-                coupon = coupon,
-                normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description),
-                llmStatus = if (best.warnings.isEmpty()) LlmProgress.SUCCESS else LlmProgress.NEEDS_REVIEW,
-                debugSnapshot = null
-            )
-            _uiState.value = ScannerUiState.Success(coupon, pendingPreview!!.llmStatus)
+            val previews = extractedCoupons.map { result ->
+                CouponProcessingSummary(
+                    coupon = result.coupon.copy(
+                        createdAt = captureTimestamp ?: result.coupon.createdAt,
+                        updatedAt = Date()
+                    ),
+                    llmStatus = if (result.warnings.isEmpty()) LlmProgress.SUCCESS else LlmProgress.NEEDS_REVIEW
+                )
+            }
+            if (previews.size == 1) {
+                val preview = previews.first()
+                pendingPreview = PendingPreview(
+                    coupon = preview.coupon,
+                    normalizedDescription = CouponDedupUtils.normalizeDescription(preview.coupon.description),
+                    llmStatus = preview.llmStatus,
+                    debugSnapshot = null
+                )
+                _uiState.value = ScannerUiState.Success(preview.coupon, preview.llmStatus)
+            } else {
+                _uiState.value = ScannerUiState.MultiCouponPreview(previews)
+            }
             return true
         }
 
@@ -2190,6 +2199,8 @@ sealed class ScannerUiState {
         val originalBitmap: Bitmap, 
         val imageUri: String?
     ) : ScannerUiState()
+
+    data class MultiCouponPreview(val extractedCoupons: List<CouponProcessingSummary>) : ScannerUiState()
     
     data class AllCouponsSaved(val processedCoupons: List<CouponProcessingSummary>) : ScannerUiState()
 }

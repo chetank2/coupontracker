@@ -247,6 +247,16 @@ class MultiCouponSelectionActivity : AppCompatActivity() {
                         
                         displayCoupons(state.couponInstances, state.originalBitmap)
                     }
+                    is ScannerUiState.MultiCouponPreview -> {
+                        binding.progressBar.visibility = View.GONE
+                        binding.buttonsContainer.visibility = View.VISIBLE
+
+                        Toast.makeText(
+                            this@MultiCouponSelectionActivity,
+                            "Detected ${state.extractedCoupons.size} coupons for review",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
                 }
             }
         }

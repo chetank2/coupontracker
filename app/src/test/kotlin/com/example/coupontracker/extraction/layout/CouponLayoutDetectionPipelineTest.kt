@@ -2,6 +2,13 @@ package com.example.coupontracker.extraction.layout
 
 import android.graphics.Bitmap
 import android.graphics.Rect
+import com.example.coupontracker.extraction.model.CouponExtractionModel
+import com.example.coupontracker.extraction.model.ModelExtractionResult
+import com.example.coupontracker.extraction.model.ModelMode
+import com.example.coupontracker.extraction.model.ModelRole
+import com.example.coupontracker.extraction.model.ModelSelector
+import com.example.coupontracker.extraction.model.ModelStrategyConfig
+import com.example.coupontracker.extraction.model.RawVisionExtractionModel
 import com.example.coupontracker.extraction.region.CouponRegionizer
 import com.example.coupontracker.extraction.region.CouponRegionizerConfig
 import com.example.coupontracker.ml.HybridCouponDetector
@@ -94,6 +101,41 @@ class CouponLayoutDetectionPipelineTest {
     }
 
     @Test
+    fun `vlm detector parses raw layout json without coupon schema enforcement`() = runBlocking {
+        val model = RawLayoutModel(
+            rawJson = """
+                {
+                  "cards": [
+                    {
+                      "box": { "x": 12, "y": 20, "width": 120, "height": 90 },
+                      "completeness": "complete",
+                      "confidence": 0.91,
+                      "visibleFields": ["merchant", "offer", "code"]
+                    }
+                  ],
+                  "confidence": 0.91
+                }
+            """.trimIndent()
+        )
+        val config = mockk<ModelStrategyConfig>()
+        every { config.modeFor(ModelRole.LOW_CONFIDENCE_RETRY) } returns ModelMode.VLM_GEMMA
+        val detector = VlmCouponLayoutDetector(
+            modelSelector = ModelSelector(setOf(model), config)
+        )
+
+        val result = detector.detectLayout(
+            bitmap = bitmap(),
+            context = LayoutDetectionContext(
+                screenshotType = ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP,
+                ocrText = "coupon anchors"
+            )
+        )
+
+        assertEquals(LayoutDetectionSource.VLM, result.source)
+        assertEquals(listOf(Rect(12, 20, 132, 110)), result.cards.map { it.bounds })
+    }
+
+    @Test
     fun `heuristic detector preserves regionizer mode for downstream extraction`() = runBlocking {
         val detector = HeuristicCouponLayoutDetector(regionizer())
         val result = detector.detectLayout(
@@ -123,6 +165,44 @@ class CouponLayoutDetectionPipelineTest {
             bitmap: Bitmap,
             context: LayoutDetectionContext
         ): CouponLayoutDetection = detection
+    }
+
+    private class RawLayoutModel(
+        private val rawJson: String
+    ) : CouponExtractionModel, RawVisionExtractionModel {
+        override val mode: ModelMode = ModelMode.VLM_GEMMA
+
+        override suspend fun extractFromText(
+            ocrText: String,
+            prompt: String,
+            grammar: String?
+        ): ModelExtractionResult {
+            throw UnsupportedOperationException("vision only")
+        }
+
+        override suspend fun extractFromImage(
+            image: Bitmap,
+            ocrText: String?,
+            prompt: String
+        ): ModelExtractionResult {
+            return ModelExtractionResult(
+                canonicalJson = "{}",
+                latencyMs = 1L,
+                usedFallback = false
+            )
+        }
+
+        override suspend fun extractRawFromImage(
+            image: Bitmap,
+            ocrText: String?,
+            prompt: String
+        ): ModelExtractionResult {
+            return ModelExtractionResult(
+                canonicalJson = rawJson,
+                latencyMs = 1L,
+                usedFallback = false
+            )
+        }
     }
 
     private fun bitmap(): Bitmap {

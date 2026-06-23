@@ -16,7 +16,7 @@ import kotlin.system.measureTimeMillis
  */
 class MiniCpmVlmCouponModel @Inject constructor(
     private val llmRuntime: LlmRuntimeManager
-) : CouponExtractionModel {
+) : CouponExtractionModel, RawVisionExtractionModel {
 
     override val mode: ModelMode = ModelMode.VLM_MINICPM
 
@@ -33,17 +33,28 @@ class MiniCpmVlmCouponModel @Inject constructor(
         ocrText: String?,
         prompt: String
     ): ModelExtractionResult {
-        var raw: String? = null
+        val rawResult = extractRawFromImage(image, ocrText, prompt)
+        return ModelExtractionResult(
+            canonicalJson = CouponJsonContract.enforce(rawResult.canonicalJson),
+            latencyMs = rawResult.latencyMs,
+            usedFallback = false
+        )
+    }
+
+    override suspend fun extractRawFromImage(
+        image: Bitmap,
+        ocrText: String?,
+        prompt: String
+    ): ModelExtractionResult {
+        lateinit var raw: String
         val latency = measureTimeMillis {
             raw = llmRuntime.runInference(
                 bitmap = image,
                 prompt = buildMultimodalPrompt(prompt, ocrText)
-            )
+            ) ?: throw IllegalStateException("MiniCPM runInference returned null")
         }
-        val rawResponse = raw
-            ?: throw IllegalStateException("MiniCPM runInference returned null")
         return ModelExtractionResult(
-            canonicalJson = CouponJsonContract.enforce(rawResponse),
+            canonicalJson = raw,
             latencyMs = latency,
             usedFallback = false
         )

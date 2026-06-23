@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.util.Log
 import com.example.coupontracker.extraction.model.ModelRole
 import com.example.coupontracker.extraction.model.ModelSelector
+import com.example.coupontracker.extraction.model.RawVisionExtractionModel
 
 class VlmCouponLayoutDetector(
     private val modelSelector: ModelSelector,
@@ -33,8 +34,21 @@ class VlmCouponLayoutDetector(
             )
         }
 
+        val rawAdapter = adapter as? RawVisionExtractionModel
+        if (rawAdapter == null) {
+            return CouponLayoutDetection(
+                cards = emptyList(),
+                source = LayoutDetectionSource.VLM,
+                confidence = 0f,
+                diagnostics = LayoutDiagnostics(
+                    detectorName = name,
+                    rejectedReasons = failures + "${adapter.mode.name}:raw_vision_unavailable"
+                )
+            )
+        }
+
         val detection = runCatching {
-                val result = adapter.extractFromImage(
+                val result = rawAdapter.extractRawFromImage(
                     image = bitmap,
                     ocrText = context.ocrText.takeIf { it.isNotBlank() },
                     prompt = PROMPT
