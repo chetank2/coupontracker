@@ -35,6 +35,7 @@ import com.example.coupontracker.util.SecurePreferencesManager
 import com.example.coupontracker.extraction.rules.TextExtractor
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -86,11 +87,11 @@ class VerifyCouponWorker @AssistedInject constructor(
             val gemmaStatus = ModelPaths.getGemmaVisionInstallStatus(applicationContext)
             val shouldRunVision = userRequested && gemmaEnabled && gemmaStatus.installed
 
-            buildDeterministicCleanedCoupon(coupon, ocrText)?.let { cleaned ->
-                couponRepository.updateCoupon(cleaned)
-                if (!shouldRunVision) {
-                    return Result.success()
-                }
+            val deterministicCleaned = buildDeterministicCleanedCoupon(coupon, ocrText)
+            val visionBaseCoupon = deterministicCleaned ?: coupon
+            if (deterministicCleaned != null && !shouldRunVision) {
+                couponRepository.updateCoupon(deterministicCleaned)
+                return Result.success()
             }
 
             if (!gemmaEnabled) {
@@ -114,7 +115,7 @@ class VerifyCouponWorker @AssistedInject constructor(
                 markFailed(couponId, "Saved image is unavailable for vision verification.")
                 return Result.success()
             }
-            val visionInput = prepareVisionBitmap(bitmap, coupon, ocrText)
+            val visionInput = prepareVisionBitmap(bitmap, visionBaseCoupon, ocrText)
             try {
                 val visionResult = withTimeout(CLEANUP_TIMEOUT_MS) {
                     gemmaVisionCouponModel.extractFromImage(
@@ -129,7 +130,12 @@ class VerifyCouponWorker @AssistedInject constructor(
                     json = visionResult.canonicalJson,
                     captureTimestamp = captureTimestamp
                 )
-                val verified = mergeVisionVerifiedCoupon(current, visionInfo, ocrText, visionInput.usedTargetedCrop)
+                val verified = mergeVisionVerifiedCoupon(
+                    current = mergeLatestCouponState(visionBaseCoupon, current),
+                    info = visionInfo,
+                    rawOcr = ocrText,
+                    usedTargetedCrop = visionInput.usedTargetedCrop
+                )
                 couponRepository.updateCoupon(verified)
                 Result.success()
             } finally {
@@ -138,6 +144,9 @@ class VerifyCouponWorker @AssistedInject constructor(
                 }
                 bitmap.recycle()
             }
+        } catch (t: CancellationException) {
+            Log.i(TAG, "Coupon cleanup cancelled for couponId=$couponId")
+            throw t
         } catch (t: Throwable) {
             Log.e(TAG, "Coupon cleanup failed", t)
             markFailed(couponId, userFacingFailure(t.message))
@@ -435,6 +444,21 @@ class VerifyCouponWorker @AssistedInject constructor(
                 compareBy<String> { OfferTextQuality.score(it) }
                     .thenBy { it.length }
             )
+    }
+
+    private fun mergeLatestCouponState(baseline: Coupon, latest: Coupon): Coupon {
+        val cleanupBaseline = baseline.copy(
+            cleanupStatus = latest.cleanupStatus,
+            cleanupStartedAt = latest.cleanupStartedAt,
+            cleanupFinishedAt = latest.cleanupFinishedAt,
+            cleanupError = latest.cleanupError,
+            updatedAt = latest.updatedAt
+        )
+        return if (latest.extractionSource == Coupon.ExtractionSource.USER_EDITED) {
+            latest
+        } else {
+            cleanupBaseline
+        }
     }
 
     private fun buildFieldSourceRunPath(
