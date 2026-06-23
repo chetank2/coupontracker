@@ -489,6 +489,15 @@ fun ScannerScreen(
                                         color = MaterialTheme.colorScheme.primary,
                                         style = MaterialTheme.typography.bodyMedium
                                     )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = { viewModel.confirmMultiCouponPreviewSave() },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.Check, contentDescription = null)
+                                        Spacer(modifier = Modifier.size(8.dp))
+                                        Text("Save ${state.extractedCoupons.size} Coupons")
+                                    }
                                 }
 
                                 // Show error message

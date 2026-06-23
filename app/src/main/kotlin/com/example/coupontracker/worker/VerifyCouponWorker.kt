@@ -326,12 +326,21 @@ class VerifyCouponWorker @AssistedInject constructor(
         val currentStrongStore = current.storeName
             .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
             .takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
-        val selectedStore = currentStrongStore ?: extractedStore ?: current.storeName
+        val preserveCurrentStore = current.extractionSource in setOf(
+            Coupon.ExtractionSource.USER_EDITED,
+            Coupon.ExtractionSource.VISION_VERIFIED
+        )
+        val selectedStore = if (preserveCurrentStore) {
+            currentStrongStore ?: extractedStore
+        } else {
+            extractedStore ?: currentStrongStore
+        } ?: current.storeName
             .takeIf { allowUserEditedFallback && it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
             ?: return null
         val storeSource = when {
-            currentStrongStore != null -> FIELD_SOURCE_PRESERVED
-            extractedStore != null -> FIELD_SOURCE_OCR_RULE
+            preserveCurrentStore && selectedStore == currentStrongStore -> FIELD_SOURCE_PRESERVED
+            selectedStore == extractedStore -> FIELD_SOURCE_OCR_RULE
+            selectedStore == currentStrongStore -> FIELD_SOURCE_PRESERVED
             allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
             else -> FIELD_SOURCE_MISSING
         }

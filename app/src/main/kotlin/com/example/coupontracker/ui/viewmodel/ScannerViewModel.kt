@@ -108,6 +108,7 @@ class ScannerViewModel @Inject constructor(
     private val textExtractor = TextExtractor()
     private val manualOverrides = mutableMapOf<String, CouponInstance>()
     private var pendingPreview: PendingPreview? = null
+    private var pendingMultiCouponPreview: List<CouponProcessingSummary> = emptyList()
 
     // Store extraction results for feedback learning
     private var lastExtractionResult: Pair<com.example.coupontracker.universal.UniversalExtractionResult, String>? = null
@@ -456,6 +457,7 @@ class ScannerViewModel @Inject constructor(
             }
             if (previews.size == 1) {
                 val preview = previews.first()
+                pendingMultiCouponPreview = emptyList()
                 pendingPreview = PendingPreview(
                     coupon = preview.coupon,
                     normalizedDescription = CouponDedupUtils.normalizeDescription(preview.coupon.description),
@@ -464,6 +466,8 @@ class ScannerViewModel @Inject constructor(
                 )
                 _uiState.value = ScannerUiState.Success(preview.coupon, preview.llmStatus)
             } else {
+                pendingPreview = null
+                pendingMultiCouponPreview = previews
                 _uiState.value = ScannerUiState.MultiCouponPreview(previews)
             }
             return true
@@ -899,8 +903,41 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
+    fun confirmMultiCouponPreviewSave() {
+        val previews = pendingMultiCouponPreview
+        if (previews.isEmpty()) return
+
+        viewModelScope.launch {
+            val processedResults = mutableListOf<CouponProcessingSummary>()
+            try {
+                for (preview in previews) {
+                    val savedId = persistCoupon(
+                        coupon = preview.coupon,
+                        normalizedDescription = CouponDedupUtils.normalizeDescription(preview.coupon.description),
+                        llmStatus = preview.llmStatus,
+                        debugSnapshot = null
+                    )
+                    val savedCoupon = couponRepository.getCouponById(savedId) ?: preview.coupon.copy(id = savedId)
+                    processedResults.add(
+                        CouponProcessingSummary(
+                            coupon = savedCoupon,
+                            llmStatus = preview.llmStatus
+                        )
+                    )
+                }
+                _uiState.value = ScannerUiState.AllCouponsSaved(processedResults)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error saving multi-coupon preview", e)
+                _uiState.value = ScannerUiState.Error("Error saving coupons: ${e.message}")
+            } finally {
+                pendingMultiCouponPreview = emptyList()
+            }
+        }
+    }
+
     fun clearPendingPreview() {
         pendingPreview = null
+        pendingMultiCouponPreview = emptyList()
     }
 
     fun getPendingPreviewCoupon(): Coupon? = pendingPreview?.coupon
