@@ -7,6 +7,10 @@ import java.util.regex.Pattern
 
 object CouponCodeExtractor {
     fun extract(text: String): String? {
+        if (hasExplicitNoCode(text)) {
+            return null
+        }
+
         val splitCodeLinePattern = Pattern.compile(
             "(?im)^\\s*code\\s*[-–—:]?\\s*$\\R\\s*([A-Za-z0-9][A-Za-z0-9_-]{4,})\\b"
         )
@@ -14,7 +18,7 @@ object CouponCodeExtractor {
         if (splitCodeLineMatcher.find()) {
             val code = splitCodeLineMatcher.group(1)
             RedeemCodeSanitizer.sanitizePreserve(code)?.let { sanitized ->
-                if (sanitized.length in 5..40) {
+                if (sanitized.length in 5..40 && !GenericFieldHeuristics.isGenericOrMissingCode(sanitized)) {
                     return sanitized
                 }
             }
@@ -25,7 +29,7 @@ object CouponCodeExtractor {
         if (codeLineMatcher.find()) {
             val code = codeLineMatcher.group(1)
             RedeemCodeSanitizer.sanitizePreserve(code)?.let { sanitized ->
-                if (sanitized.length in 5..40) {
+                if (sanitized.length in 5..40 && !GenericFieldHeuristics.isGenericOrMissingCode(sanitized)) {
                     return sanitized
                 }
             }
@@ -34,13 +38,17 @@ object CouponCodeExtractor {
         val codePattern = Pattern.compile("(?i)code\\s*[-–—:]?\\s*([A-Z0-9][A-Z0-9_-]{4,}(?:[-–—][A-Z0-9][A-Z0-9_-]{2,})*)")
         val codeMatcher = codePattern.matcher(text)
         if (codeMatcher.find()) {
-            RedeemCodeSanitizer.sanitizePreserve(codeMatcher.group(1))?.let { return it }
+            RedeemCodeSanitizer.sanitizePreserve(codeMatcher.group(1))
+                ?.takeUnless(GenericFieldHeuristics::isGenericOrMissingCode)
+                ?.let { return it }
         }
 
         val codeWithoutColonPattern = Pattern.compile("(?i)\\bcode\\b\\s*[-–—:]?\\s*([A-Z0-9][A-Z0-9_-]{4,}(?:[-–—][A-Z0-9][A-Z0-9_-]{2,})*)")
         val codeWithoutColonMatcher = codeWithoutColonPattern.matcher(text)
         if (codeWithoutColonMatcher.find()) {
-            RedeemCodeSanitizer.sanitizePreserve(codeWithoutColonMatcher.group(1))?.let { return it }
+            RedeemCodeSanitizer.sanitizePreserve(codeWithoutColonMatcher.group(1))
+                ?.takeUnless(GenericFieldHeuristics::isGenericOrMissingCode)
+                ?.let { return it }
         }
 
         val allCapsDigitsPattern = Pattern.compile("\\b([A-Z0-9]{6,})\\b")
@@ -79,6 +87,10 @@ object CouponCodeExtractor {
         }
 
         return null
+    }
+
+    private fun hasExplicitNoCode(text: String): Boolean {
+        return Regex("""(?i)\bno\s+code(?:\s+(?:needed|required))?\b""").containsMatchIn(text)
     }
 
     fun findInLines(lines: List<String>, start: Int, endInclusive: Int): String? {

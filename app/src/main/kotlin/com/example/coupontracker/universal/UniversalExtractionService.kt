@@ -9,12 +9,14 @@ import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.ProgressiveExtractionResult
 import com.example.coupontracker.extraction.ProgressiveExtractionService
 import com.example.coupontracker.extraction.TextBlock
+import com.example.coupontracker.extraction.quality.OfferTextQuality
 import com.example.coupontracker.extraction.validation.CouponFieldBundleValidator
 import com.example.coupontracker.extraction.validation.FieldValueBundle
 import com.example.coupontracker.extraction.validation.SpatialFieldConsistencyValidator
 import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.util.IndianDateParser
 import com.example.coupontracker.util.OcrTextCleaner
+import com.example.coupontracker.util.StoreCandidateValidator
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -549,6 +551,7 @@ class UniversalExtractionService @Inject constructor(
         context: ExtractionContext
     ): Coupon {
         val storeNameCandidate = extractedFields[FieldType.STORE_NAME]
+            ?.takeIf { candidate -> StoreCandidateValidator.isAcceptable(candidate.text, cleanedOcr) }
         val storeName = storeNameCandidate?.text?.takeIf { it.isNotBlank() }
             ?: extractStoreFromContext(cleanedOcr, context)
             ?: "Needs review"
@@ -614,6 +617,8 @@ class UniversalExtractionService @Inject constructor(
         val descriptionCandidate = extractedFields[FieldType.DESCRIPTION]
             ?.text
             ?.takeIf { !isGenericDescription(it) }
+            ?.takeIf { OfferTextQuality.isLikelyOfferText(it) }
+            ?.takeIf { !OfferTextQuality.isLikelyDateOrContextNoise(it) }
         if (descriptionCandidate != null) {
             return descriptionCandidate
         }
@@ -734,9 +739,13 @@ class UniversalExtractionService @Inject constructor(
             .filter { it.length >= 6 && !it.startsWith("http", ignoreCase = true) }
             .filterNot { line ->
                 val lower = line.lowercase(Locale.ROOT)
-                lower.contains("terms and conditions") ||
+                    lower.contains("terms and conditions") ||
                     lower.contains("valid on all platforms") ||
                     lower.startsWith("tnc", ignoreCase = true)
+            }
+            .filter { line ->
+                OfferTextQuality.isLikelyOfferText(line) &&
+                    !OfferTextQuality.isLikelyDateOrContextNoise(line)
             }
         val snippet = candidates.firstOrNull()
         return snippet?.take(180)
@@ -755,7 +764,9 @@ class UniversalExtractionService @Inject constructor(
     private fun isGenericDescription(description: String?): Boolean {
         if (description.isNullOrBlank()) return true
         val normalized = description.trim().lowercase(Locale.ROOT)
-        return GENERIC_DESCRIPTION_PHRASES.any { normalized.contains(it) }
+        return GENERIC_DESCRIPTION_PHRASES.any { normalized.contains(it) } ||
+            !OfferTextQuality.isLikelyOfferText(description) ||
+            OfferTextQuality.isLikelyDateOrContextNoise(description)
     }
 
     private fun createReviewOnlyCoupon(cleanedOcr: String): Coupon {

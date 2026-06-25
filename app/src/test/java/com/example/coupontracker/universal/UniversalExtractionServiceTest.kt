@@ -134,7 +134,7 @@ class UniversalExtractionServiceTest {
 
     @Test
     fun `store name inferred from contextual phrase`() = runBlocking {
-        val ocrText = "Weekend treat from the folks at Zepto Mart -- grab rewards now!"
+        val ocrText = "Get 20% off from the folks at Zepto Mart this weekend!"
 
         coEvery {
             progressiveExtractionService.extractCoupon(any(), any(), any(), any(), any(), any())
@@ -147,7 +147,7 @@ class UniversalExtractionServiceTest {
                     context = null
                 ),
                 FieldType.DESCRIPTION to FieldCandidate(
-                    value = "Weekend treat from the folks at Zepto Mart -- grab rewards now!",
+                    value = "Get 20% off from the folks at Zepto Mart this weekend!",
                     confidence = 0.6f,
                     source = "test_context_description",
                     context = null
@@ -162,7 +162,7 @@ class UniversalExtractionServiceTest {
         assertNotNull(storeCandidate)
         assertEquals("Zepto Mart", storeCandidate!!.text)
         assertEquals("Zepto Mart", result.coupon.storeName)
-        assertTrue(result.coupon.description.startsWith("Weekend treat"))
+        assertTrue(result.coupon.description.startsWith("Get 20% off"))
     }
 
     private fun emptyProgressiveResult(): ProgressiveExtractionResult =

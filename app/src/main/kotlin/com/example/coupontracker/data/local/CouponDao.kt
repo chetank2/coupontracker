@@ -60,7 +60,11 @@ interface CouponDao {
             ocrConfidence = NULL,
             needsAttention = 0,
             storeNameSource = NULL,
-            storeNameEvidence = '[]'
+            storeNameEvidence = '[]',
+            codeState = 'UNKNOWN',
+            expiryState = 'UNKNOWN',
+            layoutState = 'LOW_CONFIDENCE',
+            debugVisionEvidence = NULL
         """
     )
     suspend fun clearAllExtractionMetadata()

@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.os.SystemClock
 import android.util.Log
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.preferences.SecurePreferencesManager
 import com.example.coupontracker.extraction.deterministic.DescriptionComposer
 import com.example.coupontracker.extraction.deterministic.DeterministicCouponExtractor
 import com.example.coupontracker.extraction.deterministic.SmartCouponSanitizer
@@ -54,7 +55,8 @@ class MultiCouponExtractionService @Inject constructor(
     private val progressiveExtractionService: ProgressiveExtractionService,
     private val confidenceScorer: ConfidenceScorer,
     private val extractionValidator: ExtractionValidator,
-    private val modelSelector: ModelSelector
+    private val modelSelector: ModelSelector,
+    private val securePreferencesManager: SecurePreferencesManager
 ) {
     
     private val screenshotClassifier = ScreenshotClassifier()
@@ -76,7 +78,7 @@ class MultiCouponExtractionService @Inject constructor(
     )
     private val layoutPipeline = CouponLayoutDetectionPipeline(
         detectors = listOf(
-            VlmCouponLayoutDetector(modelSelector),
+            VlmCouponLayoutDetector(modelSelector, securePreferencesManager),
             HeuristicCouponLayoutDetector(regionizer)
         ),
         validator = CouponLayoutValidator(layoutValidationConfig),

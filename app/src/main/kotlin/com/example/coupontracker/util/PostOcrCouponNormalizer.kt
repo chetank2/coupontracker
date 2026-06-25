@@ -1,6 +1,7 @@
 package com.example.coupontracker.util
 
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.extraction.quality.OfferTextQuality
 import java.util.Locale
 
 data class PostOcrCouponNormalization(
@@ -48,6 +49,7 @@ object PostOcrCouponNormalizer {
         "up to",
         "upto",
         "extra",
+        "worth",
     )
 
     private val textExtractor = TextExtractor()
@@ -163,6 +165,7 @@ object PostOcrCouponNormalizer {
         if (line.length > 140) return false
         if (junkLineRegex.matches(line)) return false
         if (statusBarRegex.containsMatchIn(line)) return false
+        if (OfferTextQuality.isLegalOrSupportNoise(line)) return false
         val normalized = normalizeKey(line)
         if (normalized == normalizeKey(storeName.orEmpty())) return false
         if (normalized == normalizeKey(redeemCode.orEmpty())) return false
@@ -188,6 +191,7 @@ object PostOcrCouponNormalizer {
 
     private fun isOfferLine(line: String): Boolean {
         if (!offerLineRegex.containsMatchIn(line)) return false
+        if (OfferTextQuality.isLegalOrSupportNoise(line)) return false
         if (DescriptionUtils.formatCashbackDetail(line)?.contains("0.0") == true) return false
         return true
     }
@@ -257,6 +261,8 @@ object PostOcrCouponNormalizer {
         if (line.all { it.isDigit() || it.isWhitespace() }) return false
         if (junkLineRegex.matches(line)) return false
         if (statusBarRegex.containsMatchIn(line)) return false
+        if (isLikelyStandaloneHeading(line)) return false
+        if (OfferTextQuality.isLegalOrSupportNoise(line)) return false
         if (GenericFieldHeuristics.isGenericOrMissing(line)) return false
         return true
     }
@@ -264,6 +270,7 @@ object PostOcrCouponNormalizer {
     private fun isBoundaryLine(line: String): Boolean {
         if (codeLineRegex.containsMatchIn(line)) return true
         if (expiryLineRegex.containsMatchIn(line)) return true
+        if (isLikelyStandaloneHeading(line)) return true
         val normalized = normalizeKey(line)
         if (normalized in setOf("via", "pay", "redeem", "from", "order", "now", "copy")) return true
         if (Regex("""(?i)\b(?:bank|card|payment)\b""").containsMatchIn(line)) return true
@@ -271,10 +278,18 @@ object PostOcrCouponNormalizer {
         return false
     }
 
+    private fun isLikelyStandaloneHeading(line: String): Boolean {
+        val words = line.split("\\s+".toRegex()).filter { it.isNotBlank() }
+        if (words.size > 2) return false
+        if (!line.any { it.isLetter() }) return true
+        return words.size == 1 && !isOfferLine(line)
+    }
+
     private fun scoreOfferLine(line: String, storeName: String?): Int {
         val normalized = line.lowercase(Locale.ROOT)
         var score = 0
         if (normalized.contains("₹") || normalized.contains("rs")) score += 1
+        if (Regex("""(?i)\bworth\s+(?:₹|rs\.?)?\s*\d+[\d,]*\s+for\s+(?:₹|rs\.?)?\s*\d+[\d,]*\b""").containsMatchIn(line)) score += 5
         if (Regex("""\d{1,3}\s*%""").containsMatchIn(normalized)) score += 1
         if (normalized.contains("flat") || normalized.contains("save") || normalized.contains("get")) score += 1
         if (!storeName.isNullOrBlank() && normalized.contains(storeName.lowercase(Locale.ROOT))) score += 3
@@ -325,6 +340,7 @@ object PostOcrCouponNormalizer {
     private fun compactLine(raw: String): String {
         return raw
             .replace(Regex("""^[•*\-]+\s*"""), "")
+            .replace(Regex("""^\d+\s*[.)]\s*"""), "")
             .replace(Regex("""(?i)(?<![A-Z0-9])z\s*(?=\d{2,}(?:[,\d]*)(?:\b|\s))"""), "₹")
             .replace(Regex("""(?i)\b(\d{1,3})\s+percent\b"""), "$1%")
             .replace(Regex("""(?i)\b(free|off|cashback|discount)\*"""), "$1")
@@ -332,6 +348,29 @@ object PostOcrCouponNormalizer {
             .replace(Regex("""(?i)\bcashback\s*:?\s*0+(?:\.0+)?\b"""), " ")
             .replace(Regex("\\s+"), " ")
             .trim(' ', '.', ',', '-', ':')
+            .let(::normalizeCommercialPriceOffer)
+    }
+
+    private fun normalizeCommercialPriceOffer(value: String): String {
+        val corrected = Regex("""(?i)\bworth\s+(?:₹|rs\.?)?\s*(\d[\d,]{2,})\s+for\s+(?:₹|rs\.?)?\s*(7\d{3})\b""")
+            .replace(value) { match ->
+                val worth = match.groupValues[1].replace(",", "").toIntOrNull()
+                val saleRaw = match.groupValues[2].replace(",", "")
+                val sale = saleRaw.toIntOrNull()
+                val saleWithoutArtifact = saleRaw.drop(1).toIntOrNull()
+                if (worth != null &&
+                    sale != null &&
+                    saleWithoutArtifact != null &&
+                    sale > worth &&
+                    saleWithoutArtifact < worth
+                ) {
+                    "worth ₹$worth for ₹$saleWithoutArtifact"
+                } else {
+                    "worth ₹${match.groupValues[1]} for ₹${match.groupValues[2]}"
+                }
+            }
+        return Regex("""(?i)\b(worth|for)\s+(?!₹|rs\.?)\s*(\d[\d,]{2,})\b""")
+            .replace(corrected) { match -> "${match.groupValues[1]} ₹${match.groupValues[2]}" }
     }
 
     private fun normalizeKey(value: String): String {

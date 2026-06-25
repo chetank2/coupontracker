@@ -19,14 +19,12 @@ object DeviceTierPolicy {
         val tier = tierFor(cap)
 
         val defaultMode = ModelMode.TEXT_QWEN
-        val retryMode = when (tier) {
-            DeviceTier.LOW_END, DeviceTier.MID -> ModelMode.TEXT_QWEN
-            DeviceTier.HIGH_END -> when {
-                cap.mmprojPresent -> ModelMode.VLM_QWEN
-                cap.gemmaTextModelPresent -> ModelMode.TEXT_GEMMA
-                else -> ModelMode.TEXT_QWEN
-            }
-            DeviceTier.DEVELOPER -> ModelMode.VLM_QWEN
+        val retryMode = when {
+            cap.gemmaVisionModelPresent -> ModelMode.VLM_GEMMA
+            tier == DeviceTier.HIGH_END && cap.mmprojPresent -> ModelMode.VLM_QWEN
+            tier == DeviceTier.DEVELOPER -> ModelMode.VLM_QWEN
+            tier == DeviceTier.HIGH_END && cap.gemmaTextModelPresent -> ModelMode.TEXT_GEMMA
+            else -> ModelMode.TEXT_QWEN
         }
         val experimentMode = if (cap.gemmaTextModelPresent && tier != DeviceTier.LOW_END)
             ModelMode.TEXT_GEMMA else ModelMode.TEXT_QWEN

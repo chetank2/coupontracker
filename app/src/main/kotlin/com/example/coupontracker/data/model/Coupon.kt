@@ -64,7 +64,14 @@ data class Coupon(
     val lastCleanedBy: String? = null,
     val rawOcrText: String? = null,
     val ocrConfidence: Float? = null,
-    val extractionSource: String? = null
+    val extractionSource: String? = null,
+
+    // Vision field-state metadata. These are explicit absence/ownership states,
+    // not replacements for OCR-backed exact values.
+    val codeState: String = CodeState.UNKNOWN,
+    val expiryState: String = ExpiryState.UNKNOWN,
+    val layoutState: String = LayoutState.LOW_CONFIDENCE,
+    val debugVisionEvidence: String? = null
 ) {
     fun withAdditionalDetails(vararg details: String?): Coupon {
         val mergedDescription = DescriptionUtils.appendDetails(description, *details)
@@ -127,5 +134,26 @@ data class Coupon(
         const val OCR_VERIFIED = "OCR_VERIFIED"
         const val VISION_VERIFIED = "VISION_VERIFIED"
         const val USER_EDITED = "USER_EDITED"
+    }
+
+    object CodeState {
+        const val PRESENT = "PRESENT"
+        const val NO_CODE_NEEDED = "NO_CODE_NEEDED"
+        const val NOT_VISIBLE = "NOT_VISIBLE"
+        const val UNKNOWN = "UNKNOWN"
+    }
+
+    object ExpiryState {
+        const val PRESENT = "PRESENT"
+        const val NOT_VISIBLE = "NOT_VISIBLE"
+        const val UNKNOWN = "UNKNOWN"
+    }
+
+    object LayoutState {
+        const val COMPLETE = "COMPLETE"
+        const val PARTIAL = "PARTIAL"
+        const val MODAL_FOREGROUND = "MODAL_FOREGROUND"
+        const val MULTI_CARD = "MULTI_CARD"
+        const val LOW_CONFIDENCE = "LOW_CONFIDENCE"
     }
 }

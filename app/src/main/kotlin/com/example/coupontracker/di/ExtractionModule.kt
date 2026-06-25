@@ -2,6 +2,7 @@ package com.example.coupontracker.di
 
 import android.content.Context
 import com.example.coupontracker.data.local.ExtractionFeedbackDao
+import com.example.coupontracker.data.preferences.SecurePreferencesManager
 import com.example.coupontracker.extraction.*
 import com.example.coupontracker.extraction.model.ModelSelector
 import com.example.coupontracker.learning.ExtractionLearningIntegration
@@ -111,7 +112,8 @@ object ExtractionModule {
         progressiveExtractionService: ProgressiveExtractionService,
         confidenceScorer: ConfidenceScorer,
         extractionValidator: ExtractionValidator,
-        modelSelector: ModelSelector
+        modelSelector: ModelSelector,
+        securePreferencesManager: SecurePreferencesManager
     ): MultiCouponExtractionService {
         return MultiCouponExtractionService(
             context = context,
@@ -119,7 +121,8 @@ object ExtractionModule {
             progressiveExtractionService = progressiveExtractionService,
             confidenceScorer = confidenceScorer,
             extractionValidator = extractionValidator,
-            modelSelector = modelSelector
+            modelSelector = modelSelector,
+            securePreferencesManager = securePreferencesManager
         )
     }
 }

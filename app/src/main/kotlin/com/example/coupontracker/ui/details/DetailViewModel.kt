@@ -252,6 +252,14 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _coupon.value?.let { coupon ->
                 try {
+                    val usageLimitReached = coupon.usageLimit
+                        ?.takeIf { it > 0 }
+                        ?.let { coupon.usageCount >= it } == true
+                    if (usageLimitReached) {
+                        Log.d(TAG, "Usage limit already reached for coupon ${coupon.id}")
+                        return@let
+                    }
+
                     // Update usage count
                     repository.updateCouponUsageCount(coupon.id)
                     repository.updateCouponStatus(coupon.id, Coupon.Status.USED)
@@ -284,6 +292,10 @@ class DetailViewModel @Inject constructor(
             _coupon.value?.let { coupon ->
                 val expiry = coupon.expiryDate ?: return@launch
                 val reminderAt = Date(expiry.time - TimeUnit.MINUTES.toMillis(leadTimeMinutes.toLong()))
+                if (!reminderAt.after(Date())) {
+                    Log.d(TAG, "Skipping past reminder for coupon ${coupon.id}: $reminderAt")
+                    return@let
+                }
                 try {
                     repository.updateCouponReminder(coupon.id, reminderAt, leadTimeMinutes)
                     loadCoupon(coupon.id)
@@ -301,6 +313,11 @@ class DetailViewModel @Inject constructor(
         viewModelScope.launch {
             _coupon.value?.let { coupon ->
                 try {
+                    if (!date.after(Date())) {
+                        Log.d(TAG, "Skipping past reminder for coupon ${coupon.id}: $date")
+                        return@let
+                    }
+
                     // Update the reminder date
                     val leadMinutes = coupon.expiryDate?.let { expiry ->
                         val diffMillis = expiry.time - date.time

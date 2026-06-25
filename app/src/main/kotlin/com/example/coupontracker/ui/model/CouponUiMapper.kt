@@ -24,13 +24,33 @@ fun Coupon.toCouponCardModel(
         brandInitial = initial,
         brandColor = null,
         valueLabel = cardOfferSummary(displayDescription),
-        code = redeemCode.orEmpty(),
-        expiresAt = DateFormatter.formatShort(expiryDate),
+        code = codeDisplayText(),
+        expiresAt = expiryDisplayText(),
         statusLabel = cleanupStatusLabel(),
         statusInProgress = cleanupStatus == Coupon.CleanupStatus.PENDING ||
             cleanupStatus == Coupon.CleanupStatus.RUNNING,
         state = cardState(),
+        codeIsActionable = !redeemCode.isNullOrBlank(),
     )
+}
+
+@Composable
+private fun Coupon.codeDisplayText(): String {
+    return when {
+        !redeemCode.isNullOrBlank() -> redeemCode
+        codeState == Coupon.CodeState.NO_CODE_NEEDED -> stringResource(R.string.coupon_no_code_needed)
+        codeState == Coupon.CodeState.NOT_VISIBLE -> stringResource(R.string.coupon_field_not_visible)
+        else -> ""
+    }
+}
+
+@Composable
+private fun Coupon.expiryDisplayText(): String {
+    return when {
+        expiryDate != null -> DateFormatter.formatShort(expiryDate)
+        expiryState == Coupon.ExpiryState.NOT_VISIBLE -> stringResource(R.string.coupon_field_not_visible)
+        else -> ""
+    }
 }
 
 fun Coupon.cardState(now: Date = Date()): CouponCardState {
@@ -69,6 +89,8 @@ private fun Coupon.cardOfferSummary(displayDescription: String): String {
         ?.take(MAX_CARD_OFFER_LENGTH)
 
     return matchedOffer?.ifBlank { null }
+        ?: normalizedDescription.takeIf { it.isSpecificOfferText() }
+            ?.take(MAX_CARD_OFFER_LENGTH)
         ?: when {
             normalizedDescription.contains("voucher", ignoreCase = true) -> stringResource(R.string.coupon_saved_voucher)
             normalizedDescription.contains("coupon", ignoreCase = true) -> stringResource(R.string.coupon_saved_coupon)
@@ -76,9 +98,18 @@ private fun Coupon.cardOfferSummary(displayDescription: String): String {
         }
 }
 
+private fun String.isSpecificOfferText(): Boolean {
+    if (length < MIN_CARD_DESCRIPTION_LENGTH) return false
+    if (equals("coupon offer", ignoreCase = true)) return false
+    if (equals("saved offer", ignoreCase = true)) return false
+    return any(Char::isDigit) || OFFER_KEYWORD_REGEX.containsMatchIn(this)
+}
+
 private const val DEFAULT_COUPON_INITIAL = 'C'
 private const val MAX_CARD_OFFER_LENGTH = 44
+private const val MIN_CARD_DESCRIPTION_LENGTH = 10
 private val WHITESPACE_REGEX = Regex("\\s+")
 private val OFFER_SUMMARY_REGEX = Regex(
     pattern = """(?i)(₹\s*\d[\d,]*(?:\s*off)?|\d+\s*%\s*(?:off|cashback)?|flat\s+[^.]{1,32}|free\s+[^.]{1,32}|save\s+[^.]{1,32})""",
 )
+private val OFFER_KEYWORD_REGEX = Regex("""(?i)\b(discount|cashback|off|free|prime|premium|plus|voucher|coupon|membership)\b""")

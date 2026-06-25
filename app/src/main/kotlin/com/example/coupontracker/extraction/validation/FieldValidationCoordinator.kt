@@ -1,6 +1,7 @@
 package com.example.coupontracker.extraction.validation
 
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.extraction.rules.TextExtractor
@@ -31,7 +32,9 @@ data class FieldValueBundle(
     val storeName: String?,
     val description: String?,
     val redeemCode: String?,
-    val expiryDateText: String?
+    val expiryDateText: String?,
+    val codeState: String = Coupon.CodeState.UNKNOWN,
+    val expiryState: String = Coupon.ExpiryState.UNKNOWN
 )
 
 /**

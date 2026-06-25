@@ -720,12 +720,17 @@ class ScannerViewModel @Inject constructor(
             val scopedImageUri = persistCouponCrop(couponInstance.cropBitmap) ?: imageUri
 
             // Create coupon from extracted information
-            val coupon = finalizeCoupon(
-                base = createCouponFromInstance(
+            val baseCoupon = createCouponFromInstance(
                     couponInstance = couponInstance,
                     extractionResult = extractionResult,
                     imageUri = scopedImageUri,
                     captureTimestamp = captureTimestamp
+                )
+            val coupon = finalizeCoupon(
+                base = validateDetectedCouponInstance(
+                    coupon = baseCoupon,
+                    extractionResult = extractionResult,
+                    expiryDateText = extractionResult.fields["expiryDate"]
                 ),
                 ocrText = extractionResult.fullOcrText,
                 captureTimestamp = captureTimestamp
@@ -1372,7 +1377,7 @@ class ScannerViewModel @Inject constructor(
         val baseDescription = extractedInfo["description"] ?: extractedInfo["benefit"] ?: "Multi-coupon detected"
         val mergedDescription = DescriptionUtils.appendDetails(baseDescription, cashbackDetail)
 
-        val baseCoupon = Coupon(
+        return Coupon(
             storeName = extractedInfo["storeName"] ?: extractedInfo["app"] ?: Coupon.Defaults.UNKNOWN_STORE,
             description = mergedDescription,
             expiryDate = expiryDate,
@@ -1392,11 +1397,6 @@ class ScannerViewModel @Inject constructor(
             extractionSource = Coupon.ExtractionSource.OCR_FAST,
             extractionTimestamp = Date()
         )
-        return validateDetectedCouponInstance(
-            coupon = baseCoupon,
-            extractionResult = extractionResult,
-            expiryDateText = extractedInfo["expiryDate"]
-        )
     }
 
     private fun validateDetectedCouponInstance(
@@ -1409,7 +1409,9 @@ class ScannerViewModel @Inject constructor(
                 storeName = coupon.storeName,
                 description = coupon.description,
                 redeemCode = coupon.redeemCode,
-                expiryDateText = expiryDateText
+                expiryDateText = expiryDateText,
+                codeState = coupon.codeState,
+                expiryState = coupon.expiryState
             ),
             fields = buildDetectedFieldCandidates(coupon, extractionResult, expiryDateText),
             rawOcrText = extractionResult.fullOcrText,
@@ -1420,7 +1422,13 @@ class ScannerViewModel @Inject constructor(
         val issueMessages = validation.issues.map { "${it.field.name}:${it.message}" }
         val hasError = validation.issues.any { it.severity == CouponFieldBundleValidator.Severity.ERROR } ||
             !validation.spatialResult.consistent
-        val multiCouponRegion = issueMessages.any { it.contains("multiple_coupon_sections_in_single_region") }
+        val foregroundModal = coupon.layoutState == Coupon.LayoutState.MODAL_FOREGROUND
+        val multiCouponRegion = issueMessages.any { it.contains("multiple_coupon_sections_in_single_region") } &&
+            !foregroundModal
+        val onlyForegroundOwnershipIssue = foregroundModal &&
+            issueMessages.isNotEmpty() &&
+            issueMessages.all { it.contains("multiple_coupon_sections_in_single_region") }
+        val needsAttention = validation.needsAttention && !onlyForegroundOwnershipIssue
         val invalidCode = issueMessages.any {
             it.contains("COUPON_CODE:") || it.contains("store_duplicates_code") || it.contains("description_duplicates_code")
         }
@@ -1435,10 +1443,18 @@ class ScannerViewModel @Inject constructor(
         return coupon.copy(
             redeemCode = if (multiCouponRegion || invalidCode) null else coupon.redeemCode,
             expiryDate = if (multiCouponRegion) null else coupon.expiryDate,
-            needsAttention = coupon.needsAttention || validation.needsAttention,
-            cleanupStatus = if (validation.needsAttention) Coupon.CleanupStatus.FAILED else coupon.cleanupStatus,
-            cleanupError = validation.reason,
-            extractionSource = if (validation.trusted && !hasError) Coupon.ExtractionSource.OCR_VERIFIED else null,
+            needsAttention = coupon.needsAttention || needsAttention,
+            cleanupStatus = if (needsAttention) {
+                Coupon.CleanupStatus.FAILED
+            } else {
+                coupon.cleanupStatus
+            },
+            cleanupError = if (needsAttention) validation.reason else null,
+            extractionSource = if (validation.trusted && !hasError) {
+                Coupon.ExtractionSource.OCR_VERIFIED
+            } else {
+                coupon.extractionSource
+            },
             extractionRunPath = runPath
         )
     }

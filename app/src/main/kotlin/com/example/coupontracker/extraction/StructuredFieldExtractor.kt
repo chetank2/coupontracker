@@ -2,6 +2,7 @@ package com.example.coupontracker.extraction
 
 import android.util.Log
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.util.StoreCandidateValidator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -19,7 +20,7 @@ class StructuredFieldExtractor {
         
         private val COMMON_WORDS = setOf(
             "THE", "AND", "FOR", "YOU", "GET", "WITH", "FROM", "EXPIRES", "CODE",
-            "COUPON", "OFFER", "VALID", "UPTO", "FLAT", "OFF", "CASHBACK", "THIS",
+            "COUPON", "OFFER", "VALID", "UPTO", "FLAT", "OFF", "CASHBACK", "COPY", "THIS",
             "THAT", "YOUR", "USE", "APPLY", "SAVE", "DISCOUNT", "VIA", "PAY", "ONLY",
             "WON", "WIN", "NEXT", "ORDER", "PURCHASE", "BUY", "DETAILS", "NOW", "NEW",
             "MINIMUM", "VALUE", "MIN", "VALIDITY"
@@ -94,14 +95,23 @@ class StructuredFieldExtractor {
         val candidates = mutableListOf<FieldCandidate>()
         
         // Strategy 1: Explicit context patterns ("from X", "at Y") - but NOT payment methods
-        val explicitPattern = Regex("""(?:from|at|on)\s+([A-Z][A-Za-z0-9&.'\-]{1,20})""", RegexOption.IGNORE_CASE)
+        val explicitPattern = Regex("""\b(from|at|on)\s+([A-Z][A-Za-z0-9&.'\-]{1,30})""", RegexOption.IGNORE_CASE)
         explicitPattern.findAll(context.ocrText).forEach { match ->
-            val storeName = match.groupValues[1]
+            val preposition = match.groupValues[1].lowercase(Locale.ROOT)
+            val storeName = match.groupValues[2]
             // Skip payment methods like "via CRED", "via UPI"
-            if (storeName.length >= 3 && storeName.uppercase() !in PAYMENT_METHODS) {
+            if (storeName.length >= 3 &&
+                storeName.uppercase() !in PAYMENT_METHODS &&
+                StoreCandidateValidator.isAcceptable(storeName, context.ocrText)
+            ) {
+                val confidence = when {
+                    storeName.contains('.') -> 0.55f
+                    preposition == "on" -> 0.45f
+                    else -> 0.8f
+                }
                 candidates.add(FieldCandidate(
                     value = storeName,
-                    confidence = 0.8f,
+                    confidence = confidence,
                     source = "explicit_pattern",
                     context = match.value
                 ))
@@ -118,7 +128,8 @@ class StructuredFieldExtractor {
                 !isLikelyWatermark(word) &&
                 !isWalletHeaderLine(context.ocrText, match.range) &&
                 word.length in 3..15 &&
-                isValidBrandName(word)
+                isValidBrandName(word) &&
+                StoreCandidateValidator.isAcceptable(word, context.ocrText)
             ) {
                 // Higher confidence for words in first 30% of text
                 val position = match.range.first.toFloat() / context.ocrText.length
@@ -134,7 +145,7 @@ class StructuredFieldExtractor {
         }
         
         // Strategy 3: Title Case brands with SMART position-based confidence
-        val titleCasePattern = Regex("""\b([A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){0,2})\b""")
+        val titleCasePattern = Regex("""\b([A-Z][a-z]{2,}(?:[ \t]+[A-Z][a-z]{2,}){0,2})\b""")
         
         titleCasePattern.findAll(context.ocrText).forEach { match ->
             val storeName = match.value
@@ -148,7 +159,12 @@ class StructuredFieldExtractor {
             if (words.any { LAYOUT_TOKENS.contains(it.lowercase(Locale.ROOT)) }) return@forEach
             
             // Validate brand name quality (reject OCR garbage like "Pastm Patm")
-            if (!isValidBrandName(storeName) || isLikelyWatermark(storeName)) return@forEach
+            if (!isValidBrandName(storeName) ||
+                isLikelyWatermark(storeName) ||
+                !StoreCandidateValidator.isAcceptable(storeName, context.ocrText)
+            ) {
+                return@forEach
+            }
             if (isWalletHeaderLine(context.ocrText, match.range)) return@forEach
             
             // Calculate position-based confidence
@@ -185,7 +201,10 @@ class StructuredFieldExtractor {
         val wordFrequency = mutableMapOf<String, Int>()
         Regex("""\b([A-Z][A-Za-z]{2,})\b""").findAll(context.ocrText).forEach { match ->
             val word = match.value
-            if (word !in COMMON_WORDS && !isWalletHeaderLine(context.ocrText, match.range)) {
+            if (word !in COMMON_WORDS &&
+                !isWalletHeaderLine(context.ocrText, match.range) &&
+                StoreCandidateValidator.isAcceptable(word, context.ocrText)
+            ) {
                 wordFrequency[word] = wordFrequency.getOrDefault(word, 0) + 1
             }
         }

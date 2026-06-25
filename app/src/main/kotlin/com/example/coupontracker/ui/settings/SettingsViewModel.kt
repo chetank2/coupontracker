@@ -8,6 +8,7 @@ import com.example.coupontracker.data.model.SortOrder
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.repository.SettingsRepository
 import com.example.coupontracker.data.util.CouponDedupUtils
+import com.example.coupontracker.util.DataManager
 import com.example.coupontracker.util.SecureBackupManager
 import com.example.coupontracker.util.ThemeManager
 import com.example.coupontracker.util.ThemeMode
@@ -21,6 +22,7 @@ class SettingsViewModel @Inject constructor(
     private val repository: SettingsRepository,
     private val couponRepository: CouponRepository,
     private val themeManager: ThemeManager,
+    private val dataManager: DataManager,
     private val secureBackupManager: SecureBackupManager
 ) : ViewModel() {
 
@@ -152,9 +154,26 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Export all coupons to encrypted backup file
+     * Export all coupons to a readable JSON file.
      */
-    fun exportBackup(uri: Uri) {
+    fun exportData(uri: Uri) {
+        viewModelScope.launch {
+            _backupState.value = BackupState.Exporting
+
+            try {
+                val coupons = couponRepository.getAllCoupons().first()
+                dataManager.exportData(uri, coupons)
+                _backupState.value = BackupState.Success("Data exported successfully", coupons.size)
+            } catch (e: Exception) {
+                _backupState.value = BackupState.Error("Export failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Export all coupons to encrypted backup file.
+     */
+    fun exportEncryptedBackup(uri: Uri) {
         viewModelScope.launch {
             _backupState.value = BackupState.Exporting
 

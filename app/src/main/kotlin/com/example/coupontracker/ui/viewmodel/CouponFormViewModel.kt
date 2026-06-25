@@ -11,7 +11,10 @@ import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.extraction.rules.CouponInfo
+import com.example.coupontracker.util.CouponExtractionConfidenceScorer
 import com.example.coupontracker.util.CouponInputManager
+import com.example.coupontracker.util.ExtractionRecommendation
+import com.example.coupontracker.worker.VerifyCouponWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,7 +89,8 @@ class CouponFormViewModel @Inject constructor(
                     it.copy(
                         isProcessing = false,
                         couponInfo = couponInfo,
-                        persistedImageUri = coupon.imageUri
+                        persistedImageUri = coupon.imageUri,
+                        extractedCoupon = coupon
                     )
                 }
             } catch (e: Exception) {
@@ -106,7 +110,8 @@ class CouponFormViewModel @Inject constructor(
                 error = null,
                 saveResult = null,
                 couponInfo = mapCouponToCouponInfo(coupon),
-                persistedImageUri = coupon.imageUri
+                persistedImageUri = coupon.imageUri,
+                extractedCoupon = coupon
             )
         }
     }
@@ -134,7 +139,8 @@ class CouponFormViewModel @Inject constructor(
                         isProcessing = false,
                         couponInfo = mapCouponToCouponInfo(coupon),
                         persistedImageUri = coupon.imageUri,
-                        editingCoupon = coupon
+                        editingCoupon = coupon,
+                        extractedCoupon = null
                     )
                 }
             } catch (e: Exception) {
@@ -207,9 +213,10 @@ class CouponFormViewModel @Inject constructor(
                     return@launch
                 }
 
-                // Create and save coupon object
+                // Create and save coupon object, preserving extraction metadata from scan.
                 val persistedImageUri = _uiState.value.persistedImageUri ?: imageUri
                 val coupon = createCoupon(
+                    baseline = _uiState.value.extractedCoupon,
                     storeName = storeName,
                     description = description,
                     code = code,
@@ -226,8 +233,11 @@ class CouponFormViewModel @Inject constructor(
                 )
 
                 val savedCoupon = couponRepository.getCouponById(savedCouponId) ?: coupon.copy(id = savedCouponId)
-                val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt ?: savedCoupon.createdAt)
+                val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt)
                 val result = if (isDuplicate) CouponSaveResult.ALREADY_SAVED else CouponSaveResult.SAVED
+                if (result == CouponSaveResult.SAVED) {
+                    maybeQueueAutomaticVerification(savedCoupon)
+                }
 
                 updateState {
                     it.copy(
@@ -247,6 +257,7 @@ class CouponFormViewModel @Inject constructor(
      * Create a coupon object from the provided parameters
      */
     private fun createCoupon(
+        baseline: Coupon?,
         storeName: String,
         description: String,
         code: String,
@@ -254,16 +265,61 @@ class CouponFormViewModel @Inject constructor(
         category: String,
         imageUri: String?
     ): Coupon {
-        return Coupon(
+        val now = Date()
+        return (baseline ?: Coupon(
             storeName = storeName,
             description = description,
             redeemCode = code.takeIf { it.isNotBlank() },
             expiryDate = expiryDate,
             category = category.takeIf { it.isNotBlank() },
             imageUri = imageUri,
-            createdAt = Date(),
+            createdAt = now,
+            updatedAt = now
+        )).copy(
+            id = 0,
+            storeName = storeName,
+            description = description,
+            redeemCode = code.takeIf { it.isNotBlank() },
+            expiryDate = expiryDate,
+            category = category.takeIf { it.isNotBlank() },
+            imageUri = imageUri ?: baseline?.imageUri,
+            normalizedDescription = CouponDedupUtils.normalizeDescription(description),
+            createdAt = now,
+            updatedAt = now
+        )
+    }
+
+    private suspend fun maybeQueueAutomaticVerification(coupon: Coupon) {
+        val assessment = CouponExtractionConfidenceScorer.score(coupon, coupon.rawOcrText)
+        if (assessment.recommendation != ExtractionRecommendation.VERIFY_WITH_VISION) {
+            return
+        }
+        if (coupon.cleanupStatus == Coupon.CleanupStatus.PENDING ||
+            coupon.cleanupStatus == Coupon.CleanupStatus.RUNNING ||
+            coupon.hasTrustedCleanup()
+        ) {
+            return
+        }
+
+        val pendingCoupon = coupon.copy(
+            cleanupStatus = Coupon.CleanupStatus.PENDING,
+            cleanupError = null,
+            cleanupStartedAt = null,
+            cleanupFinishedAt = null,
             updatedAt = Date()
         )
+        couponRepository.updateCoupon(pendingCoupon)
+        VerifyCouponWorker.enqueueAutomaticVerification(getApplication(), coupon.id)
+    }
+
+    private fun Coupon.hasTrustedCleanup(): Boolean {
+        return cleanupStatus == Coupon.CleanupStatus.CLEANED &&
+            !needsAttention &&
+            extractionSource in setOf(
+                Coupon.ExtractionSource.VISION_VERIFIED,
+                Coupon.ExtractionSource.QWEN_CLEANED,
+                Coupon.ExtractionSource.OCR_VERIFIED
+            )
     }
 
     /**
@@ -335,7 +391,8 @@ data class CouponFormUiState(
     val saveResult: CouponSaveResult? = null,
     val savedCoupon: Coupon? = null,
     val persistedImageUri: String? = null,
-    val editingCoupon: Coupon? = null
+    val editingCoupon: Coupon? = null,
+    val extractedCoupon: Coupon? = null
 )
 
 enum class CouponSaveResult {

@@ -53,4 +53,5 @@ data class CouponCardModel(
     val statusLabel: String? = null,
     val statusInProgress: Boolean = false,
     val state: CouponCardState = CouponCardState.Default,
+    val codeIsActionable: Boolean = true,
 )

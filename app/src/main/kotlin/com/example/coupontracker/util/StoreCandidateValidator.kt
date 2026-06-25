@@ -7,13 +7,14 @@ object StoreCandidateValidator {
     private val tokenRegex = Regex("[a-z0-9]+")
     private val noiseTokens = setOf(
         "am", "pm", "vit", "otp", "upi", "url", "www", "com", "app",
+        "pastm",
         "now", "new", "get", "off", "for", "the", "and", "use", "code",
         "cashback", "cred", "pay", "via", "expires", "expired", "valid",
         "expiry", "hour", "hours", "hr", "hrs", "day", "days", "week",
         "weeks", "month", "months", "in", "active", "inactive",
         "available", "claimed", "unclaimed", "redeemed", "unredeemed",
         "voucher", "vouchers", "offer", "offers", "details", "terms",
-        "conditions"
+        "conditions", "about", "deleted", "item", "items"
     )
 
     fun isAcceptable(candidate: String?, rawOcr: String? = null): Boolean {

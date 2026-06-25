@@ -21,7 +21,10 @@ class CouponExtractionConfidenceScorerTest {
             description = "you won Lenskart Gold Max membership at just ₹49",
             expiryDate = Date(),
             redeemCode = "AFFLCRDG-OKTYZX6-6TOZ",
-            imageUri = null
+            imageUri = null,
+            codeState = Coupon.CodeState.PRESENT,
+            expiryState = Coupon.ExpiryState.PRESENT,
+            layoutState = Coupon.LayoutState.COMPLETE
         )
 
         val result = CouponExtractionConfidenceScorer.score(coupon, ocr)
@@ -47,7 +50,10 @@ class CouponExtractionConfidenceScorerTest {
             description = "you won Lenskart Gold Max membership at just ₹49",
             expiryDate = Date(),
             redeemCode = "AFFLCRDG-OKTYZX6-6TOZ",
-            imageUri = null
+            imageUri = null,
+            codeState = Coupon.CodeState.PRESENT,
+            expiryState = Coupon.ExpiryState.PRESENT,
+            layoutState = Coupon.LayoutState.MULTI_CARD
         )
 
         val result = CouponExtractionConfidenceScorer.score(coupon, ocr)
@@ -71,5 +77,107 @@ class CouponExtractionConfidenceScorerTest {
 
         assertEquals(ExtractionConfidenceBand.LOW, result.band)
         assertEquals(ExtractionRecommendation.MANUAL_REVIEW, result.recommendation)
+    }
+
+    @Test
+    fun `score saves no-code modal when state explains missing code and expiry`() {
+        val ocr = """
+            IDFC FIRST Bank
+            Monthly Interest
+            No code needed
+        """.trimIndent()
+        val coupon = Coupon(
+            storeName = "IDFC FIRST Bank",
+            description = "Monthly Interest",
+            expiryDate = null,
+            redeemCode = null,
+            imageUri = null,
+            codeState = Coupon.CodeState.NO_CODE_NEEDED,
+            expiryState = Coupon.ExpiryState.NOT_VISIBLE,
+            layoutState = Coupon.LayoutState.MODAL_FOREGROUND
+        )
+
+        val result = CouponExtractionConfidenceScorer.score(coupon, ocr)
+
+        assertEquals(ExtractionConfidenceBand.HIGH, result.band)
+        assertEquals(ExtractionRecommendation.SAVE_DIRECTLY, result.recommendation)
+        assertEquals(1f, result.fieldConfidences["redeemCode"])
+        assertEquals(1f, result.fieldConfidences["expiryDate"])
+    }
+
+    @Test
+    fun `score accepts not visible expiry without punishing missing date`() {
+        val ocr = """
+            Minimalist
+            Flat ₹100 Off + ₹50 Cashback
+            code: MNPPRK100UAPR255QYSG7A
+        """.trimIndent()
+        val coupon = Coupon(
+            storeName = "Minimalist",
+            description = "Flat ₹100 Off + ₹50 Cashback",
+            expiryDate = null,
+            redeemCode = "MNPPRK100UAPR255QYSG7A",
+            imageUri = null,
+            codeState = Coupon.CodeState.PRESENT,
+            expiryState = Coupon.ExpiryState.NOT_VISIBLE,
+            layoutState = Coupon.LayoutState.COMPLETE
+        )
+
+        val result = CouponExtractionConfidenceScorer.score(coupon, ocr)
+
+        assertEquals(ExtractionRecommendation.SAVE_DIRECTLY, result.recommendation)
+        assertEquals(1f, result.fieldConfidences["expiryDate"])
+    }
+
+    @Test
+    fun `score never saves partial layout directly`() {
+        val coupon = highConfidenceCoupon(layoutState = Coupon.LayoutState.PARTIAL)
+        val result = CouponExtractionConfidenceScorer.score(coupon, highConfidenceOcr)
+
+        assertEquals(ExtractionRecommendation.VERIFY_WITH_VISION, result.recommendation)
+        assertTrue(result.issues.contains("layout_partial"))
+    }
+
+    @Test
+    fun `score sends low confidence layout to review even with strong text`() {
+        val coupon = highConfidenceCoupon(layoutState = Coupon.LayoutState.LOW_CONFIDENCE)
+        val result = CouponExtractionConfidenceScorer.score(coupon, highConfidenceOcr)
+
+        assertEquals(ExtractionRecommendation.VERIFY_WITH_VISION, result.recommendation)
+        assertTrue(result.issues.contains("layout_low_confidence"))
+    }
+
+    @Test
+    fun `score rejects hallucinated present code without OCR support`() {
+        val coupon = highConfidenceCoupon(redeemCode = "SCRATCH999")
+        val result = CouponExtractionConfidenceScorer.score(coupon, highConfidenceOcr)
+
+        assertEquals(ExtractionRecommendation.VERIFY_WITH_VISION, result.recommendation)
+        assertTrue(result.issues.contains("unsupported_coupon_code"))
+        assertTrue(result.issues.contains("ocr_contradiction"))
+        assertTrue(result.fieldConfidences["redeemCode"]!! < 0.5f)
+    }
+
+    private val highConfidenceOcr = """
+        Lenskart
+        you won Lenskart Gold Max membership at just ₹49
+        code: AFFLCRDG-OKTYZX6-6TOZ
+        EXPIRES IN 29 DAYS
+    """.trimIndent()
+
+    private fun highConfidenceCoupon(
+        redeemCode: String = "AFFLCRDG-OKTYZX6-6TOZ",
+        layoutState: String = Coupon.LayoutState.COMPLETE
+    ): Coupon {
+        return Coupon(
+            storeName = "Lenskart",
+            description = "you won Lenskart Gold Max membership at just ₹49",
+            expiryDate = Date(),
+            redeemCode = redeemCode,
+            imageUri = null,
+            codeState = Coupon.CodeState.PRESENT,
+            expiryState = Coupon.ExpiryState.PRESENT,
+            layoutState = layoutState
+        )
     }
 }

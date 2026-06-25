@@ -276,7 +276,7 @@ private fun CouponCardContent(
                         color = colors.onSurfaceVariant,
                     )
                     Text(
-                        text = if (revealed || model.code.isBlank()) {
+                        text = if (!model.codeIsActionable || revealed || model.code.isBlank()) {
                             model.code.ifBlank { stringResource(R.string.coupon_no_code) }
                         } else {
                             "••••••"

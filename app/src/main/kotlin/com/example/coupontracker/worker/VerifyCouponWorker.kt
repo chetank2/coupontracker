@@ -32,6 +32,7 @@ import com.example.coupontracker.util.ModelExpiryNormalizer
 import com.example.coupontracker.util.OcrEvidenceValidator
 import com.example.coupontracker.util.PostOcrCouponNormalizer
 import com.example.coupontracker.util.SecurePreferencesManager
+import com.example.coupontracker.util.StoreCandidateValidator
 import com.example.coupontracker.extraction.rules.TextExtractor
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -322,9 +323,11 @@ class VerifyCouponWorker @AssistedInject constructor(
             ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
         val selectedCode = extractedCode ?: currentStrongCode ?: current.redeemCode
             ?.takeIf { allowUserEditedFallback && it.isNotBlank() }
+        val noCodeRequired = hasNoCodeEvidence(rawOcr)
         val codeSource = when {
             extractedCode != null -> FIELD_SOURCE_OCR_RULE
             currentStrongCode != null -> FIELD_SOURCE_PRESERVED
+            noCodeRequired -> FIELD_SOURCE_OCR_RULE
             selectedCode != null && allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
             else -> FIELD_SOURCE_MISSING
         }
@@ -334,6 +337,7 @@ class VerifyCouponWorker @AssistedInject constructor(
             ?.takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
         val currentStrongStore = current.storeName
             .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
+            .takeIf { StoreCandidateValidator.isAcceptable(it, rawOcr) }
             .takeIf { OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
         val preserveCurrentStore = current.extractionSource in setOf(
             Coupon.ExtractionSource.USER_EDITED,
@@ -391,7 +395,7 @@ class VerifyCouponWorker @AssistedInject constructor(
             selectedExpiry != null && allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
             else -> FIELD_SOURCE_MISSING
         }
-        if (selectedCode.isNullOrBlank() && selectedExpiry == null) {
+        if (selectedCode.isNullOrBlank() && selectedExpiry == null && !noCodeRequired) {
             return null
         }
 
@@ -400,6 +404,15 @@ class VerifyCouponWorker @AssistedInject constructor(
             description = selectedDescription,
             expiryDate = selectedExpiry,
             redeemCode = selectedCode,
+            codeState = when {
+                !selectedCode.isNullOrBlank() -> Coupon.CodeState.PRESENT
+                noCodeRequired -> Coupon.CodeState.NO_CODE_NEEDED
+                else -> current.codeState
+            },
+            expiryState = when {
+                selectedExpiry != null -> Coupon.ExpiryState.PRESENT
+                else -> current.expiryState
+            },
             category = info.category,
             status = info.status ?: Coupon.Status.ACTIVE,
             minimumPurchase = info.minimumPurchase,
@@ -484,18 +497,29 @@ class VerifyCouponWorker @AssistedInject constructor(
         usedTargetedCrop: Boolean
     ): Coupon {
         val allowUserEditedFallback = current.extractionSource == Coupon.ExtractionSource.USER_EDITED
+        val noCodeRequired = hasNoCodeEvidence(rawOcr)
         val selectedStore = info.storeName.trim()
             .takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
-            ?.takeIf { rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
+            ?.takeIf {
+                rawOcr.isNullOrBlank() ||
+                    OcrEvidenceValidator.isPhraseSupported(it, rawOcr) ||
+                    (usedTargetedCrop && hasStoreTokenEvidence(it, rawOcr))
+            }
             ?: current.storeName.takeIf {
                 it.isNotBlank() &&
                     !GenericFieldHeuristics.isGenericOrMissing(it) &&
+                    StoreCandidateValidator.isAcceptable(it, rawOcr) &&
                     (rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr))
             }
             ?: current.storeName.takeIf { allowUserEditedFallback && it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissing(it) }
         val selectedDescription = info.description
             .takeIf(GenericFieldHeuristics::isMeaningfulDescription)
-            ?.takeIf { rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr) || hasSupportedDescriptionTokens(it, rawOcr) }
+            ?.takeIf {
+                rawOcr.isNullOrBlank() ||
+                    OcrEvidenceValidator.isPhraseSupported(it, rawOcr) ||
+                    hasSupportedDescriptionTokens(it, rawOcr) ||
+                    (usedTargetedCrop && noCodeRequired && isNoCodeBenefitDescription(it))
+            }
             ?: current.description
                 .takeIf(GenericFieldHeuristics::isMeaningfulDescription)
                 ?.takeIf { rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr) || hasSupportedDescriptionTokens(it, rawOcr) }
@@ -511,7 +535,7 @@ class VerifyCouponWorker @AssistedInject constructor(
         val missingCriticalFields = selectedStore == null ||
             selectedStore == Coupon.Defaults.UNKNOWN_STORE ||
             selectedDescription == null ||
-            (selectedCode.isNullOrBlank() && selectedExpiry == null)
+            (selectedCode.isNullOrBlank() && selectedExpiry == null && !noCodeRequired)
 
         if (missingCriticalFields) {
             Log.w(
@@ -542,7 +566,9 @@ class VerifyCouponWorker @AssistedInject constructor(
         val storeSource = if (
             info.storeName.isNotBlank() &&
             !GenericFieldHeuristics.isGenericOrMissing(info.storeName) &&
-            (rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(info.storeName, rawOcr))
+            (rawOcr.isNullOrBlank() ||
+                OcrEvidenceValidator.isPhraseSupported(info.storeName, rawOcr) ||
+                (usedTargetedCrop && hasStoreTokenEvidence(info.storeName, rawOcr)))
         ) {
             FIELD_SOURCE_VISION
         } else {
@@ -553,7 +579,8 @@ class VerifyCouponWorker @AssistedInject constructor(
             OfferTextQuality.isLikelyOfferText(info.description) &&
             (rawOcr.isNullOrBlank() ||
                 OcrEvidenceValidator.isPhraseSupported(info.description, rawOcr) ||
-                hasSupportedDescriptionTokens(info.description, rawOcr))
+                hasSupportedDescriptionTokens(info.description, rawOcr) ||
+                (usedTargetedCrop && noCodeRequired && isNoCodeBenefitDescription(info.description)))
         ) {
             FIELD_SOURCE_VISION
         } else {
@@ -563,6 +590,7 @@ class VerifyCouponWorker @AssistedInject constructor(
             info.redeemCode?.trim()
                 ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
                 ?.takeIf { rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(it, rawOcr) } != null -> FIELD_SOURCE_VISION
+            noCodeRequired -> FIELD_SOURCE_VISION
             selectedCode != null && allowUserEditedFallback -> FIELD_SOURCE_USER_EDITED
             selectedCode != null -> FIELD_SOURCE_PRESERVED
             else -> FIELD_SOURCE_MISSING
@@ -573,7 +601,7 @@ class VerifyCouponWorker @AssistedInject constructor(
             selectedExpiry != null -> FIELD_SOURCE_PRESERVED
             else -> FIELD_SOURCE_MISSING
         }
-        val actionFieldVisionSupported = codeSource == FIELD_SOURCE_VISION || expirySource == FIELD_SOURCE_VISION
+        val actionFieldVisionSupported = codeSource == FIELD_SOURCE_VISION || expirySource == FIELD_SOURCE_VISION || noCodeRequired
         val strictVisionVerified = usedTargetedCrop &&
             storeSource == FIELD_SOURCE_VISION &&
             descriptionSource == FIELD_SOURCE_VISION &&
@@ -611,6 +639,15 @@ class VerifyCouponWorker @AssistedInject constructor(
             description = verifiedDescription,
             expiryDate = selectedExpiry,
             redeemCode = selectedCode,
+            codeState = when {
+                !selectedCode.isNullOrBlank() -> Coupon.CodeState.PRESENT
+                noCodeRequired -> Coupon.CodeState.NO_CODE_NEEDED
+                else -> current.codeState
+            },
+            expiryState = when {
+                selectedExpiry != null -> Coupon.ExpiryState.PRESENT
+                else -> current.expiryState
+            },
             category = info.category,
             status = info.status ?: Coupon.Status.ACTIVE,
             minimumPurchase = info.minimumPurchase,
@@ -682,13 +719,53 @@ class VerifyCouponWorker @AssistedInject constructor(
     private fun hasSupportedDescriptionTokens(description: String, rawOcr: String?): Boolean {
         if (rawOcr.isNullOrBlank()) return true
         val ocrTokens = rawOcr.lowercase(Locale.ROOT)
-        val supportedCount = description
+        val candidateTokens = description
             .lowercase(Locale.ROOT)
             .split(Regex("\\s+"))
             .map { it.trim(',', '.', '*', ':', ';', '(', ')') }
             .filter { it.length >= 3 }
-            .count { token -> ocrTokens.contains(token) }
-        return supportedCount >= 3
+        val supportedCount = candidateTokens.count { token -> ocrTokens.contains(token) }
+        return if (candidateTokens.size <= 2) {
+            candidateTokens.isNotEmpty() && supportedCount == candidateTokens.size
+        } else {
+            supportedCount >= 3
+        }
+    }
+
+    private fun hasStoreTokenEvidence(storeName: String, rawOcr: String?): Boolean {
+        if (rawOcr.isNullOrBlank()) return false
+        val ocrTokens = rawOcr.lowercase(Locale.ROOT)
+            .split(Regex("[^a-z0-9]+"))
+            .filter { it.isNotBlank() }
+            .toSet()
+        val storeTokens = storeName.lowercase(Locale.ROOT)
+            .split(Regex("[^a-z0-9]+"))
+            .filter { it.length >= 3 }
+        if (storeTokens.isEmpty()) return false
+        val supported = storeTokens.count { it in ocrTokens }
+        val hasDistinctiveAcronym = storeTokens.any { token ->
+            token.length >= 4 && token.all(Char::isLetter) && token in ocrTokens
+        }
+        return supported >= 2 || (storeTokens.size <= 2 && supported == storeTokens.size) || hasDistinctiveAcronym
+    }
+
+    private fun isNoCodeBenefitDescription(description: String): Boolean {
+        return GenericFieldHeuristics.isMeaningfulDescription(description) &&
+            OfferTextQuality.isLikelyOfferText(description) &&
+            Regex("(?i)\\b(?:interest|emi|membership|subscription|access|upgrade|benefit|bonus|reward|free)\\b")
+                .containsMatchIn(description)
+    }
+
+    private fun hasNoCodeEvidence(rawOcr: String?): Boolean {
+        val normalized = rawOcr.orEmpty()
+            .lowercase(Locale.ROOT)
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        if (normalized.isBlank()) return false
+        return Regex("\\bno\\s+code(?:\\s+needed|required)?\\b").containsMatchIn(normalized) ||
+            normalized.contains("nocodeneeded") ||
+            normalized.contains("no code needed")
     }
 
     private fun JSONObject.optNullableString(key: String): String? {

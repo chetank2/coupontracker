@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.Build
 import android.os.PowerManager
+import com.example.coupontracker.model.ModelPaths
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import javax.inject.Inject
@@ -24,6 +25,7 @@ class DeviceCapabilityProbe @Inject constructor(
         val files = context.filesDir
         val qwenPresent = File(files, QWEN_MODEL_REL).exists()
         val gemmaPresent = File(files, GEMMA_TEXT_REL).exists()
+        val gemmaVisionPresent = ModelPaths.isGemmaVisionInstalled(context)
         val mmprojPresent = File(files, MMPROJ_REL).exists()
 
         val nativeLoaded = runCatching {
@@ -38,6 +40,7 @@ class DeviceCapabilityProbe @Inject constructor(
             thermalStatus = thermal,
             qwenModelPresent = qwenPresent,
             gemmaTextModelPresent = gemmaPresent,
+            gemmaVisionModelPresent = gemmaVisionPresent,
             mmprojPresent = mmprojPresent,
             nativeLibraryLoaded = nativeLoaded
         )

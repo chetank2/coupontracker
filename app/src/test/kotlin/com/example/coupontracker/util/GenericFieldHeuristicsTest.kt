@@ -68,6 +68,7 @@ class GenericFieldHeuristicsTest {
         assertTrue(GenericFieldHeuristics.isGenericOrMissing("ACTIVE"))
         assertTrue(GenericFieldHeuristics.isGenericOrMissing("claimed"))
         assertTrue(GenericFieldHeuristics.isGenericOrMissing("unredeemed"))
+        assertTrue(GenericFieldHeuristics.isGenericOrMissing("About"))
     }
 
     @Test
@@ -83,5 +84,18 @@ class GenericFieldHeuristicsTest {
         assertFalse(GenericFieldHeuristics.isMeaningfulDescription("you won off Onion Shampoo ZEN"))
         assertTrue(GenericFieldHeuristics.isMeaningfulDescription("you won 80% off on Skullcandy"))
         assertTrue(GenericFieldHeuristics.isMeaningfulDescription("you've won neck fan at ₹1100"))
+    }
+
+    @Test
+    fun `reward chrome is not a valid coupon code or store`() {
+        assertTrue(GenericFieldHeuristics.isGenericOrMissing("SCRATCH"))
+        assertTrue(GenericFieldHeuristics.isGenericOrMissingCode("SCRATCH"))
+        assertTrue(GenericFieldHeuristics.isGenericOrMissingCode("NO_CODE_NEEDED"))
+    }
+
+    @Test
+    fun `short no-code benefit descriptions can be meaningful`() {
+        assertTrue(GenericFieldHeuristics.isMeaningfulDescription("Monthly Interest"))
+        assertTrue(GenericFieldHeuristics.isMeaningfulDescription("Gold Membership"))
     }
 }

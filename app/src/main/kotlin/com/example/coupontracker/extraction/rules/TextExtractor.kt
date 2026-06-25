@@ -410,6 +410,9 @@ class TextExtractor {
             if (isCouponBlockCodeLine(line)) {
                 return
             }
+            if (OfferTextQuality.isLegalOrSupportNoise(line)) {
+                return
+            }
             val candidate = cleanCandidate(raw, text) ?: return
             if (!StoreCandidateValidator.isAcceptable(candidate, text)) {
                 return
@@ -575,6 +578,10 @@ class TextExtractor {
             ),
             Pattern.compile(
                 "(?i)\\b(?:on|at)\\s+((?:the\\s+)?[\\p{L}\\p{M}\\p{N}&.'-]+(?:\\s+[\\p{L}\\p{M}\\p{N}&.'-]+){0,4})\\s+(?:website|app|store|site)\\b",
+                Pattern.UNICODE_CASE
+            ),
+            Pattern.compile(
+                "(?i)\\bby\\s+([\\p{Lu}][\\p{L}\\p{M}\\p{N}&.'-]{2,}(?:\\s+[\\p{Lu}][\\p{L}\\p{M}\\p{N}&.'-]{2,}){0,2})\\s+(?:worth|for)\\b",
                 Pattern.UNICODE_CASE
             )
         )
@@ -1063,12 +1070,13 @@ class TextExtractor {
             if (next.isBlank()) continue
             if (
                 isCouponBlockExpiryLine(next) ||
-                isCouponBlockCodeLine(next) ||
-                isCouponBlockActionLine(next) ||
-                isCouponBlockChromeLine(next) ||
-                isStandaloneCodeCandidate(next) ||
-                isRatingLine(next) ||
-                (OfferTextQuality.isLikelyDateOrContextNoise(next) && !isOfferContinuationLine(next))
+                    isCouponBlockCodeLine(next) ||
+                    isCouponBlockActionLine(next) ||
+                    isCouponBlockChromeLine(next) ||
+                    OfferTextQuality.isLegalOrSupportNoise(next) ||
+                    isStandaloneCodeCandidate(next) ||
+                    isRatingLine(next) ||
+                    (OfferTextQuality.isLikelyDateOrContextNoise(next) && !isOfferContinuationLine(next))
             ) {
                 break
             }
@@ -1100,11 +1108,53 @@ class TextExtractor {
         val bounded = value?.let { raw ->
             val withoutInlineCode = raw.replace(Regex("(?i)\\b(?:coupon\\s+code|promo\\s+code|code)\\s*[:\\-–—].*$"), "")
                 .replace(Regex("""\s+\bDAYS\b\s*$"""), "")
+                .replace(Regex("""(?m)^\s*\d+\s*[.)]\s*"""), "")
             val matcher = DESCRIPTION_BOUNDARY_PATTERN.matcher(withoutInlineCode)
             if (matcher.find()) withoutInlineCode.substring(0, matcher.start()) else withoutInlineCode
         }
         val cleaned = LocalLlmOcrService.cleanDescription(bounded)
+            .let(::normalizeCommercialPriceOffer)
         return cleaned.ifBlank { null }
+    }
+
+    private fun normalizeCommercialPriceOffer(value: String): String {
+        if (value.isBlank()) return value
+        val correctedSalePrice = WORTH_FOR_RUPEE_ARTIFACT_PATTERN.replace(value) { match ->
+            val worth = match.groupValues[1].replace(",", "").toIntOrNull()
+            val saleRaw = match.groupValues[2].replace(",", "")
+            val sale = saleRaw.toIntOrNull()
+            val saleWithoutArtifact = saleRaw.drop(1).toIntOrNull()
+            if (worth != null &&
+                sale != null &&
+                saleWithoutArtifact != null &&
+                sale > worth &&
+                saleWithoutArtifact < worth
+            ) {
+                "worth ₹$worth for ₹$saleWithoutArtifact"
+            } else {
+                "worth ₹${match.groupValues[1]} for ₹${match.groupValues[2]}"
+            }
+        }
+        return WORTH_FOR_MISSING_RUPEE_PATTERN.replace(correctedSalePrice) { match ->
+            val label = match.groupValues[1]
+            val amount = match.groupValues[2]
+            "$label ₹$amount"
+        }.let(::normalizeRupeeGlyphArtifacts)
+    }
+
+    private fun normalizeRupeeGlyphArtifacts(value: String): String {
+        if (value.isBlank()) return value
+        return RUPEE_GLYPH_AMOUNT_ARTIFACT_PATTERN.replace(value) { match ->
+            val prefix = match.groupValues[1]
+            val rawAmount = match.groupValues[2].replace(",", "")
+            val suffix = match.groupValues[3]
+            val repaired = repairRupeeGlyphAmount(rawAmount)
+            if (repaired != null) {
+                "$prefix ₹$repaired$suffix"
+            } else {
+                match.value
+            }
+        }
     }
 
     private fun refineDescriptionCandidate(candidate: String, summaryFallback: String?): String {
@@ -1161,6 +1211,8 @@ class TextExtractor {
     private fun buildMonetarySummary(text: String, lines: List<String>): String? {
         data class MonetaryLine(val line: String, val amount: Int)
 
+        buildCombinedOffCashbackSummary(lines)?.let { return it }
+
         val monetaryCandidates = lines.mapNotNull { line ->
             val trimmed = line.trim()
             if (trimmed.isEmpty()) return@mapNotNull null
@@ -1204,18 +1256,44 @@ class TextExtractor {
         return store?.let { "$it Coupon - $summaryCore" } ?: summaryCore
     }
 
+    private fun buildCombinedOffCashbackSummary(lines: List<String>): String? {
+        for (index in lines.indices) {
+            val current = lines[index].trim()
+            if (current.isBlank()) continue
+            val next = lines.getOrNull(index + 1)?.trim().orEmpty()
+            val combined = normalizeRupeeGlyphArtifacts("$current $next")
+                .replace(Regex("""\s+"""), " ")
+                .replace("*", "")
+                .trim()
+            val match = OFF_PLUS_CASHBACK_PATTERN.find(combined) ?: continue
+            val offAmount = match.groupValues[1]
+            val cashbackAmount = match.groupValues[2]
+            return "Flat ₹$offAmount Off + ₹$cashbackAmount Cashback"
+        }
+        return null
+    }
+
     private fun extractDominantAmount(line: String): Int? {
         var best: Int? = null
         val matcher = DIGIT_RUN_PATTERN.matcher(line)
         while (matcher.find()) {
             val raw = matcher.group(1)?.replace(",", "") ?: continue
-            val value = raw.toIntOrNull() ?: continue
+            val repaired = repairRupeeGlyphAmount(raw)
+            val value = (repaired ?: raw).toIntOrNull() ?: continue
             if (value < 50) continue
             if (best == null || value > best) {
                 best = value
             }
         }
         return best
+    }
+
+    private fun repairRupeeGlyphAmount(raw: String): String? {
+        if (!raw.startsWith("7") || raw.length !in 3..4) return null
+        val repaired = raw.drop(1)
+        val amount = repaired.toIntOrNull() ?: return null
+        if (amount < 50) return null
+        return repaired
     }
 
     private fun findHeadingStoreFallback(lines: List<String>): String? {
@@ -1833,6 +1911,18 @@ class TextExtractor {
         private val MONETARY_LINE_PATTERN = Pattern.compile("(?i)(flat|up\\s*to|upto|extra|save).*(off|cashback|discount)")
         private val LEADING_AMOUNT_PATTERN = Pattern.compile("(?i)(flat|up\\s*to|upto|extra|save)\\s+(\\d[\\d,]{2,})")
         private val DIGIT_RUN_PATTERN = Pattern.compile("(\\d[\\d,]{2,})")
+        private val WORTH_FOR_RUPEE_ARTIFACT_PATTERN = Regex(
+            "(?i)\\bworth\\s+(?:₹|rs\\.?)?\\s*(\\d[\\d,]{2,})\\s+for\\s+(?:₹|rs\\.?)?\\s*(7\\d{3})\\b"
+        )
+        private val WORTH_FOR_MISSING_RUPEE_PATTERN = Regex(
+            "(?i)\\b(worth|for)\\s+(?!₹|rs\\.?)\\s*(\\d[\\d,]{2,})\\b"
+        )
+        private val RUPEE_GLYPH_AMOUNT_ARTIFACT_PATTERN = Regex(
+            "(?i)((?:\\b(?:flat|up\\s*to|upto|extra|save))|\\+)\\s+(7\\d{2,3})(\\s+(?:off|cashback|discount)\\b)"
+        )
+        private val OFF_PLUS_CASHBACK_PATTERN = Regex(
+            "(?i)\\bflat\\s+(?:₹|rs\\.?)?\\s*(\\d[\\d,]*)\\s+off\\s*\\+\\s*(?:₹|rs\\.?)?\\s*(\\d[\\d,]*)\\s+cashback\\b"
+        )
         private val GENERIC_HEADING_PATTERN = Pattern.compile("(?i)(offer|details|coupon|code|cashback)")
         private val RUPEE_VALUE_PATTERN = "(?i)(?:₹|rs\\.?\\s*)?\\d[\\d,]{2,}(?=\\s*(?:cashback|off|discount|\\+|$))".toRegex()
         private val STORE_COUNTER_ARTIFACT_PATTERN =

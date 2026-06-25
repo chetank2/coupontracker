@@ -2,6 +2,7 @@ package com.example.coupontracker.extraction
 
 import android.util.Log
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.extraction.quality.OfferTextQuality
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -194,6 +195,12 @@ class SemanticFieldExtractor {
      * Extract meaningful description from sentence
      */
     private fun extractDescriptionFromSentence(sentence: String): FieldCandidate? {
+        if (!OfferTextQuality.isLikelyOfferText(sentence) ||
+            OfferTextQuality.isLikelyDateOrContextNoise(sentence)
+        ) {
+            return null
+        }
+
         // If sentence contains offer-related words and has substance, use it
         val offerKeywords = listOf("get", "offer", "save", "discount", "cashback", "off", "free", "win", "won")
         val conditionKeywords = listOf("above", "minimum", "min", "orders over", "on orders", "spend")
@@ -234,4 +241,3 @@ class SemanticFieldExtractor {
         return null
     }
 }
-

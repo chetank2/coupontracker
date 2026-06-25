@@ -134,4 +134,35 @@ class PostOcrCouponNormalizerTest {
             result.description
         )
     }
+
+    @Test
+    fun normalizerPrefersCommercialPriceLineOverLegalAndSupportTerms() {
+        val rawOcr = """
+            ANTARA
+            EXPIRES IN 13 DAYS
+            offer details
+            terms and conditions
+            1. Apple/Google is not a sponsor of, or involved in, this
+            contest/sweepstakes in any manner.
+            2. One Touch Digital BP by AGEasy worth 1499 for 7899
+            3. no minimum spend required
+            4. customer care details: +919911789911
+            support@ageasybyantara.com
+            5. no delivery charges
+            6. offer valid once per user
+            code: CREDBP
+            Redeem Now
+        """.trimIndent()
+
+        val result = PostOcrCouponNormalizer.normalize(
+            currentDescription = "3. no minimum spend required 4. customer care",
+            ocrText = rawOcr,
+            storeName = "AGEasy",
+            redeemCode = "CREDBP",
+        )
+
+        assertEquals("One Touch Digital BP by AGEasy worth ₹1499 for ₹899", result.description)
+        assertFalse(result.description.orEmpty().contains("customer care", ignoreCase = true))
+        assertFalse(result.description.orEmpty().contains("minimum spend", ignoreCase = true))
+    }
 }

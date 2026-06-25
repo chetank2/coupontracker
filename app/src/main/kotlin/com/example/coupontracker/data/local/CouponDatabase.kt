@@ -15,7 +15,7 @@ import com.example.coupontracker.data.util.CouponDedupUtils
         ExtractionFeedback::class,      // V2: Feedback & telemetry
         ValidatorFeedbackRecord::class  // Validator override & correction dataset
     ],
-    version = 15,
+    version = 16,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -748,6 +748,15 @@ abstract class CouponDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE coupons ADD COLUMN rawOcrText TEXT")
                 database.execSQL("ALTER TABLE coupons ADD COLUMN ocrConfidence REAL")
                 database.execSQL("ALTER TABLE coupons ADD COLUMN extractionSource TEXT")
+            }
+        }
+
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE coupons ADD COLUMN codeState TEXT NOT NULL DEFAULT 'UNKNOWN'")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN expiryState TEXT NOT NULL DEFAULT 'UNKNOWN'")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN layoutState TEXT NOT NULL DEFAULT 'LOW_CONFIDENCE'")
+                database.execSQL("ALTER TABLE coupons ADD COLUMN debugVisionEvidence TEXT")
             }
         }
     }

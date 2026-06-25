@@ -55,6 +55,39 @@ class StructuredFieldExtractorTest {
     }
 
     @Test
+    fun `store detection ignores status bar Pastm and keeps merchant brand`() = runTest {
+        val context = ExtractionContext(
+            imageUri = "test://coupon",
+            ocrText = """
+                8:20 Pastm M
+                X
+                Minimalist
+                The Daily
+                Radiance Ritual
+                Flat ₹100 Off + ₹50 Cashback
+                on Radiance Kit from beminimalist.co
+                Code: MNPPRK100UAPR255QYSGZA COPY
+            """.trimIndent(),
+            ocrBlocks = emptyList(),
+            metadata = emptyMap(),
+            captureTimestamp = null
+        )
+
+        val results = extractor.detectFieldsStructured(context)
+        val storeCandidates = results[FieldType.STORE_NAME].orEmpty()
+
+        println("DEBUG: Store candidates with status bar: ${storeCandidates.map { it.value to it.source }}")
+        assertTrue(
+            "Expected store candidates to include Minimalist, but found: ${storeCandidates.map { it.value }}",
+            storeCandidates.any { it.value.equals("Minimalist", ignoreCase = true) }
+        )
+        assertTrue(
+            "Status bar artifact Pastm should be filtered out, but found: ${storeCandidates.map { it.value }}",
+            storeCandidates.none { it.value.equals("Pastm", ignoreCase = true) }
+        )
+    }
+
+    @Test
     fun `store detection accepts brands with y vowel like XYXX`() = runTest {
         val context = ExtractionContext(
             imageUri = "test://coupon",

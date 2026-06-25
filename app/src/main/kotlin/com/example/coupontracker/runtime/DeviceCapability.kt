@@ -8,6 +8,7 @@ data class DeviceCapability(
     val thermalStatus: Int, // android.os.PowerManager.THERMAL_STATUS_*
     val qwenModelPresent: Boolean,
     val gemmaTextModelPresent: Boolean,
+    val gemmaVisionModelPresent: Boolean,
     val mmprojPresent: Boolean,
     val nativeLibraryLoaded: Boolean
 )

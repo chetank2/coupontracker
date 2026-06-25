@@ -848,11 +848,18 @@ private fun BackupRestoreCard(
     val backupState by viewModel.backupState.collectAsState()
 
     // File pickers
-    val exportLauncher = rememberLauncherForActivityResult(
+    val exportDataLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        onPickerReturn()
+        uri?.let { viewModel.exportData(it) }
+    }
+
+    val exportEncryptedBackupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/octet-stream")
     ) { uri ->
         onPickerReturn()
-        uri?.let { viewModel.exportBackup(it) }
+        uri?.let { viewModel.exportEncryptedBackup(it) }
     }
 
     val importLauncher = rememberLauncherForActivityResult(
@@ -910,23 +917,21 @@ private fun BackupRestoreCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             Text(
-                text = "Export your coupons to an encrypted backup file or restore from a previous backup.",
+                text = "Export readable JSON for viewing, or create an encrypted backup for restore.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Export/Import Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Export Button
                 OutlinedButton(
                     onClick = {
                         val timestamp = System.currentTimeMillis()
-                        exportLauncher.launch("coupons_backup_$timestamp.encrypted")
+                        exportDataLauncher.launch("coupons_export_$timestamp.json")
                     },
                     enabled = backupState !is SettingsViewModel.BackupState.Exporting &&
                              backupState !is SettingsViewModel.BackupState.Importing,
@@ -948,10 +953,9 @@ private fun BackupRestoreCard(
                         )
                     }
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Export")
+                    Text("Export JSON")
                 }
 
-                // Import Button
                 Button(
                     onClick = {
                         importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
@@ -978,6 +982,26 @@ private fun BackupRestoreCard(
                 }
             }
 
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = {
+                    val timestamp = System.currentTimeMillis()
+                    exportEncryptedBackupLauncher.launch("coupons_backup_$timestamp.ctbackup")
+                },
+                enabled = backupState !is SettingsViewModel.BackupState.Exporting &&
+                         backupState !is SettingsViewModel.BackupState.Importing,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Create encrypted backup")
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
 
             // Security note
@@ -992,7 +1016,7 @@ private fun BackupRestoreCard(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = "Backups are encrypted using AES-256",
+                    text = "Encrypted backups restore only through this app.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )

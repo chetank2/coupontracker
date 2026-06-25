@@ -374,16 +374,9 @@ class AddFragment : Fragment() {
         // Set initial state
         updateLlmUiState()
         
-        // Setup switch listener
-        binding.llmOcrSwitch.setOnCheckedChangeListener { _, isChecked ->
-            securePreferencesManager.setSelectedApiType(ApiType.MODEL_BASED)
-            if (isChecked) {
-                binding.llmOcrSwitch.isChecked = false
-            }
-            updateLlmControlsVisibility(false)
-            Log.d(TAG, "Local LLM capture switch ignored; Clean button owns Qwen cleanup")
-            ExtractionLogBuffer.appendInfo(TAG, "Qwen cleanup is available from the Clean action after OCR capture")
-        }
+        // Capture uses the model-based offline scanner. Qwen cleanup is controlled
+        // from Settings and the coupon detail Clean action, not this legacy switch.
+        binding.llmOcrSwitch.isEnabled = false
         
         // Setup info button
         binding.llmInfoButton.setOnClickListener {
@@ -415,11 +408,11 @@ class AddFragment : Fragment() {
         val cachedStatus = modelDownloadManager.getModelStatus()
 
         // Update switch states
-        binding.llmOcrSwitch.isChecked = llmSettings.useLocalLlm
+        binding.llmOcrSwitch.isChecked = true
         binding.llmWifiOnlySwitch.isChecked = llmSettings.downloadWifiOnly
 
         // Update controls visibility
-        updateLlmControlsVisibility(llmSettings.useLocalLlm)
+        updateLlmControlsVisibility(false)
 
         // Update status and buttons with cached data
         updateLlmStatusDisplay(cachedStatus)

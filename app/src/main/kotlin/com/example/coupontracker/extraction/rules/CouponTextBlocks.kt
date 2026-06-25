@@ -74,9 +74,14 @@ object CouponTextBlocks {
         val firstExpiryIndex = meaningfulLines.indexOfFirst(::isExpiryLine)
         if (firstExpiryIndex <= 0) return text
 
-        val hasPreviousCode = meaningfulLines.take(firstExpiryIndex).any(::isCodeLine)
+        val beforeExpiry = meaningfulLines.take(firstExpiryIndex)
+        val firstCodeBeforeExpiry = beforeExpiry.indexOfFirst(::isCodeLine)
+        val firstOfferBeforeExpiry = beforeExpiry.indexOfFirst(::looksLikeSelectedCardOfferLine)
+        val hasPreviousCode = firstCodeBeforeExpiry >= 0
+        val hasCurrentOfferBeforeExpiry = firstOfferBeforeExpiry >= 0 &&
+            (firstCodeBeforeExpiry < 0 || firstOfferBeforeExpiry < firstCodeBeforeExpiry)
         val hasSelectedOffer = meaningfulLines.drop(firstExpiryIndex + 1).take(8).any(::looksLikeSelectedCardOfferLine)
-        if (!hasPreviousCode || !hasSelectedOffer) return text
+        if (!hasPreviousCode || !hasSelectedOffer || hasCurrentOfferBeforeExpiry) return text
 
         return meaningfulLines.drop(firstExpiryIndex).joinToString("\n")
     }

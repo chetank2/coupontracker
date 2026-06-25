@@ -220,9 +220,17 @@ class CouponRepositoryImpl @Inject constructor(
             } else {
                 incoming.extractionSource ?: existing.extractionSource
             },
+            codeState = selectExplicitState(incoming.codeState, existing.codeState, Coupon.CodeState.UNKNOWN),
+            expiryState = selectExplicitState(incoming.expiryState, existing.expiryState, Coupon.ExpiryState.UNKNOWN),
+            layoutState = selectExplicitState(incoming.layoutState, existing.layoutState, Coupon.LayoutState.LOW_CONFIDENCE),
+            debugVisionEvidence = incoming.debugVisionEvidence ?: existing.debugVisionEvidence,
             createdAt = existing.createdAt,
             updatedAt = Date()
         )
+    }
+
+    private fun selectExplicitState(incoming: String, existing: String, defaultValue: String): String {
+        return incoming.takeIf { it != defaultValue } ?: existing
     }
 
     private fun selectBestQualityScore(incoming: Coupon, existing: Coupon): Int? {

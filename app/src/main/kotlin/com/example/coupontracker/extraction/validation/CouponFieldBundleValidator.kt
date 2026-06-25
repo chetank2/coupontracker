@@ -1,6 +1,7 @@
 package com.example.coupontracker.extraction.validation
 
 import com.example.coupontracker.data.model.FieldType
+import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.TextBlock
 import com.example.coupontracker.util.GenericFieldHeuristics
@@ -135,7 +136,15 @@ class CouponFieldBundleValidator(
         rawOcrText: String,
         issues: MutableList<Issue>
     ) {
-        val code = bundle.redeemCode?.trim()?.takeIf { it.isNotBlank() } ?: return
+        val code = bundle.redeemCode?.trim()?.takeIf { it.isNotBlank() }
+        if (code == null) {
+            if (bundle.codeState == Coupon.CodeState.NO_CODE_NEEDED ||
+                bundle.codeState == Coupon.CodeState.NOT_VISIBLE
+            ) {
+                return
+            }
+            return
+        }
 
         if (GenericFieldHeuristics.isGenericOrMissingCode(code)) {
             issues += Issue(FieldType.COUPON_CODE, "invalid_or_placeholder_code", Severity.WARNING)
@@ -160,7 +169,11 @@ class CouponFieldBundleValidator(
     }
 
     private fun validateExpiry(bundle: FieldValueBundle, issues: MutableList<Issue>) {
-        val expiry = bundle.expiryDateText?.trim()?.takeIf { it.isNotBlank() } ?: return
+        val expiry = bundle.expiryDateText?.trim()?.takeIf { it.isNotBlank() }
+        if (expiry == null) {
+            if (bundle.expiryState == Coupon.ExpiryState.NOT_VISIBLE) return
+            return
+        }
         val parsed = IndianDateParser.parseExpiryIST(expiry).date
             ?: IndianDateParser.extractExpiryFromText(expiry).date
         if (parsed == null && !ISO_DATE.matches(expiry)) {

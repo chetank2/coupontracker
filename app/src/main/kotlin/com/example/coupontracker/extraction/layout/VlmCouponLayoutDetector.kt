@@ -2,12 +2,14 @@ package com.example.coupontracker.extraction.layout
 
 import android.graphics.Bitmap
 import android.util.Log
+import com.example.coupontracker.data.preferences.SecurePreferencesManager
 import com.example.coupontracker.extraction.model.ModelRole
 import com.example.coupontracker.extraction.model.ModelSelector
 import com.example.coupontracker.extraction.model.RawVisionExtractionModel
 
 class VlmCouponLayoutDetector(
     private val modelSelector: ModelSelector,
+    private val securePreferencesManager: SecurePreferencesManager? = null,
     private val parser: CouponLayoutJsonParser = CouponLayoutJsonParser()
 ) : CouponLayoutDetector {
 
@@ -18,6 +20,17 @@ class VlmCouponLayoutDetector(
         context: LayoutDetectionContext
     ): CouponLayoutDetection {
         val failures = mutableListOf<String>()
+        if (securePreferencesManager?.isGemmaVisionVerifierEnabled() == false) {
+            return CouponLayoutDetection(
+                cards = emptyList(),
+                source = LayoutDetectionSource.VLM,
+                confidence = 0f,
+                diagnostics = LayoutDiagnostics(
+                    detectorName = name,
+                    rejectedReasons = listOf("gemma_vision_verifier_disabled")
+                )
+            )
+        }
         val adapter = runCatching { modelSelector.select(ModelRole.LOW_CONFIDENCE_RETRY) }
             .onFailure { failures += "retry_slot_unavailable" }
             .getOrNull()

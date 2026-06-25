@@ -12,7 +12,8 @@ object GenericFieldHeuristics {
     private val descriptionKeywords = setOf(
         "off", "discount", "cashback", "save", "flat", "upto", "offer", "deal",
         "free", "gift", "reward", "voucher", "bonus", "win", "won", "buy",
-        "purchase", "order", "products"
+        "purchase", "order", "products", "interest", "emi", "membership",
+        "subscription", "access", "upgrade", "benefit"
     )
     private val monthTokens = setOf(
         "jan", "january", "feb", "february", "mar", "march", "apr", "april",
@@ -46,6 +47,7 @@ object GenericFieldHeuristics {
             // Generic descriptions  
             "details", "description", "info", "information", "text",
             "content", "data", "field", "value", "item", "element",
+            "about",
             
             // Generic store names
             "store", "shop", "merchant", "brand", "company", "business",
@@ -53,7 +55,10 @@ object GenericFieldHeuristics {
             
             // Common placeholder text
             "unknown", "default", "placeholder", "sample", "example",
-            "test", "demo", "temp", "temporary", "loading"
+            "test", "demo", "temp", "temporary", "loading",
+
+            // Reward-screen chrome, not coupon data
+            "scratch", "open", "claim", "copy"
         )
         
         val cleanValue = value.trim().lowercase()
@@ -128,7 +133,7 @@ object GenericFieldHeuristics {
             return false
         }
 
-        if (words.size < 3 && !hasNumberToken) {
+        if (words.size < 3 && !hasNumberToken && !looksLikeShortBenefitPhrase(words, hasKeyword)) {
             Log.d(TAG, "Treating '$value' as weak description - too few words without numbers")
             return false
         }
@@ -139,6 +144,15 @@ object GenericFieldHeuristics {
         }
 
         return true
+    }
+
+    private fun looksLikeShortBenefitPhrase(words: List<String>, hasKeyword: Boolean): Boolean {
+        if (!hasKeyword || words.size !in 2..3) return false
+        val benefitTokens = setOf(
+            "interest", "emi", "membership", "subscription", "access",
+            "upgrade", "benefit", "bonus", "reward", "free"
+        )
+        return words.any { token -> token.trim('*', ',', '.', ':', ';') in benefitTokens }
     }
 
     private fun looksLikeSavingsWithoutConcreteValue(lower: String, hasNumberToken: Boolean): Boolean {
@@ -191,12 +205,23 @@ object GenericFieldHeuristics {
         if (isGenericOrMissing(value)) return true
         
         // Detect repeated single segment forms like NO_CODE_NEEDED or lorem words
-        if (cleanValue.contains("NO_CODE") || cleanValue.contains("NEEDED")) {
+        if (cleanValue.contains("NO_CODE") || cleanValue.contains("NEEDED") || cleanValue in GENERIC_CODE_TOKENS) {
             Log.d(TAG, "Treating '$value' as placeholder code")
             return true
         }
         return false
     }
+
+    private val GENERIC_CODE_TOKENS = setOf(
+        "SCRATCH",
+        "OPEN",
+        "OPENNOW",
+        "CLAIM",
+        "CLAIMNOW",
+        "COPY",
+        "NOCODE",
+        "NOCODENEEDED"
+    )
     
     /**
      * Check if two field values are duplicates (case-insensitive, trimmed)

@@ -33,10 +33,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.coupontracker.R
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.ui.theme.BrandColors
@@ -170,7 +172,14 @@ fun CouponItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Code with copy button
-                coupon.redeemCode?.let { code ->
+                val codeDisplay = coupon.redeemCode
+                    ?: when (coupon.codeState) {
+                        Coupon.CodeState.NO_CODE_NEEDED -> stringResource(R.string.coupon_no_code_needed)
+                        Coupon.CodeState.NOT_VISIBLE -> stringResource(R.string.coupon_field_not_visible)
+                        else -> null
+                    }
+                codeDisplay?.let { code ->
+                    val actionableCode = coupon.redeemCode?.takeIf { it.isNotBlank() }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
@@ -187,16 +196,18 @@ fun CouponItem(
                             style = MaterialTheme.typography.labelMedium
                         )
 
-                        IconButton(
-                            onClick = { clipboardManager.setText(AnnotatedString(code)) },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy code",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(14.dp)
-                            )
+                        if (actionableCode != null) {
+                            IconButton(
+                                onClick = { clipboardManager.setText(AnnotatedString(actionableCode)) },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy code",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -218,7 +229,12 @@ fun CouponItem(
                 }
 
                 Text(
-                    text = DateFormatter.formatShort(coupon.expiryDate),
+                    text = coupon.expiryDate?.let(DateFormatter::formatShort)
+                        ?: if (coupon.expiryState == Coupon.ExpiryState.NOT_VISIBLE) {
+                            stringResource(R.string.coupon_field_not_visible)
+                        } else {
+                            DateFormatter.formatShort(coupon.expiryDate)
+                        },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

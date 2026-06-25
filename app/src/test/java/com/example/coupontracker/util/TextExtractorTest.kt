@@ -102,6 +102,57 @@ class TextExtractorTest {
     }
 
     @Test
+    fun `extractCouponInfoSync ignores legal sponsor text and terms when selecting offer`() {
+        val baseDate = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).parse("2026-06-24 13:00")
+        val text = """
+            trophy room
+            vouchers (9) gift cards (0)
+            ANTARA
+            MEM
+            START
+            STOP
+            SET
+            EXPIRES IN 13 DAYS
+            offer details
+            terms and conditions
+            1. Apple/Google is not a sponsor of, or involved in, this
+            contest/sweepstakes in any manner.
+            2. One Touch Digital BP by AGEasy worth 1499 for 7899
+            3. no minimum spend required
+            4. customer care details: +919911789911
+            support@ageasybyantara.com
+            5. no delivery charges
+            6. offer valid once per user
+            code: CREDBP
+            Redeem Now
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("AGEasy", result.storeName)
+        assertEquals("One Touch Digital BP by AGEasy worth ₹1499 for ₹899", result.description)
+        assertEquals("CREDBP", result.redeemCode)
+    }
+
+    @Test
+    fun `extractCouponInfoSync handles no-code reward modal without using chrome as code`() {
+        val text = """
+            SCRATCH & WIN REWARDS!
+            IDFC FIRST BANK
+            Monthly Interest
+            NO CODE NEEDED
+            Open Now
+            I'll use it later
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text)
+
+        assertEquals("IDFC FIRST BANK", result.storeName)
+        assertEquals("Monthly Interest", result.description)
+        assertNull(result.redeemCode)
+    }
+
+    @Test
     fun `extractCouponInfoSync rejects expiry badge as store and description`() {
         val baseDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse("2026-06-18 22:53:50")
         val text = """
@@ -186,9 +237,40 @@ class TextExtractorTest {
         val result = extractor.extractDescription(text)
 
         assertEquals(
-            "Minimalist Coupon - Flat ₹7100 off",
+            "Flat ₹100 Off + ₹50 Cashback",
             result
         )
+    }
+
+    @Test
+    fun `extractCouponInfo handles Minimalist screenshot chrome and rupee OCR artifacts`() {
+        val text = """
+            8:20 Pastm M
+            X
+            Minimalist
+            The Daily
+            Radiance Ritual
+            Bx
+            MULTI-PRODUCT KIT Minimalist
+            Flat 7100 Off + 750
+            Cashback*
+            on Radiance Kit from beminimalist.co
+            Code: MNPPRK100UAPR255QYSGZA COPY
+            BUY NOw
+            Expires on 05 May, 2025, 11:59 PM
+            Offer Details
+            About Minimalist K
+            Scratch card received on offer
+            Flat 100 Off + 750 Cashback*
+        """.trimIndent()
+
+        val baseDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse("2026-06-25")
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("Minimalist", result.storeName)
+        assertEquals("Flat ₹100 Off + ₹50 Cashback", result.description)
+        assertEquals("MNPPRK100UAPR255QYSGZA", result.redeemCode)
+        assertEquals("2025-05-05", SimpleDateFormat("yyyy-MM-dd", Locale.US).format(result.expiryDate!!))
     }
 
     @Test
@@ -201,6 +283,26 @@ class TextExtractorTest {
         val result = extractor.extractStoreName(text)
 
         assertEquals("Aha", result)
+    }
+
+    @Test
+    fun `extractStoreName rejects product status text and keeps visible brand`() {
+        val text = """
+            foxtale
+            foxtale DELETED ITEMS
+            Niacinamide Serum
+            Foxtale Skin Radiance Mask
+            Buy 2 Get 2 FREE* +
+            Upto 5% Foxcoins
+            on Prepaid Orders on Foxtale Skincare
+            Code: FOXPPB2G2BIY5WIV8 COPY
+            Expires on 31 May, 2025, 11:59 PM
+            About Foxtale
+        """.trimIndent()
+
+        val result = extractor.extractStoreName(text)
+
+        assertEquals("Foxtale", result)
     }
 
     @Test

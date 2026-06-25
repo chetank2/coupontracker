@@ -2,6 +2,7 @@ package com.example.coupontracker.extraction.layout
 
 import android.graphics.Bitmap
 import android.graphics.Rect
+import com.example.coupontracker.data.preferences.SecurePreferencesManager
 import com.example.coupontracker.extraction.model.CouponExtractionModel
 import com.example.coupontracker.extraction.model.ModelExtractionResult
 import com.example.coupontracker.extraction.model.ModelMode
@@ -15,6 +16,7 @@ import com.example.coupontracker.ml.HybridCouponDetector
 import com.example.coupontracker.ml.ScreenshotClassifier
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -133,6 +135,30 @@ class CouponLayoutDetectionPipelineTest {
 
         assertEquals(LayoutDetectionSource.VLM, result.source)
         assertEquals(listOf(Rect(12, 20, 132, 110)), result.cards.map { it.bounds })
+    }
+
+    @Test
+    fun `vlm detector skips when Gemma verifier is disabled`() = runBlocking {
+        val prefs = mockk<SecurePreferencesManager>()
+        every { prefs.isGemmaVisionVerifierEnabled() } returns false
+        val config = mockk<ModelStrategyConfig>()
+        val model = RawLayoutModel(rawJson = """{"cards":[]}""")
+        val detector = VlmCouponLayoutDetector(
+            modelSelector = ModelSelector(setOf(model), config),
+            securePreferencesManager = prefs
+        )
+
+        val result = detector.detectLayout(
+            bitmap = bitmap(),
+            context = LayoutDetectionContext(
+                screenshotType = ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP,
+                ocrText = "coupon anchors"
+            )
+        )
+
+        assertEquals(emptyList<CouponCardRegion>(), result.cards)
+        assertEquals(listOf("gemma_vision_verifier_disabled"), result.diagnostics.rejectedReasons)
+        verify(exactly = 0) { config.modeFor(any()) }
     }
 
     @Test

@@ -55,6 +55,7 @@ import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.data.util.DescriptionUtils
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -297,8 +298,14 @@ private fun CouponDetailContent(
 
         Spacer(modifier = Modifier.height(BrandSpacing.Large))
 
+        val codeStateText = when {
+            coupon.codeState == Coupon.CodeState.NO_CODE_NEEDED -> stringResource(R.string.coupon_no_code_needed)
+            coupon.codeState == Coupon.CodeState.NOT_VISIBLE -> stringResource(R.string.coupon_field_not_visible)
+            else -> null
+        }
+
         // Coupon code
-        if (!coupon.redeemCode.isNullOrEmpty()) {
+        if (!coupon.redeemCode.isNullOrEmpty() || codeStateText != null) {
             Text(
                 text = "Code",
                 style = MaterialTheme.typography.labelLarge,
@@ -321,19 +328,21 @@ private fun CouponDetailContent(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                text = coupon.redeemCode,
+                        text = coupon.redeemCode ?: codeStateText.orEmpty(),
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
                     )
 
-                    IconButton(onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        val clip = ClipData.newPlainText("Coupon code", coupon.redeemCode)
-                        clipboard.setPrimaryClip(clip)
-                        Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
-                    }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy code")
+                    if (!coupon.redeemCode.isNullOrBlank()) {
+                        IconButton(onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("Coupon code", coupon.redeemCode)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, "Code copied to clipboard", Toast.LENGTH_SHORT).show()
+                        }) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy code")
+                        }
                     }
                 }
             }
@@ -371,7 +380,11 @@ private fun CouponDetailContent(
 
             Text(
                 text = coupon.expiryDate?.let { DateFormatter.formatShort(it) }
-                    ?: stringResource(id = R.string.no_expiry_provided),
+                    ?: if (coupon.expiryState == Coupon.ExpiryState.NOT_VISIBLE) {
+                        stringResource(R.string.coupon_field_not_visible)
+                    } else {
+                        stringResource(id = R.string.no_expiry_provided)
+                    },
                 style = MaterialTheme.typography.bodyLarge
             )
 
@@ -398,10 +411,6 @@ private fun CouponDetailContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-
-        Spacer(modifier = Modifier.height(BrandSpacing.Medium))
-
-        CouponReviewSourceCard(coupon = coupon)
 
         Spacer(modifier = Modifier.height(BrandSpacing.Medium))
 
@@ -513,47 +522,6 @@ private fun CouponStructuredFieldsCard(
 }
 
 @Composable
-private fun CouponReviewSourceCard(coupon: Coupon) {
-    val status = remember(coupon) { reviewStatusText(coupon) }
-    val source = remember(coupon) { extractionSourceLabel(coupon) }
-    val derivedExpiry = isDerivedRelativeExpiry(coupon.rawOcrText)
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
-        Column(
-            modifier = Modifier.padding(BrandSpacing.Medium),
-            verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)
-        ) {
-            Text(
-                text = "Review",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            ReviewInfoRow(
-                icon = if (coupon.needsAttention) Icons.Default.Warning else Icons.Default.CheckCircle,
-                label = "Status",
-                value = status
-            )
-            ReviewInfoRow(
-                icon = Icons.Default.Source,
-                label = "Source",
-                value = source
-            )
-            if (derivedExpiry) {
-                ReviewInfoRow(
-                    icon = Icons.Default.Event,
-                    label = "Expiry",
-                    value = "Derived from relative OCR"
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun ReviewInfoRow(
     icon: ImageVector,
     label: String,
@@ -592,6 +560,15 @@ private fun CouponActionButtons(
     onCancelReminderClick: () -> Unit,
 ) {
     var reminderMenuExpanded by remember { mutableStateOf(false) }
+    val now = remember(coupon.id, coupon.updatedAt, coupon.reminderDate) { Date() }
+    val usageLimitReached = coupon.usageLimit?.takeIf { it > 0 }?.let { coupon.usageCount >= it } == true
+    val canSetReminder = coupon.expiryDate?.after(now) == true
+
+    fun reminderOptionEnabled(leadTimeMinutes: Int): Boolean {
+        val expiry = coupon.expiryDate ?: return false
+        return Date(expiry.time - TimeUnit.MINUTES.toMillis(leadTimeMinutes.toLong())).after(now)
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(BrandSpacing.Small)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -604,6 +581,7 @@ private fun CouponActionButtons(
                     stringResource(R.string.coupon_mark_used)
                 },
                 onClick = onTrackUsageClick,
+                enabled = !usageLimitReached,
                 modifier = Modifier.weight(1f),
                 tier = BrandButtonTier.Primary,
                 leadingIcon = Icons.Default.CheckCircle,
@@ -617,7 +595,7 @@ private fun CouponActionButtons(
                         stringResource(R.string.coupon_remind_me)
                     },
                     onClick = { reminderMenuExpanded = true },
-                    enabled = coupon.expiryDate != null,
+                    enabled = canSetReminder,
                     modifier = Modifier.fillMaxWidth(),
                     tier = BrandButtonTier.Secondary,
                     leadingIcon = Icons.Default.Notifications,
@@ -627,16 +605,16 @@ private fun CouponActionButtons(
                     expanded = reminderMenuExpanded,
                     onDismissRequest = { reminderMenuExpanded = false }
                 ) {
-                    ReminderOption("At expiry", 0, onSetReminderLeadTime) {
+                    ReminderOption("At expiry", 0, reminderOptionEnabled(0), onSetReminderLeadTime) {
                         reminderMenuExpanded = false
                     }
-                    ReminderOption("1 hour before", 60, onSetReminderLeadTime) {
+                    ReminderOption("1 hour before", 60, reminderOptionEnabled(60), onSetReminderLeadTime) {
                         reminderMenuExpanded = false
                     }
-                    ReminderOption("24 hours before", 1440, onSetReminderLeadTime) {
+                    ReminderOption("24 hours before", 1440, reminderOptionEnabled(1440), onSetReminderLeadTime) {
                         reminderMenuExpanded = false
                     }
-                    ReminderOption("48 hours before", 2880, onSetReminderLeadTime) {
+                    ReminderOption("48 hours before", 2880, reminderOptionEnabled(2880), onSetReminderLeadTime) {
                         reminderMenuExpanded = false
                     }
                     if (coupon.reminderLeadTimeMinutes != null) {
@@ -772,6 +750,12 @@ private fun CleanupStatusCard(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                if (isRunning) {
+                    Spacer(modifier = Modifier.height(BrandSpacing.Small))
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             if (!isRunning && (needsReview || coupon.cleanupStatus != Coupon.CleanupStatus.CLEANED)) {
@@ -791,11 +775,13 @@ private fun CleanupStatusCard(
 private fun ReminderOption(
     label: String,
     minutes: Int,
+    enabled: Boolean,
     onSetReminderLeadTime: (Int) -> Unit,
     onSelected: () -> Unit,
 ) {
     DropdownMenuItem(
         text = { Text(label) },
+        enabled = enabled,
         onClick = {
             onSetReminderLeadTime(minutes)
             onSelected()
@@ -1230,29 +1216,6 @@ private fun deriveQualityInsights(coupon: com.example.coupontracker.data.model.C
 private fun isDerivedRelativeExpiry(rawOcrText: String?): Boolean {
     if (rawOcrText.isNullOrBlank()) return false
     return Regex("(?i)\\bexpires?\\s+in\\s+\\d+\\s+(?:days?|hours?)\\b").containsMatchIn(rawOcrText)
-}
-
-private fun reviewStatusText(coupon: Coupon): String {
-    return when {
-        coupon.needsAttention -> "Needs review"
-        coupon.cleanupStatus == Coupon.CleanupStatus.FAILED -> "Needs review"
-        coupon.cleanupStatus == Coupon.CleanupStatus.RUNNING ||
-            coupon.cleanupStatus == Coupon.CleanupStatus.PENDING -> "Checking"
-        coupon.cleanupStatus == Coupon.CleanupStatus.CLEANED -> "Checked, review before redeeming"
-        else -> "Review before redeeming"
-    }
-}
-
-private fun extractionSourceLabel(coupon: Coupon): String {
-    val source = coupon.extractionSource?.takeIf { it.isNotBlank() }
-        ?: coupon.lastCleanedBy?.takeIf { it.isNotBlank() }
-        ?: "OCR rules"
-    return source
-        .replace('_', ' ')
-        .lowercase(Locale.getDefault())
-        .replaceFirstChar { char ->
-            if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
-        }
 }
 
 private fun shareCoupon(context: Context, coupon: com.example.coupontracker.data.model.Coupon) {
