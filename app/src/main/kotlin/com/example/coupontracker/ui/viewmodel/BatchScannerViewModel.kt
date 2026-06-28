@@ -10,11 +10,14 @@ import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.domain.usecase.BatchScanReadinessDecision
+import com.example.coupontracker.domain.usecase.BatchScanReadinessUseCase
 import com.example.coupontracker.domain.usecase.SaveBatchCouponsUseCase
 import com.example.coupontracker.extraction.capture.BatchCaptureInput
-import com.example.coupontracker.extraction.capture.BatchCaptureItemProcessor
-import com.example.coupontracker.extraction.capture.createCropIsolationFailedCoupon
-import com.example.coupontracker.extraction.capture.isFallbackOrFullImageRegion
+import com.example.coupontracker.extraction.capture.BatchCaptureItemStatus
+import com.example.coupontracker.extraction.capture.BatchCaptureOrchestrator
+import com.example.coupontracker.extraction.capture.BatchRegionIsolationCoordinator
+import com.example.coupontracker.extraction.capture.BatchRegionExtractionRunner
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.util.AnalyticsTracker
 import com.example.coupontracker.util.CouponInputManager
@@ -24,8 +27,6 @@ import com.example.coupontracker.util.ImageMetadataExtractor
 import com.example.coupontracker.util.MultiCouponDetectorState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,6 +47,10 @@ class BatchScannerViewModel @Inject constructor(
     private val telemetryService: ExtractionTelemetryService,
     private val regionPipeline: com.example.coupontracker.extraction.multi.CouponRegionPipeline,
     private val batchPipelineFlag: com.example.coupontracker.extraction.multi.BatchPipelineFeatureFlag,
+    private val batchScanReadinessUseCase: BatchScanReadinessUseCase,
+    private val batchCaptureOrchestrator: BatchCaptureOrchestrator,
+    private val batchRegionIsolationCoordinator: BatchRegionIsolationCoordinator,
+    private val batchRegionExtractionRunner: BatchRegionExtractionRunner,
     private val saveBatchCouponsUseCase: SaveBatchCouponsUseCase
 ) : AndroidViewModel(application) {
 
@@ -54,7 +59,6 @@ class BatchScannerViewModel @Inject constructor(
 
     private val multiEngineOCR = com.example.coupontracker.util.MultiEngineOCR(context, ocrEngine)
     private val uriPersistenceManager = com.example.coupontracker.util.UriPersistenceManager(context)
-    private val batchCaptureItemProcessor = BatchCaptureItemProcessor()
     private val detectorInitializationResult = initializeTwoStageDetector()
     private val twoStageDetector = detectorInitializationResult.detector
     private val detectorInitErrorMessage = detectorInitializationResult.errorMessage
@@ -258,25 +262,30 @@ class BatchScannerViewModel @Inject constructor(
                 val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
                 Log.d(TAG, "Batch: Starting with strategy ${strategy.name}, ${_uiState.value.selectedImages.size} images")
 
-                if (twoStageDetector == null && !hybridDetector.isPartiallyAvailable()) {
-                    val message = detectorInitErrorMessage ?: "Multi-coupon detector is unavailable."
-                    Log.e(TAG, "Batch: No detector or fallback available - aborting processing")
-                    telemetryService.trackMultiCouponDetectorState(
-                        MultiCouponDetectorState.DISABLED,
-                        "no_detector_or_fallback"
-                    )
-                    updateState { it.copy(isProcessing = false, error = message) }
-                    return@launch
-                } else if (twoStageDetector == null) {
-                    Log.w(TAG, "Batch: TwoStageDetector unavailable - using OCR anchor fallback")
-                    telemetryService.trackMultiCouponDetectorState(
-                        MultiCouponDetectorState.STUB,
-                        "ocr_anchor_fallback"
-                    )
-                    updateState {
-                        it.copy(
-                            notice = "Multi-coupon detection disabled – using OCR anchor fallback"
+                when (val readiness = batchScanReadinessUseCase.decide(
+                    twoStageDetectorAvailable = twoStageDetector != null,
+                    fallbackDetectorAvailable = hybridDetector.isPartiallyAvailable(),
+                    detectorInitErrorMessage = detectorInitErrorMessage
+                )) {
+                    BatchScanReadinessDecision.Ready -> Unit
+                    is BatchScanReadinessDecision.Abort -> {
+                        Log.e(TAG, "Batch: No detector or fallback available - aborting processing")
+                        telemetryService.trackMultiCouponDetectorState(
+                            MultiCouponDetectorState.DISABLED,
+                            readiness.telemetryReason
                         )
+                        updateState { it.copy(isProcessing = false, error = readiness.message) }
+                        return@launch
+                    }
+                    is BatchScanReadinessDecision.UseOcrAnchorFallback -> {
+                        Log.w(TAG, "Batch: TwoStageDetector unavailable - using OCR anchor fallback")
+                        telemetryService.trackMultiCouponDetectorState(
+                            MultiCouponDetectorState.STUB,
+                            readiness.telemetryReason
+                        )
+                        updateState {
+                            it.copy(notice = readiness.notice)
+                        }
                     }
                 }
 
@@ -291,98 +300,48 @@ class BatchScannerViewModel @Inject constructor(
                 }
 
                 val images = _uiState.value.selectedImages
-                val processedCoupons = mutableListOf<Coupon>()
-                var failedCount = 0
-                val imageStatuses = mutableListOf<ImageProcessingStatus>()
+                val inputs = images.map { it.toBatchCaptureInput() }
+                val selectedImagesByUri = images.associateBy { it.uri.toString() }
 
-                for ((index, selectedImage) in images.withIndex()) {
-                    val uri = selectedImage.uri
-                    updateState { it.copy(currentlyProcessingImage = selectedImage) }
-                    try {
-                        if (selectedImage.isPdf()) {
-                            Log.d(TAG, "Batch: Processing PDF ${selectedImage.displayName}")
-                        } else if (!selectedImage.isImage()) {
-                            Log.w(TAG, "Batch: Unsupported file type ${selectedImage.mimeType} for uri=$uri")
+                val batchResult = batchCaptureOrchestrator.process(
+                    inputs = inputs,
+                    decodeBitmap = { inputUri ->
+                        android.graphics.BitmapFactory.decodeStream(
+                            context.contentResolver.openInputStream(inputUri)
+                        )
+                    },
+                    trackBitmap = { bitmapManager.trackBitmap(it) },
+                    releaseBitmap = { bitmapManager.releaseBitmap(it) },
+                    processPdf = { inputUri -> couponInputManager.processPdfUri(inputUri) },
+                    extractImageCoupons = { inputUri, imageBitmap ->
+                        detectAndExtractMultipleCoupons(inputUri, imageBitmap)
+                    },
+                    onItemStarted = { input ->
+                        updateState {
+                            it.copy(currentlyProcessingImage = selectedImagesByUri[input.uri.toString()])
                         }
-
-                        val itemResult = batchCaptureItemProcessor.process(
-                            input = selectedImage.toBatchCaptureInput(),
-                            decodeBitmap = { inputUri ->
-                                android.graphics.BitmapFactory.decodeStream(
-                                    context.contentResolver.openInputStream(inputUri)
+                    },
+                    onItemFinished = { progress ->
+                        updateState {
+                            it.copy(
+                                processedCount = progress.processedCount,
+                                currentlyProcessingImage = null,
+                                imageProcessingStatuses = progress.itemStatuses.toImageProcessingStatuses(
+                                    selectedImagesByUri
                                 )
-                            },
-                            trackBitmap = { bitmapManager.trackBitmap(it) },
-                            releaseBitmap = { bitmapManager.releaseBitmap(it) },
-                            processPdf = { inputUri -> couponInputManager.processPdfUri(inputUri) },
-                            extractImageCoupons = { inputUri, imageBitmap ->
-                                detectAndExtractMultipleCoupons(inputUri, imageBitmap)
-                            }
-                        )
-
-                        if (itemResult.success) {
-                            processedCoupons.addAll(itemResult.coupons)
-                            if (selectedImage.isImage()) {
-                                Log.d(TAG, "Batch: Extracted ${itemResult.couponsFound} coupon(s) from image ${index + 1}/${images.size}")
-                            }
-                        } else {
-                            failedCount++
-                        }
-
-                        if (itemResult.message == "Unable to open image") {
-                            Log.e(TAG, "Batch: Failed to decode bitmap ${index + 1}")
-                        }
-                        if (itemResult.message == "No coupons detected") {
-                            Log.w(TAG, "Batch: No coupons extracted from image ${index + 1}/${images.size}")
-                        }
-
-                        imageStatuses.add(
-                            ImageProcessingStatus(
-                                image = selectedImage,
-                                success = itemResult.success,
-                                message = itemResult.message,
-                                couponsFound = itemResult.couponsFound
                             )
-                        )
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Batch: Error processing ${index + 1}/${images.size}", e)
-                        failedCount++
-                        imageStatuses.add(
-                            ImageProcessingStatus(
-                                image = selectedImage,
-                                success = false,
-                                message = e.message ?: "Unexpected error"
-                            )
-                        )
+                        }
                     }
-
-                    // Update progress
-                    updateState {
-                        it.copy(
-                            processedCount = index + 1,
-                            currentlyProcessingImage = null,
-                            imageProcessingStatuses = imageStatuses.toList()
-                        )
-                    }
-                }
-
-                // Show success or partial success message
-                val failedImages = imageStatuses.filterNot { it.success }
-                val statusMessage = when {
-                    failedCount == 0 -> null
-                    failedCount < images.size -> {
-                        val failedNames = failedImages.joinToString { it.image.displayName }
-                        "Processed ${images.size - failedCount} of ${images.size} files. Issues with: $failedNames"
-                    }
-                    else -> "Failed to process any files."
-                }
+                )
 
                 updateState {
                     it.copy(
                         isProcessing = false,
-                        processedCoupons = processedCoupons,
-                        error = statusMessage,
-                        imageProcessingStatuses = imageStatuses.toList(),
+                        processedCoupons = batchResult.coupons,
+                        error = batchResult.errorMessage,
+                        imageProcessingStatuses = batchResult.itemStatuses.toImageProcessingStatuses(
+                            selectedImagesByUri
+                        ),
                         currentlyProcessingImage = null
                     )
                 }
@@ -557,66 +516,28 @@ class BatchScannerViewModel @Inject constructor(
     private suspend fun detectAndExtractMultipleCoupons(
         uri: Uri,
         bitmap: android.graphics.Bitmap
-    ): List<Coupon> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-        
-        Log.d(TAG, "Detecting multiple coupons in image...")
-        
-        try {
-            // Step 1: Run OCR on full image
-            val ocrResult = multiEngineOCR.processImage(bitmap)
-            
-            if (ocrResult !is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success) {
-                Log.w(TAG, "OCR failed before region isolation; returning review coupon")
-                return@withContext listOf(createCropIsolationFailedCoupon(uri, "ocr_failed_before_region_detection"))
-            }
-            
-            // Step 2: Detect coupon regions using hybrid detector
-            val couponRegions = hybridDetector.detectCoupons(bitmap, ocrResult)
-            
-            Log.d(TAG, "Hybrid detector found ${couponRegions.size} coupon region(s)")
-
-            // Step 3: Only trust real isolated regions. Full-image/fallback
-            // regions are review-safe placeholders, not clean coupon crops.
-            val isolatedRegions = couponRegions.filterNot { isFallbackOrFullImageRegion(bitmap, it) }
-            if (isolatedRegions.isEmpty()) {
-                Log.w(TAG, "Region isolation failed; returning review coupon")
-                return@withContext listOf(createCropIsolationFailedCoupon(uri, "no_isolated_coupon_regions"))
-            }
-
-            if (isolatedRegions.size < couponRegions.size) {
-                Log.w(
-                    TAG,
-                    "Ignoring ${couponRegions.size - isolatedRegions.size} fallback/full-image region(s)"
-                )
-            }
-            
-            // Step 4: Extract each detected coupon region
-            val extractedCoupons: List<Coupon> = if (batchPipelineFlag.isEnabled()) {
-                val viaPipeline = extractViaCouponRegionPipeline(bitmap, isolatedRegions, uri)
-                if (viaPipeline.isNotEmpty()) {
-                    Log.d(TAG, "Pipeline extraction yielded ${viaPipeline.size} coupon(s)")
-                    viaPipeline
-                } else {
-                    Log.w(TAG, "Pipeline yielded zero coupons; falling back to per-region loop")
-                    extractCouponsViaPerRegionLoop(bitmap, isolatedRegions, uri)
+    ): List<Coupon> = batchRegionIsolationCoordinator.extract(
+        uri = uri,
+        bitmap = bitmap,
+        runOcr = { sourceBitmap -> multiEngineOCR.processImage(sourceBitmap) },
+        detectRegions = { sourceBitmap, ocrResult -> hybridDetector.detectCoupons(sourceBitmap, ocrResult) },
+        extractIsolatedRegions = { isolatedRegions ->
+            batchRegionExtractionRunner.extract(
+                bitmap = bitmap,
+                couponRegions = isolatedRegions,
+                usePipeline = batchPipelineFlag.isEnabled(),
+                trackBitmap = bitmapManager::trackBitmap,
+                releaseBitmap = bitmapManager::releaseBitmap,
+                extractPipeline = { crops -> extractPipelineCrops(crops, uri) },
+                extractSingleRegion = { regionBitmap ->
+                    extractCouponFromRegion(
+                        regionBitmap = regionBitmap,
+                        uri = uri
+                    )
                 }
-            } else {
-                extractCouponsViaPerRegionLoop(bitmap, isolatedRegions, uri)
-            }
-            
-            // If no coupons extracted from real regions, do not save full-image OCR.
-            if (extractedCoupons.isEmpty()) {
-                Log.w(TAG, "No coupons extracted from isolated regions; returning review coupon")
-                return@withContext listOf(createCropIsolationFailedCoupon(uri, "isolated_region_extraction_failed"))
-            }
-            
-            return@withContext extractedCoupons
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in multi-coupon detection", e)
-            return@withContext listOf(createCropIsolationFailedCoupon(uri, "region_detection_exception"))
+            )
         }
-    }
+    )
     
     /**
      * Extract single coupon using standard strategy
@@ -644,93 +565,16 @@ class BatchScannerViewModel @Inject constructor(
     }
 
     /**
-     * Original per-region extraction loop (lifted into a method so the flag
-     * branch in `detectMultipleCoupons` is readable). Behaviour byte-equivalent
-     * to the pre-rewire code.
+     * Converts pipeline canonical JSON into coupons. Crop ownership lives in
+     * BatchRegionExtractionRunner; dedup + cap are applied by the pipeline.
      */
-    private suspend fun extractCouponsViaPerRegionLoop(
-        bitmap: android.graphics.Bitmap,
-        couponRegions: List<com.example.coupontracker.ml.HybridCouponDetector.CouponRegion>,
+    private suspend fun extractPipelineCrops(
+        crops: List<android.graphics.Bitmap>,
         uri: android.net.Uri
     ): List<com.example.coupontracker.data.model.Coupon> {
-        val extractedCoupons = mutableListOf<com.example.coupontracker.data.model.Coupon>()
-        for ((regionIndex, region) in couponRegions.withIndex()) {
-            try {
-                Log.d(TAG, "Extracting coupon region ${regionIndex + 1}/${couponRegions.size}")
-                val regionBitmap = cropBitmapToRegion(bitmap, region.boundingBox)
-                if (regionBitmap == null) {
-                    Log.w(TAG, "Failed to crop region ${regionIndex + 1}, skipping")
-                    continue
-                }
-                bitmapManager.trackBitmap(regionBitmap)
-                try {
-                    val coupon = extractCouponFromRegion(
-                        regionBitmap = regionBitmap,
-                        uri = uri
-                    )
-                    extractedCoupons.add(coupon)
-                    Log.d(TAG, "Successfully extracted coupon ${regionIndex + 1}: store='${coupon.storeName}', code='${coupon.redeemCode}'")
-                } finally {
-                    bitmapManager.releaseBitmap(regionBitmap)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error extracting region ${regionIndex + 1}", e)
-            }
-        }
-        return extractedCoupons
-    }
-
-    /**
-     * Pipeline-backed batch extraction. Crops each detected region, runs
-     * the unified per-region OCR + extraction pipeline, then converts each
-     * canonical JSON result into a `Coupon`. Dedup + cap are applied by
-     * the pipeline.
-     */
-    private suspend fun extractViaCouponRegionPipeline(
-        bitmap: android.graphics.Bitmap,
-        couponRegions: List<com.example.coupontracker.ml.HybridCouponDetector.CouponRegion>,
-        uri: android.net.Uri
-    ): List<com.example.coupontracker.data.model.Coupon> {
-        val crops = mutableListOf<android.graphics.Bitmap>()
-        for (region in couponRegions) {
-            val crop = cropBitmapToRegion(bitmap, region.boundingBox) ?: continue
-            bitmapManager.trackBitmap(crop)
-            crops += crop
-        }
-        if (crops.isEmpty()) return emptyList()
-        return try {
-            val canonicalJsons = regionPipeline.extractFromCrops(crops)
-            canonicalJsons.map { json ->
-                com.example.coupontracker.extraction.multi.JsonToCouponConverter.convert(json, uri)
-            }
-        } finally {
-            crops.forEach { bitmapManager.releaseBitmap(it) }
-        }
-    }
-
-    /**
-     * Crop bitmap to region bounds
-     */
-    private fun cropBitmapToRegion(bitmap: android.graphics.Bitmap, region: android.graphics.Rect): android.graphics.Bitmap? {
-        return try {
-            // Validate bounds
-            val left = region.left.coerceIn(0, bitmap.width)
-            val top = region.top.coerceIn(0, bitmap.height)
-            val right = region.right.coerceIn(left, bitmap.width)
-            val bottom = region.bottom.coerceIn(top, bitmap.height)
-            
-            val width = right - left
-            val height = bottom - top
-            
-            if (width <= 0 || height <= 0) {
-                Log.w(TAG, "Invalid crop region: width=$width, height=$height")
-                return null
-            }
-            
-            android.graphics.Bitmap.createBitmap(bitmap, left, top, width, height)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error cropping bitmap", e)
-            null
+        val canonicalJsons = regionPipeline.extractFromCrops(crops)
+        return canonicalJsons.map { json ->
+            com.example.coupontracker.extraction.multi.JsonToCouponConverter.convert(json, uri)
         }
     }
     
@@ -831,6 +675,19 @@ private fun SelectedImage.toBatchCaptureInput(): BatchCaptureInput {
         displayName = displayName,
         mimeType = mimeType
     )
+}
+
+private fun List<BatchCaptureItemStatus>.toImageProcessingStatuses(
+    selectedImagesByUri: Map<String, SelectedImage>
+): List<ImageProcessingStatus> {
+    return map { status ->
+        ImageProcessingStatus(
+            image = selectedImagesByUri.getValue(status.input.uri.toString()),
+            success = status.success,
+            message = status.message,
+            couponsFound = status.couponsFound
+        )
+    }
 }
 
 data class ImageProcessingStatus(

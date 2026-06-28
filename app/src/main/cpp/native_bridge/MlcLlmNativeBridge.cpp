@@ -117,7 +117,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
     
     if (!pSess || !(*pSess)) {
         LOGE("❌ Invalid handle: %lld", (long long)handle);
-        return env->NewStringUTF("{\"error\":\"invalid_handle\"}");
+        return nullptr;
     }
 
     const char* prompt = env->GetStringUTFChars(jPrompt, nullptr);
@@ -162,6 +162,7 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
 
     if (st != BridgeStatus::OK) {
         LOGW("⚠️ bridge_run_vision returned status=%d", (int)st);
+        return nullptr;
     }
     
     LOGI("✅ Inference complete (%zu bytes)", outJson.size());
@@ -283,4 +284,3 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM* vm, void* reserved) {
 }
 
 } // extern "C"
-

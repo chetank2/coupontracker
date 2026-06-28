@@ -4,7 +4,6 @@ import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.RectF
 import android.net.Uri
 import android.util.Log
 import androidx.annotation.VisibleForTesting
@@ -12,26 +11,22 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.data.model.Coupon
-import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.data.repository.CouponRepository
-import com.example.coupontracker.data.util.DescriptionUtils
-import com.example.coupontracker.debug.ExtractionDebugScorer
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.domain.usecase.SaveScannedCouponResult
 import com.example.coupontracker.domain.usecase.SaveScannedCouponUseCase
-import com.example.coupontracker.domain.usecase.SingleScanRouteDecision
+import com.example.coupontracker.domain.usecase.GuardedFullImageFallbackResult
+import com.example.coupontracker.domain.usecase.GuardedFullImageFallbackUseCase
+import com.example.coupontracker.domain.usecase.SingleScanRouteAction
 import com.example.coupontracker.domain.usecase.SingleScanRoutingUseCase
 import com.example.coupontracker.extraction.MultiCouponExtractionService
+import com.example.coupontracker.extraction.capture.DetectedCropCouponBuilder
+import com.example.coupontracker.extraction.capture.DetectedCropFieldExtractor
+import com.example.coupontracker.extraction.capture.LlmProgress
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.extraction.capture.FullImageFallbackProbe
-import com.example.coupontracker.extraction.capture.FullImageFallbackReviewCouponFactory
 import com.example.coupontracker.extraction.capture.shouldBlockFullImageFallback
-import com.example.coupontracker.extraction.FieldCandidate
-import com.example.coupontracker.extraction.TextBlock
-import com.example.coupontracker.extraction.rules.TextExtractor
-import com.example.coupontracker.extraction.validation.CouponFieldBundleValidator
-import com.example.coupontracker.extraction.validation.FieldValueBundle
-import com.example.coupontracker.ocr.OcrTextSpan
+import com.example.coupontracker.extraction.capture.toDetectedCropFieldExtraction
 import com.example.coupontracker.universal.ExtractionContext
 import com.example.coupontracker.universal.UniversalExtractionService
 import com.example.coupontracker.util.ExtractionPerformanceMonitor
@@ -39,15 +34,11 @@ import com.example.coupontracker.util.ExtractionMethod
 import com.example.coupontracker.util.FeedbackType
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.ml.MultiCouponDetectorDisabledException
-import com.example.coupontracker.ml.ScreenshotClassifier
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
 import com.example.coupontracker.util.AnalyticsTracker
-import com.example.coupontracker.util.BitmapManager
 import com.example.coupontracker.util.CouponFixContext
-import com.example.coupontracker.extraction.rules.CouponInfo
 import com.example.coupontracker.util.CouponExtractionConfidenceScorer
-import com.example.coupontracker.util.CouponCardOcrNormalizer
 import com.example.coupontracker.util.CouponPostProcessor
 import com.example.coupontracker.util.ExtractResult
 import com.example.coupontracker.util.ExtractionRecommendation
@@ -75,13 +66,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
-import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import com.example.coupontracker.util.DateParser
-import org.json.JSONArray
-import org.json.JSONObject
 import javax.inject.Inject
 
 @HiltViewModel
@@ -99,9 +86,10 @@ class ScannerViewModel @Inject constructor(
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Injected bitmap memory management
     private val validatorFeedbackRecorder: ValidatorFeedbackRecorder,
     private val saveScannedCouponUseCase: SaveScannedCouponUseCase,
+    private val guardedFullImageFallbackUseCase: GuardedFullImageFallbackUseCase,
     private val singleScanRoutingUseCase: SingleScanRoutingUseCase,
     private val fullImageFallbackProbe: FullImageFallbackProbe,
-    private val fullImageFallbackReviewCouponFactory: FullImageFallbackReviewCouponFactory
+    private val detectedCropFieldExtractor: DetectedCropFieldExtractor
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -113,7 +101,7 @@ class ScannerViewModel @Inject constructor(
     private val detectorInitErrorMessage: String? = detectorInitializationResult.errorMessage
     private val uriPersistenceManager = UriPersistenceManager(context)
     private val fieldHeuristics: GenericFieldHeuristics = GenericFieldHeuristics
-    private val textExtractor = TextExtractor()
+    private val detectedCropCouponBuilder = DetectedCropCouponBuilder()
     private val manualOverrides = mutableMapOf<String, CouponInstance>()
     private var pendingPreview: PendingPreview? = null
     private var pendingMultiCouponPreview: List<CouponProcessingSummary> = emptyList()
@@ -129,104 +117,16 @@ class ScannerViewModel @Inject constructor(
         private const val TAG = "ScannerViewModel"
         private const val STRATEGY_SURFACE_SINGLE = "single_capture"
         private const val OCR_CONFIDENCE_QUEUE_CLEANUP = 0.85f
-        private const val DETECTED_CROP_OCR_PENDING_REASON =
-            "Background vision verification pending for OCR-only detected crop"
 
         @VisibleForTesting
         internal fun parseExpiryDate(
             dateString: String?,
             locale: Locale = Locale.getDefault()
-        ): Date? {
-            if (dateString.isNullOrBlank()) return null
-
-            val cleanedDate = dateString
-                .trim()
-                .replace("\u202F", " ")
-                .let {
-                    val timeRegex = Regex("\\s*(?:at\\s*)?\\d{1,2}:\\d{2}(?:\\s*[AaPp][Mm])?(?:\\s*[A-Za-z]+)?$")
-                    timeRegex.replace(it) { _ -> "" }.trim()
-                }
-
-            val dateFormats = listOf(
-                "dd/MM/yyyy",
-                "MM/dd/yyyy",
-                "yyyy/MM/dd",
-                "dd-MM-yyyy",
-                "MM-dd-yyyy",
-                "yyyy-MM-dd",
-                "dd.MM.yyyy",
-                "MM.dd.yyyy",
-                "yyyy.MM.dd",
-                "dd MMM yyyy",
-                "dd MMMM yyyy",
-                "dd MMM, yyyy",
-                "dd MMMM, yyyy",
-                "dd/MM/yy",
-                "MM/dd/yy",
-                "dd-MM-yy",
-                "MM-dd-yy",
-                "dd.MM.yy",
-                "MM.dd.yy",
-                "dd MMM yy",
-                "dd MMMM yy"
-            )
-
-            val twoDigitYearStart = Calendar.getInstance().apply {
-                set(Calendar.YEAR, 2000)
-                set(Calendar.MONTH, Calendar.JANUARY)
-                set(Calendar.DAY_OF_MONTH, 1)
-                set(Calendar.HOUR_OF_DAY, 0)
-                set(Calendar.MINUTE, 0)
-                set(Calendar.SECOND, 0)
-                set(Calendar.MILLISECOND, 0)
-            }.time
-
-            for (format in dateFormats) {
-                try {
-                    val sdf = SimpleDateFormat(format, locale)
-                    sdf.isLenient = false
-                    if (format.contains("yy") && !format.contains("yyyy")) {
-                        sdf.set2DigitYearStart(twoDigitYearStart)
-                    }
-                    val parsed = sdf.parse(cleanedDate)
-                    if (parsed != null) {
-                        return parsed
-                    }
-                } catch (e: Exception) {
-                    // Try next format
-                }
-            }
-
-            return null // Don't return fallback date - use null if parsing fails
-        }
+        ): Date? = DetectedCropCouponBuilder.parseExpiryDate(dateString, locale)
 
         @VisibleForTesting
-        internal fun markDetectedCropOcrProvisional(coupon: Coupon): Coupon {
-            val pendingEvidence = listOf(
-                "background_vision_verification=pending",
-                "source=single_detected_crop_ocr_only"
-            )
-            val mergedEvidence = sequenceOf(
-                coupon.debugVisionEvidence,
-                pendingEvidence.joinToString("; ")
-            )
-                .filterNot { it.isNullOrBlank() }
-                .joinToString("; ")
-
-            return coupon.copy(
-                needsAttention = true,
-                cleanupStatus = Coupon.CleanupStatus.PENDING,
-                cleanupStartedAt = null,
-                cleanupFinishedAt = null,
-                cleanupError = DETECTED_CROP_OCR_PENDING_REASON,
-                layoutState = if (coupon.layoutState == Coupon.LayoutState.COMPLETE) {
-                    Coupon.LayoutState.LOW_CONFIDENCE
-                } else {
-                    coupon.layoutState
-                },
-                debugVisionEvidence = mergedEvidence
-            )
-        }
+        internal fun markDetectedCropOcrProvisional(coupon: Coupon): Coupon =
+            DetectedCropCouponBuilder.markOcrProvisional(coupon)
     }
 
     private suspend fun logStrategyExecution(
@@ -383,14 +283,14 @@ class ScannerViewModel @Inject constructor(
         val detector = twoStageDetector
         if (detector == null) {
             Log.w(TAG, "Single scan crop-first routing unavailable: ${detectorInitErrorMessage ?: "detector not initialized"}")
-            val decision = singleScanRoutingUseCase.decideAfterCropDetection(
+            val action = singleScanRoutingUseCase.planAfterCropDetection(
                 detectorAvailable = false,
                 detectedCropCount = 0
-            ) as SingleScanRouteDecision.TryLayoutThenGuardedFallback
-            if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, decision.reason)) {
+            ) as SingleScanRouteAction.TryLayoutThenGuardedFallback
+            if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, action.reason)) {
                 return false
             }
-            scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, decision.reason)
+            scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, action.reason)
             return false
         }
 
@@ -399,23 +299,23 @@ class ScannerViewModel @Inject constructor(
         }
         Log.d(TAG, "Single scan crop-first detection found ${couponInstances.size} coupon(s)")
 
-        return when (val decision = singleScanRoutingUseCase.decideAfterCropDetection(
+        return when (val action = singleScanRoutingUseCase.planAfterCropDetection(
             detectorAvailable = true,
             detectedCropCount = couponInstances.size
         )) {
-            is SingleScanRouteDecision.TryLayoutThenGuardedFallback -> {
-                if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, decision.reason)) {
+            is SingleScanRouteAction.TryLayoutThenGuardedFallback -> {
+                if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, action.reason)) {
                     return false
                 }
-                scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, decision.reason)
+                scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, action.reason)
                 false
             }
-            SingleScanRouteDecision.ProcessSingleCrop -> {
+            is SingleScanRouteAction.ProcessSingleCrop -> {
                 logStrategyExecution(
                     requested = strategy,
-                    executed = "ocr_first_card_crop",
+                    executed = action.executedStrategy,
                     surface = STRATEGY_SURFACE_SINGLE,
-                    reason = "single_coupon_crop_detected"
+                    reason = action.reason
                 )
                 processSingleCoupon(
                     couponInstance = couponInstances.first(),
@@ -425,12 +325,12 @@ class ScannerViewModel @Inject constructor(
                 )
                 false
             }
-            SingleScanRouteDecision.ShowMultiCouponSelection -> {
+            is SingleScanRouteAction.ShowMultiCouponSelection -> {
                 logStrategyExecution(
                     requested = strategy,
-                    executed = "multi_coupon_selection",
+                    executed = action.executedStrategy,
                     surface = STRATEGY_SURFACE_SINGLE,
-                    reason = "multiple_coupon_crops_detected"
+                    reason = action.reason
                 )
                 _uiState.value = ScannerUiState.MultiCouponDetected(
                     couponInstances = couponInstances,
@@ -593,32 +493,24 @@ class ScannerViewModel @Inject constructor(
         persistImmediately: Boolean,
         reason: String
     ) {
-        val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
-        val persistedUri = uriPersistenceManager.persistUri(imageUri)
-        val finalImageUri = resolveImageUri(persistedUri, imageUri)
-        val coupon = fullImageFallbackReviewCouponFactory.create(
-            imageUri = finalImageUri,
+        when (val result = guardedFullImageFallbackUseCase(
+            imageUri = imageUri,
             rawOcrText = rawOcrText,
             reason = reason,
-            captureTimestamp = captureTimestamp
-        )
-        val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
-
-        if (persistImmediately) {
-            persistCoupon(
-                coupon = coupon,
-                normalizedDescription = normalizedDescription,
-                llmStatus = LlmProgress.NEEDS_REVIEW,
-                debugSnapshot = null
-            )
-        } else {
-            pendingPreview = PendingPreview(
-                coupon = coupon,
-                normalizedDescription = normalizedDescription,
-                llmStatus = LlmProgress.NEEDS_REVIEW,
-                debugSnapshot = null
-            )
-            _uiState.value = ScannerUiState.Success(coupon, LlmProgress.NEEDS_REVIEW)
+            persistImmediately = persistImmediately
+        )) {
+            is GuardedFullImageFallbackResult.Persisted -> {
+                applySaveResult(result.saveResult, LlmProgress.NEEDS_REVIEW)
+            }
+            is GuardedFullImageFallbackResult.Preview -> {
+                pendingPreview = PendingPreview(
+                    coupon = result.coupon,
+                    normalizedDescription = result.normalizedDescription,
+                    llmStatus = LlmProgress.NEEDS_REVIEW,
+                    debugSnapshot = null
+                )
+                _uiState.value = ScannerUiState.Success(result.coupon, LlmProgress.NEEDS_REVIEW)
+            }
         }
     }
     
@@ -768,27 +660,15 @@ class ScannerViewModel @Inject constructor(
             Log.d(TAG, "Processing single coupon with ${couponInstance.fields.size} detected fields")
 
             // Extract text from detected fields using OCR
-            val extractionResult = extractTextFromFields(couponInstance, captureTimestamp)
+            val extractionResult = detectedCropFieldExtractor.extractTextFromFields(couponInstance, captureTimestamp)
             val debugSnapshot = extractionResult.debugSnapshot
             val scopedImageUri = persistCouponCrop(couponInstance.cropBitmap) ?: imageUri
 
-            // Create coupon from extracted information
-            val baseCoupon = createCouponFromInstance(
-                    couponInstance = couponInstance,
-                    extractionResult = extractionResult,
-                    imageUri = scopedImageUri,
-                    captureTimestamp = captureTimestamp
-                )
-            val coupon = markDetectedCropOcrProvisional(
-                finalizeCoupon(
-                    base = validateDetectedCouponInstance(
-                        coupon = baseCoupon,
-                        extractionResult = extractionResult,
-                        expiryDateText = extractionResult.fields["expiryDate"]
-                    ),
-                    ocrText = extractionResult.fullOcrText,
-                    captureTimestamp = captureTimestamp
-                )
+            val coupon = detectedCropCouponBuilder.buildProvisionalCoupon(
+                couponInstance = couponInstance,
+                extraction = extractionResult.toDetectedCropFieldExtraction(),
+                imageUri = scopedImageUri,
+                captureTimestamp = captureTimestamp
             )
 
             analyticsTracker.trackEvent(
@@ -852,6 +732,11 @@ class ScannerViewModel @Inject constructor(
             debugSnapshot = debugSnapshot
         )
 
+        applySaveResult(result, llmStatus)
+        return result.savedCouponId
+    }
+
+    private fun applySaveResult(result: SaveScannedCouponResult, llmStatus: LlmProgress) {
         when (result.kind) {
             SaveScannedCouponResult.Kind.ALREADY_SAVED -> {
                 _uiState.value = ScannerUiState.AlreadySaved(result.couponForUi, llmStatus)
@@ -865,8 +750,6 @@ class ScannerViewModel @Inject constructor(
                 Log.d(TAG, "Coupon saved with ID: ${result.savedCouponId}, store: ${result.couponForUi.storeName}")
             }
         }
-
-        return result.savedCouponId
     }
 
     private fun shouldQueueCleanup(coupon: Coupon, confidence: Float): Boolean {
@@ -1076,14 +959,15 @@ class ScannerViewModel @Inject constructor(
 
         for ((index, instance) in couponInstances.withIndex()) {
             try {
-            val extractionResult = extractTextFromFields(instance, captureTimestamp)
-            val scopedImageUri = persistCouponCrop(instance.cropBitmap) ?: originalImageUri
-            val coupon = finalizeCoupon(
-                base = createCouponFromInstance(instance, extractionResult, scopedImageUri, captureTimestamp),
-                ocrText = extractionResult.fullOcrText,
-                captureTimestamp = captureTimestamp
-            )
-            val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
+                val extractionResult = detectedCropFieldExtractor.extractTextFromFields(instance, captureTimestamp)
+                val scopedImageUri = persistCouponCrop(instance.cropBitmap) ?: originalImageUri
+                val coupon = detectedCropCouponBuilder.buildCoupon(
+                    couponInstance = instance,
+                    extraction = extractionResult.toDetectedCropFieldExtraction(),
+                    imageUri = scopedImageUri,
+                    captureTimestamp = captureTimestamp
+                )
+                val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
 
                 val saveResult = saveScannedCouponUseCase(
                     coupon = coupon,
@@ -1136,203 +1020,6 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Extract text from detected fields using OCR with run-path telemetry
-     */
-    private suspend fun extractTextFromFields(
-        couponInstance: CouponInstance,
-        captureTimestamp: Date?
-    ): FieldExtractionResult {
-        return withContext(Dispatchers.IO) {
-            val startTime = System.currentTimeMillis()
-            val extractedInfo = mutableMapOf<String, String>()
-            var progress = LlmProgress.FALLBACK
-            val triedStages = mutableListOf<String>()
-            var finalStage = "OCR"
-            var qualityScore: Int? = null
-            var fieldConfidences: Map<String, Float> = emptyMap()
-            var sourceStage: ExtractionStage? = ExtractionStage.MLKIT
-            var fullOcrText: String? = null
-            var ocrBlocks: List<TextBlock> = emptyList()
-            var imageHeight = 0
-
-            extractedInfo["minicpmConfidence"] = couponInstance.confidence.toString()
-            extractedInfo["minicpmDetectionStatus"] = couponInstance.status.name
-
-            try {
-                triedStages.add("OCR")
-                val fallbackResult = runFallbackOcr(couponInstance.cropBitmap, captureTimestamp)
-                extractedInfo.putAll(fallbackResult.fields)
-                fullOcrText = fallbackResult.text
-                ocrBlocks = fallbackResult.ocrBlocks
-                imageHeight = fallbackResult.imageHeight
-                qualityScore = if (fallbackResult.fields.isNotEmpty()) 55 else 0
-                fieldConfidences = fallbackResult.fields.keys.associateWith { 0.55f }
-                Log.d(TAG, "OCR-only field extraction completed with ${fallbackResult.fields.size} fields")
-            } catch (e: Exception) {
-                Log.e(TAG, "OCR field extraction failed", e)
-                triedStages.add("OCR_FAILED")
-                finalStage = "OCR_FAILED"
-                qualityScore = qualityScore ?: 0
-            }
-
-            // Track run path telemetry
-            val totalTime = System.currentTimeMillis() - startTime
-            val runPath = RunPath(
-                primary = "OCR",
-                tried = triedStages,
-                final = finalStage,
-                nativeAvailable = false,
-                totalTimeMs = totalTime
-            )
-
-            telemetryService.trackRunPath(runPath)
-
-            extractedInfo["minicpmProcessing"] = progress.name
-            extractedInfo["runPath"] = "${runPath.strategy} → ${runPath.final}"
-            extractedInfo["processingTimeMs"] = totalTime.toString()
-            qualityScore?.let { extractedInfo["qualityScore"] = it.toString() }
-
-            val baseResult = FieldExtractionResult(
-                fields = extractedInfo.toMap(),
-                llmStatus = progress,
-                runPath = runPath,
-                qualityScore = qualityScore,
-                fieldConfidences = fieldConfidences,
-                sourceStage = sourceStage,
-                fullOcrText = fullOcrText,
-                ocrBlocks = ocrBlocks,
-                imageHeight = imageHeight
-            )
-
-            val snapshot = ExtractionDebugScorer.fromFieldExtraction(baseResult, runPath)
-
-            baseResult.copy(debugSnapshot = snapshot)
-        }
-    }
-
-    private fun mapCouponInfoToFields(couponInfo: CouponInfo): MutableMap<String, String> {
-        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val fields = mutableMapOf<String, String>()
-
-        val storeName = couponInfo.storeName
-        if (storeName.isNotBlank() && !fieldHeuristics.isGenericOrMissing(storeName)) {
-            fields["storeName"] = storeName
-        }
-
-        val description = couponInfo.description
-        if (description.isNotBlank() && !fieldHeuristics.isGenericOrMissing(description)) {
-            fields["description"] = description
-        }
-
-        couponInfo.redeemCode?.takeIf { it.isNotBlank() }?.let { fields["code"] = it }
-
-        couponInfo.expiryDate?.let { date ->
-            fields["expiryDate"] = formatter.format(date)
-        }
-
-        val savingsDetail = couponInfo.cashbackDetail
-            ?.takeIf { GenericFieldHeuristics.hasMeaningfulCashback(it) }
-            ?: DescriptionUtils.extractCashbackLine(couponInfo.description)
-                ?.takeIf { GenericFieldHeuristics.hasMeaningfulCashback(it) }
-
-        savingsDetail?.let { fields["amount"] = it }
-
-        couponInfo.minimumPurchase?.takeIf { !GenericFieldHeuristics.isZeroOrMeaningless(it) }?.let {
-            fields["minOrderAmount"] = formatNumeric(it)
-        }
-
-        couponInfo.paymentMethod?.takeIf { it.isNotBlank() }?.let { fields["paymentMethod"] = it }
-        couponInfo.platformType?.takeIf { it.isNotBlank() }?.let { fields["platformType"] = it }
-        couponInfo.status?.takeIf { it.isNotBlank() }?.let { status ->
-            fields["status"] = status
-        }
-
-        return fields
-    }
-
-    private fun shouldFlagForReview(couponInfo: CouponInfo, fields: Map<String, String>): Boolean {
-        val storeWeak = fieldHeuristics.isGenericOrMissing(fields["storeName"])
-        val descriptionWeak = fieldHeuristics.isGenericOrMissing(fields["description"])
-        val duplicateStoreAndCode = fieldHeuristics.areDuplicateFields(fields["storeName"], fields["code"])
-        val codeMissing = couponInfo.redeemCode.isNullOrBlank()
-        val amountWeak = !GenericFieldHeuristics.hasMeaningfulCashback(couponInfo.cashbackDetail) &&
-            !GenericFieldHeuristics.hasMeaningfulCashback(couponInfo.description)
-
-        return storeWeak || descriptionWeak || duplicateStoreAndCode || (codeMissing && amountWeak)
-    }
-
-    private suspend fun runFallbackOcr(bitmap: Bitmap, captureTimestamp: Date?): FallbackOcrResult {
-        val boxedResult = runCatching {
-            val spans = ocrEngine.recognizeWithBoxes(bitmap)
-            BoxedOcrResult(
-                text = CouponCardOcrNormalizer.normalize(bitmap.width, bitmap.height, spans),
-                blocks = ocrSpansToTextBlocks(spans),
-                imageHeight = bitmap.height
-            )
-        }.getOrNull()
-
-        val boxedText = boxedResult?.text
-        if (!boxedText.isNullOrBlank()) {
-            val couponInfo = textExtractor.extractCouponInfoSync(boxedText, captureTimestamp)
-            val fields = mapCouponInfoToFields(couponInfo)
-            if (fields.isNotEmpty()) {
-                return FallbackOcrResult(
-                    fields = fields,
-                    text = boxedText,
-                    ocrBlocks = boxedResult.blocks,
-                    imageHeight = boxedResult.imageHeight
-                )
-            }
-        }
-
-        return when (val result = multiEngineOCR.processImage(bitmap)) {
-            is MultiEngineOCR.OCRResult.Success -> {
-                val couponInfo = textExtractor.extractCouponInfoSync(result.text, captureTimestamp)
-                val fields = mapCouponInfoToFields(couponInfo).ifEmpty { result.extractedInfo }
-                FallbackOcrResult(
-                    fields = fields,
-                    text = result.text,
-                    ocrBlocks = boxedResult?.blocks.orEmpty(),
-                    imageHeight = boxedResult?.imageHeight ?: 0
-                )
-            }
-            is MultiEngineOCR.OCRResult.Error -> {
-                Log.w(TAG, "Fallback OCR failed: ${result.message}")
-                FallbackOcrResult(
-                    fields = emptyMap(),
-                    text = null,
-                    ocrBlocks = boxedResult?.blocks.orEmpty(),
-                    imageHeight = boxedResult?.imageHeight ?: 0
-                )
-            }
-        }
-    }
-
-    private data class FallbackOcrResult(
-        val fields: Map<String, String>,
-        val text: String?,
-        val ocrBlocks: List<TextBlock> = emptyList(),
-        val imageHeight: Int = 0
-    )
-
-    private data class BoxedOcrResult(
-        val text: String,
-        val blocks: List<TextBlock>,
-        val imageHeight: Int
-    )
-
-    private fun formatNumeric(value: Double): String {
-        return if (value % 1.0 == 0.0) {
-            value.toInt().toString()
-        } else {
-            String.format(Locale.getDefault(), "%.2f", value)
-        }
-    }
-
-    /**
-     * Create a Coupon object from a detected coupon instance
-     */
     private fun mergeConfidenceBreakdown(
         llmConf: Map<String, Float>,
         ocrResult: com.example.coupontracker.universal.UniversalExtractionResult?
@@ -1355,148 +1042,6 @@ class ScannerViewModel @Inject constructor(
         }
         return couponInstance.fields.associate { detection ->
             detection.fieldType.name.lowercase(Locale.ROOT) to detection.confidence
-        }
-    }
-
-    private fun createCouponFromInstance(
-        couponInstance: CouponInstance,
-        extractionResult: FieldExtractionResult,
-        imageUri: String?,
-        captureTimestamp: Date? = null
-    ): Coupon {
-        val extractedInfo = extractionResult.fields
-
-        // Parse expiry date string to Date if available
-        val expiryDate = DateParser.parseDate(extractedInfo["expiryDate"], captureTimestamp)
-            ?: parseExpiryDate(extractedInfo["expiryDate"])
-
-        // Normalize cashback detail if present
-        val cashbackDetail = extractedInfo["amount"]?.let { raw ->
-            DescriptionUtils.formatCashbackDetail(raw) ?: raw
-        }
-
-        val runPathSummary = extractionResult.runPath?.let { path ->
-            buildString {
-                append(path.strategy.ifBlank { "LLM" })
-                if (path.final.isNotBlank()) {
-                    append(" → ")
-                    append(path.final)
-                }
-            }.ifBlank { null }
-        }
-
-        val baseDescription = extractedInfo["description"] ?: extractedInfo["benefit"] ?: "Multi-coupon detected"
-        val mergedDescription = DescriptionUtils.appendDetails(baseDescription, cashbackDetail)
-
-        return Coupon(
-            storeName = extractedInfo["storeName"] ?: extractedInfo["app"] ?: Coupon.Defaults.UNKNOWN_STORE,
-            description = mergedDescription,
-            expiryDate = expiryDate,
-            redeemCode = extractedInfo["code"], // Don't generate fallback - use null if not extracted
-            imageUri = imageUri,
-            category = determineCategory(extractedInfo),
-            status = when (couponInstance.status) {
-                com.example.coupontracker.ml.CouponStatus.COMPLETE -> "ACTIVE"
-                com.example.coupontracker.ml.CouponStatus.PARTIAL_TOP -> "PARTIAL"
-                com.example.coupontracker.ml.CouponStatus.PARTIAL_BOTTOM -> "PARTIAL"
-            },
-            extractionQualityScore = extractionResult.qualityScore,
-            extractionConfidenceBreakdown = extractionResult.fieldConfidences,
-            extractionStage = extractionResult.sourceStage?.name,
-            extractionRunPath = runPathSummary,
-            rawOcrText = extractionResult.fullOcrText,
-            extractionSource = Coupon.ExtractionSource.OCR_FAST,
-            extractionTimestamp = Date()
-        )
-    }
-
-    private fun validateDetectedCouponInstance(
-        coupon: Coupon,
-        extractionResult: FieldExtractionResult,
-        expiryDateText: String?
-    ): Coupon {
-        val validation = CouponFieldBundleValidator().validate(
-            bundle = FieldValueBundle(
-                storeName = coupon.storeName,
-                description = coupon.description,
-                redeemCode = coupon.redeemCode,
-                expiryDateText = expiryDateText,
-                codeState = coupon.codeState,
-                expiryState = coupon.expiryState
-            ),
-            fields = buildDetectedFieldCandidates(coupon, extractionResult, expiryDateText),
-            rawOcrText = extractionResult.fullOcrText,
-            ocrBlocks = extractionResult.ocrBlocks,
-            imageHeight = extractionResult.imageHeight
-        )
-
-        val issueMessages = validation.issues.map { "${it.field.name}:${it.message}" }
-        val hasError = validation.issues.any { it.severity == CouponFieldBundleValidator.Severity.ERROR } ||
-            !validation.spatialResult.consistent
-        val foregroundModal = coupon.layoutState == Coupon.LayoutState.MODAL_FOREGROUND
-        val multiCouponRegion = issueMessages.any { it.contains("multiple_coupon_sections_in_single_region") } &&
-            !foregroundModal
-        val onlyForegroundOwnershipIssue = foregroundModal &&
-            issueMessages.isNotEmpty() &&
-            issueMessages.all { it.contains("multiple_coupon_sections_in_single_region") }
-        val needsAttention = validation.needsAttention && !onlyForegroundOwnershipIssue
-        val invalidCode = issueMessages.any {
-            it.contains("COUPON_CODE:") || it.contains("store_duplicates_code") || it.contains("description_duplicates_code")
-        }
-        val runPath = JSONObject()
-            .put("stage", "detected_coupon_instance")
-            .put("validator", "CouponFieldBundleValidator")
-            .put("trusted", validation.trusted)
-            .put("needsAttention", validation.needsAttention)
-            .put("issues", JSONArray(issueMessages))
-            .toString()
-
-        return coupon.copy(
-            redeemCode = if (multiCouponRegion || invalidCode) null else coupon.redeemCode,
-            expiryDate = if (multiCouponRegion) null else coupon.expiryDate,
-            needsAttention = coupon.needsAttention || needsAttention,
-            cleanupStatus = if (needsAttention) {
-                Coupon.CleanupStatus.FAILED
-            } else {
-                coupon.cleanupStatus
-            },
-            cleanupError = if (needsAttention) validation.reason else null,
-            extractionSource = if (validation.trusted && !hasError) {
-                Coupon.ExtractionSource.OCR_VERIFIED
-            } else {
-                coupon.extractionSource
-            },
-            extractionRunPath = runPath
-        )
-    }
-
-    private fun buildDetectedFieldCandidates(
-        coupon: Coupon,
-        extractionResult: FieldExtractionResult,
-        expiryDateText: String?
-    ): Map<FieldType, FieldCandidate> {
-        fun confidenceFor(fieldName: String): Float {
-            return extractionResult.fieldConfidences[fieldName]
-                ?: extractionResult.fieldConfidences[fieldName.lowercase(Locale.ROOT)]
-                ?: 0.55f
-        }
-
-        return buildMap {
-            put(
-                FieldType.STORE_NAME,
-                FieldCandidate(coupon.storeName, confidenceFor("storeName"), "detected_coupon_ocr", null)
-            )
-            put(
-                FieldType.DESCRIPTION,
-                FieldCandidate(coupon.description, confidenceFor("description"), "detected_coupon_ocr", null)
-            )
-            coupon.redeemCode?.takeIf { it.isNotBlank() }?.let { code ->
-                put(FieldType.COUPON_CODE, FieldCandidate(code, confidenceFor("code"), "detected_coupon_ocr", null))
-            }
-            val expiryCandidate = expiryDateText?.takeIf { it.isNotBlank() } ?: coupon.expiryDate?.toString()
-            expiryCandidate?.let { expiry ->
-                put(FieldType.EXPIRY_DATE, FieldCandidate(expiry, confidenceFor("expiryDate"), "detected_coupon_ocr", null))
-            }
         }
     }
 
@@ -1665,25 +1210,6 @@ class ScannerViewModel @Inject constructor(
     }
 
     /**
-     * Determine category from extracted information
-     */
-    private fun determineCategory(extractedInfo: Map<String, String>): String {
-        val relevantKeys = listOf("storeName", "description", "terms", "benefit", "app")
-        val text = relevantKeys.mapNotNull { key -> extractedInfo[key] }
-            .joinToString(" ")
-            .lowercase()
-        
-        return when {
-            text.contains("food") || text.contains("restaurant") || text.contains("dining") || text.contains("meal") -> "Food"
-            text.contains("fashion") || text.contains("clothing") || text.contains("apparel") || text.contains("wear") -> "Fashion"
-            text.contains("grocery") || text.contains("groceries") || text.contains("supermarket") -> "Grocery"
-            text.contains("travel") || text.contains("booking") || text.contains("hotel") -> "Travel"
-            text.contains("electronics") || text.contains("mobile") || text.contains("appliance") -> "Electronics"
-            else -> "Other"
-        }
-    }
-
-    /**
      * Save the scanned coupon to the repository
      */
     fun saveCoupon(coupon: Coupon) {
@@ -1794,39 +1320,3 @@ private data class PendingPreview(
     val llmStatus: LlmProgress,
     val debugSnapshot: ExtractionDebugSnapshot?
 )
-
-enum class LlmProgress {
-    SUCCESS,
-    NEEDS_REVIEW,
-    FALLBACK;
-
-    fun displayName(): String {
-        val lower = name.lowercase(Locale.getDefault()).replace('_', ' ')
-        return lower.replaceFirstChar { char ->
-            if (char.isLowerCase()) char.titlecase(Locale.getDefault()) else char.toString()
-        }
-    }
-}
-
-data class FieldExtractionResult(
-    val fields: Map<String, String>,
-    val llmStatus: LlmProgress,
-    val runPath: RunPath? = null,
-    val debugSnapshot: ExtractionDebugSnapshot? = null,
-    val qualityScore: Int? = null,
-    val fieldConfidences: Map<String, Float> = emptyMap(),
-    val sourceStage: ExtractionStage? = null,
-    val fullOcrText: String? = null,
-    val ocrBlocks: List<TextBlock> = emptyList(),
-    val imageHeight: Int = 0
-)
-
-internal fun ocrSpansToTextBlocks(spans: List<OcrTextSpan>): List<TextBlock> {
-    return spans.map { span ->
-        TextBlock(
-            text = span.text,
-            bounds = RectF(span.boundingBox),
-            confidence = span.confidence
-        )
-    }
-}

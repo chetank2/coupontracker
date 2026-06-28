@@ -184,27 +184,6 @@ struct StreamAggregator {
     }
 };
 
-// Fallback payload returned when native inference fails.
-// Must contain ONLY the seven canonical coupon-grammar keys, in canonical
-// order, with no diagnostic metadata. Diagnostics belong in android_log output,
-// not in the JSON payload — the JVM parser treats unknown keys as contract
-// drift and we don't want to rely on key stripping to hide it.
-//
-// Any change here must be mirrored in JniFallbackFixtures.CANONICAL_FALLBACK_JSON.
-std::string BuildFallbackResponse() {
-    std::ostringstream oss;
-    oss << "{";
-    oss << "\"storeName\":\"unknown\",";
-    oss << "\"description\":\"unknown\",";
-    oss << "\"redeemCode\":\"unknown\",";
-    oss << "\"expiryDate\":\"unknown\",";
-    oss << "\"storeNameSource\":\"fallback\",";
-    oss << "\"storeNameEvidence\":[],";
-    oss << "\"needsAttention\":true";
-    oss << "}";
-    return oss.str();
-}
-
 std::string JStringToString(JNIEnv* env, jstring value) {
     if (!value) {
         return {};
@@ -318,10 +297,9 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runTextInference(
     ctx->last_progress.store(1.0f);
 
     if (!success) {
-        LOGW("runTextInference: engine reported failure; returning schema-pure fallback (prompt prefix=\"%.160s\")",
+        LOGW("runTextInference: engine reported failure; returning null so JVM can fail over safely (prompt prefix=\"%.160s\")",
              prompt.c_str());
-        const std::string fallback = BuildFallbackResponse();
-        return env->NewStringUTF(fallback.c_str());
+        return nullptr;
     }
 
     const std::string result = aggregator.buffer.str();
@@ -363,10 +341,9 @@ Java_com_example_coupontracker_llm_MlcLlmNative_runVisionInference(
     ctx->last_progress.store(1.0f);
 
     if (!success) {
-        LOGW("runVisionInference: engine reported failure; returning schema-pure fallback (width=%d height=%d prompt prefix=\"%.160s\")",
+        LOGW("runVisionInference: engine reported failure; returning null so JVM can fail over safely (width=%d height=%d prompt prefix=\"%.160s\")",
              static_cast<int>(width), static_cast<int>(height), prompt.c_str());
-        const std::string fallback = BuildFallbackResponse();
-        return env->NewStringUTF(fallback.c_str());
+        return nullptr;
     }
 
     const std::string result = aggregator.buffer.str();

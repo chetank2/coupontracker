@@ -562,3 +562,348 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradl
 
 - Extract fallback review persistence/preview routing.
 - Extract batch save result state mapping.
+
+## 2026-06-28: Agent-Orchestrated Routing And Native Fallback Hardening
+
+### Date
+
+2026-06-28
+
+### Files Changed
+
+- `app/src/main/kotlin/com/example/coupontracker/domain/usecase/SingleScanRoutingUseCase.kt`
+- `app/src/main/kotlin/com/example/coupontracker/domain/usecase/BatchScanReadinessUseCase.kt`
+- `app/src/main/kotlin/com/example/coupontracker/ui/viewmodel/ScannerViewModel.kt`
+- `app/src/main/kotlin/com/example/coupontracker/ui/viewmodel/BatchScannerViewModel.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/CouponBlockSelector.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/TextExtractor.kt`
+- `app/src/main/cpp/mlc_llm_jni.cpp`
+- `app/src/main/cpp/native_bridge/MlcLlmNativeBridge.cpp`
+- Focused tests for the above use cases, rule selector, and JNI fallback contract.
+
+### Why
+
+- Scanner and batch ViewModels were still making route/action decisions that
+  belong in domain/extraction boundaries.
+- Native inference failure still had coupon-shaped fallback behavior in the C++
+  layer, which could be mistaken for extracted coupon data.
+- `TextExtractor` still concentrated multi-card block selection with the rest
+  of field extraction rules.
+
+### What It Solves
+
+- Single-scan crop-count routing now has a testable domain action plan instead
+  of hardcoded telemetry strings in the ViewModel.
+- Batch scan startup readiness now has a testable use-case boundary for ready,
+  OCR-anchor fallback, and abort decisions.
+- Native text/vision inference failure returns null so Kotlin failure handling
+  can fail closed instead of parsing synthetic coupon-shaped JSON.
+- Wallet/card block selection now lives in `CouponBlockSelector`, preserving
+  the public `TextExtractor.extractCouponBlockForStore(...)` adapter.
+
+### How It Works
+
+- `SingleScanRoutingUseCase.planAfterCropDetection(...)` returns the route
+  action, reason, and executed strategy name used by `ScannerViewModel`.
+- `BatchScanReadinessUseCase.decide(...)` returns UI-safe readiness messages
+  and telemetry reasons before batch processing starts.
+- JNI text/vision paths return `nullptr` on engine failure or invalid handles.
+- `CouponBlockSelector.selectForStore(...)` owns the selected-card block
+  boundary scan and delegates shared line predicates to `CouponTextBlocks`.
+
+### How Good It Is
+
+Good. The changes reduce hardcoded route/mock/fallback behavior and add focused
+tests, but ViewModels still own execution side effects and `TextExtractor` still
+contains store, description, expiry, and metadata extraction.
+
+### Remaining Risk
+
+- `ScannerViewModel` still executes layout routing, fallback persistence, and
+  preview/UI state transitions.
+- `BatchScannerViewModel` still owns most detection/extraction orchestration
+  after readiness.
+- `TextExtractor` remains large; next safe splits are store-name, description,
+  expiry, and metadata extractors.
+- Device screenshot regression proof is still needed after deeper route moves.
+
+### Tests/Evidence
+
+```bash
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest --tests com.example.coupontracker.extraction.rules.CouponBlockSelectorTest --tests com.example.coupontracker.util.TextExtractorTest --tests com.example.coupontracker.domain.usecase.SingleScanRoutingUseCaseTest --tests com.example.coupontracker.domain.usecase.BatchScanReadinessUseCaseTest --tests com.example.coupontracker.llm.JniFallbackContractTest
+```
+
+Subagents also reported passing:
+
+```bash
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:assembleDebug
+git diff --check
+```
+
+### Follow-Up
+
+- Extract scanner layout-route and guarded-fallback execution/save behavior.
+- Move batch detection/extraction orchestration behind a use case or pipeline
+  executor.
+- Continue `TextExtractor` split with `StoreNameExtractor`,
+  `CouponDescriptionExtractor`, and `ExpiryDateExtractor`.
+- Add recurring screenshot/device regression checks for BigBasket,
+  MakeMyTrip, Lenskart, and Leaf-style modal fixtures.
+
+## 2026-06-28: Agent-Orchestrated Completion Slice
+
+### Date
+
+2026-06-28
+
+### Files Changed
+
+- `app/src/main/kotlin/com/example/coupontracker/domain/usecase/ExtractCouponUseCase.kt`
+- `app/src/main/kotlin/com/example/coupontracker/domain/usecase/GuardedFullImageFallbackUseCase.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/capture/BatchCaptureOrchestrator.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/capture/BatchCaptureItemProcessor.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/ExpiryDateExtractor.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/TextExtractor.kt`
+- `app/src/main/kotlin/com/example/coupontracker/ui/viewmodel/ScannerViewModel.kt`
+- `app/src/main/kotlin/com/example/coupontracker/ui/viewmodel/BatchScannerViewModel.kt`
+- Focused tests for guarded fallback, batch orchestration, use-case boundaries,
+  expiry extraction, and existing TextExtractor behavior.
+
+### Why
+
+- The remaining architecture debt was concentrated in ViewModels executing
+  route side effects and in `TextExtractor` owning too many rule families.
+- `ExtractCouponUseCase` needed a typed path for crop-scoped OCR, not only a
+  bitmap wrapper.
+- Full-image fallback must stay review-safe while moving persistence/preview
+  behavior out of UI code.
+
+### What It Solves
+
+- Guarded full-image fallback review coupon creation, URI persistence, and
+  save/preview branching now live in `GuardedFullImageFallbackUseCase`.
+- Batch per-item processing status, failure accounting, and progress callbacks
+  now live in `BatchCaptureOrchestrator`.
+- `ExtractCouponUseCase` now accepts typed bitmap and scoped-OCR requests,
+  making it a better domain entry for future upload/crop routing.
+- Expiry parsing now lives in `ExpiryDateExtractor`; `TextExtractor` keeps
+  compatibility methods that delegate to it.
+
+### How It Works
+
+- `ScannerViewModel.scanWithGuardedFullImageFallback(...)` calls
+  `GuardedFullImageFallbackUseCase` and only maps the returned result into UI
+  state.
+- `BatchScannerViewModel` maps selected images into `BatchCaptureInput`, then
+  delegates the item loop to `BatchCaptureOrchestrator`.
+- `ExtractCouponRequest.BitmapInput` runs OCR from bitmap;
+  `ExtractCouponRequest.ScopedOcrInput` routes already-cropped OCR text through
+  `OcrFirstCouponExtractor.extractFromOcr(...)`.
+- `TextExtractor.extractExpiryDate(...)` and `parseExpiryDate(...)` preserve
+  public compatibility while delegating to `ExpiryDateExtractor`.
+
+### How Good It Is
+
+Good. This removes more ViewModel orchestration and splits another large rule
+family with tests. It is still not fully durable because scanner crop execution
+and batch detection/extraction internals remain partly in ViewModels.
+
+### Remaining Risk
+
+- `ScannerViewModel` still owns detected-crop OCR field extraction and coupon
+  construction.
+- `BatchScannerViewModel` still owns region detection and crop extraction
+  helpers after the per-item loop delegates.
+- `TextExtractor` still needs store-name, description, and metadata splits.
+- Full device/logcat regression is still required for real screenshot flows.
+
+### Tests/Evidence
+
+```bash
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest --tests com.example.coupontracker.domain.usecase.GuardedFullImageFallbackUseCaseTest --tests com.example.coupontracker.extraction.capture.BatchCaptureOrchestratorTest --tests com.example.coupontracker.domain.usecase.CouponUseCaseBoundaryTest --tests com.example.coupontracker.extraction.rules.CouponBlockSelectorTest --tests com.example.coupontracker.extraction.rules.ExpiryDateExtractorTest --tests com.example.coupontracker.util.TextExtractorTest --tests com.example.coupontracker.llm.JniFallbackContractTest
+```
+
+### Follow-Up
+
+- Move detected-crop OCR field extraction/coupon construction behind an
+  extraction use case.
+- Move batch region detection/extraction helpers into the batch pipeline layer.
+- Continue splitting `TextExtractor` store/description/metadata rules.
+- Add recurring device screenshot regression checks before claiming the whole
+  architecture is fully complete.
+
+## 2026-06-28: Agent Roster Refactor Completion Pass
+
+### Date
+
+2026-06-28
+
+### Files Changed
+
+- `app/src/main/kotlin/com/example/coupontracker/extraction/capture/DetectedCropCouponBuilder.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/capture/BatchRegionExtractionRunner.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/CouponMetadataExtractor.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/TextExtractor.kt`
+- `app/src/main/kotlin/com/example/coupontracker/ui/viewmodel/ScannerViewModel.kt`
+- `app/src/main/kotlin/com/example/coupontracker/ui/viewmodel/BatchScannerViewModel.kt`
+- `docs/refactor/usecases/extract-coupon.md`
+- Focused tests for detected-crop coupon building, batch region extraction, and
+  metadata extraction.
+
+### Why
+
+- The agent roster called for finishing remaining architecture slices with
+  crop-first extraction preserved and ViewModels thinned.
+- `ScannerViewModel` still owned detected-crop OCR coupon construction and
+  validation.
+- `BatchScannerViewModel` still owned crop creation and pipeline/per-region
+  extraction choice for already-isolated batch regions.
+- `TextExtractor` still owned metadata rules after block and expiry splits.
+
+### What It Solves
+
+- Detected-crop OCR fields are now converted into validated/provisional coupons
+  by `DetectedCropCouponBuilder`.
+- Already-isolated batch regions are cropped, tracked, released, and routed
+  through pipeline/per-region extraction by `BatchRegionExtractionRunner`.
+- Category, rating, status, discount type, min/max purchase/discount, payment
+  method, platform type, and usage limit now live in
+  `CouponMetadataExtractor`.
+- `docs/refactor/usecases/extract-coupon.md` now reflects typed
+  `ExtractCouponRequest` inputs instead of calling the use case only a thin
+  wrapper.
+
+### How It Works
+
+- `ScannerViewModel` still performs OCR and UI/persistence state, but delegates
+  detected-crop coupon construction and provisional marking to
+  `DetectedCropCouponBuilder`.
+- `BatchScannerViewModel` still coordinates detection/isolation, then delegates
+  accepted isolated regions to `BatchRegionExtractionRunner`.
+- `TextExtractor.extractCouponInfoSync(...)` asks `CouponMetadataExtractor` for
+  metadata and keeps public compatibility methods as delegates.
+
+### How Good It Is
+
+Good. This pass removes more rule and construction logic from ViewModels and
+`TextExtractor` with focused tests. It remains incomplete at the ideal-flow
+level because scanner OCR field extraction and batch region detection still need
+separate owners.
+
+### Remaining Risk
+
+- `ScannerViewModel` still owns detected-crop OCR execution and telemetry.
+- `BatchScannerViewModel` still owns region detection/isolation before the
+  runner.
+- `TextExtractor` still owns store-name and description extraction.
+- Real device/logcat regression proof is still needed for known screenshot
+  fixtures.
+
+### Tests/Evidence
+
+```bash
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:compileDebugKotlin
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest --tests com.example.coupontracker.extraction.capture.DetectedCropCouponBuilderTest --tests com.example.coupontracker.extraction.capture.BatchRegionExtractionRunnerTest --tests com.example.coupontracker.extraction.rules.CouponMetadataExtractorTest --tests com.example.coupontracker.util.TextExtractorTest --tests com.example.coupontracker.ui.viewmodel.ScannerViewModelDateParsingTest
+```
+
+### Follow-Up
+
+- Move detected-crop OCR execution into an extraction runner/use case.
+- Move batch region detection/isolation into the batch extraction layer.
+- Split store-name and description rules from `TextExtractor`.
+- Build recurring screenshot/device regression around BigBasket, MakeMyTrip,
+  Lenskart, Leaf-style modals, and crop OCR blank cases.
+
+## 2026-06-28: Final Agent Roster Refactor And Test Stability Pass
+
+### Date
+
+2026-06-28
+
+### Files Changed
+
+- `app/src/main/kotlin/com/example/coupontracker/extraction/capture/DetectedCropFieldExtractor.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/capture/BatchRegionIsolationCoordinator.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/StoreNameExtractor.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/TextExtractor.kt`
+- `app/src/main/kotlin/com/example/coupontracker/ui/viewmodel/ScannerViewModel.kt`
+- `app/src/main/kotlin/com/example/coupontracker/ui/viewmodel/BatchScannerViewModel.kt`
+- `app/src/main/kotlin/com/example/coupontracker/debug/ExtractionDebugModels.kt`
+- `app/src/test/resources/robolectric.properties`
+- Focused tests for crop OCR field extraction mapping, batch region isolation,
+  and store-name extraction.
+
+### Why
+
+- The remaining agent-roster tasks were to keep thinning ViewModels, split
+  remaining deterministic rules, and make test proof reliable.
+- `ScannerViewModel` still owned detected-crop OCR execution and the
+  `FieldExtractionResult` type.
+- `BatchScannerViewModel` still owned OCR-to-region-isolation policy.
+- `TextExtractor` still owned store-name scoring and wallet-noise penalties.
+- Full unit tests were unstable because Robolectric tried to instantiate the
+  Hilt production application in unit tests.
+
+### What It Solves
+
+- `DetectedCropFieldExtractor` now owns crop OCR execution, fallback OCR,
+  `FieldExtractionResult`, `LlmProgress`, OCR span mapping, and conversion to
+  `DetectedCropFieldExtraction`.
+- `BatchRegionIsolationCoordinator` now owns batch OCR, region detection,
+  fallback/full-image filtering, and review-safe crop-isolation failure
+  decisions.
+- `StoreNameExtractor` now owns store-name extraction and scoring while
+  `TextExtractor.extractStoreName(...)` remains a compatibility delegate.
+- Unit-test Robolectric now uses plain `android.app.Application`, keeping Hilt
+  integration in `androidTest` and preventing missing generated Hilt app class
+  failures in JVM tests.
+
+### How It Works
+
+- `ScannerViewModel` passes the detected crop bitmap to
+  `DetectedCropFieldExtractor`, then keeps routing, UI state, preview/save, and
+  analytics behavior.
+- `BatchScannerViewModel` delegates OCR/detection/isolation to
+  `BatchRegionIsolationCoordinator`, then delegates accepted isolated regions
+  to `BatchRegionExtractionRunner`.
+- `TextExtractor` asks `StoreNameExtractor` for store candidates and keeps the
+  public method stable for existing callers.
+- `app/src/test/resources/robolectric.properties` sets
+  `application=android.app.Application`.
+
+### How Good It Is
+
+Good. The code is significantly more modular and all required local checks now
+pass. It is not fully durable yet because description extraction remains inside
+`TextExtractor` and real device/logcat regression still requires a connected
+phone.
+
+### Remaining Risk
+
+- `TextExtractor` still owns description extraction.
+- `ScannerViewModel` still owns UI/persistence orchestration around extraction
+  results.
+- `BatchScannerViewModel` still wires detector dependencies and UI progress.
+- Device verification is blocked until `adb devices` shows a connected phone.
+
+### Tests/Evidence
+
+```bash
+/Users/C/Library/Android/sdk/platform-tools/adb devices
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:compileDebugKotlin
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest --tests com.example.coupontracker.extraction.capture.BatchRegionIsolationCoordinatorTest --tests com.example.coupontracker.ui.viewmodel.OcrSpanMappingTest
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:assembleDebug
+git diff --check
+```
+
+`adb devices` returned no connected devices, so device install/logcat/DB proof
+is not complete in this pass.
+
+### Follow-Up
+
+- Connect phone and run install plus DB/logcat regression checks for BigBasket,
+  MakeMyTrip, Lenskart, Leaf-style modals, and crop-OCR-blank cases.
+- Split `CouponDescriptionExtractor` from `TextExtractor`.
+- Continue reducing ViewModel UI/persistence orchestration in smaller slices.

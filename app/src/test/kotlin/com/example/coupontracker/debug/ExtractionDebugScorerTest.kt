@@ -2,8 +2,8 @@ package com.example.coupontracker.debug
 
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.universal.UniversalExtractionResult
-import com.example.coupontracker.ui.viewmodel.FieldExtractionResult
-import com.example.coupontracker.ui.viewmodel.LlmProgress
+import com.example.coupontracker.extraction.capture.FieldExtractionResult
+import com.example.coupontracker.extraction.capture.LlmProgress
 import com.example.coupontracker.util.CouponInfo
 import com.example.coupontracker.util.ExtractResult
 import com.example.coupontracker.util.ExtractionSignals

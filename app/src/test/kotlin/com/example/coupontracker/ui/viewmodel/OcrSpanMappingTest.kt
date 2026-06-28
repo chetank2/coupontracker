@@ -1,13 +1,17 @@
 package com.example.coupontracker.ui.viewmodel
 
+import android.app.Application
 import android.graphics.Rect
+import com.example.coupontracker.extraction.capture.ocrSpansToTextBlocks
 import com.example.coupontracker.ocr.OcrTextSpan
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
+@Config(application = Application::class)
 class OcrSpanMappingTest {
 
     @Test

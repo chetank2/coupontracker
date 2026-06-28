@@ -2,8 +2,8 @@ package com.example.coupontracker.debug
 
 import com.example.coupontracker.util.ExtractResult
 import com.example.coupontracker.util.RunPath
-import com.example.coupontracker.ui.viewmodel.LlmProgress
-import com.example.coupontracker.ui.viewmodel.FieldExtractionResult
+import com.example.coupontracker.extraction.capture.FieldExtractionResult
+import com.example.coupontracker.extraction.capture.LlmProgress
 import com.example.coupontracker.universal.UniversalExtractionResult
 import java.util.Locale
 import javax.inject.Inject

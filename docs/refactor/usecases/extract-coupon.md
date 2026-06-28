@@ -18,10 +18,16 @@ confidence, evidence, and provenance.
 
 ## Current Implementation
 
-`ExtractCouponUseCase` is currently a thin wrapper around
-`OcrFirstCouponExtractor.extract(bitmap, imageUri, captureTimestamp)`. It does
-not yet own scan-mode selection, crop routing, or multi-coupon orchestration.
-Those responsibilities still live in scanner routing and extraction services.
+`ExtractCouponUseCase` now exposes typed requests:
+
+- `ExtractCouponRequest.BitmapInput` for OCR-from-bitmap extraction.
+- `ExtractCouponRequest.ScopedOcrInput` for already-cropped OCR text and OCR
+  blocks.
+
+The compatibility `invoke(bitmap, imageUri, captureTimestamp)` entry still
+routes to `BitmapInput`. The use case does not yet own scan-mode selection,
+multi-coupon orchestration, or all scanner route execution. Those
+responsibilities still live in scanner routing and extraction services.
 
 ## Solution
 
@@ -45,8 +51,8 @@ Current files include `domain/usecase/ExtractCouponUseCase.kt`,
 
 ## Tests
 
-Current minimum test: assert the use case forwards bitmap, image URI, and capture
-timestamp to `OcrFirstCouponExtractor`.
+Current minimum tests assert the use case forwards bitmap, image URI, capture
+timestamp, and scoped OCR evidence to `OcrFirstCouponExtractor`.
 
 Target tests: use fake pipeline dependencies to assert routing for single image,
 selected crop, multi-coupon crops, OCR failure, low-confidence review paths, and

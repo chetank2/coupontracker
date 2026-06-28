@@ -3,12 +3,13 @@ package com.example.coupontracker.extraction.capture
 import android.graphics.Bitmap
 import android.net.Uri
 import com.example.coupontracker.data.model.Coupon
+import javax.inject.Inject
 
 /**
  * Routes one selected batch item through the correct capture path while keeping
  * bitmap ownership explicit for callers.
  */
-class BatchCaptureItemProcessor {
+class BatchCaptureItemProcessor @Inject constructor() {
 
     suspend fun process(
         input: BatchCaptureInput,

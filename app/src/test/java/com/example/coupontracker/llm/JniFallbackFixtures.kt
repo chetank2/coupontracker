@@ -1,12 +1,14 @@
 package com.example.coupontracker.llm
 
 /**
- * Mirrors the JSON that BuildFallbackResponse() in mlc_llm_jni.cpp must emit
- * whenever the native runtime fails an inference. This exists so the contract
- * can be asserted from JVM tests without loading the JNI library.
+ * Mirrors the response that mlc_llm_jni.cpp must emit whenever the native
+ * runtime fails an inference. This exists so the contract can be asserted from
+ * JVM tests without loading the JNI library.
  *
- * If BuildFallbackResponse() is changed, update this fixture in the same commit.
+ * Native inference failure must not produce coupon-shaped JSON. Returning null
+ * lets the JVM wrapper fail over safely instead of accepting synthetic coupon
+ * fields.
  */
 object JniFallbackFixtures {
-    const val CANONICAL_FALLBACK_JSON = """{"storeName":"unknown","description":"unknown","redeemCode":"unknown","expiryDate":"unknown","storeNameSource":"fallback","storeNameEvidence":[],"needsAttention":true}"""
+    val INFERENCE_FAILURE_RESPONSE: String? = null
 }

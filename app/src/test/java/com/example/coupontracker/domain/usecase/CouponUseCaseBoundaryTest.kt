@@ -149,4 +149,56 @@ class CouponUseCaseBoundaryTest {
             )
         }
     }
+
+    @Test
+    fun `extract coupon scoped ocr request forwards crop scoped text`() = runTest {
+        val extractor = mockk<OcrFirstCouponExtractor>()
+        val useCase = ExtractCouponUseCase(extractor)
+        val bitmap = mockk<Bitmap>()
+        val timestamp = Date(1_735_689_600_000L)
+        val expected = OcrFirstExtractionResult(
+            coupon = Coupon(
+                storeName = "Crop Store",
+                description = "Crop Offer",
+                redeemCode = null,
+                imageUri = "content://crop"
+            ),
+            rawOcrText = "Crop Store\nCrop Offer",
+            confidence = 0.8f,
+            success = true,
+            failureReason = null
+        )
+        coEvery {
+            extractor.extractFromOcr(
+                bitmap = bitmap,
+                ocrText = "Crop Store\nCrop Offer",
+                ocrHints = mapOf("storeName" to "Crop Store"),
+                ocrBlocks = emptyList(),
+                imageUri = "content://crop",
+                captureTimestamp = timestamp
+            )
+        } returns expected
+
+        val result = useCase.extract(
+            ExtractCouponRequest.ScopedOcrInput(
+                bitmap = bitmap,
+                ocrText = "Crop Store\nCrop Offer",
+                ocrHints = mapOf("storeName" to "Crop Store"),
+                imageUri = "content://crop",
+                captureTimestamp = timestamp
+            )
+        )
+
+        assertEquals(expected, result)
+        coVerify {
+            extractor.extractFromOcr(
+                bitmap = bitmap,
+                ocrText = "Crop Store\nCrop Offer",
+                ocrHints = mapOf("storeName" to "Crop Store"),
+                ocrBlocks = emptyList(),
+                imageUri = "content://crop",
+                captureTimestamp = timestamp
+            )
+        }
+    }
 }
