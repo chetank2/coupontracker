@@ -22,6 +22,7 @@ class ResumableModelDownloader(
         private const val TAG = "ResumableDownloader"
         private const val BUFFER_SIZE = 8192
         private const val CHUNK_SIZE = 8 * 1024 * 1024  // 8MB chunks
+        private val SHA256_REGEX = Regex("^[A-Fa-f0-9]{64}$")
     }
     
     data class DownloadProgress(
@@ -194,7 +195,13 @@ class ResumableModelDownloader(
                     ))
 
                     // Verify SHA-256 if provided
-                    if (expectedSha256 != null && expectedSha256 != "COMPUTE_ON_FIRST_DOWNLOAD") {
+                    if (expectedSha256 != null) {
+                        if (!SHA256_REGEX.matches(expectedSha256)) {
+                            destFile.delete()
+                            return@withContext DownloadResult.Failed(
+                                "Invalid expected SHA-256 checksum"
+                            )
+                        }
                         Log.d(TAG, "Verifying SHA-256...")
                         val actualSha256 = computeSha256(destFile) { progress ->
                             onProgress(DownloadProgress(
@@ -217,8 +224,8 @@ class ResumableModelDownloader(
                             DownloadResult.Failed("Checksum verification failed")
                         }
                     } else {
-                        // Compute SHA-256 for first download
-                        Log.d(TAG, "Computing SHA-256 for verification...")
+                        // Compute SHA-256 for inventory/logging. This is not trust verification.
+                        Log.d(TAG, "Computing SHA-256 for inventory...")
                         val sha256 = computeSha256(destFile) { progress ->
                             onProgress(DownloadProgress(
                                 bytesDownloaded = finalTotal,
@@ -337,4 +344,3 @@ class ResumableModelDownloader(
         return availableSpace >= requiredBytes
     }
 }
-

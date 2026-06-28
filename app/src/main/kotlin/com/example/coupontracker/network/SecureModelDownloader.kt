@@ -54,6 +54,7 @@ class SecureModelDownloader @Inject constructor(
         private const val CONNECT_TIMEOUT_SEC = 30L
         private const val READ_TIMEOUT_SEC = 60L
         private const val CHUNK_SIZE = 8192
+        private val SHA256_REGEX = Regex("^[A-Fa-f0-9]{64}$")
     }
     
     /**
@@ -143,7 +144,7 @@ class SecureModelDownloader @Inject constructor(
      * @param url HTTPS URL to download from (must be in allowlist)
      * @param destFile Destination file
      * @param expectedSize Expected file size in bytes (for validation)
-     * @param expectedSha256 Expected SHA-256 hash (null to skip verification)
+     * @param expectedSha256 Expected SHA-256 hash (null when no upstream checksum is available)
      * @param onProgress Progress callback
      * @return DownloadResult
      */
@@ -251,7 +252,11 @@ class SecureModelDownloader @Inject constructor(
                 Log.i(TAG, "SHA-256: $sha256")
                 
                 // Verify checksum if provided
-                if (expectedSha256 != null && !expectedSha256.equals("COMPUTE_ON_FIRST_DOWNLOAD", ignoreCase = true)) {
+                if (expectedSha256 != null) {
+                    if (!SHA256_REGEX.matches(expectedSha256)) {
+                        destFile.delete()
+                        return@withContext DownloadResult.Failed("Invalid expected SHA-256 checksum")
+                    }
                     if (!sha256.equals(expectedSha256, ignoreCase = true)) {
                         destFile.delete()
                         return@withContext DownloadResult.Failed(
@@ -299,4 +304,3 @@ class SecureModelDownloader @Inject constructor(
         return available >= requiredBytes
     }
 }
-

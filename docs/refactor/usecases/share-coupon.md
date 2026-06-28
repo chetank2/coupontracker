@@ -10,6 +10,12 @@ Different screens should not format share payloads differently.
 `domain/usecase/ShareCouponUseCase` builds a share payload from a domain coupon
 or coupon id. Android intent creation stays at the UI/platform boundary.
 
+## Current Implementation
+
+`ShareCouponUseCase` currently formats store, description, optional redeem code,
+and optional expiry date from a `Coupon`. It does not yet include amount/terms
+or load by coupon id.
+
 ## Solution
 
 The use case formats store, offer description, code, expiry, amount, and terms
@@ -23,8 +29,11 @@ Current files include `domain/usecase/ShareCouponUseCase.kt`,
 
 ## Tests
 
-Test formatting with full fields, missing optional fields, expired coupons,
-unicode/currency content, and no placeholder leakage.
+Current minimum tests: assert full-field formatting and omission of absent
+optional code/expiry fields.
+
+Target tests: test formatting with full fields, missing optional fields, expired
+coupons, unicode/currency content, and no placeholder leakage.
 
 ## Risks
 
@@ -35,4 +44,3 @@ values can mislead users.
 
 All share actions use one formatter, placeholders are omitted, and UI handles
 only platform dispatch.
-

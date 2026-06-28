@@ -1,44 +1,68 @@
-# Coupon Field Flow Audit (Oct 2025)
+# Coupon Field Flow Audit
 
-## 1. Single Screenshot → `ImageProcessor`
+This map reflects the current Compose-first scanner flow. Older fragment/XML
+routes still exist for legacy screens and Safe Args generation, but
+`MainActivity` launches Compose with `AppNavigation`.
 
-- Entry points: `CouponInputManager.processCouponFromBitmap`, `ScannerViewModel.scanWithLegacyPath`.
-- `ImageProcessor.processImage(bitmap, captureTimestamp, originalUri)` first attempts the progressive pipeline when injected `ProgressiveExtractionService` is available.
-- Progressive pipeline builds a `Coupon` via `ProgressiveExtractionService.finishExtraction()` → `buildFinalResult()`.
-  - `storeName`: primary from the Qwen pass, otherwise best pattern candidate; falls back to `"Unknown Store"` if heuristics reject.
-  - `description`: Qwen, pattern, or heuristics; final fallback is first 200 chars of OCR text with `"Coupon offer"` default.
-  - `redeemCode`: Qwen candidate, structured patterns, heuristics.
-  - `expiryDate`: Qwen or structured pass; normalized via `ParseDate` and `IndianDateParser`; relative dates ignore screenshot metadata until rule added.
-- When progressive pipeline fails (OCR blank, exception), flow drops to legacy `ModelBasedOCRService` → `CouponInfo` which still returns `"Unknown Store"`/`"No description"` when patterns miss.
+## 1. Single Screenshot Upload
 
-## 2. Multi-Coupon Screenshots → `MultiCouponExtractionService`
+- Entry point: `ScannerViewModel.scanCouponFromUri(...)`.
+- Current routing decodes the bitmap, runs crop/layout detection, then chooses
+  one of these paths:
+  - detected single crop -> crop OCR through `OcrFirstCouponExtractor`;
+  - multiple regions -> `MultiCouponExtractionService`;
+  - no reliable crop -> review-safe OCR fallback only when the screenshot is
+    not classified as multi-coupon.
+- Save is delegated through `SaveScannedCouponUseCase`, which persists the
+  scan result and queues automatic verification when confidence/layout state
+  requires it.
 
-- Triggered from `CouponInputManager.processCouponFromBitmap` when screenshot classifier marks `MULTI_COUPON_APP`.
-- Steps: hybrid detector segments → per-region extraction via `ProgressiveExtractionService.extractCoupon`.
-- Post-processing: `handleMultiCouponResult()` simply picks the highest-confidence coupon and returns raw `Coupon` from progressive pipeline with minimal normalization.
-- When `extractMultipleCoupons` returns multiple coupons, only the top candidate is surfaced to `CouponInputManager` today; batch save happens via `ScannerViewModel` multi-flow.
+## 2. Multi-Coupon Screenshots
 
-## 3. `ScannerViewModel` Paths
+- Entry point: `MultiCouponExtractionService.extractMultipleCoupons(...)`.
+- Foreground capture is intentionally heuristic/OCR-first for latency.
+- Heuristic-owned coupons must be saved as review/verification candidates, not
+  trusted final data.
+- Full-screen OCR is not valid proof for final code or expiry when a crop is
+  available.
 
-- Strategies (`LEGACY`, `LLM_FIRST`, `OCR_FIRST`, `HYBRID`) each funnel to helper builders:
-  - `buildCouponFromLlmResult()` converts `CouponInfo` into `Coupon`, defaulting description to `"Extracted via LLM"` and store to `"Unknown Store"` when blank.
-  - `UniversalExtractionService` and two-stage detector paths similarly yield `Coupon` objects with minimal field validation.
-- Multi-coupon actions (`processCouponBatch`, `processSingleCoupon`) rely on `createCouponFromInstance()` which uses extracted map fields and again defaults missing store/description to placeholders.
+## 3. Verification And Gemma
 
-## 4. Batch Upload (`CouponInputManager.processCouponsInBatch*`)
+- Entry point: `VerifyCouponWorker`.
+- The worker loads the saved coupon, runs deterministic cleanup, decides whether
+  Gemma Vision is allowed/needed, prepares an active crop, runs crop OCR, then
+  asks Gemma for field labels/states.
+- `VisionEvidenceMergePolicy` merges only crop-supported evidence into final
+  fields. Codes require exact OCR support. Missing code/expiry can be trusted
+  only when field state explains the absence.
+- Malformed or low-confidence model output must end in review/failure state,
+  not trusted cleanup.
 
-- Loops over URIs, invoking single-image path for each; no aggregation or validation after `Coupon` creation.
-- Failure per image logs error but continues; partial successes return list of raw `Coupon`s.
+## 4. Field Authority
 
-## Gaps vs Required Rules
+- OCR owns exact visible text.
+- Gemma owns visual ownership, layout, and semantic field labels/states.
+- Validators and merge policies decide whether fields are trusted, need review,
+  or are rejected.
+- Placeholders such as generic store names, generic offers, or assumed no-code
+  states must remain review evidence and must not become trusted coupon data.
 
-1. **Correct Store Name**: multiple builders still allow `"Unknown Store"` even when text contains brand (due to aggressive heuristics or missing post-pass).
-2. **Correct Coupon Code**: `redeemCode` may remain null when code present but filtered, no final pass to re-scan description text.
-3. **Expiry Date with Relative Logic**: relative phrases handled inconsistently; metadata timestamp ignored after legacy fallback.
-4. **Description = Residual Content**: placeholders like `"No description"` or `"Extracted via LLM"` survive instead of using remaining OCR text.
+## 5. Known Legacy Surface
 
-## Next Actions
+- `activity_main.xml` and `nav_graph.xml` are retained for legacy fragments and
+  generated Safe Args classes.
+- They are not the launcher navigation path while `MainActivity` uses
+  `setContent { AppNavigation(...) }`.
+- Any migration that removes those XML files must first remove or replace the
+  legacy fragments and generated `*Directions` usages.
 
-- Introduce a shared field post-processor enforcing rules before returning any `Coupon`.
-- Feed capture timestamp into progressive + legacy fallbacks so relative expiry calculations succeed.
-- Relax heuristics so legitimate short brand names survive but still filter UI chrome.
+## Gaps To Watch
+
+1. Single-crop uploads can still show OCR-first fields before background
+   verification finishes.
+2. Foreground capture stays fast by deferring Gemma; correctness depends on
+   review-safe persistence and queued verification.
+3. Legacy fragment paths remain in source and should be quarantined or migrated
+   separately.
+4. Regression fixtures should cover multi-card contamination, no-code modals,
+   malformed Gemma JSON, and crop OCR failure.

@@ -23,7 +23,7 @@ object RealModelConfig {
         val filename: String,
         val url: String,
         val expectedSize: Long,  // in bytes
-        val sha256: String,      // to be computed after first download
+        val sha256: String?,     // null when upstream checksum is unavailable
         val required: Boolean = true
     )
     
@@ -32,7 +32,7 @@ object RealModelConfig {
         filename = "ggml-model-Q4_K_M.gguf",
         url = "$HF_BASE_URL/ggml-model-Q4_K_M.gguf",
         expectedSize = 4_681_089_344L,  // ~4.7GB actual size from Hugging Face
-        sha256 = "COMPUTE_ON_FIRST_DOWNLOAD",  // Will be updated after verification
+        sha256 = null,
         required = true
     )
     
@@ -41,7 +41,7 @@ object RealModelConfig {
         filename = "tokenizer.json",
         url = "$HF_BASE_URL/tokenizer.json",
         expectedSize = 500_000L,  // ~500KB
-        sha256 = "COMPUTE_ON_FIRST_DOWNLOAD",
+        sha256 = null,
         required = true
     )
     
@@ -49,7 +49,7 @@ object RealModelConfig {
         filename = "config.json",
         url = "$HF_BASE_URL/config.json",
         expectedSize = 10_000L,  // ~10KB
-        sha256 = "COMPUTE_ON_FIRST_DOWNLOAD",
+        sha256 = null,
         required = false  // May not be needed
     )
     
@@ -91,4 +91,3 @@ object RealModelConfig {
         return "minicpm-v2.6-q4km"
     }
 }
-

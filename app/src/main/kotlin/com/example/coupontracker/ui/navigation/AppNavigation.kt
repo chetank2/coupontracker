@@ -14,7 +14,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.coupontracker.ui.screen.AnalyticsScreen
-import com.example.coupontracker.ui.screen.ApiTestScreen
 import com.example.coupontracker.ui.screen.BatchScannerScreen
 import com.example.coupontracker.ui.details.CouponDetailScreen
 import com.example.coupontracker.ui.screen.CouponFormScreen
@@ -50,7 +49,6 @@ sealed class Screen(val route: String) {
     object ManualEntryWithCode : Screen("manual_entry/{code}") {
         fun createRoute(code: String) = "manual_entry/$code"
     }
-    object ApiTest : Screen("api_test")
     object Settings : Screen("settings")
     object PrivacyPolicy : Screen("privacy_policy")
 
@@ -173,10 +171,6 @@ fun AppNavigation(
                     navController.navigateUp()
                 }
             )
-        }
-
-        composable(Screen.ApiTest.route) {
-            ApiTestScreen(navController = navController)
         }
 
         composable(Screen.Settings.route) {

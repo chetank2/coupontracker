@@ -10,6 +10,12 @@ code should not know repository deletion details or reminder cancellation rules.
 `domain/usecase/DeleteCouponUseCase` accepts coupon identifiers and delegates to
 repository and scheduling collaborators.
 
+## Current Implementation
+
+`DeleteCouponUseCase` currently accepts a `Coupon` object and delegates directly
+to `CouponRepository.deleteCoupon(coupon)`. It does not yet validate by id,
+soft-delete, return a UI result, or cancel reminder/work dependencies.
+
 ## Solution
 
 The use case should validate the target, delete or soft-delete according to the
@@ -25,8 +31,11 @@ worker/reminder scheduling files.
 
 ## Tests
 
-Test delete success, missing coupon, repository failure, and reminder/job cleanup
-using fakes.
+Current minimum test: assert the passed coupon is delegated to the repository
+delete call.
+
+Target tests: test delete success, missing coupon, repository failure, and
+reminder/job cleanup using fakes.
 
 ## Risks
 
@@ -37,4 +46,3 @@ Direct DAO access from UI would bypass product rules.
 
 All deletion flows use the use case, dependent work is cleaned up, and UI gets a
 clear success or failure result.
-
