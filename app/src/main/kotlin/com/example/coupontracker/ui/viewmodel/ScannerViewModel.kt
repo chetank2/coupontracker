@@ -10,7 +10,6 @@ import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.BuildConfig
-import com.example.coupontracker.data.model.CashbackInfo
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.data.repository.CouponRepository
@@ -26,7 +25,6 @@ import com.example.coupontracker.extraction.rules.TextExtractor
 import com.example.coupontracker.extraction.validation.CouponFieldBundleValidator
 import com.example.coupontracker.extraction.validation.FieldValueBundle
 import com.example.coupontracker.universal.ExtractionContext
-import com.example.coupontracker.universal.ExtractionCandidate
 import com.example.coupontracker.universal.UniversalExtractionService
 import com.example.coupontracker.util.ExtractionPerformanceMonitor
 import com.example.coupontracker.util.ExtractionMethod
@@ -50,9 +48,7 @@ import com.example.coupontracker.util.ExtractionStage
 import com.example.coupontracker.util.ExtractionTelemetryService
 import com.example.coupontracker.feedback.ValidatorFeedbackRecorder
 import com.example.coupontracker.util.GenericFieldHeuristics
-import com.example.coupontracker.util.IndianCurrencyParser
 import com.example.coupontracker.util.ImageMetadataExtractor
-import com.example.coupontracker.util.LlmProgressStage
 import com.example.coupontracker.util.MultiCouponDetectorState
 import com.example.coupontracker.util.MultiEngineOCR
 import com.example.coupontracker.util.RunPath
@@ -640,75 +636,6 @@ class ScannerViewModel @Inject constructor(
     }
     
     /**
-     * Process a captured bitmap to extract coupon information
-     */
-    fun processCapturedImage(
-        bitmap: Bitmap,
-        imageUri: Uri? = null,
-        persistImmediately: Boolean = true
-    ) {
-        viewModelScope.launch {
-            try {
-                _uiState.value = ScannerUiState.Scanning()
-                Log.d(TAG, "Processing captured bitmap with two-stage detection")
-
-                val detector = twoStageDetector ?: run {
-                    val message = detectorInitErrorMessage ?: "Multi-coupon detector is unavailable."
-                    Log.w(TAG, "Captured image processing: $message – falling back to OCR-only mode")
-                    _uiState.value = ScannerUiState.Scanning(
-                        LlmProgressUpdate(
-                            stage = LlmProgressStage.PREPARING,
-                            percent = 5,
-                            message = "Multi-coupon detection disabled – using single-coupon mode"
-                        )
-                    )
-                    fallbackToTraditionalOCRBitmap(bitmap, imageUri)
-                    return@launch
-                }
-
-                // Run two-stage detection
-                val couponInstances = withContext(Dispatchers.IO) {
-                    detector.detectMultiCoupons(bitmap)
-                }
-
-                Log.d(TAG, "Two-stage detection on bitmap completed: ${couponInstances.size} coupons detected")
-
-                when {
-                    couponInstances.isEmpty() -> {
-                        // Try universal extraction first for bitmap processing
-                        Log.d(TAG, "No coupons detected in bitmap, trying universal extraction")
-                        if (imageUri != null) {
-                            tryUniversalExtraction(imageUri, bitmap)
-                        } else {
-                            // Create temporary URI for bitmap
-                            Log.d(TAG, "No imageUri provided, falling back to traditional OCR")
-                        fallbackToTraditionalOCRBitmap(bitmap, imageUri)
-                        }
-                    }
-                    couponInstances.size == 1 -> {
-                        // Single coupon detected
-                        val couponInstance = couponInstances.first()
-                        processSingleCoupon(
-                            couponInstance = couponInstance,
-                            imageUri = imageUri?.toString(),
-                            persistImmediately = persistImmediately,
-                            captureTimestamp = imageUri?.let { ImageMetadataExtractor.extractCaptureTimestamp(context, it) }
-                        )
-                    }
-                    else -> {
-                        // Multiple coupons detected
-                        _uiState.value = ScannerUiState.MultiCouponDetected(couponInstances, bitmap, imageUri?.toString())
-                    }
-                }
-
-            } catch (e: Exception) {
-                Log.e(TAG, "Error processing captured image", e)
-                _uiState.value = ScannerUiState.Error("Error processing image: ${e.message}")
-            }
-        }
-    }
-
-    /**
      * Process a single detected coupon instance
      */
     private suspend fun processSingleCoupon(
@@ -1239,10 +1166,6 @@ class ScannerViewModel @Inject constructor(
         val text: String?
     )
 
-    private fun extractNumericValue(value: String?): Double? {
-        return IndianCurrencyParser.parseAmount(value)
-    }
-
     private fun formatNumeric(value: Double): String {
         return if (value % 1.0 == 0.0) {
             value.toInt().toString()
@@ -1422,330 +1345,6 @@ class ScannerViewModel @Inject constructor(
     }
 
     /**
-     * Try universal extraction as an alternative to traditional OCR
-     */
-    private suspend fun tryUniversalExtraction(imageUri: Uri, bitmap: Bitmap) {
-        val startTime = System.currentTimeMillis()
-        
-        try {
-            Log.d(TAG, "Attempting universal extraction")
-            val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
-            
-            // Extract text using OCR for universal extraction
-            var ocrHints: Map<String, String>? = null
-            val ocrText = when (val result = multiEngineOCR.processImage(bitmap)) {
-                is MultiEngineOCR.OCRResult.Success -> {
-                    ocrHints = result.extractedInfo
-                    result.text
-                }
-                is MultiEngineOCR.OCRResult.Error -> {
-                    Log.w(TAG, "OCR failed for universal extraction: ${result.message}")
-                    ""
-                }
-            }
-            
-            if (ocrText.isBlank()) {
-                Log.w(TAG, "No OCR text available for universal extraction")
-                
-                // Record failed attempt
-                val processingTime = System.currentTimeMillis() - startTime
-                performanceMonitor.recordExtractionAttempt(
-                    method = ExtractionMethod.UNIVERSAL_EXTRACTION,
-                    success = false,
-                    confidence = 0f,
-                    processingTimeMs = processingTime,
-                    fieldsExtracted = emptySet()
-                )
-                
-                fallbackToTraditionalOCR(imageUri)
-                return
-            }
-            
-            // Create extraction context
-            val context = buildUniversalExtractionContext(ocrText, ocrHints, captureTimestamp)
-            val ocrBlocks = runCatching {
-                ocrEngine.recognizeWithBoxes(bitmap).map { span ->
-                    com.example.coupontracker.extraction.TextBlock(
-                        text = span.text,
-                        bounds = android.graphics.RectF(span.boundingBox),
-                        confidence = span.confidence
-                    )
-                }
-            }.getOrDefault(emptyList())
-            
-            // Run universal extraction
-            val extractionResult = universalExtractionService.extractCoupon(
-                image = bitmap,
-                ocrText = ocrText,
-                context = context,
-                ocrBlocks = ocrBlocks
-            )
-
-            val processingTime = System.currentTimeMillis() - startTime
-            analyticsTracker.trackProcessingTime(processingTime, "universal_extraction")
-
-            if (extractionResult.success && extractionResult.confidence > 0.3f) {
-                Log.d(TAG, "Universal extraction successful with confidence: ${extractionResult.confidence}")
-
-                // Use the universally extracted coupon
-                val persistedUri = uriPersistenceManager.persistUri(imageUri)
-                val finalImageUri = resolveImageUri(persistedUri, imageUri)
-                val confidenceBreakdown = buildConfidenceMap(
-                    extractionResult.coupon.extractionConfidenceBreakdown,
-                    extractionResult.extractedFields
-                )
-                val coupon = extractionResult.coupon.copy(
-                    imageUri = finalImageUri,
-                    extractionConfidenceBreakdown = confidenceBreakdown
-                )
-                val debugSnapshot = ExtractionDebugScorer.fromUniversalResult(
-                    extractionResult,
-                    ocrText.isBlank()
-                )
-                val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
-
-                // Record successful extraction
-                val fieldsExtracted = mutableSetOf<String>()
-                if (coupon.storeName != Coupon.Defaults.UNKNOWN_STORE) fieldsExtracted.add("storeName")
-                if (!coupon.redeemCode.isNullOrBlank()) fieldsExtracted.add("redeemCode")
-                if (coupon.getCashbackNumericValue() > 0) fieldsExtracted.add("cashback")
-                if (coupon.expiryDate != null) fieldsExtracted.add("expiryDate")
-                
-                performanceMonitor.recordExtractionAttempt(
-                    method = ExtractionMethod.UNIVERSAL_EXTRACTION,
-                    success = true,
-                    confidence = extractionResult.confidence,
-                    processingTimeMs = processingTime,
-                    fieldsExtracted = fieldsExtracted
-                )
-                
-                // Store extraction result for potential feedback learning
-                lastExtractionResult = extractionResult.copy(coupon = coupon) to ocrText
-
-                pendingPreview = PendingPreview(
-                    coupon = coupon,
-                    normalizedDescription = normalizedDescription,
-                    llmStatus = LlmProgress.SUCCESS,
-                    debugSnapshot = debugSnapshot
-                )
-
-                _uiState.value = ScannerUiState.Success(coupon, LlmProgress.SUCCESS)
-
-                analyticsTracker.trackEvent(
-                    AnalyticsTracker.EVENT_COUPON_DETECTED,
-                    mapOf(
-                        "source" to "universal",
-                        "confidence" to String.format(Locale.US, "%.2f", extractionResult.confidence),
-                        "llm_status" to LlmProgress.SUCCESS.name,
-                        "fields" to extractionResult.extractedFields.size
-                    )
-                )
-                analyticsTracker.trackEvent(
-                    AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
-                    mapOf(
-                        "persisted" to false,
-                        "result" to "pending_review",
-                        "llm_status" to LlmProgress.SUCCESS.name
-                    )
-                )
-
-            } else {
-                Log.d(TAG, "Universal extraction failed or low confidence: ${extractionResult.confidence}")
-                
-                // Record failed attempt
-                performanceMonitor.recordExtractionAttempt(
-                    method = ExtractionMethod.UNIVERSAL_EXTRACTION,
-                    success = false,
-                    confidence = extractionResult.confidence,
-                    processingTimeMs = processingTime,
-                    fieldsExtracted = emptySet()
-                )
-                
-                fallbackToTraditionalOCR(imageUri)
-            }
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Universal extraction error", e)
-            
-            // Record failed attempt
-            val processingTime = System.currentTimeMillis() - startTime
-            performanceMonitor.recordExtractionAttempt(
-                method = ExtractionMethod.UNIVERSAL_EXTRACTION,
-                success = false,
-                confidence = 0f,
-                processingTimeMs = processingTime,
-                fieldsExtracted = emptySet()
-            )
-            
-            fallbackToTraditionalOCR(imageUri)
-        }
-    }
-
-    /**
-     * Fallback to traditional OCR when no coupons are detected
-     */
-    private suspend fun fallbackToTraditionalOCR(imageUri: Uri) {
-        try {
-            Log.d(TAG, "Using traditional OCR fallback")
-            
-            // First persist the URI
-            val persistedUri = uriPersistenceManager.persistUri(imageUri)
-            val finalUri = persistedUri ?: imageUri
-            
-            when (val result = multiEngineOCR.processImage(imageUri)) {
-                is MultiEngineOCR.OCRResult.Success -> {
-                    val extractedInfo = result.extractedInfo
-                    Log.d(TAG, "Traditional OCR extracted: $extractedInfo")
-
-                    if (extractedInfo.isEmpty()) {
-                        _uiState.value = ScannerUiState.Error("Could not extract any coupon information from the image")
-                        analyticsTracker.trackEvent(
-                            AnalyticsTracker.EVENT_CAPTURE_FAILED,
-                            mapOf(
-                                "reason" to "ocr_no_fields",
-                                "stage" to "traditional_uri"
-                            )
-                        )
-                    } else {
-                        val coupon = createCouponFromExtractedInfo(
-                            extractedInfo = extractedInfo,
-                            imageUri = finalUri.toString(),
-                            rawOcrText = result.text,
-                            captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, finalUri)
-                        )
-                        val debugSnapshot = ExtractionDebugScorer.fromTraditionalOcr(extractedInfo)
-                        val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
-                        pendingPreview = PendingPreview(
-                            coupon = coupon,
-                            normalizedDescription = normalizedDescription,
-                            llmStatus = LlmProgress.FALLBACK,
-                            debugSnapshot = debugSnapshot
-                        )
-                        _uiState.value = ScannerUiState.Success(coupon, LlmProgress.FALLBACK)
-
-                        analyticsTracker.trackEvent(
-                            AnalyticsTracker.EVENT_COUPON_DETECTED,
-                            mapOf(
-                                "source" to "traditional_ocr",
-                                "fields" to extractedInfo.size,
-                                "llm_status" to LlmProgress.FALLBACK.name
-                            )
-                        )
-                        analyticsTracker.trackEvent(
-                            AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
-                            mapOf(
-                                "persisted" to false,
-                                "result" to "pending_review",
-                                "llm_status" to LlmProgress.FALLBACK.name
-                            )
-                        )
-                    }
-                }
-                is MultiEngineOCR.OCRResult.Error -> {
-                    _uiState.value = ScannerUiState.Error(result.message)
-                    analyticsTracker.trackEvent(
-                        AnalyticsTracker.EVENT_CAPTURE_FAILED,
-                        mapOf(
-                            "reason" to "ocr_error",
-                            "stage" to "traditional_uri"
-                        )
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in traditional OCR fallback", e)
-            _uiState.value = ScannerUiState.Error("Error processing image: ${e.message}")
-            analyticsTracker.trackEvent(
-                AnalyticsTracker.EVENT_CAPTURE_FAILED,
-                mapOf(
-                    "reason" to (e.message ?: "ocr_exception"),
-                    "stage" to "traditional_uri"
-                )
-            )
-        }
-    }
-
-    /**
-     * Fallback to traditional OCR for bitmap when no coupons are detected
-     */
-    private suspend fun fallbackToTraditionalOCRBitmap(bitmap: Bitmap, imageUri: Uri?) {
-        try {
-            Log.d(TAG, "Using traditional OCR fallback for bitmap")
-            
-            when (val result = multiEngineOCR.processImage(bitmap)) {
-                is MultiEngineOCR.OCRResult.Success -> {
-                    val extractedInfo = result.extractedInfo
-                    Log.d(TAG, "Traditional OCR extracted from bitmap: $extractedInfo")
-
-                    if (extractedInfo.isEmpty()) {
-                        _uiState.value = ScannerUiState.Error("Could not extract any coupon information from the image")
-                        analyticsTracker.trackEvent(
-                            AnalyticsTracker.EVENT_CAPTURE_FAILED,
-                            mapOf(
-                                "reason" to "ocr_no_fields",
-                                "stage" to "traditional_bitmap"
-                            )
-                        )
-                    } else {
-                        val coupon = createCouponFromExtractedInfo(
-                            extractedInfo = extractedInfo,
-                            imageUri = imageUri?.toString(),
-                            rawOcrText = result.text,
-                            captureTimestamp = imageUri?.let { ImageMetadataExtractor.extractCaptureTimestamp(context, it) }
-                        )
-                        val debugSnapshot = ExtractionDebugScorer.fromTraditionalOcr(extractedInfo)
-                        val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
-                        pendingPreview = PendingPreview(
-                            coupon = coupon,
-                            normalizedDescription = normalizedDescription,
-                            llmStatus = LlmProgress.FALLBACK,
-                            debugSnapshot = debugSnapshot
-                        )
-                        _uiState.value = ScannerUiState.Success(coupon, LlmProgress.FALLBACK)
-
-                        analyticsTracker.trackEvent(
-                            AnalyticsTracker.EVENT_COUPON_DETECTED,
-                            mapOf(
-                                "source" to "traditional_ocr",
-                                "fields" to extractedInfo.size,
-                                "llm_status" to LlmProgress.FALLBACK.name
-                            )
-                        )
-                        analyticsTracker.trackEvent(
-                            AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
-                            mapOf(
-                                "persisted" to false,
-                                "result" to "pending_review",
-                                "llm_status" to LlmProgress.FALLBACK.name
-                            )
-                        )
-                    }
-                }
-                is MultiEngineOCR.OCRResult.Error -> {
-                    _uiState.value = ScannerUiState.Error(result.message)
-                    analyticsTracker.trackEvent(
-                        AnalyticsTracker.EVENT_CAPTURE_FAILED,
-                        mapOf(
-                            "reason" to "ocr_error",
-                            "stage" to "traditional_bitmap"
-                        )
-                    )
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in traditional OCR fallback for bitmap", e)
-            _uiState.value = ScannerUiState.Error("Error processing image: ${e.message}")
-            analyticsTracker.trackEvent(
-                AnalyticsTracker.EVENT_CAPTURE_FAILED,
-                mapOf(
-                    "reason" to (e.message ?: "ocr_exception"),
-                    "stage" to "traditional_bitmap"
-                )
-            )
-        }
-    }
-
-    /**
      * Load bitmap from URI
      */
     private suspend fun loadBitmapFromUri(uri: Uri): Bitmap? {
@@ -1772,104 +1371,6 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Legacy method - Create a Coupon object from the extracted information
-     */
-    private fun createCouponFromExtractedInfo(
-        extractedInfo: Map<String, String>,
-        imageUri: String? = null,
-        rawOcrText: String? = null,
-        captureTimestamp: Date? = null
-    ): Coupon {
-        // Parse expiry date string to Date if available
-        val expiryDate = DateParser.parseDate(extractedInfo["expiryDate"], captureTimestamp)
-            ?: rawOcrText?.let { DateParser.parseDate(it, captureTimestamp) }
-            ?: parseExpiryDate(extractedInfo["expiryDate"])
-
-        val cashbackDetail = extractedInfo["amount"]?.let { raw ->
-            DescriptionUtils.formatCashbackDetail(raw) ?: raw
-        }
-
-        val baseDescription = extractedInfo["description"] ?: "No description"
-        val mergedDescription = DescriptionUtils.appendDetails(baseDescription, cashbackDetail)
-
-        val baseCoupon = Coupon(
-            storeName = extractedInfo["storeName"] ?: Coupon.Defaults.UNKNOWN_STORE,
-            description = mergedDescription,
-            expiryDate = expiryDate,
-            redeemCode = extractedInfo["code"],
-            imageUri = imageUri,
-            category = determineCategory(extractedInfo),
-            status = Coupon.Status.ACTIVE,
-            rawOcrText = rawOcrText,
-            extractionSource = Coupon.ExtractionSource.OCR_FAST
-        )
-        return validateFallbackCoupon(
-            coupon = baseCoupon,
-            rawOcrText = rawOcrText,
-            expiryDateText = extractedInfo["expiryDate"]
-        )
-    }
-
-    private fun validateFallbackCoupon(
-        coupon: Coupon,
-        rawOcrText: String?,
-        expiryDateText: String?
-    ): Coupon {
-        val validation = CouponFieldBundleValidator().validate(
-            bundle = FieldValueBundle(
-                storeName = coupon.storeName,
-                description = coupon.description,
-                redeemCode = coupon.redeemCode,
-                expiryDateText = expiryDateText
-            ),
-            fields = buildFallbackFieldCandidates(coupon, expiryDateText),
-            rawOcrText = rawOcrText,
-            ocrBlocks = emptyList(),
-            imageHeight = 0
-        )
-        val runPath = JSONObject()
-            .put("stage", "traditional_ocr_fallback")
-            .put("validator", "CouponFieldBundleValidator")
-            .put("trusted", validation.trusted)
-            .put("needsAttention", validation.needsAttention)
-            .put("issues", JSONArray(validation.issues.map { "${it.field.name}:${it.message}" }))
-            .toString()
-        return coupon.copy(
-            extractionRunPath = runPath,
-            needsAttention = coupon.needsAttention || validation.needsAttention,
-            cleanupStatus = if (validation.needsAttention) Coupon.CleanupStatus.FAILED else coupon.cleanupStatus,
-            cleanupError = validation.reason,
-            extractionSource = if (validation.trusted) coupon.extractionSource else null
-        )
-    }
-
-    private fun buildFallbackFieldCandidates(
-        coupon: Coupon,
-        expiryDateText: String?
-    ): Map<FieldType, FieldCandidate> {
-        return buildMap {
-            put(
-                FieldType.STORE_NAME,
-                FieldCandidate(coupon.storeName, 0.5f, "traditional_ocr", null)
-            )
-            put(
-                FieldType.DESCRIPTION,
-                FieldCandidate(coupon.description, 0.5f, "traditional_ocr", null)
-            )
-            coupon.redeemCode?.takeIf { it.isNotBlank() }?.let { code ->
-                put(FieldType.COUPON_CODE, FieldCandidate(code, 0.5f, "traditional_ocr", null))
-            }
-            val expiryCandidate = expiryDateText?.takeIf { it.isNotBlank() } ?: coupon.expiryDate?.toString()
-            expiryCandidate?.let { expiry ->
-                put(FieldType.EXPIRY_DATE, FieldCandidate(expiry, 0.5f, "traditional_ocr", null))
-            }
-        }
-    }
-
-    /**
-     * Parse expiry date string to Date
-     */
     /**
      * Confirm that the extraction was correct (positive feedback)
      */
@@ -2061,53 +1562,6 @@ class ScannerViewModel @Inject constructor(
         }
     }
 
-    private fun buildUniversalExtractionContext(
-        ocrText: String,
-        extractedInfo: Map<String, String>?,
-        captureTimestamp: Date?
-    ): ExtractionContext {
-        val fallbackBrand = ocrText.lineSequence()
-            .map { it.trim() }
-            .firstOrNull { line ->
-                line.isNotBlank() &&
-                    line.length in 3..48 &&
-                    line.any { it.isLetter() } &&
-                    !fieldHeuristics.isGenericOrMissing(line)
-            }
-
-        val brandHint = sequenceOf(
-            extractedInfo?.get("storeName"),
-            extractedInfo?.get("brand"),
-            extractedInfo?.get("app"),
-            extractedInfo?.get("merchant"),
-            fallbackBrand,
-            lastExtractionResult?.first?.coupon?.storeName
-        )
-            .mapNotNull { candidate ->
-                candidate?.takeIf { it.isNotBlank() && !fieldHeuristics.isGenericOrMissing(it) }
-            }
-            .firstOrNull()
-
-        val categoryHint = extractedInfo
-            ?.get("category")
-            ?.takeIf { it.isNotBlank() }
-
-        val previousSuccesses = lastExtractionResult
-            ?.first
-            ?.coupon
-            ?.storeName
-            ?.takeIf { it.isNotBlank() && !fieldHeuristics.isGenericOrMissing(it) }
-            ?.let { listOf(it) }
-            ?: emptyList()
-
-        return ExtractionContext(
-            brandHint = brandHint,
-            categoryHint = categoryHint,
-            previousSuccesses = previousSuccesses,
-            captureTimestamp = captureTimestamp
-        )
-    }
-
     private fun buildFeedbackContext(): ExtractionContext {
         val priorStore = lastExtractionResult
             ?.first
@@ -2123,23 +1577,6 @@ class ScannerViewModel @Inject constructor(
 
     private fun resolveImageUri(persisted: Uri?, original: Uri): String {
         return (persisted ?: original).toString()
-    }
-
-    private fun buildConfidenceMap(
-        existing: Map<String, Float>,
-        extractedFields: Map<FieldType, ExtractionCandidate>
-    ): Map<String, Float> {
-        if (existing.isNotEmpty()) return existing
-        if (extractedFields.isEmpty()) return emptyMap()
-        return extractedFields.entries.associate { (fieldType, candidate) ->
-            fieldType.name.lowercase(Locale.ROOT) to candidate.confidence
-        }
-    }
-
-    private fun Coupon.ensureConfidenceBreakdown(breakdown: Map<String, Float>): Coupon {
-        if (breakdown.isEmpty()) return this
-        if (extractionConfidenceBreakdown.isNotEmpty()) return this
-        return copy(extractionConfidenceBreakdown = breakdown)
     }
 
     private fun finalizeCoupon(

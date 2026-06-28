@@ -130,6 +130,9 @@ class CouponFieldExtractor {
             val matcher = pattern.matcher(text)
             if (matcher.find() && matcher.groupCount() >= 1) {
                 val match = matcher.group(1) ?: continue
+                if (!isPlausibleMerchant(match)) {
+                    continue
+                }
                 val confidence = when (index) {
                     0 -> ConfidenceLevel.MEDIUM // First pattern (capitalized word at start)
                     1 -> ConfidenceLevel.HIGH   // Explicit "from [merchant]" format
@@ -142,11 +145,24 @@ class CouponFieldExtractor {
         // If all else fails, try to use the first line of text if it's reasonably short
         val firstLine = text.lines().firstOrNull()?.trim() ?: ""
         if (firstLine.length in 2..25 && !firstLine.contains("code", ignoreCase = true) && 
-            !firstLine.contains("coupon", ignoreCase = true)) {
+            !firstLine.contains("coupon", ignoreCase = true) &&
+            isPlausibleMerchant(firstLine)) {
             return ExtractedField(capitalizeWords(firstLine), ConfidenceLevel.LOW)
         }
         
         return null
+    }
+
+    private fun isPlausibleMerchant(value: String): Boolean {
+        val normalized = value.trim().lowercase()
+        if (normalized.isBlank()) return false
+        val genericOfferWords = setOf(
+            "flat", "get", "save", "offer", "coupon", "discount", "cashback",
+            "deal", "deals", "free", "valid", "expires", "redeem", "apply",
+            "use", "claim", "shop", "buy", "order"
+        )
+        val tokens = normalized.split(Regex("\\s+")).filter { it.isNotBlank() }
+        return tokens.isNotEmpty() && tokens.none { it.trim(':', '-', '*') in genericOfferWords }
     }
     
     /**
@@ -358,13 +374,8 @@ class CouponFieldExtractor {
             }
         }
         
-        // Set default merchant name if missing
-        if (!results.containsKey("merchantName")) {
-            results["merchantName"] = ExtractedField(
-                com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE,
-                ConfidenceLevel.SYNTHETIC
-            )
-        }
+        // Do not synthesize UNKNOWN_STORE as an extracted merchant. Downstream models
+        // can still display the fallback, but it must remain missing/low-confidence.
     }
     
     /**

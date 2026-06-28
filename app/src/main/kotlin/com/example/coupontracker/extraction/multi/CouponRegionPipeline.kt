@@ -6,8 +6,6 @@ import android.util.Log
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.TextBlock
-import com.example.coupontracker.extraction.model.CouponExtractionModel
-import com.example.coupontracker.extraction.model.ModelMode
 import com.example.coupontracker.extraction.model.ModelRole
 import com.example.coupontracker.extraction.model.ModelSelector
 import com.example.coupontracker.extraction.validation.CouponFieldBundleValidator
@@ -59,29 +57,8 @@ class CouponRegionPipeline @Inject constructor(
                     confidence = span.confidence
                 )
             }
-        val json = runVlmFirst(crop, ocrText)
-            ?: runTextFallback(ocrText)
+        val json = runTextFallback(ocrText)
         return validateCanonicalJson(json, ocrText, ocrBlocks, crop.height)
-    }
-
-    private suspend fun runVlmFirst(crop: Bitmap, ocrText: String): JSONObject? {
-        for (mode in VLM_PRIORITY) {
-            val adapter = modelSelector.selectMode(mode) ?: continue
-            val canonical = runCatching {
-                val result = adapter.extractFromImage(
-                    image = crop,
-                    ocrText = ocrText,
-                    prompt = VLM_PROMPT
-                )
-                JSONObject(result.canonicalJson)
-            }.onFailure { error ->
-                Log.w(TAG, "VLM mode $mode failed for crop; falling back if possible: ${error.message}")
-            }.getOrNull()
-            if (canonical != null) {
-                return canonical
-            }
-        }
-        return null
     }
 
     private suspend fun runTextFallback(ocrText: String): JSONObject {
@@ -149,14 +126,6 @@ class CouponRegionPipeline @Inject constructor(
 
     companion object {
         private const val TAG = "CouponRegionPipeline"
-        private val VLM_PRIORITY = listOf(
-            ModelMode.VLM_GEMMA,
-            ModelMode.VLM_QWEN,
-            ModelMode.VLM_MINICPM
-        )
-        private const val VLM_PROMPT =
-            "Read this single cropped coupon region and return canonical coupon JSON. " +
-                "Use only fields visible inside this crop. Do not infer from outside context."
         private const val TEXT_FALLBACK_PROMPT =
             "Extract the coupon fields as canonical JSON using the provided OCR text."
     }

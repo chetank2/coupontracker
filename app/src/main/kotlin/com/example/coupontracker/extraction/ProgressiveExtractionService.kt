@@ -507,9 +507,12 @@ class ProgressiveExtractionService @Inject constructor(
         // Store Name
         val storeName = resolveStoreName(context, extractedFields)
         
-        // Description: ALWAYS use OCR text as fallback (never "Error processing coupon")
+        // Description: keep generic placeholders out of trusted-looking saved text.
         val descriptionCandidate = extractedFields[FieldType.DESCRIPTION]?.value
-            ?: context.ocrText.take(200).trim().ifBlank { "Coupon offer" }
+            ?.takeIf { GenericFieldHeuristics.isMeaningfulDescription(it) }
+            ?: context.ocrText.take(200).trim()
+                .takeIf { GenericFieldHeuristics.isMeaningfulDescription(it) }
+            ?: "Needs review: description not visible"
         val description = buildSupplementalDescription(extractedFields, descriptionCandidate)
         
         // Redeem Code
@@ -521,7 +524,14 @@ class ProgressiveExtractionService @Inject constructor(
             ?.value
             ?.let { resolveExpiryDate(it, context.captureTimestamp, context.ocrText) }
         
-        val confidenceBreakdown = buildConfidenceBreakdown(filterPrimaryFields(extractedFields))
+        val confidenceBreakdown = buildConfidenceBreakdown(filterPrimaryFields(extractedFields)).toMutableMap()
+        val syntheticStoreName = storeName == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
+        if (syntheticStoreName) {
+            confidenceBreakdown[FieldType.STORE_NAME.name.lowercase(Locale.ROOT)] = 0f
+        }
+        if (!GenericFieldHeuristics.isMeaningfulDescription(description)) {
+            confidenceBreakdown[FieldType.DESCRIPTION.name.lowercase(Locale.ROOT)] = 0f
+        }
 
         return Coupon(
             storeName = storeName,
@@ -530,7 +540,10 @@ class ProgressiveExtractionService @Inject constructor(
             redeemCode = redeemCode,
             imageUri = imageUri,
             status = "ACTIVE",
-            extractionConfidenceBreakdown = confidenceBreakdown
+            extractionConfidenceBreakdown = confidenceBreakdown,
+            needsAttention = syntheticStoreName || !GenericFieldHeuristics.isMeaningfulDescription(description),
+            storeNameSource = if (syntheticStoreName) "missing" else extractedFields[FieldType.STORE_NAME]?.source,
+            storeNameEvidence = extractedFields[FieldType.STORE_NAME]?.value?.takeIf { !syntheticStoreName }?.let(::listOf).orEmpty()
         )
     }
 
@@ -604,7 +617,7 @@ class ProgressiveExtractionService @Inject constructor(
         }
 
         if (segments.isEmpty()) {
-            return "Coupon offer"
+            return "Needs review: description not visible"
         }
 
         return segments.joinToString(separator = "\n")

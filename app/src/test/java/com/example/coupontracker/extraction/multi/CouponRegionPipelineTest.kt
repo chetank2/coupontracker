@@ -11,6 +11,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -40,17 +41,12 @@ class CouponRegionPipelineTest {
 
     private fun mockSelectorWithVlm(
         vlmJson: String,
-        textJson: String = canonical,
-        vlmFails: Boolean = false
+        textJson: String = canonical
     ): Pair<ModelSelector, Pair<CouponExtractionModel, CouponExtractionModel>> {
         val vlm = mockk<CouponExtractionModel>()
         val text = mockk<CouponExtractionModel>()
-        if (vlmFails) {
-            coEvery { vlm.extractFromImage(any(), any(), any()) } throws IllegalStateException("vlm failed")
-        } else {
-            coEvery { vlm.extractFromImage(any(), any(), any()) } returns
-                ModelExtractionResult(vlmJson, 7L, false)
-        }
+        coEvery { vlm.extractFromImage(any(), any(), any()) } returns
+            ModelExtractionResult(vlmJson, 7L, false)
         coEvery { text.extractFromText(any(), any(), any()) } returns
             ModelExtractionResult(textJson, 5L, false)
         val selector = mockk<ModelSelector>()
@@ -113,7 +109,7 @@ class CouponRegionPipelineTest {
     }
 
     @Test
-    fun `crop extraction uses VLM before text fallback when available`() = runBlocking {
+    fun `crop extraction ignores available VLM and uses OCR text fallback`() = runBlocking {
         val ocr = mockk<OcrEngine>()
         coEvery { ocr.recognize(any()) } returns "PUMA\nFlat 20% off\nUse code PUMA20"
         coEvery { ocr.recognizeWithBoxes(any()) } returns emptyList()
@@ -124,32 +120,35 @@ class CouponRegionPipelineTest {
 
         val result = pipeline.extractWhole(stubBitmap())
 
-        assertEquals("PUMA", result[0].getString("storeName"))
-        coVerify(exactly = 1) { adapters.first.extractFromImage(any(), any(), any()) }
-        coVerify(exactly = 0) { adapters.second.extractFromText(any(), any(), any()) }
+        assertEquals("AJIO", result[0].getString("storeName"))
+        verify(exactly = 0) { selector.selectMode(any()) }
+        coVerify(exactly = 0) { adapters.first.extractFromImage(any(), any(), any()) }
+        coVerify(exactly = 1) { adapters.second.extractFromText(any(), any(), any()) }
     }
 
     @Test
-    fun `crop extraction falls back to text model when VLM fails`() = runBlocking {
+    fun `VLM cannot inject unsupported final fields`() = runBlocking {
         val ocr = mockk<OcrEngine>()
         coEvery { ocr.recognize(any()) } returns "AJIO\nFlat 50% off\nUse code SAVE50"
         coEvery { ocr.recognizeWithBoxes(any()) } returns emptyList()
         val (selector, adapters) = mockSelectorWithVlm(
-            vlmJson = canonical,
-            textJson = canonical,
-            vlmFails = true
+            vlmJson = """{"storeName":"Unsupported Store","description":"Invented 99% off","redeemCode":"FAKE999","expiryDate":"2099-01-01","needsAttention":false}""",
+            textJson = canonical
         )
         val pipeline = CouponRegionPipeline(ocr, selector)
 
         val result = pipeline.extractWhole(stubBitmap())
 
         assertEquals("AJIO", result[0].getString("storeName"))
-        coVerify(exactly = 1) { adapters.first.extractFromImage(any(), any(), any()) }
+        assertEquals("SAVE50", result[0].getString("redeemCode"))
+        assertEquals("2026-06-01", result[0].getString("expiryDate"))
+        verify(exactly = 0) { selector.selectMode(any()) }
+        coVerify(exactly = 0) { adapters.first.extractFromImage(any(), any(), any()) }
         coVerify(exactly = 1) { adapters.second.extractFromText(any(), any(), any()) }
     }
 
     @Test
-    fun `crop extraction tries next model when VLM returns invalid json`() = runBlocking {
+    fun `crop extraction does not try next VLM when first VLM returns invalid json`() = runBlocking {
         val ocr = mockk<OcrEngine>()
         coEvery { ocr.recognize(any()) } returns "AJIO\nFlat 50% off\nUse code SAVE50"
         coEvery { ocr.recognizeWithBoxes(any()) } returns emptyList()
@@ -172,8 +171,9 @@ class CouponRegionPipelineTest {
         val result = pipeline.extractWhole(stubBitmap())
 
         assertEquals("AJIO", result[0].getString("storeName"))
-        coVerify(exactly = 1) { gemma.extractFromImage(any(), any(), any()) }
-        coVerify(exactly = 1) { qwen.extractFromImage(any(), any(), any()) }
-        coVerify(exactly = 0) { text.extractFromText(any(), any(), any()) }
+        verify(exactly = 0) { selector.selectMode(any()) }
+        coVerify(exactly = 0) { gemma.extractFromImage(any(), any(), any()) }
+        coVerify(exactly = 0) { qwen.extractFromImage(any(), any(), any()) }
+        coVerify(exactly = 1) { text.extractFromText(any(), any(), any()) }
     }
 }

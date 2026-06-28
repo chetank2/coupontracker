@@ -32,6 +32,9 @@ import javax.inject.Inject
 /**
  * ViewModel for batch scanning of multiple coupons
  */
+private const val CROP_ISOLATION_FAILED_ERROR =
+    "Crop isolation failed; full-image OCR was not saved as a clean coupon."
+
 @HiltViewModel
 class BatchScannerViewModel @Inject constructor(
     application: Application,
@@ -602,47 +605,55 @@ class BatchScannerViewModel @Inject constructor(
             val ocrResult = multiEngineOCR.processImage(bitmap)
             
             if (ocrResult !is com.example.coupontracker.util.MultiEngineOCR.OCRResult.Success) {
-                Log.w(TAG, "OCR failed, falling back to single coupon extraction")
-                return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+                Log.w(TAG, "OCR failed before region isolation; returning review coupon")
+                return@withContext listOf(createCropIsolationFailedCoupon(uri, "ocr_failed_before_region_detection"))
             }
             
             // Step 2: Detect coupon regions using hybrid detector
             val couponRegions = hybridDetector.detectCoupons(bitmap, ocrResult)
             
             Log.d(TAG, "Hybrid detector found ${couponRegions.size} coupon region(s)")
-            
-            // Step 3: If only one region or full-image fallback, use standard extraction
-            if (couponRegions.size == 1 && couponRegions[0].source == com.example.coupontracker.ml.HybridCouponDetector.DetectionSource.FALLBACK) {
-                Log.d(TAG, "Single coupon detected, using standard extraction")
-                return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+
+            // Step 3: Only trust real isolated regions. Full-image/fallback
+            // regions are review-safe placeholders, not clean coupon crops.
+            val isolatedRegions = couponRegions.filterNot { isFallbackOrFullImageRegion(bitmap, it) }
+            if (isolatedRegions.isEmpty()) {
+                Log.w(TAG, "Region isolation failed; returning review coupon")
+                return@withContext listOf(createCropIsolationFailedCoupon(uri, "no_isolated_coupon_regions"))
+            }
+
+            if (isolatedRegions.size < couponRegions.size) {
+                Log.w(
+                    TAG,
+                    "Ignoring ${couponRegions.size - isolatedRegions.size} fallback/full-image region(s)"
+                )
             }
             
             // Step 4: Extract each detected coupon region
             val extractedCoupons: List<Coupon> = if (batchPipelineFlag.isEnabled()) {
-                val viaPipeline = extractViaCouponRegionPipeline(bitmap, couponRegions, uri)
+                val viaPipeline = extractViaCouponRegionPipeline(bitmap, isolatedRegions, uri)
                 if (viaPipeline.isNotEmpty()) {
                     Log.d(TAG, "Pipeline extraction yielded ${viaPipeline.size} coupon(s)")
                     viaPipeline
                 } else {
                     Log.w(TAG, "Pipeline yielded zero coupons; falling back to per-region loop")
-                    extractCouponsViaPerRegionLoop(bitmap, couponRegions, uri)
+                    extractCouponsViaPerRegionLoop(bitmap, isolatedRegions, uri)
                 }
             } else {
-                extractCouponsViaPerRegionLoop(bitmap, couponRegions, uri)
+                extractCouponsViaPerRegionLoop(bitmap, isolatedRegions, uri)
             }
             
-            // If no coupons extracted from regions, fallback to single coupon
+            // If no coupons extracted from real regions, do not save full-image OCR.
             if (extractedCoupons.isEmpty()) {
-                Log.w(TAG, "No coupons extracted from regions, falling back to single coupon extraction")
-                return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+                Log.w(TAG, "No coupons extracted from isolated regions; returning review coupon")
+                return@withContext listOf(createCropIsolationFailedCoupon(uri, "isolated_region_extraction_failed"))
             }
             
             return@withContext extractedCoupons
             
         } catch (e: Exception) {
             Log.e(TAG, "Error in multi-coupon detection", e)
-            // Fallback to single coupon extraction
-            return@withContext listOf(extractSingleCoupon(uri, bitmap, strategy))
+            return@withContext listOf(createCropIsolationFailedCoupon(uri, "region_detection_exception"))
         }
     }
     
@@ -859,3 +870,51 @@ data class ImageProcessingStatus(
     val message: String?,
     val couponsFound: Int = 0
 )
+
+internal fun isFallbackOrFullImageRegion(
+    bitmap: android.graphics.Bitmap,
+    region: com.example.coupontracker.ml.HybridCouponDetector.CouponRegion
+): Boolean {
+    if (region.source == com.example.coupontracker.ml.HybridCouponDetector.DetectionSource.FALLBACK) {
+        return true
+    }
+
+    val imageArea = bitmap.width.toLong() * bitmap.height.toLong()
+    if (imageArea <= 0L) return true
+
+    val left = region.boundingBox.left.coerceIn(0, bitmap.width)
+    val top = region.boundingBox.top.coerceIn(0, bitmap.height)
+    val right = region.boundingBox.right.coerceIn(left, bitmap.width)
+    val bottom = region.boundingBox.bottom.coerceIn(top, bitmap.height)
+    val regionArea = (right - left).toLong() * (bottom - top).toLong()
+    val coversMostWidth = (right - left) >= bitmap.width * 95 / 100
+    val coversMostHeight = (bottom - top) >= bitmap.height * 95 / 100
+    return regionArea >= (imageArea * 95L / 100L) || (coversMostWidth && coversMostHeight)
+}
+
+internal fun createCropIsolationFailedCoupon(
+    uri: Uri,
+    reason: String
+): Coupon {
+    return Coupon(
+        storeName = Coupon.Defaults.UNKNOWN_STORE,
+        description = "Needs review: crop isolation failed",
+        redeemCode = null,
+        imageUri = uri.toString(),
+        status = Coupon.Status.ACTIVE,
+        needsAttention = true,
+        storeNameSource = "batch_crop_isolation",
+        storeNameEvidence = emptyList(),
+        extractionQualityScore = 0,
+        extractionConfidenceBreakdown = mapOf("layout" to 0f),
+        extractionStage = "BATCH_CROP_ISOLATION_FAILED",
+        extractionRunPath = "batch_region_detection -> review",
+        extractionTimestamp = java.util.Date(),
+        cleanupStatus = Coupon.CleanupStatus.FAILED,
+        cleanupError = "$CROP_ISOLATION_FAILED_ERROR reason=$reason",
+        extractionSource = "BATCH_CROP_ISOLATION_FAILED",
+        codeState = Coupon.CodeState.UNKNOWN,
+        expiryState = Coupon.ExpiryState.UNKNOWN,
+        layoutState = Coupon.LayoutState.LOW_CONFIDENCE
+    )
+}
