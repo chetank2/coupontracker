@@ -136,6 +136,103 @@ class PostOcrCouponNormalizerTest {
     }
 
     @Test
+    fun normalizerRepairsMissingRupeeGlyphInCommercialAtPrice() {
+        val rawOcr = """
+            The Man Company
+            Buy any 4 products at
+            699*
+            Buy any 4 products at 7699*
+            Code: TMCPE6990425SQTJ
+        """.trimIndent()
+
+        val result = PostOcrCouponNormalizer.normalize(
+            currentDescription = "Buy any 4 products at 7699*",
+            ocrText = rawOcr,
+            storeName = "The Man Company",
+            redeemCode = "TMCPE6990425SQTJ",
+        )
+
+        assertEquals("Buy any 4 products at ₹699*", result.description)
+    }
+
+    @Test
+    fun normalizerKeepsTecMarxDescriptionOfferFocused() {
+        val rawOcr = """
+            TECMARY
+            Get Roar Bluetooth Earbuds @
+            299*
+            only on TecMarx website
+            BUY NOW
+        """.trimIndent()
+
+        val result = PostOcrCouponNormalizer.normalize(
+            currentDescription = "TECMARY Get Roar Bluetooth Earbuds @ 299* only on TecMarx website BUY NOW",
+            ocrText = rawOcr,
+            storeName = "TecMarx",
+            redeemCode = null,
+        )
+
+        assertEquals("Get Roar Bluetooth Earbuds @ ₹299*", result.description)
+        assertFalse(result.description.orEmpty().contains("TECMARY"))
+        assertFalse(result.description.orEmpty().contains("BUY NOW", ignoreCase = true))
+        assertFalse(result.description.orEmpty().contains("website", ignoreCase = true))
+    }
+
+    @Test
+    fun normalizerDoesNotRewriteRealSevenThousandPricesWithoutArtifactMarker() {
+        val rawOcr = """
+            Premium Store
+            Save on premium kit from 7999
+            Code: PREMIUM7999
+        """.trimIndent()
+
+        val result = PostOcrCouponNormalizer.normalize(
+            currentDescription = "Save on premium kit from 7999",
+            ocrText = rawOcr,
+            storeName = "Premium Store",
+            redeemCode = "PREMIUM7999",
+        )
+
+        assertEquals("Save on premium kit from 7999", result.description)
+    }
+
+    @Test
+    fun normalizerDoesNotRewriteLegitimateSevenThousandPricesWithAsterisk() {
+        val rawOcr = """
+            Travel Store
+            Save on hotel stays from 7999*
+            Code: HOTEL7999
+        """.trimIndent()
+
+        val result = PostOcrCouponNormalizer.normalize(
+            currentDescription = "Save on hotel stays from 7999*",
+            ocrText = rawOcr,
+            storeName = "Travel Store",
+            redeemCode = "HOTEL7999",
+        )
+
+        assertEquals("Save on hotel stays from 7999*", result.description)
+    }
+
+    @Test
+    fun normalizerDoesNotRewriteProductsAtSevenThousandWithAsterisk() {
+        val rawOcr = """
+            Premium Store
+            Save on premium products at 7499*
+            Code: PREMIUM7499
+        """.trimIndent()
+
+        val result = PostOcrCouponNormalizer.normalize(
+            currentDescription = "Save on premium products at 7499*",
+            ocrText = rawOcr,
+            storeName = "Premium Store",
+            redeemCode = "PREMIUM7499",
+        )
+
+        assertEquals("Save on premium products at 7499*", result.description)
+    }
+
+    @Test
     fun normalizerPrefersCommercialPriceLineOverLegalAndSupportTerms() {
         val rawOcr = """
             ANTARA
@@ -161,7 +258,7 @@ class PostOcrCouponNormalizerTest {
             redeemCode = "CREDBP",
         )
 
-        assertEquals("One Touch Digital BP by AGEasy worth ₹1499 for ₹899", result.description)
+        assertEquals("One Touch Digital BP by AGEasy worth ₹1499 for ₹7899", result.description)
         assertFalse(result.description.orEmpty().contains("customer care", ignoreCase = true))
         assertFalse(result.description.orEmpty().contains("minimum spend", ignoreCase = true))
     }

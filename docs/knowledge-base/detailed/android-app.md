@@ -21,10 +21,18 @@ classes.
 - `app/src/main/kotlin/com/example/coupontracker/ui/navigation`
 - `app/src/main/kotlin/com/example/coupontracker/domain/usecase`
 - `app/src/main/kotlin/com/example/coupontracker/data/local`
+- `app/src/main/kotlin/com/example/coupontracker/data/model`
 - `app/src/main/kotlin/com/example/coupontracker/data/preferences`
 - `app/src/main/kotlin/com/example/coupontracker/data/repository`
 - `app/src/main/kotlin/com/example/coupontracker/worker`
 - `app/src/main/kotlin/com/example/coupontracker/work`
+
+Current Room code is in `data/local` and `data/model`. A future `data/db`
+package is a target only; do not move Room classes there without a dedicated
+migration-safe split.
+
+Current WorkManager code is split between `worker` and `work`; `worker` is the
+target home, but `work/CouponReminderWorker.kt` still exists.
 
 ## Current Docs
 

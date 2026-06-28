@@ -5,7 +5,7 @@ import android.graphics.Bitmap
 import android.os.SystemClock
 import android.util.Log
 import com.example.coupontracker.data.model.Coupon
-import com.example.coupontracker.data.preferences.SecurePreferencesManager
+import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.extraction.deterministic.DescriptionComposer
 import com.example.coupontracker.extraction.deterministic.DeterministicCouponExtractor
 import com.example.coupontracker.extraction.deterministic.SmartCouponSanitizer
@@ -15,8 +15,7 @@ import com.example.coupontracker.extraction.layout.CouponLayoutValidationConfig
 import com.example.coupontracker.extraction.layout.CouponLayoutValidator
 import com.example.coupontracker.extraction.layout.HeuristicCouponLayoutDetector
 import com.example.coupontracker.extraction.layout.LayoutDetectionContext
-import com.example.coupontracker.extraction.layout.VlmCouponLayoutDetector
-import com.example.coupontracker.extraction.model.ModelSelector
+import com.example.coupontracker.extraction.layout.LayoutDetectionSource
 import com.example.coupontracker.extraction.region.CouponRegionizer
 import com.example.coupontracker.extraction.region.CouponRegionizerConfig
 import com.example.coupontracker.ml.HybridCouponDetector
@@ -54,9 +53,7 @@ class MultiCouponExtractionService @Inject constructor(
     private val ocrEngine: OcrEngine,
     private val progressiveExtractionService: ProgressiveExtractionService,
     private val confidenceScorer: ConfidenceScorer,
-    private val extractionValidator: ExtractionValidator,
-    private val modelSelector: ModelSelector,
-    private val securePreferencesManager: SecurePreferencesManager
+    private val extractionValidator: ExtractionValidator
 ) {
     
     private val screenshotClassifier = ScreenshotClassifier()
@@ -76,9 +73,11 @@ class MultiCouponExtractionService @Inject constructor(
         allowPartialCards = false,
         allowSingleFallback = false
     )
+    // Foreground upload must stay non-blocking. Do not add VLM detectors here:
+    // Gemma layout/field labeling runs in VerifyCouponWorker after save/verify,
+    // where failures can become review states without stalling the form.
     private val layoutPipeline = CouponLayoutDetectionPipeline(
         detectors = listOf(
-            VlmCouponLayoutDetector(modelSelector, securePreferencesManager),
             HeuristicCouponLayoutDetector(regionizer)
         ),
         validator = CouponLayoutValidator(layoutValidationConfig),
@@ -109,7 +108,8 @@ class MultiCouponExtractionService @Inject constructor(
             val fullText: String,
             val classification: ScreenshotClassifier.ClassificationResult,
             val couponRegions: List<HybridCouponDetector.CouponRegion>,
-            val regionCandidates: List<CouponRegionizer.RegionCandidate>
+            val regionCandidates: List<CouponRegionizer.RegionCandidate>,
+            val layoutSource: LayoutDetectionSource
         ) : BootstrapOutcome()
 
         data class NeedsFallback(val reason: String) : BootstrapOutcome()
@@ -176,7 +176,7 @@ class MultiCouponExtractionService @Inject constructor(
             }
 
             bootstrap as BootstrapOutcome.Ready
-            val (_, _, classification, couponRegions, regionCandidates) = bootstrap
+            val (_, _, classification, couponRegions, regionCandidates, layoutSource) = bootstrap
 
             // Limit to MAX_COUPONS_PER_SCREENSHOT
             val regionsToProcess = regionCandidates.take(MAX_COUPONS_PER_SCREENSHOT)
@@ -197,6 +197,7 @@ class MultiCouponExtractionService @Inject constructor(
                             bitmap = bitmap,
                             candidate = region,
                             regionIndex = index,
+                            layoutSource = layoutSource,
                             imageUri = imageUri,
                             captureTimestamp = captureTimestamp
                         )
@@ -278,6 +279,7 @@ class MultiCouponExtractionService @Inject constructor(
         bitmap: Bitmap,
         candidate: CouponRegionizer.RegionCandidate,
         regionIndex: Int,
+        layoutSource: LayoutDetectionSource,
         imageUri: String?,
         captureTimestamp: Date?
     ): CouponWithConfidence {
@@ -291,6 +293,12 @@ class MultiCouponExtractionService @Inject constructor(
                 is MultiEngineOCR.OCRResult.Success -> ocr.text
                 else -> ""
             }
+            Log.d(
+                TAG,
+                "CROP_OCR_DONE index=$regionIndex mode=${candidate.mode} " +
+                    "bounds=${candidate.bounds.flattenToString()} textLength=${regionText.length} " +
+                    "source=${if (existingText != null) "detector_region" else "crop_ocr"}"
+            )
 
             val deterministicResult = deterministicExtractor.extract(regionText, candidate.mode, captureTimestamp)
 
@@ -306,7 +314,25 @@ class MultiCouponExtractionService @Inject constructor(
                     ocrText = regionText,
                     captureTimestamp = captureTimestamp
                 )
-            )
+            ).let { coupon ->
+                if (layoutSource == LayoutDetectionSource.HEURISTIC) {
+                    coupon.copy(
+                        needsAttention = true,
+                        cleanupStatus = Coupon.CleanupStatus.PENDING,
+                        cleanupError = "Needs vision verification for layout ownership",
+                        layoutState = Coupon.LayoutState.LOW_CONFIDENCE,
+                        debugVisionEvidence = buildString {
+                            append("layout_source=heuristic")
+                            append("; region_mode=")
+                            append(candidate.mode.name)
+                            append("; bounds=")
+                            append(candidate.bounds.flattenToString())
+                        }
+                    )
+                } else {
+                    coupon
+                }
+            }
 
             val validationResult = extractionValidator.validate(refinedCoupon)
 
@@ -314,7 +340,15 @@ class MultiCouponExtractionService @Inject constructor(
                 coupon = refinedCoupon,
                 confidence = maxOf(sanitized.confidence, validationResult.validationResult.overallConfidence),
                 extractionQuality = validationResult.extractionQuality,
-                warnings = (sanitized.issues + validationResult.actionableRecommendations).distinct()
+                warnings = (
+                    sanitized.issues +
+                        validationResult.actionableRecommendations +
+                        if (layoutSource == LayoutDetectionSource.HEURISTIC) {
+                            listOf("layout_ownership_needs_vision")
+                        } else {
+                            emptyList()
+                        }
+                    ).distinct()
             )
         } finally {
             if (!regionBitmap.isRecycled) {
@@ -392,10 +426,21 @@ class MultiCouponExtractionService @Inject constructor(
         val deduped = mutableListOf<CouponWithConfidence>()
         for (coupon in coupons) {
             val codeKey = coupon.coupon.redeemCode?.uppercase()?.takeIf { it.isNotBlank() }
-            val key = buildString {
-                append(coupon.coupon.storeName.lowercase())
-                append('|')
-                append(codeKey ?: coupon.coupon.description.lowercase())
+            val storeKey = coupon.coupon.storeName.trim().lowercase()
+            val key = if (codeKey != null) {
+                "$storeKey|code|$codeKey"
+            } else {
+                buildString {
+                    append(storeKey)
+                    append("|no_code|")
+                    append(CouponDedupUtils.normalizeDescription(coupon.coupon.description))
+                    append('|')
+                    append(coupon.coupon.expiryDate?.time ?: "no_expiry")
+                    append('|')
+                    append(coupon.coupon.codeState)
+                    append('|')
+                    append(coupon.coupon.expiryState)
+                }
             }
             if (seen.add(key)) {
                 deduped.add(coupon)
@@ -407,11 +452,11 @@ class MultiCouponExtractionService @Inject constructor(
     }
 
     private suspend fun bootstrapExtraction(bitmap: Bitmap): BootstrapOutcome {
-        Log.d(TAG, "Step 1: Running OCR...")
+        Log.d(TAG, "UPLOAD_BOOTSTRAP_OCR start image=${bitmap.width}x${bitmap.height}")
         val ocrStart = SystemClock.elapsedRealtime()
         val ocrResult = multiEngineOCR.processImage(bitmap)
         val ocrMillis = SystemClock.elapsedRealtime() - ocrStart
-        Log.d(TAG, "OCR finished in ${ocrMillis}ms")
+        Log.d(TAG, "UPLOAD_BOOTSTRAP_OCR done durationMs=$ocrMillis")
 
         if (ocrResult !is MultiEngineOCR.OCRResult.Success) {
             Log.w(TAG, "OCR bootstrap failed: ${ocrResult}")
@@ -422,30 +467,28 @@ class MultiCouponExtractionService @Inject constructor(
         val fullText = ocrSuccess.text.ifBlank {
             ocrSuccess.extractedInfo.values.joinToString("\n")
         }
-        Log.d(TAG, "OCR extracted ${fullText.length} characters")
+        Log.d(TAG, "UPLOAD_BOOTSTRAP_OCR textLength=${fullText.length}")
 
-        Log.d(TAG, "Step 2: Classifying screenshot type...")
+        Log.d(TAG, "UPLOAD_CLASSIFY_SCREENSHOT start")
         val classifyStart = SystemClock.elapsedRealtime()
         val classification = screenshotClassifier.classify(bitmap, fullText)
         val classifyMillis = SystemClock.elapsedRealtime() - classifyStart
-        Log.d(TAG, "Classification finished in ${classifyMillis}ms")
-        Log.d(TAG, "Classification: ${classification.type} (confidence: ${classification.confidence})")
+        Log.d(TAG, "UPLOAD_CLASSIFY_SCREENSHOT done durationMs=$classifyMillis type=${classification.type} confidence=${classification.confidence}")
 
-        Log.d(TAG, "Step 3: Detecting coupon regions...")
+        Log.d(TAG, "UPLOAD_REGION_DETECT start")
         val detectStart = SystemClock.elapsedRealtime()
         val couponRegions = if (hybridDetector.isContourDetectorOperational()) {
             hybridDetector.detectCoupons(bitmap, ocrSuccess)
         } else {
             Log.w(
                 TAG,
-                "Two-stage detector unavailable or stubbed; layout pipeline will use VLM/heuristic fallback " +
+                "Two-stage detector unavailable or stubbed; foreground upload will use heuristic crop fallback " +
                     "(type=${classification.type}, confidence=${classification.confidence})"
             )
             emptyList()
         }
         val detectMillis = SystemClock.elapsedRealtime() - detectStart
-        Log.d(TAG, "Hybrid detector finished in ${detectMillis}ms")
-        Log.d(TAG, "Detected ${couponRegions.size} coupon region(s)")
+        Log.d(TAG, "UPLOAD_REGION_DETECT done durationMs=$detectMillis detected=${couponRegions.size}")
 
         val layoutDetection = timeStageSuspend("Layout detection pipeline") {
             layoutPipeline.detect(
@@ -459,7 +502,7 @@ class MultiCouponExtractionService @Inject constructor(
         }
         Log.d(
             TAG,
-            "Layout detection source=${layoutDetection.source} " +
+            "HEURISTIC_CROP_SELECTED source=${layoutDetection.source} " +
                 "accepted=${layoutDetection.cards.size} raw=${layoutDetection.diagnostics.rawCardCount} " +
                 "fallback=${layoutDetection.diagnostics.fallbackUsed}"
         )
@@ -483,7 +526,8 @@ class MultiCouponExtractionService @Inject constructor(
             fullText = fullText,
             classification = classification,
             couponRegions = couponRegions,
-            regionCandidates = regionCandidates
+            regionCandidates = regionCandidates,
+            layoutSource = layoutDetection.source
         )
     }
 

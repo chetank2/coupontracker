@@ -15,9 +15,10 @@ import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.model.FieldType
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.DescriptionUtils
-import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugScorer
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
+import com.example.coupontracker.domain.usecase.SaveScannedCouponResult
+import com.example.coupontracker.domain.usecase.SaveScannedCouponUseCase
 import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.extraction.FieldCandidate
@@ -58,7 +59,6 @@ import com.example.coupontracker.util.RunPath
 import com.example.coupontracker.util.UriPersistenceManager
 import com.example.coupontracker.util.LlmProgressUpdate
 import com.example.coupontracker.util.normalizeExpiryDate
-import com.example.coupontracker.worker.VerifyCouponWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -92,8 +92,8 @@ class ScannerViewModel @Inject constructor(
     private val ocrFirstCouponExtractor: OcrFirstCouponExtractor,
     private val multiCouponExtractionService: MultiCouponExtractionService,
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Injected bitmap memory management
-    private val debugRepository: ExtractionDebugRepository,
-    private val validatorFeedbackRecorder: ValidatorFeedbackRecorder
+    private val validatorFeedbackRecorder: ValidatorFeedbackRecorder,
+    private val saveScannedCouponUseCase: SaveScannedCouponUseCase
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -435,6 +435,12 @@ class ScannerViewModel @Inject constructor(
                 surface = STRATEGY_SURFACE_SINGLE,
                 reason = "${reason}_layout_no_candidates"
             )
+            if (multiResult?.screenshotType == com.example.coupontracker.ml.ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP) {
+                _uiState.value = ScannerUiState.Error(
+                    "Could not isolate the foreground coupon. Please crop the coupon or try Verify from the saved draft."
+                )
+                return true
+            }
             return false
         }
 
@@ -790,93 +796,28 @@ class ScannerViewModel @Inject constructor(
         llmStatus: LlmProgress,
         debugSnapshot: ExtractionDebugSnapshot?
     ): Long {
-        // First check if a duplicate already exists using the saveOrMerge helper
-        val savedCouponId = couponRepository.saveOrMergeCoupon(
+        val result = saveScannedCouponUseCase(
             coupon = coupon,
             normalizedDescription = normalizedDescription,
-            imagePhash = null, // TODO: Add image hashing if needed
-            imageSignature = null // TODO: Add image signature if needed
+            llmStatusName = llmStatus.name,
+            debugSnapshot = debugSnapshot
         )
 
-        val savedCoupon = couponRepository.getCouponById(savedCouponId)
-
-        debugSnapshot?.let { snapshot ->
-            debugRepository.updateSnapshot(savedCouponId, snapshot)
-        }
-
-        var analyticsResult = "created"
-        var persistedFlag = true
-
-        if (savedCoupon != null) {
-            val isDuplicate = savedCoupon.createdAt.before(coupon.createdAt)
-
-            if (isDuplicate) {
-                _uiState.value = ScannerUiState.AlreadySaved(savedCoupon, llmStatus)
+        when (result.kind) {
+            SaveScannedCouponResult.Kind.ALREADY_SAVED -> {
+                _uiState.value = ScannerUiState.AlreadySaved(result.couponForUi, llmStatus)
                 Log.d(
                     TAG,
-                    "Duplicate coupon detected, existing ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}"
+                    "Duplicate coupon detected, existing ID: ${result.couponForUi.id}, store: ${result.couponForUi.storeName}"
                 )
-                analyticsResult = "duplicate"
-                persistedFlag = false
-            } else {
-                _uiState.value = ScannerUiState.Saved(savedCoupon)
-                Log.d(TAG, "New coupon saved with ID: ${savedCoupon.id}, store: ${savedCoupon.storeName}")
-                analyticsResult = "created"
             }
-        } else {
-            val savedCouponState = coupon.copy(id = savedCouponId)
-            _uiState.value = ScannerUiState.Saved(savedCouponState)
-            Log.d(TAG, "Coupon saved with ID: $savedCouponId")
+            SaveScannedCouponResult.Kind.SAVED -> {
+                _uiState.value = ScannerUiState.Saved(result.couponForUi)
+                Log.d(TAG, "Coupon saved with ID: ${result.savedCouponId}, store: ${result.couponForUi.storeName}")
+            }
         }
 
-        analyticsTracker.trackEvent(
-            AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
-            mapOf(
-                "persisted" to persistedFlag,
-                "result" to analyticsResult,
-                "llm_status" to llmStatus.name
-            )
-        )
-
-        if (persistedFlag) {
-            maybeQueueAutomaticVerification(savedCoupon ?: coupon.copy(id = savedCouponId))
-        }
-
-        return savedCouponId
-    }
-
-    private suspend fun maybeQueueAutomaticVerification(coupon: Coupon) {
-        val assessment = CouponExtractionConfidenceScorer.score(coupon, coupon.rawOcrText)
-        if (assessment.recommendation != ExtractionRecommendation.VERIFY_WITH_VISION) {
-            return
-        }
-        if (coupon.cleanupStatus == Coupon.CleanupStatus.PENDING ||
-            coupon.cleanupStatus == Coupon.CleanupStatus.RUNNING ||
-            coupon.hasTrustedCleanup()
-        ) {
-            return
-        }
-
-        couponRepository.updateCoupon(
-            coupon.copy(
-                cleanupStatus = Coupon.CleanupStatus.PENDING,
-                cleanupError = null,
-                cleanupStartedAt = null,
-                cleanupFinishedAt = null,
-                updatedAt = Date()
-            )
-        )
-        VerifyCouponWorker.enqueueAutomaticVerification(context, coupon.id)
-    }
-
-    private fun Coupon.hasTrustedCleanup(): Boolean {
-        return cleanupStatus == Coupon.CleanupStatus.CLEANED &&
-            !needsAttention &&
-            extractionSource in setOf(
-                Coupon.ExtractionSource.VISION_VERIFIED,
-                Coupon.ExtractionSource.QWEN_CLEANED,
-                Coupon.ExtractionSource.OCR_VERIFIED
-            )
+        return result.savedCouponId
     }
 
     private fun shouldQueueCleanup(coupon: Coupon, confidence: Float): Boolean {
@@ -1095,13 +1036,13 @@ class ScannerViewModel @Inject constructor(
             )
             val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
 
-                val savedCouponId = couponRepository.saveOrMergeCoupon(
+                val saveResult = saveScannedCouponUseCase(
                     coupon = coupon,
                     normalizedDescription = normalizedDescription,
-                    imagePhash = null,
-                    imageSignature = null
+                    llmStatusName = extractionResult.llmStatus.name,
+                    debugSnapshot = null
                 )
-                val savedCoupon = couponRepository.getCouponById(savedCouponId) ?: coupon.copy(id = savedCouponId)
+                val savedCoupon = saveResult.couponForUi
                 processedResults.add(CouponProcessingSummary(savedCoupon, extractionResult.llmStatus))
 
                 Log.d(
@@ -1117,15 +1058,6 @@ class ScannerViewModel @Inject constructor(
                         "fields" to extractionResult.fields.size
                     )
                 )
-                analyticsTracker.trackEvent(
-                    AnalyticsTracker.EVENT_CAPTURE_COMPLETED,
-                    mapOf(
-                        "persisted" to true,
-                        "result" to "batch",
-                        "llm_status" to extractionResult.llmStatus.name
-                    )
-                )
-
             } catch (e: Exception) {
                 Log.e(TAG, "Error processing coupon $index", e)
                 // Continue with other coupons

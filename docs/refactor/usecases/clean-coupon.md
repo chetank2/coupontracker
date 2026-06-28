@@ -8,8 +8,9 @@ edits. Cleanup needs a separate explicit use case with evidence checks.
 ## Target Structure
 
 `domain/usecase/CleanCouponUseCase` loads the saved coupon, sends only allowed
-evidence to `ai/cleanup`, validates the cleaned result, and persists accepted
-changes through the repository.
+evidence to the cleanup/model-verification layer, validates the cleaned result,
+and persists accepted changes through the repository. A future `ai/cleanup`
+package may own that layer; it does not currently exist.
 
 ## Solution
 
@@ -39,4 +40,3 @@ field-level provenance.
 
 Cleanup is separate from capture, evidence validation is enforced, user edits are
 preserved, and accepted changes are auditable.
-

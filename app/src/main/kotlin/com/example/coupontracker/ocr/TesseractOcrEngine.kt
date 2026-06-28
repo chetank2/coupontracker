@@ -162,10 +162,50 @@ class TesseractOcrEngine @Inject constructor(
     }
     
     override suspend fun recognizeWithBoxes(bitmap: Bitmap): List<OcrTextSpan> = withContext(Dispatchers.Default) {
-        // TODO: Implement bounding box extraction using TessBaseAPI ResultIterator
-        // For now, return empty list - this is not critical for initial implementation
-        Log.w(TAG, "Bounding box extraction not yet implemented")
-        return@withContext emptyList()
+        val api = try {
+            requireApiWithRetry()
+        } catch (e: Exception) {
+            Log.e(TAG, "Unable to obtain Tesseract instance after retries", e)
+            throw e
+        }
+
+        return@withContext try {
+            api.setImage(bitmap)
+            val iterator = api.resultIterator
+            if (iterator == null) {
+                Log.w(TAG, "Tesseract result iterator unavailable")
+                return@withContext emptyList()
+            }
+
+            val spans = mutableListOf<OcrTextSpan>()
+            val level = TessBaseAPI.PageIteratorLevel.RIL_WORD
+            try {
+                iterator.begin()
+                do {
+                    val text = iterator.getUTF8Text(level)?.trim().orEmpty()
+                    val box = iterator.getBoundingRect(level)
+                    if (text.isNotBlank() && box.width() > 0 && box.height() > 0) {
+                        spans.add(
+                            OcrTextSpan(
+                                text = text,
+                                boundingBox = Rect(box.left, box.top, box.right, box.bottom),
+                                confidence = (iterator.confidence(level) / 100f).coerceIn(0f, 1f)
+                            )
+                        )
+                    }
+                } while (iterator.next(level))
+            } finally {
+                iterator.delete()
+            }
+
+            Log.d(TAG, "Extracted ${spans.size} boxed text spans")
+            spans
+        } catch (e: Exception) {
+            Log.e(TAG, "OCR bounding box extraction failed", e)
+            emptyList()
+        } finally {
+            runCatching { api.clear() }
+        }
     }
     
     override fun isReady(): Boolean = isInitialized && tessBaseAPI != null
@@ -240,4 +280,3 @@ class TesseractOcrEngine @Inject constructor(
         val timestampMs: Long = System.currentTimeMillis()
     )
 }
-

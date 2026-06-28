@@ -51,6 +51,7 @@ import com.example.coupontracker.ui.components.GlassSurface
 import com.example.coupontracker.ui.components.StatusType
 import com.example.coupontracker.ui.navigation.Screen
 import com.example.coupontracker.ui.theme.BrandSpacing
+import com.example.coupontracker.util.CleanupStatusFreshness
 import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.data.util.DescriptionUtils
 import java.util.Date
@@ -90,6 +91,7 @@ fun CouponDetailScreen(
                 },
                 actions = {
                     val shareEnabled = coupon != null
+                    val verificationRunning = coupon?.let(CleanupStatusFreshness::isFreshInProgress) == true
                     IconButton(
                         onClick = { coupon?.let { navController.navigate(Screen.CouponEdit.createRoute(it.id)) } },
                         enabled = shareEnabled
@@ -98,7 +100,7 @@ fun CouponDetailScreen(
                     }
                     IconButton(
                         onClick = { viewModel.verifyCoupon() },
-                        enabled = shareEnabled
+                        enabled = shareEnabled && !verificationRunning
                     ) {
                         Icon(Icons.Default.CheckCircle, contentDescription = stringResource(R.string.content_clean_coupon))
                     }
@@ -665,10 +667,13 @@ private fun CleanupStatusCard(
     onCleanCoupon: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isRunning = coupon.cleanupStatus == Coupon.CleanupStatus.PENDING ||
-        coupon.cleanupStatus == Coupon.CleanupStatus.RUNNING
+    val isRunning = CleanupStatusFreshness.isFreshInProgress(coupon)
+    val staleInProgress = !isRunning &&
+        (coupon.cleanupStatus == Coupon.CleanupStatus.PENDING ||
+            coupon.cleanupStatus == Coupon.CleanupStatus.RUNNING)
     val needsReview = coupon.needsAttention && !isRunning
     val shouldShow = isRunning ||
+        staleInProgress ||
         coupon.cleanupStatus == Coupon.CleanupStatus.FAILED ||
         coupon.cleanupStatus == Coupon.CleanupStatus.CLEANED ||
         coupon.needsAttention
@@ -699,6 +704,12 @@ private fun CleanupStatusCard(
             } else {
                 Icon(
                     imageVector = when (coupon.cleanupStatus) {
+                        Coupon.CleanupStatus.PENDING,
+                        Coupon.CleanupStatus.RUNNING -> if (staleInProgress) {
+                            Icons.Default.ErrorOutline
+                        } else {
+                            Icons.Default.AutoFixHigh
+                        }
                         Coupon.CleanupStatus.CLEANED -> if (needsReview) Icons.Default.ErrorOutline else Icons.Default.CheckCircle
                         Coupon.CleanupStatus.FAILED -> Icons.Default.ErrorOutline
                         else -> Icons.Default.AutoFixHigh
@@ -711,6 +722,12 @@ private fun CleanupStatusCard(
                             MaterialTheme.colorScheme.primary
                         }
                         Coupon.CleanupStatus.FAILED -> MaterialTheme.colorScheme.error
+                        Coupon.CleanupStatus.PENDING,
+                        Coupon.CleanupStatus.RUNNING -> if (staleInProgress) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
                 )
@@ -719,8 +736,16 @@ private fun CleanupStatusCard(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = when (coupon.cleanupStatus) {
-                        Coupon.CleanupStatus.PENDING -> stringResource(R.string.coupon_cleaning_queued_title)
-                        Coupon.CleanupStatus.RUNNING -> stringResource(R.string.coupon_cleaning_running_title)
+                        Coupon.CleanupStatus.PENDING -> if (staleInProgress) {
+                            stringResource(R.string.coupon_cleaning_failed_title)
+                        } else {
+                            stringResource(R.string.coupon_cleaning_queued_title)
+                        }
+                        Coupon.CleanupStatus.RUNNING -> if (staleInProgress) {
+                            stringResource(R.string.coupon_cleaning_failed_title)
+                        } else {
+                            stringResource(R.string.coupon_cleaning_running_title)
+                        }
                         Coupon.CleanupStatus.CLEANED -> if (needsReview) {
                             stringResource(R.string.coupon_cleaning_failed_title)
                         } else {
@@ -737,8 +762,16 @@ private fun CleanupStatusCard(
                 )
                 Text(
                     text = when (coupon.cleanupStatus) {
-                        Coupon.CleanupStatus.PENDING -> stringResource(R.string.coupon_cleaning_queued_body)
-                        Coupon.CleanupStatus.RUNNING -> stringResource(R.string.coupon_cleaning_running_body)
+                        Coupon.CleanupStatus.PENDING -> if (staleInProgress) {
+                            coupon.cleanupError ?: stringResource(R.string.coupon_cleaning_failed_body)
+                        } else {
+                            stringResource(R.string.coupon_cleaning_queued_body)
+                        }
+                        Coupon.CleanupStatus.RUNNING -> if (staleInProgress) {
+                            coupon.cleanupError ?: stringResource(R.string.coupon_cleaning_failed_body)
+                        } else {
+                            stringResource(R.string.coupon_cleaning_running_body)
+                        }
                         Coupon.CleanupStatus.CLEANED -> if (needsReview) {
                             coupon.cleanupError ?: stringResource(R.string.coupon_cleaning_failed_body)
                         } else {

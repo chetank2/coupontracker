@@ -8,10 +8,13 @@ roles, metadata, and runtime errors need a dedicated owner.
 
 ## Target Structure
 
-`ai/model` owns model interfaces, adapters, selectors, metadata, roles, and
-runtime configuration. `ai/cleanup` and `ai/verification` consume those model
-interfaces. Capture pipelines may request retry/verification only through
-explicit boundaries.
+Future target: `ai/model` owns model interfaces, adapters, selectors, metadata,
+roles, and runtime configuration. `ai/cleanup` and `ai/verification` consume
+those model interfaces. Capture pipelines may request retry/verification only
+through explicit boundaries.
+
+Current state: no `ai/` package exists. Model-related code remains under
+`extraction/model`, `llm`, `ml`, `model`, `runtime`, and `verification`.
 
 ## Solution
 
@@ -40,5 +43,7 @@ capture code would violate OCR-first capture.
 
 ## Definition Of Done
 
-AI model code lives under `ai/model`, Hilt bindings compile, model settings still
-work, capture remains OCR-first, and model callers use role-specific interfaces.
+AI model code lives under `ai/model` only after the dedicated migration slice;
+until then current model packages remain intact. Hilt bindings compile, model
+settings still work, capture remains OCR-first, and model callers use
+role-specific interfaces.

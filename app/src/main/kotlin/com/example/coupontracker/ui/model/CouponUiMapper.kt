@@ -8,6 +8,7 @@ import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.ui.components.CouponCardModel
 import com.example.coupontracker.ui.components.CouponCardState
 import com.example.coupontracker.ui.components.DateFormatter
+import com.example.coupontracker.util.CleanupStatusFreshness
 import java.util.Date
 
 @Composable
@@ -27,8 +28,7 @@ fun Coupon.toCouponCardModel(
         code = codeDisplayText(),
         expiresAt = expiryDisplayText(),
         statusLabel = cleanupStatusLabel(),
-        statusInProgress = cleanupStatus == Coupon.CleanupStatus.PENDING ||
-            cleanupStatus == Coupon.CleanupStatus.RUNNING,
+        statusInProgress = CleanupStatusFreshness.isFreshInProgress(this),
         state = cardState(),
         codeIsActionable = !redeemCode.isNullOrBlank(),
     )
@@ -63,9 +63,18 @@ fun Coupon.cardState(now: Date = Date()): CouponCardState {
 
 @Composable
 private fun Coupon.cleanupStatusLabel(): String? {
+    val freshInProgress = CleanupStatusFreshness.isFreshInProgress(this)
     return when (cleanupStatus) {
-        Coupon.CleanupStatus.PENDING -> stringResource(R.string.coupon_status_queued)
-        Coupon.CleanupStatus.RUNNING -> stringResource(R.string.coupon_status_cleaning)
+        Coupon.CleanupStatus.PENDING -> if (freshInProgress) {
+            stringResource(R.string.coupon_status_queued)
+        } else {
+            stringResource(R.string.coupon_status_needs_clean)
+        }
+        Coupon.CleanupStatus.RUNNING -> if (freshInProgress) {
+            stringResource(R.string.coupon_status_cleaning)
+        } else {
+            stringResource(R.string.coupon_status_needs_clean)
+        }
         Coupon.CleanupStatus.FAILED -> stringResource(R.string.coupon_status_needs_clean)
         else -> null
     }

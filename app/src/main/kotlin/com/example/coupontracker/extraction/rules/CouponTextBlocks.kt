@@ -24,14 +24,17 @@ object CouponTextBlocks {
     }
 
     fun isActionLine(line: String): Boolean {
-        return Pattern.compile("(?i)^(details|offer\\s+details|redeem|redeem\\s+now|copy|copy\\s+code|tap\\s+to\\s+copy|view\\s+details)$")
+        return Pattern.compile(
+            "(?i)^(details|offer\\s+details|redeem|redeem\\s+now|copy|copy\\s+code|tap\\s+to\\s+copy|view\\s+details|claim\\s+now)(?:\\s+\\d+)?$",
+            Pattern.UNICODE_CASE
+        )
             .matcher(line.trim())
             .find()
     }
 
     fun isChromeLine(line: String): Boolean {
         val normalized = normalizeKey(line)
-        if (normalized in setOf("vouchers", "active", "lifetime")) return true
+        if (normalized in setOf("vouchers", "active", "lifetime", "faq", "faqs")) return true
         if (isPhoneStatusBarNoise(line)) return true
         return Pattern.compile("(?i)\\b(vouchers?|active|lifetime)\\b.*\\d")
             .matcher(line)
@@ -76,13 +79,19 @@ object CouponTextBlocks {
 
         val beforeExpiry = meaningfulLines.take(firstExpiryIndex)
         val firstCodeBeforeExpiry = beforeExpiry.indexOfFirst(::isCodeLine)
-        val firstOfferBeforeExpiry = beforeExpiry.indexOfFirst(::looksLikeSelectedCardOfferLine)
+        val firstOfferBeforeExpiry = beforeExpiry.indexOfFirst { line ->
+            !isChromeLine(line) && !isActionLine(line) && looksLikeSelectedCardOfferLine(line)
+        }
         val hasPreviousCode = firstCodeBeforeExpiry >= 0
         val hasCurrentOfferBeforeExpiry = firstOfferBeforeExpiry >= 0 &&
             (firstCodeBeforeExpiry < 0 || firstOfferBeforeExpiry < firstCodeBeforeExpiry)
         val hasSelectedOffer = meaningfulLines.drop(firstExpiryIndex + 1).take(8).any(::looksLikeSelectedCardOfferLine)
-        if (!hasPreviousCode || !hasSelectedOffer || hasCurrentOfferBeforeExpiry) return text
+        val hasPreviousCardBoundary = hasPreviousCode || beforeExpiry.any { line ->
+            isChromeLine(line) || isActionLine(line)
+        }
+        if (!hasPreviousCardBoundary || !hasSelectedOffer || hasCurrentOfferBeforeExpiry) return text
 
-        return meaningfulLines.drop(firstExpiryIndex).joinToString("\n")
+        val firstSelectedLineIndex = if (hasPreviousCode) firstExpiryIndex else firstExpiryIndex + 1
+        return meaningfulLines.drop(firstSelectedLineIndex).joinToString("\n")
     }
 }

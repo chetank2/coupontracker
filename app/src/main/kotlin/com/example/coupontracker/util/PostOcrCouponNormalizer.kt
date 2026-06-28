@@ -58,13 +58,16 @@ object PostOcrCouponNormalizer {
     private val codeLineRegex = Regex("""(?i)\b(?:${codeSynonyms.joinToString("|") { Regex.escape(it) }})\b""")
     private val expiryLineRegex = Regex("""(?i)\b(?:${expirySynonyms.joinToString("|") { Regex.escape(it) }})\b""")
     private val offerLineRegex = Regex(
-        pattern = """(?i)(\b(?:${offerSynonyms.joinToString("|") { Regex.escape(it) }})\b|\d{1,3}\s*%|₹\s*\d|rs\.?\s*\d|buy\s+\d+\s+get\s+\d+)""",
+        pattern = """(?i)(\b(?:${offerSynonyms.joinToString("|") { Regex.escape(it) }})\b|\d{1,3}\s*%|₹\s*\d|rs\.?\s*\d|buy\s+\d+\s+get\s+\d+|\bget\b.{3,80}(?:@|at)\s*(?:₹|rs\.?)?\s*\d)""",
     )
     private val termsLineRegex = Regex("""(?i)\b(min(?:imum)?\s+order|min(?:imum)?\s+purchase|max(?:imum)?\s+discount|payment|valid on|only on|terms?|t&c|usage limit)\b""")
     private val junkLineRegex = Regex(
-        pattern = """(?i)^(copy|copy code|tap to copy|apply|apply now|use now|redeem now|view details|details|terms|about|order now|claim now|got it|ok)$""",
+        pattern = """(?i)^(copy|copy code|tap to copy|apply|apply now|use now|redeem now|buy now|view details|details|terms|about|order now|claim now|got it|ok)$""",
     )
     private val statusBarRegex = Regex("""(?i)\b(?:5g|4g|lte|volte|wifi|battery)\b|^\d{1,2}:\d{2}$|^\d{1,3}%$""")
+    private val merchantContextRegex = Regex(
+        """(?i)^\s*(?:(?:from|only\s+on)\s+[\p{L}\p{M}\p{N}'&.\- ]{2,80}\s+(?:website|app|store)|about\s+[\p{L}\p{M}\p{N}'&.\- ]{2,80}|[\p{L}\p{M}\p{N}'&.\- ]{2,80}\s+(?:website|app|store))\s*$"""
+    )
 
     fun normalize(
         currentDescription: String,
@@ -126,14 +129,15 @@ object PostOcrCouponNormalizer {
         redeemCode: String?,
     ): List<String> {
         val cleaned = cleaner.cleanForLlmExtraction(rawText).cleanedText
+        val splitRupeeArtifactAmounts = splitRupeeArtifactAmounts(rawText)
         val compacted = cleaned
             .lineSequence()
             .flatMap { it.split("•").asSequence() }
-            .map(::compactLine)
+            .map { line -> compactLine(line, splitRupeeArtifactAmounts) }
             .filter { it.isNotBlank() }
             .toList()
 
-        return mergeSplitCashbackLines(compacted)
+        return mergeSplitOfferPriceLines(mergeSplitCashbackLines(compacted))
             .mapNotNull { line ->
                 line.takeIf { isUsefulLine(it, storeName, redeemCode) }
             }
@@ -165,6 +169,7 @@ object PostOcrCouponNormalizer {
         if (line.length > 140) return false
         if (junkLineRegex.matches(line)) return false
         if (statusBarRegex.containsMatchIn(line)) return false
+        if (isMerchantContextLine(line)) return false
         if (OfferTextQuality.isLegalOrSupportNoise(line)) return false
         val normalized = normalizeKey(line)
         if (normalized == normalizeKey(storeName.orEmpty())) return false
@@ -218,21 +223,21 @@ object PostOcrCouponNormalizer {
             )
             ?.index ?: return null
 
-        val start = findOfferBlockStart(bestIndex)
+        val start = findOfferBlockStart(bestIndex, storeName)
         val end = findOfferBlockEnd(bestIndex)
         return subList(start, end + 1)
-            .filter(::isOfferContextLine)
+            .filter { isOfferContextLine(it, storeName) }
             .distinctBy(::normalizeKey)
             .takeIf { lines -> lines.any(::isOfferLine) }
     }
 
-    private fun List<String>.findOfferBlockStart(bestIndex: Int): Int {
+    private fun List<String>.findOfferBlockStart(bestIndex: Int, storeName: String?): Int {
         var start = bestIndex
         var included = 0
         var index = bestIndex - 1
         while (index >= 0 && included < 3) {
             val line = this[index]
-            if (!isOfferContextLine(line) || isBoundaryLine(line)) break
+            if (!isOfferContextLine(line, storeName) || isBoundaryLine(line)) break
             if (isOfferLine(line)) break
             start = index
             included += 1
@@ -256,15 +261,30 @@ object PostOcrCouponNormalizer {
         return end
     }
 
-    private fun isOfferContextLine(line: String): Boolean {
+    private fun isOfferContextLine(line: String, storeName: String? = null): Boolean {
         if (line.length < 3 || line.length > 120) return false
         if (line.all { it.isDigit() || it.isWhitespace() }) return false
         if (junkLineRegex.matches(line)) return false
         if (statusBarRegex.containsMatchIn(line)) return false
         if (isLikelyStandaloneHeading(line)) return false
+        if (isMerchantContextLine(line)) return false
+        if (isStoreFragmentLine(line, storeName)) return false
         if (OfferTextQuality.isLegalOrSupportNoise(line)) return false
         if (GenericFieldHeuristics.isGenericOrMissing(line)) return false
         return true
+    }
+
+    private fun isMerchantContextLine(line: String): Boolean {
+        return merchantContextRegex.matches(line)
+    }
+
+    private fun isStoreFragmentLine(line: String, storeName: String?): Boolean {
+        if (storeName.isNullOrBlank()) return false
+        if (isOfferLine(line)) return false
+        val storeTokens = normalizeKey(storeName).split(" ").filter { it.length >= 3 }.toSet()
+        if (storeTokens.isEmpty()) return false
+        val lineTokens = normalizeKey(line).split(" ").filter { it.length >= 3 }
+        return lineTokens.isNotEmpty() && lineTokens.any { it in storeTokens }
     }
 
     private fun isBoundaryLine(line: String): Boolean {
@@ -337,40 +357,92 @@ object PostOcrCouponNormalizer {
         return merged
     }
 
-    private fun compactLine(raw: String): String {
+    private fun mergeSplitOfferPriceLines(lines: List<String>): List<String> {
+        val merged = mutableListOf<String>()
+        var index = 0
+        while (index < lines.size) {
+            val line = lines[index]
+            val next = lines.getOrNull(index + 1)
+            val amount = next?.let { Regex("""^(\d{2,6})\s*\*$""").find(it)?.groupValues?.getOrNull(1) }
+            if (amount != null &&
+                Regex("""(?i)\b(?:@|at|for|from)\s*$""").containsMatchIn(line) &&
+                Regex("""(?i)\b(?:get|buy|products?|earbuds?|ring|worth)\b""").containsMatchIn(line)
+            ) {
+                merged += "$line ₹$amount*"
+                index += 2
+            } else {
+                merged += line
+                index++
+            }
+        }
+        return merged
+    }
+
+    private fun compactLine(
+        raw: String,
+        splitRupeeArtifactAmounts: Set<String> = emptySet()
+    ): String {
         return raw
             .replace(Regex("""^[•*\-]+\s*"""), "")
             .replace(Regex("""^\d+\s*[.)]\s*"""), "")
             .replace(Regex("""(?i)(?<![A-Z0-9])z\s*(?=\d{2,}(?:[,\d]*)(?:\b|\s))"""), "₹")
             .replace(Regex("""(?i)\b(\d{1,3})\s+percent\b"""), "$1%")
             .replace(Regex("""(?i)\b(free|off|cashback|discount)\*"""), "$1")
+            .replace(Regex("""(?i)^[A-Z][A-Z0-9&.'-]{2,20}\s+(?=(?:you\s+won|buy|get|save|flat|up\s*to|upto)\b)"""), "")
+            .replace(Regex("""(?i)(@|at)\s+(?!₹|rs\.?)\s*(\d[\d,]{1,2}|[1-9]\d{2})\s*\*"""), "$1 ₹$2*")
             .replace(Regex("""(?i)\b(?:copy|copy code|tap to copy|apply code)\b"""), " ")
+            .replace(Regex("""(?i)\s+only\s+on\s+[\p{L}\p{M}\p{N}'&.\- ]{2,80}\s+website\b.*$"""), "")
+            .replace(Regex("""(?i)\s+buy\s+now\b.*$"""), "")
             .replace(Regex("""(?i)\bcashback\s*:?\s*0+(?:\.0+)?\b"""), " ")
             .replace(Regex("\\s+"), " ")
             .trim(' ', '.', ',', '-', ':')
-            .let(::normalizeCommercialPriceOffer)
+            .let { normalizeCommercialPriceOffer(it, splitRupeeArtifactAmounts) }
     }
 
-    private fun normalizeCommercialPriceOffer(value: String): String {
-        val corrected = Regex("""(?i)\bworth\s+(?:₹|rs\.?)?\s*(\d[\d,]{2,})\s+for\s+(?:₹|rs\.?)?\s*(7\d{3})\b""")
+    private fun normalizeCommercialPriceOffer(
+        value: String,
+        splitRupeeArtifactAmounts: Set<String>
+    ): String {
+        return Regex("""(?i)\b(worth|for)\s+(?!₹|rs\.?)\s*(\d[\d,]{2,})\b""")
+            .replace(value) { match -> "${match.groupValues[1]} ₹${match.groupValues[2]}" }
+            .let { normalizeRupeeAmountArtifacts(it, splitRupeeArtifactAmounts) }
+    }
+
+    private fun normalizeRupeeAmountArtifacts(
+        value: String,
+        splitRupeeArtifactAmounts: Set<String>
+    ): String {
+        return Regex("""(?i)\b(at|from|for)\s+(7\d{3})(\s*\*)(?=\s|$)""")
             .replace(value) { match ->
-                val worth = match.groupValues[1].replace(",", "").toIntOrNull()
-                val saleRaw = match.groupValues[2].replace(",", "")
-                val sale = saleRaw.toIntOrNull()
-                val saleWithoutArtifact = saleRaw.drop(1).toIntOrNull()
-                if (worth != null &&
-                    sale != null &&
-                    saleWithoutArtifact != null &&
-                    sale > worth &&
-                    saleWithoutArtifact < worth
-                ) {
-                    "worth ₹$worth for ₹$saleWithoutArtifact"
+                val label = match.groupValues[1]
+                val amount = match.groupValues[2]
+                val marker = match.groupValues[3]
+                val repaired = amount.drop(1)
+                if (repaired in splitRupeeArtifactAmounts) {
+                    "$label ₹$repaired$marker"
                 } else {
-                    "worth ₹${match.groupValues[1]} for ₹${match.groupValues[2]}"
+                    match.value
                 }
             }
-        return Regex("""(?i)\b(worth|for)\s+(?!₹|rs\.?)\s*(\d[\d,]{2,})\b""")
-            .replace(corrected) { match -> "${match.groupValues[1]} ₹${match.groupValues[2]}" }
+    }
+
+    private fun splitRupeeArtifactAmounts(rawText: String): Set<String> {
+        val lines = rawText.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .toList()
+        return buildSet {
+            for (index in 0 until lines.lastIndex) {
+                val current = lines[index]
+                val next = lines[index + 1]
+                val hasPriceLabel = Regex("""(?i)(?:\b(?:at|from|for)\s*$|^\s*(?:at|from|for)\s*$)""")
+                    .containsMatchIn(current)
+                val amount = Regex("""^(\d{2,3})\s*\*$""").find(next)?.groupValues?.getOrNull(1)
+                if (hasPriceLabel && amount != null) {
+                    add(amount)
+                }
+            }
+        }
     }
 
     private fun normalizeKey(value: String): String {

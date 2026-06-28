@@ -2,6 +2,8 @@ package com.example.coupontracker.extraction.layout
 
 import android.graphics.Bitmap
 import android.graphics.Rect
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 
 class CouponLayoutDetectionPipeline(
     private val detectors: List<CouponLayoutDetector>,
@@ -17,9 +19,16 @@ class CouponLayoutDetectionPipeline(
         var firstValidDetection: CouponLayoutDetection? = null
         val preferExistingRegions = context.fallbackRegions.isNotEmpty()
         for (detector in detectors) {
-            val detection = runCatching { detector.detectLayout(bitmap, context) }
+            val detection = runCatching {
+                withTimeout(DETECTOR_TIMEOUT_MS) {
+                    detector.detectLayout(bitmap, context)
+                }
+            }
                 .onFailure { rejected += "${detector.name}:${it.javaClass.simpleName}" }
                 .getOrElse {
+                    if (it is TimeoutCancellationException) {
+                        rejected += "${detector.name}:timeout_${DETECTOR_TIMEOUT_MS}ms"
+                    }
                     CouponLayoutDetection(
                         cards = emptyList(),
                         source = LayoutDetectionSource.FALLBACK,
@@ -67,5 +76,9 @@ class CouponLayoutDetectionPipeline(
                 fallbackUsed = true
             )
         )
+    }
+
+    private companion object {
+        private const val DETECTOR_TIMEOUT_MS = 15_000L
     }
 }

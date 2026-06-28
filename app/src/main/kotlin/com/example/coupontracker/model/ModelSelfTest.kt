@@ -21,6 +21,15 @@ class ModelSelfTest @Inject constructor(
     companion object {
         private const val TAG = "ModelSelfTest"
         private const val TIMEOUT_MS = 60_000L
+        private const val SELF_TEST_STORE = "FixtureMart"
+        private const val SELF_TEST_CODE = "FIXTURE42"
+        private const val SELF_TEST_EXPIRY_DAY = "31"
+        private const val SELF_TEST_EXPIRY_MONTH = "Jul"
+        private const val SELF_TEST_EXPIRY_YEAR = "2026"
+        private const val SELF_TEST_OFFER_VALUE = "42"
+        private const val SELF_TEST_OCR =
+            "$SELF_TEST_STORE coupon. Save $SELF_TEST_OFFER_VALUE percent with code $SELF_TEST_CODE. " +
+                "Valid till $SELF_TEST_EXPIRY_DAY $SELF_TEST_EXPIRY_MONTH $SELF_TEST_EXPIRY_YEAR."
     }
     
     /**
@@ -38,18 +47,13 @@ class ModelSelfTest @Inject constructor(
 
             val modelInfo = llmRuntimeManager.getModelInfo()
             val prompt = """
-                Return only JSON for this coupon text:
-                Store: Domino's
-                Offer: Get 20% off
-                Code: PIZZA20
-                Expiry: 30 Jun 2026
-
+                Return only JSON for the provided OCR text.
                 Required keys: storeName, description, redeemCode, expiryDate.
             """.trimIndent()
 
             val response = withTimeout(TIMEOUT_MS) {
                 llmRuntimeManager.runTextInference(
-                    ocrText = "Domino's Get 20% off code PIZZA20 valid till 30 Jun 2026",
+                    ocrText = SELF_TEST_OCR,
                     prompt = prompt,
                     keepLoaded = false,
                     maxTokensOverride = 96
@@ -78,12 +82,12 @@ class ModelSelfTest @Inject constructor(
             val code = json.optString("redeemCode")
             val expiry = json.optString("expiryDate")
             val description = json.optString("description")
-            val matchesFixture = store.contains("Domino", ignoreCase = true) &&
-                code.equals("PIZZA20", ignoreCase = true) &&
-                expiry.contains("30", ignoreCase = true) &&
-                expiry.contains("Jun", ignoreCase = true) &&
-                expiry.contains("2026", ignoreCase = true) &&
-                description.contains("20", ignoreCase = true)
+            val matchesFixture = store.equals(SELF_TEST_STORE, ignoreCase = true) &&
+                code.equals(SELF_TEST_CODE, ignoreCase = true) &&
+                expiry.contains(SELF_TEST_EXPIRY_DAY, ignoreCase = true) &&
+                expiry.contains(SELF_TEST_EXPIRY_MONTH, ignoreCase = true) &&
+                expiry.contains(SELF_TEST_EXPIRY_YEAR, ignoreCase = true) &&
+                description.contains(SELF_TEST_OFFER_VALUE, ignoreCase = true)
 
             if (!matchesFixture) {
                 Log.w(

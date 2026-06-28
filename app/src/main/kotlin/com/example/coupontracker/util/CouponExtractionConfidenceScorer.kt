@@ -77,7 +77,8 @@ object CouponExtractionConfidenceScorer {
                 it == "ocr_contradiction"
         }
         val missingCoreFields = storeConfidence < 0.4f && descriptionConfidence < 0.4f
-        val score = weightedScore.coerceIn(0, 100)
+        val maxScore = confidenceScoreCap(coupon, descriptionConfidence)
+        val score = weightedScore.coerceIn(0, maxScore)
         val band = when {
             score >= 90 && !highRisk -> ExtractionConfidenceBand.HIGH
             score >= 65 -> ExtractionConfidenceBand.MEDIUM
@@ -146,6 +147,10 @@ object CouponExtractionConfidenceScorer {
         issues: MutableList<String>
     ): Float {
         val description = coupon.description.trim()
+        if (coupon.needsAttention) {
+            issues += "description_needs_attention"
+            return 0.45f
+        }
         if (!GenericFieldHeuristics.isMeaningfulDescription(description)) {
             issues += "missing_offer_description"
             return 0f
@@ -154,8 +159,27 @@ object CouponExtractionConfidenceScorer {
             issues += "description_looks_like_raw_ocr"
             return 0.45f
         }
-        if (ocr.isBlank()) return 0.65f
-        return if (OcrEvidenceValidator.isPhraseSupported(description, ocr)) 1f else 0.75f
+        if (ocr.isBlank()) {
+            issues += "weak_description_evidence"
+            return 0.65f
+        }
+        return if (OcrEvidenceValidator.isPhraseSupported(description, ocr)) {
+            1f
+        } else {
+            issues += "weak_description_evidence"
+            0.75f
+        }
+    }
+
+    private fun confidenceScoreCap(coupon: Coupon, descriptionConfidence: Float): Int {
+        var cap = 100
+        if (coupon.layoutState == Coupon.LayoutState.LOW_CONFIDENCE && !isVerifiedExtraction(coupon)) {
+            cap = minOf(cap, 84)
+        }
+        if (coupon.needsAttention || descriptionConfidence < 0.8f) {
+            cap = minOf(cap, 79)
+        }
+        return cap
     }
 
     private fun scoreCodeOrState(

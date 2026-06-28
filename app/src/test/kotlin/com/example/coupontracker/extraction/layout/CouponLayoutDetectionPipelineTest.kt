@@ -138,6 +138,43 @@ class CouponLayoutDetectionPipelineTest {
     }
 
     @Test
+    fun `vlm detector parses normalized vision layout schema`() = runBlocking {
+        val model = RawLayoutModel(
+            rawJson = """
+                {
+                  "layoutState": "MULTI_CARD",
+                  "confidence": 0.88,
+                  "cards": [
+                    {
+                      "active": true,
+                      "foreground": true,
+                      "layoutState": "COMPLETE",
+                      "confidence": 0.91,
+                      "bounds": { "x": 0.10, "y": 0.20, "w": 0.80, "h": 0.35 }
+                    }
+                  ]
+                }
+            """.trimIndent()
+        )
+        val config = mockk<ModelStrategyConfig>()
+        every { config.modeFor(ModelRole.LOW_CONFIDENCE_RETRY) } returns ModelMode.VLM_GEMMA
+        val detector = VlmCouponLayoutDetector(
+            modelSelector = ModelSelector(setOf(model), config)
+        )
+
+        val result = detector.detectLayout(
+            bitmap = bitmap(width = 1000, height = 2000),
+            context = LayoutDetectionContext(
+                screenshotType = ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP,
+                ocrText = "coupon anchors"
+            )
+        )
+
+        assertEquals(LayoutDetectionSource.VLM, result.source)
+        assertEquals(listOf(Rect(100, 400, 900, 1100)), result.cards.map { it.bounds })
+    }
+
+    @Test
     fun `vlm detector skips when Gemma verifier is disabled`() = runBlocking {
         val prefs = mockk<SecurePreferencesManager>()
         every { prefs.isGemmaVisionVerifierEnabled() } returns false
@@ -181,6 +218,35 @@ class CouponLayoutDetectionPipelineTest {
             listOf(CouponRegionizer.RegionMode.MULTI_GRID, CouponRegionizer.RegionMode.MULTI_GRID),
             result.cards.map { it.regionMode }
         )
+    }
+
+    @Test
+    fun `heuristic detector does not fabricate reward modal crop from copy`() = runBlocking {
+        val detector = HeuristicCouponLayoutDetector(
+            regionizer(
+                rewardDropPhrases = listOf("scratch")
+            )
+        )
+
+        val result = detector.detectLayout(
+            bitmap = bitmap(width = 1080, height = 2400),
+            context = LayoutDetectionContext(
+                screenshotType = ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP,
+                ocrText = """
+                    Scratch & win
+                    Old background card
+                    lenskart
+                    Free Home Eye
+                    NO CODE NEEDED
+                    Book Now
+                    I'll use it later!
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(1, result.cards.size)
+        assertEquals(CouponRegionizer.RegionMode.REWARD, result.cards.single().regionMode)
+        assertEquals(Rect(0, 0, 1080, 2400), result.cards.single().bounds)
     }
 
     private class FixedDetector(
@@ -231,10 +297,10 @@ class CouponLayoutDetectionPipelineTest {
         }
     }
 
-    private fun bitmap(): Bitmap {
+    private fun bitmap(width: Int = 300, height: Int = 400): Bitmap {
         val bitmap = mockk<Bitmap>()
-        every { bitmap.width } returns 300
-        every { bitmap.height } returns 400
+        every { bitmap.width } returns width
+        every { bitmap.height } returns height
         return bitmap
     }
 
@@ -257,12 +323,14 @@ class CouponLayoutDetectionPipelineTest {
         )
     }
 
-    private fun regionizer(): CouponRegionizer {
+    private fun regionizer(
+        rewardDropPhrases: List<String> = emptyList()
+    ): CouponRegionizer {
         return CouponRegionizer(
             CouponRegionizerConfig(
                 globalCrop = CouponRegionizerConfig.GlobalCrop(topPct = 0f, bottomPct = 0f),
                 poster = CouponRegionizerConfig.PosterConfig(focusTopPct = 0.32f, focusHeightPct = 0.56f),
-                reward = CouponRegionizerConfig.RewardConfig(dropPhrases = emptyList()),
+                reward = CouponRegionizerConfig.RewardConfig(dropPhrases = rewardDropPhrases),
                 grid = CouponRegionizerConfig.GridConfig(minCardWidthPx = 100, minGapPx = 0, maxCols = 3),
                 mapOverlay = CouponRegionizerConfig.MapOverlayConfig(brightnessThresh = 0.85f, overlayMinAreaPct = 0.2f)
             )

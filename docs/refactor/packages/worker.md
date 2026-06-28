@@ -8,9 +8,10 @@ background tasks without owning product rules.
 
 ## Target Structure
 
-`worker` owns WorkManager workers and enqueue helpers. Workers depend on use
-cases or small repository contracts. Scheduling policies and unique work names
-are centralized.
+`worker` is the target home for WorkManager workers and enqueue helpers.
+Current WorkManager code is still split between `worker` and `work`. Workers
+depend on use cases or small repository contracts. Scheduling policies and
+unique work names are centralized.
 
 ## Solution
 
@@ -41,4 +42,3 @@ boot scheduling, or notification permissions.
 
 All workers live under one package, enqueue policies are centralized, workers
 call use cases instead of embedding business rules, and imports compile.
-

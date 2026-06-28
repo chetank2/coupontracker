@@ -5,6 +5,7 @@ import java.util.Locale
 
 object StoreCandidateValidator {
     private val tokenRegex = Regex("[a-z0-9]+")
+    private val stylizedAlphaNumericBrandRegex = Regex("""^[A-Za-z]{2,5}\s+\d{1,3}[A-Za-z]{1,3}$""")
     private val noiseTokens = setOf(
         "am", "pm", "vit", "otp", "upi", "url", "www", "com", "app",
         "pastm",
@@ -14,7 +15,10 @@ object StoreCandidateValidator {
         "weeks", "month", "months", "in", "active", "inactive",
         "available", "claimed", "unclaimed", "redeemed", "unredeemed",
         "voucher", "vouchers", "offer", "offers", "details", "terms",
-        "conditions", "about", "deleted", "item", "items"
+        "conditions", "about", "deleted", "item", "items",
+        "flat", "save", "discount", "claim", "faqs", "faq",
+        "scratch", "win", "rewards", "reward", "prize", "lucky",
+        "webinar", "seminar", "workshop", "event", "session"
     )
 
     fun isAcceptable(candidate: String?, rawOcr: String? = null): Boolean {
@@ -33,6 +37,9 @@ object StoreCandidateValidator {
 
         val letterTokens = tokens.filter { token -> token.any(Char::isLetter) }
         if (letterTokens.isEmpty()) return false
+        if (stylizedAlphaNumericBrandRegex.matches(candidate.trim())) {
+            return rawOcr.isNullOrBlank() || OcrEvidenceValidator.isPhraseSupported(candidate, rawOcr)
+        }
         if (tokens.any { token -> token.any(Char::isLetter) && token.any(Char::isDigit) }) {
             return false
         }

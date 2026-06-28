@@ -426,12 +426,31 @@ class LlmOcrFusionService(
     private suspend fun extractOcrTextSpans(bitmap: Bitmap): List<TextSpan> {
         return withContext(Dispatchers.IO) {
             try {
-                // Use Tesseract OCR for text detection
-                // TODO: Implement recognizeWithBoxes in TesseractOcrEngine for accurate bounding boxes
+                val boxedSpans = runCatching {
+                    ocrEngine.recognizeWithBoxes(bitmap)
+                        .filter { it.text.isNotBlank() && it.boundingBox.width() > 0 && it.boundingBox.height() > 0 }
+                        .map { span ->
+                            TextSpan(
+                                text = span.text.trim(),
+                                x = span.boundingBox.left,
+                                y = span.boundingBox.top,
+                                width = span.boundingBox.width(),
+                                height = span.boundingBox.height()
+                            )
+                        }
+                }.getOrElse { error ->
+                    Log.w(TAG, "OCR boxed spans unavailable, falling back to plain text OCR", error)
+                    emptyList()
+                }
+
+                if (boxedSpans.isNotEmpty()) {
+                    Log.d(TAG, "Extracted ${boxedSpans.size} boxed text spans from OCR")
+                    return@withContext boxedSpans
+                }
+
                 val fullText = ocrEngine.recognize(bitmap)
                 
                 // Split text into lines and create simple TextSpan objects
-                // For now, we don't have accurate bounding boxes, so we use null
                 val textSpans = mutableListOf<TextSpan>()
                 
                 val lines = fullText.split("\n").filter { it.isNotBlank() }
@@ -439,7 +458,7 @@ class LlmOcrFusionService(
                     textSpans.add(
                         TextSpan(
                             text = line.trim(),
-                            x = 0, // TODO: Get actual bounding box from TesseractOcrEngine
+                            x = 0,
                             y = 0,
                             width = bitmap.width,
                             height = 20 // Estimated line height

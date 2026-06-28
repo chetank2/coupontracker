@@ -22,6 +22,11 @@ coupon data must still pass deterministic validation.
 - `app/src/main/kotlin/com/example/coupontracker/verification`
 - `app/src/main/kotlin/com/example/coupontracker/worker`
 
+There is no current `app/src/main/kotlin/com/example/coupontracker/ai`
+package. `ai/` is a future consolidation target; current AI/model code remains
+under `llm`, `ml`, `extraction/model`, `model`, `runtime`, and
+`verification`.
+
 ## Current Docs
 
 - [LLM integration](../../LLM_INTEGRATION.md)

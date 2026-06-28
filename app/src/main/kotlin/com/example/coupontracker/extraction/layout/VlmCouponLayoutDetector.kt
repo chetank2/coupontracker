@@ -1,16 +1,21 @@
 package com.example.coupontracker.extraction.layout
 
 import android.graphics.Bitmap
+import android.graphics.Rect
 import android.util.Log
+import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.preferences.SecurePreferencesManager
 import com.example.coupontracker.extraction.model.ModelRole
 import com.example.coupontracker.extraction.model.ModelSelector
 import com.example.coupontracker.extraction.model.RawVisionExtractionModel
+import com.example.coupontracker.extraction.vision.VisionFieldJsonParser
+import com.example.coupontracker.extraction.vision.VisionLayoutCard
 
 class VlmCouponLayoutDetector(
     private val modelSelector: ModelSelector,
     private val securePreferencesManager: SecurePreferencesManager? = null,
-    private val parser: CouponLayoutJsonParser = CouponLayoutJsonParser()
+    private val parser: CouponLayoutJsonParser = CouponLayoutJsonParser(),
+    private val visionParser: VisionFieldJsonParser = VisionFieldJsonParser()
 ) : CouponLayoutDetector {
 
     override val name: String = "vlm_layout"
@@ -66,7 +71,7 @@ class VlmCouponLayoutDetector(
                     ocrText = context.ocrText.takeIf { it.isNotBlank() },
                     prompt = PROMPT
                 )
-                parser.parse(result.canonicalJson)
+                parseLayoutResult(result.canonicalJson, bitmap)
             }.onFailure { error ->
                 failures += "${adapter.mode.name}:${error.javaClass.simpleName}"
                 Log.w(TAG, "VLM layout mode ${adapter.mode} failed: ${error.message}")
@@ -91,6 +96,44 @@ class VlmCouponLayoutDetector(
         )
     }
 
+    private fun parseLayoutResult(rawJson: String, bitmap: Bitmap): CouponLayoutDetection {
+        val normalized = runCatching {
+            val parsed = visionParser.parseLayout(rawJson)
+            CouponLayoutDetection(
+                cards = parsed.cards.mapIndexed { index, card -> card.toCouponCardRegion(bitmap, index) },
+                source = LayoutDetectionSource.VLM,
+                confidence = parsed.confidence,
+                diagnostics = LayoutDiagnostics(
+                    detectorName = name,
+                    rawCardCount = parsed.cards.size
+                )
+            )
+        }.getOrNull()
+        if (normalized != null && normalized.cards.isNotEmpty()) return normalized
+
+        return parser.parse(rawJson)
+    }
+
+    private fun VisionLayoutCard.toCouponCardRegion(bitmap: Bitmap, index: Int): CouponCardRegion {
+        val left = (bounds.x * bitmap.width).toInt().coerceIn(0, bitmap.width)
+        val top = (bounds.y * bitmap.height).toInt().coerceIn(0, bitmap.height)
+        val right = (bounds.right * bitmap.width).toInt().coerceIn(left, bitmap.width)
+        val bottom = (bounds.bottom * bitmap.height).toInt().coerceIn(top, bitmap.height)
+        return CouponCardRegion(
+            bounds = Rect(left, top, right, bottom),
+            completeness = when (layoutState) {
+                Coupon.LayoutState.COMPLETE,
+                Coupon.LayoutState.MODAL_FOREGROUND -> CardCompleteness.COMPLETE
+                Coupon.LayoutState.LOW_CONFIDENCE -> CardCompleteness.TOO_INCOMPLETE
+                else -> CardCompleteness.PARTIAL
+            },
+            confidence = confidence,
+            visibleFields = emptySet(),
+            reason = "vlm_normalized_layout",
+            sourceIndex = index
+        )
+    }
+
     companion object {
         private const val TAG = "VlmCouponLayoutDetector"
         private val VLM_MODE_NAMES = setOf(
@@ -99,8 +142,9 @@ class VlmCouponLayoutDetector(
             "VLM_MINICPM"
         )
         private const val PROMPT =
-            "Find visible coupon cards in this screenshot. Return JSON only with a cards array. " +
-                "Each card must have box {x,y,width,height}, completeness complete|partial|too_incomplete, " +
-                "confidence 0..1, visibleFields, and reason. Do not extract final coupon code, cashback, expiry, or merchant values."
+            "JSON only. Layout only. Do not return store, offer, code, or expiry. " +
+            "Return exactly {\"layoutState\":\"\",\"confidence\":0,\"cards\":[{\"active\":true,\"confidence\":0,\"bounds\":{\"x\":0,\"y\":0,\"w\":0,\"h\":0}}]}. " +
+            "Bounds are normalized 0..1. Pick one active foreground coupon/card/modal. " +
+            "layoutState: COMPLETE, PARTIAL, MODAL_FOREGROUND, MULTI_CARD, or LOW_CONFIDENCE."
     }
 }

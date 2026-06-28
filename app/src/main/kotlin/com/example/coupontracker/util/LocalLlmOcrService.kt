@@ -561,7 +561,7 @@ class LocalLlmOcrService(
             Return exactly one JSON object with keys storeName, description, redeemCode, expiryDate, storeNameSource, storeNameEvidence, needsAttention.
             Use only text present in OCR. Do not correct, rename, or infer brand names. Never output null or empty strings; use the literal string "unknown" when the field is missing or not directly supported by OCR. Keep storeNameEvidence as exact OCR snippets, up to three short snippets, or [] when nothing reliable exists. needsAttention should be true when the store lacks exact OCR evidence.
         """.trimIndent()
-        val warmupOcr = "WarmupCo weekend deal – 5% off everything. Redeem with code WARMUP5 before 31 Dec 2025."
+        val warmupOcr = "storeName description redeemCode expiryDate"
 
         val start = System.currentTimeMillis()
         return try {

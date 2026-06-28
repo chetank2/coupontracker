@@ -24,7 +24,9 @@ class DeterministicCouponExtractor(
         val expiryText: String?,
         val expiryDate: LocalDate?,
         val offerMatched: Boolean,
-        val codeMatched: Boolean
+        val codeMatched: Boolean,
+        val noCodeRequired: Boolean = false,
+        val regionMode: RegionMode = RegionMode.DEFAULT
     ) {
         val hasCriticalFields: Boolean
             get() = !offer.isNullOrBlank() && !storeCandidate.isNullOrBlank()
@@ -54,13 +56,15 @@ class DeterministicCouponExtractor(
             ?.toLocalDate()
             ?: LocalDate.now()
 
-        val storeCandidate = storeCanon.findInText(flat) ?: storeCanon.findInText(rawText)
+        val storeCandidate = storeCanon.findInText(flat)
+            ?: storeCanon.findInText(rawText)
         val offerMatch = offerPatterns.firstOrNull { pattern -> pattern.find(flat) != null }
         val offerText = offerMatch?.find(flat)?.value
 
         val codeCandidate = codePattern.findAll(upperFlat)
             .map { it.value }
             .firstOrNull { value -> value.uppercase(Locale.ROOT) !in codeStoplist }
+        val noCodeRequired = hasNoCodeEvidence(flat)
         val expiryMatch = expiryPattern.find(flat)
         val expiryRaw = expiryMatch?.groupValues?.getOrNull(1)
         val relativeExpiryMatch = relativeExpiryPattern.find(flat)
@@ -83,8 +87,18 @@ class DeterministicCouponExtractor(
             expiryText = expiryRaw ?: relativeExpiryText,
             expiryDate = expiryDate,
             offerMatched = offerMatch != null,
-            codeMatched = codeCandidate != null
+            codeMatched = codeCandidate != null,
+            noCodeRequired = noCodeRequired,
+            regionMode = mode
         )
+    }
+
+    private fun hasNoCodeEvidence(text: String): Boolean {
+        val normalized = text.lowercase(Locale.ROOT)
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return Regex("\\bno\\s+code(?:\\s+needed|required)?\\b").containsMatchIn(normalized)
     }
 
     private fun normalizeText(rawText: String, mode: RegionMode): String {

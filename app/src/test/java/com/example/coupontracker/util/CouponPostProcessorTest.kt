@@ -52,4 +52,57 @@ class CouponPostProcessorTest {
         assertEquals("Gritzo", refined.storeName)
         assertTrue(refined.needsAttention)
     }
+
+    @Test
+    fun `refine replaces weak merchant fragment with fuller OCR backed store`() {
+        val ocrText = """
+            FACEMINC
+            CompanvJE MAN COHDANY
+            Lhe Man
+            Buy any 4 products at
+            699*
+            from The Man Company website
+            Code: TMCPe6990425SQTJ COPY
+            About The Man Company
+            Buy any 4 products at 7699*
+        """.trimIndent()
+        val coupon = Coupon(
+            storeName = "Lhe Man",
+            description = "Buy any 4 products at 7699*",
+            redeemCode = "TMCPE6990425SQTJ",
+            imageUri = null,
+        )
+
+        val refined = CouponPostProcessor.refine(
+            coupon = coupon,
+            context = CouponFixContext(ocrText = ocrText)
+        )
+
+        assertEquals("The Man Company", refined.storeName)
+        assertEquals("Buy any 4 products at ₹699*", refined.description)
+    }
+
+    @Test
+    fun `refine does not extract needed from no code needed text`() {
+        val ocrText = """
+            SAMPLE STORE
+            Complimentary service voucher
+            NO CODE NEEDED
+        """.trimIndent()
+        val coupon = Coupon(
+            storeName = "SAMPLE STORE",
+            description = "Complimentary service voucher",
+            redeemCode = null,
+            imageUri = null,
+            codeState = Coupon.CodeState.NO_CODE_NEEDED
+        )
+
+        val refined = CouponPostProcessor.refine(
+            coupon = coupon,
+            context = CouponFixContext(ocrText = ocrText)
+        )
+
+        assertEquals(null, refined.redeemCode)
+        assertEquals(Coupon.CodeState.NO_CODE_NEEDED, refined.codeState)
+    }
 }

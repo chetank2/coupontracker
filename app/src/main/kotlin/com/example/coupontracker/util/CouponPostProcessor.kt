@@ -53,31 +53,74 @@ object CouponPostProcessor {
     }
 
     private fun resolveStoreName(current: String, ocrText: String?): String {
+        val ocrCandidate = if (!ocrText.isNullOrBlank()) {
+            extractCommercialStore(ocrText)
+                ?: textExtractor.extractStoreName(ocrText)
+                ?.takeIf { StoreCandidateValidator.isAcceptable(it, ocrText) }
+        } else {
+            null
+        }
+
         if (current.isNotBlank() &&
             !GenericFieldHeuristics.isGenericOrMissing(current) &&
             (ocrText.isNullOrBlank() || StoreCandidateValidator.isAcceptable(current, ocrText))
         ) {
+            if (ocrCandidate != null && isFullerStoreCandidate(current, ocrCandidate)) {
+                return ocrCandidate
+            }
             return current
         }
 
-        if (!ocrText.isNullOrBlank()) {
-            val candidate = textExtractor.extractStoreName(ocrText)
-            if (StoreCandidateValidator.isAcceptable(candidate, ocrText)) {
-                return candidate.orEmpty()
-            }
+        if (ocrCandidate != null) {
+            return ocrCandidate
         }
 
         return current.ifBlank { com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE }
     }
 
+    private fun isFullerStoreCandidate(current: String, candidate: String): Boolean {
+        val currentTokens = storeTokens(current)
+        val candidateTokens = storeTokens(candidate)
+        if (currentTokens.isEmpty() || candidateTokens.isEmpty()) return false
+        if (candidate.length <= current.length + 4) return false
+        return currentTokens.any { it in candidateTokens }
+    }
+
+    private fun storeTokens(value: String): Set<String> {
+        return Regex("[a-z0-9]+")
+            .findAll(value.lowercase())
+            .map { it.value }
+            .filterNot { it in setOf("the", "a", "an", "website", "app", "store") }
+            .toSet()
+    }
+
+    private fun extractCommercialStore(ocrText: String): String? {
+        return Regex(
+            pattern = """(?i)\bfrom\s+([A-Z][\p{L}\p{M}\p{N}'&.\- ]{2,60}?)\s+(?:website|app|store)\b""",
+            options = setOf(RegexOption.IGNORE_CASE)
+        ).findAll(ocrText)
+            .mapNotNull { match ->
+                match.groupValues[1]
+                    .trim()
+                    .replace(Regex("""\s+"""), " ")
+                    .takeIf { StoreCandidateValidator.isAcceptable(it, ocrText) }
+            }
+            .maxByOrNull { it.length }
+    }
+
     private fun resolveRedeemCode(current: String?, ocrText: String?): String? {
+        val noCodeRequired = hasNoCodeEvidence(ocrText)
         val explicitCode = extractExplicitCode(ocrText)
+            ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
         val normalized = current?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
         if (!explicitCode.isNullOrBlank() && explicitCode != normalized) {
             return explicitCode
         }
         if (normalized != null) {
             return normalized
+        }
+        if (noCodeRequired) {
+            return null
         }
 
         if (!ocrText.isNullOrBlank()) {
@@ -88,6 +131,15 @@ object CouponPostProcessor {
         }
 
         return null
+    }
+
+    private fun hasNoCodeEvidence(ocrText: String?): Boolean {
+        val normalized = ocrText.orEmpty()
+            .lowercase()
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return Regex("\\bno\\s+code(?:\\s+needed|required)?\\b").containsMatchIn(normalized)
     }
 
     private fun extractExplicitCode(ocrText: String?): String? {

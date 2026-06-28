@@ -1,6 +1,7 @@
 package com.example.coupontracker.extraction.deterministic
 
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.extraction.region.CouponRegionizer
 import java.time.ZoneId
 import java.util.Date
 import java.util.Locale
@@ -42,6 +43,11 @@ class SmartCouponSanitizer(
 
         val code = fields.code
         val sanitizedCode = code?.uppercase(Locale.ROOT)
+        val codeState = when {
+            !sanitizedCode.isNullOrBlank() -> Coupon.CodeState.PRESENT
+            fields.noCodeRequired -> Coupon.CodeState.NO_CODE_NEEDED
+            else -> Coupon.CodeState.UNKNOWN
+        }
 
         val expiryDate = fields.expiryDate
         val expiryDateConverted = expiryDate?.atStartOfDay(ZoneId.systemDefault())?.let { Date.from(it.toInstant()) }
@@ -57,6 +63,9 @@ class SmartCouponSanitizer(
             expiryDate = expiryDateConverted,
             imageUri = imageUri,
             status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE,
+            codeState = codeState,
+            expiryState = if (expiryDateConverted != null) Coupon.ExpiryState.PRESENT else Coupon.ExpiryState.UNKNOWN,
+            layoutState = Coupon.LayoutState.COMPLETE,
             createdAt = createdAt,
             updatedAt = Date()
         )
@@ -67,6 +76,9 @@ class SmartCouponSanitizer(
             normalizedDescription = description.lowercase(Locale.ROOT),
             redeemCode = sanitizedCode,
             expiryDate = expiryDateConverted ?: baseCoupon.expiryDate,
+            codeState = codeState,
+            expiryState = if (expiryDateConverted != null) Coupon.ExpiryState.PRESENT else baseCoupon.expiryState,
+            layoutState = baseCoupon.layoutState,
             imageUri = imageUri ?: baseCoupon.imageUri,
             updatedAt = Date()
         )

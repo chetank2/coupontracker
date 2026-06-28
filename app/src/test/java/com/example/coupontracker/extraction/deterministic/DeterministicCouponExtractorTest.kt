@@ -76,4 +76,5 @@ class DeterministicCouponExtractorTest {
         assertEquals("EXPIRES IN 29 DAYS", result.expiryText)
         assertEquals(LocalDate.of(2026, 7, 16), result.expiryDate)
     }
+
 }

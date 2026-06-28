@@ -22,6 +22,10 @@ ai/
   verification/background verification adapters
 ```
 
+`ai/` in this diagram is a future target package. Current model/AI-related code
+still lives under `llm`, `ml`, `extraction/model`, `model`, `runtime`, and
+`verification`.
+
 ## Solution
 
 - Single coupon image: OCR crop or image, extract deterministic fields, validate,

@@ -56,14 +56,14 @@ class VisionFieldStateExtractor @Inject constructor(
         private const val TAG = "VisionFieldStateExtractor"
         private val VLM_MODE_NAMES = setOf("VLM_GEMMA", "VLM_QWEN", "VLM_MINICPM")
         private const val PROMPT =
-            "Inspect this single foreground coupon card or modal. Return JSON only: " +
-                "{\"cards\":[{\"active\":true,\"storeName\":string|null,\"description\":string|null," +
-                "\"redeemCode\":string|null,\"expiryText\":string|null," +
-                "\"codeState\":\"PRESENT|NO_CODE_NEEDED|NOT_VISIBLE|UNKNOWN\"," +
-                "\"expiryState\":\"PRESENT|NOT_VISIBLE|UNKNOWN\"," +
-                "\"layoutState\":\"COMPLETE|PARTIAL|MODAL_FOREGROUND|MULTI_CARD|LOW_CONFIDENCE\"," +
-                "\"confidence\":0.0,\"evidence\":string|null}]}. " +
-                "Use PRESENT for code only when the exact code is visible. Use NO_CODE_NEEDED only when the UI says no code is needed. " +
-                "Do not invent coupon codes or expiry dates. Ignore background cards when a modal is foreground."
+            "Inspect this single cropped foreground coupon card or modal. Return JSON only: " +
+                "{\"layoutState\":\"COMPLETE|PARTIAL|MODAL_FOREGROUND|MULTI_CARD|LOW_CONFIDENCE\"," +
+                "\"confidence\":0.0,\"fields\":{\"store\":{\"state\":\"PRESENT|NOT_VISIBLE|UNKNOWN\"," +
+                "\"text\":string|null,\"evidence\":[string],\"confidence\":0.0},\"description\":{\"state\":\"PRESENT|NOT_VISIBLE|UNKNOWN\"," +
+                "\"text\":string|null,\"evidence\":[string],\"confidence\":0.0},\"code\":{\"state\":\"PRESENT|NO_CODE_NEEDED|NOT_VISIBLE|UNKNOWN\"," +
+                "\"text\":string|null,\"evidence\":[string],\"confidence\":0.0},\"expiry\":{\"state\":\"PRESENT|NOT_VISIBLE|UNKNOWN\"," +
+                "\"text\":string|null,\"evidence\":[string],\"confidence\":0.0}},\"noise\":[string]}. " +
+                "Label visible field regions and evidence only. OCR remains the exact text source, so do not invent coupon codes or expiry dates. " +
+                "Use NO_CODE_NEEDED only when the UI says no code is needed."
     }
 }

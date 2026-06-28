@@ -6,6 +6,11 @@ Use it when you need to modify code or investigate a behavior.
 
 ## Topic Index
 
+- [Static Memory](../static-memory.md)
+- [Dynamic Memory](../dynamic-memory.md)
+- [Knowledge Base Contract](../knowledge-base-contract.md)
+- [Knowledge Base Roadmap](../roadmap.md)
+- [Refactor Roadmap](../refactor-roadmap.md)
 - [Extraction and OCR](extraction-and-ocr.md)
 - [Models and Local AI](models-and-ai.md)
 - [Android App Architecture](android-app.md)
@@ -14,6 +19,7 @@ Use it when you need to modify code or investigate a behavior.
 - [Store, Privacy, and Publishing](store-and-publishing.md)
 - [Git, Branches, and Maintenance](git-and-branches.md)
 - [Global AI Engineering Principles](global-ai-engineering-principles.md)
+- [Project Origin and Historical Context](project-origin-history.md)
 - [Historical Archive](historical-archive.md)
 
 ## How To Use This Level
@@ -22,6 +28,8 @@ Use it when you need to modify code or investigate a behavior.
 2. Read current docs before archived docs.
 3. Treat archived docs as historical evidence, not current truth.
 4. If you learn something from device logs or a production failure, add it to:
+   - [Dynamic Memory](../dynamic-memory.md),
+   - [Static Memory](../static-memory.md) when it becomes a durable rule,
    - [Project Knowledge Diary](../../PROJECT_KNOWLEDGE_DIARY.md), or
    - a focused topic doc in this detailed layer.
 

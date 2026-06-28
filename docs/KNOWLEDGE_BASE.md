@@ -8,6 +8,8 @@ The docs folder is organized into two reading levels:
    product rules, and what to read first.
 2. **Detailed knowledge base**: deeper implementation notes, extraction rules,
    model history, refactor docs, store publishing, and archived history.
+3. **Memory files**: stable rules and dated lessons that should remain outside
+   agent-private folders.
 
 Use this file instead of scanning the whole `docs/` folder manually.
 
@@ -15,6 +17,11 @@ Use this file instead of scanning the whole `docs/` folder manually.
 
 - [High-level knowledge base](knowledge-base/high-level/README.md)
 - [Detailed knowledge base](knowledge-base/detailed/README.md)
+- [Knowledge base contract](knowledge-base/knowledge-base-contract.md)
+- [Knowledge base roadmap](knowledge-base/roadmap.md)
+- [Refactor roadmap](knowledge-base/refactor-roadmap.md)
+- [Static memory](knowledge-base/static-memory.md)
+- [Dynamic memory](knowledge-base/dynamic-memory.md)
 - [Full project diary](PROJECT_KNOWLEDGE_DIARY.md)
 - [Refactor documentation](refactor/README.md)
 
@@ -42,6 +49,27 @@ Read the detailed knowledge base when you need to change:
 Read [Global AI Engineering Principles](knowledge-base/detailed/global-ai-engineering-principles.md)
 when you need the country-agnostic, model-agnostic standard for how a coupon
 extraction app should work beyond this specific repository.
+
+Read [Knowledge Base Contract](knowledge-base/knowledge-base-contract.md) when
+you need to decide what belongs in the knowledge base and where it should go.
+
+Read [Knowledge Base Roadmap](knowledge-base/roadmap.md) for the documentation
+backlog and missing source maps, contracts, playbooks, and testing matrices.
+
+Read [Refactor Roadmap](knowledge-base/refactor-roadmap.md) before moving code
+between packages or changing architectural ownership.
+
+Read [Static Memory](knowledge-base/static-memory.md) for stable product,
+design, development, testing, and code-hygiene rules.
+
+Read [Dynamic Memory](knowledge-base/dynamic-memory.md) for recent commits,
+device observations, regression fixes, and branch-specific lessons.
+
+Read [Project Origin and Historical Context](knowledge-base/detailed/project-origin-history.md)
+for early ChatGPT/project discussions, original product goals, screenshot
+dataset context, and historical Qwen/Gemma/YOLO decisions. Treat that page as
+history; current source code, tests, static memory, and dynamic memory override
+it when they conflict.
 
 ## Current Priority
 

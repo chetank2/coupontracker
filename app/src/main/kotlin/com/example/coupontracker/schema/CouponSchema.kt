@@ -24,7 +24,6 @@ object CouponSchema {
                 required = true,
                 metadata = FieldMetadata(
                     description = "Brand or store name that issued the coupon",
-                    examples = listOf("Sample Store", "Example Mart", "Demo Brand"),
                     hints = listOf(
                         "Extract brand name only, not full company name",
                         "Prefer the issuing brand over partner or watermark text",
@@ -46,11 +45,6 @@ object CouponSchema {
                 required = false,
                 metadata = FieldMetadata(
                     description = "Verbatim offer text exactly as printed on the coupon",
-                    examples = listOf(
-                        "Flat ₹200 cashback on first order",
-                        "Get 50% off on electronics",
-                        "Buy 1 Get 1 free on select items"
-                    ),
                     hints = listOf(
                         "Use the offer sentence as-is without adding math or commentary",
                         "Preserve currency symbols, plus signs, and formatting",
@@ -71,7 +65,6 @@ object CouponSchema {
                 required = false,
                 metadata = FieldMetadata(
                     description = "Coupon or promo code to be entered at checkout",
-                    examples = listOf("SAVE50", "FLASH75", "NEWUSER100"),
                     hints = listOf(
                         "Extract only the code characters (no labels like 'Code:' or 'Use')",
                         "Treat 'couponCode' as an alias for this field",
@@ -91,7 +84,6 @@ object CouponSchema {
                 required = false,
                 metadata = FieldMetadata(
                     description = "Expiration date of the coupon",
-                    examples = listOf("31 May, 2025", "2025-12-31", "15/12/2025"),
                     hints = listOf(
                         "Copy the displayed date exactly when present",
                         "If only a relative phrase like 'Expires in 5 days' exists, emit ISO date computed from screenshot timestamp",
@@ -111,7 +103,6 @@ object CouponSchema {
                 required = false,
                 metadata = FieldMetadata(
                     description = "Short note indicating how the store name was inferred",
-                    examples = listOf("heading", "logo", "ocr_fallback"),
                     hints = listOf(
                         "Use concise labels such as heading, logo, url, ocr_fallback",
                         "Return null when provenance is unclear",
@@ -130,7 +121,6 @@ object CouponSchema {
                 required = false,
                 metadata = FieldMetadata(
                     description = "Supporting snippets that justify the selected store name",
-                    examples = listOf("[\"SAMPLE\", \"Get Upto 50% Off\"]", "[\"DEMO\"]"),
                     hints = listOf(
                         "Provide up to three short evidence strings",
                         "Use OCR fragments or reasoning phrases",
@@ -149,7 +139,6 @@ object CouponSchema {
                 required = false,
                 metadata = FieldMetadata(
                     description = "Flag indicating whether the extraction needs manual review",
-                    examples = listOf("true", "false"),
                     hints = listOf(
                         "Set true when the store name confidence is low or conflicting",
                         "Use false when extraction is high confidence"

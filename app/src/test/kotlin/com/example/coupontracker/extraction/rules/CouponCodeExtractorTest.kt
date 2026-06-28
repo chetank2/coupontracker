@@ -50,4 +50,19 @@ class CouponCodeExtractorTest {
 
         assertNull(CouponCodeExtractor.extract(text))
     }
+
+    @Test
+    fun `does not extract unlabeled alpha only modal action as code`() {
+        val text = """
+            MAKEMYTRIP FLIGHTS
+            Flat 15% off*
+            NO COD NEEDED
+            FLYMART
+            CLAIM IOW >
+            Book Now!
+            IIl use it later!
+        """.trimIndent()
+
+        assertNull(CouponCodeExtractor.extract(text))
+    }
 }

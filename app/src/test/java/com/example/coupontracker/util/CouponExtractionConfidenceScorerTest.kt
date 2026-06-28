@@ -145,6 +145,35 @@ class CouponExtractionConfidenceScorerTest {
 
         assertEquals(ExtractionRecommendation.VERIFY_WITH_VISION, result.recommendation)
         assertTrue(result.issues.contains("layout_low_confidence"))
+        assertTrue(result.score < 90)
+    }
+
+    @Test
+    fun `score caps Leaf weak low-confidence extraction below high confidence`() {
+        val ocr = """
+            Leaf
+            you won 16099 off on Leaf Halo Smart Ring
+            code: CREDJP70
+            Expires in 13 days
+        """.trimIndent()
+        val coupon = Coupon(
+            storeName = "Leaf",
+            description = "you won 16099 off on Leaf Halo Smart Ring",
+            expiryDate = Date(),
+            redeemCode = "CREDJP70",
+            imageUri = null,
+            needsAttention = true,
+            codeState = Coupon.CodeState.PRESENT,
+            expiryState = Coupon.ExpiryState.PRESENT,
+            layoutState = Coupon.LayoutState.LOW_CONFIDENCE
+        )
+
+        val result = CouponExtractionConfidenceScorer.score(coupon, ocr)
+
+        assertEquals(ExtractionRecommendation.VERIFY_WITH_VISION, result.recommendation)
+        assertTrue(result.score < 90)
+        assertTrue(result.issues.contains("layout_low_confidence"))
+        assertTrue(result.issues.contains("description_needs_attention"))
     }
 
     @Test

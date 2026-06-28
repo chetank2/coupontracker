@@ -1,8 +1,10 @@
 package com.example.coupontracker.util
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -98,7 +100,7 @@ class TextExtractorTest {
 
         assertEquals("The Man Company", result.storeName)
         assertEquals("TMCPE6990425SQTJ", result.redeemCode)
-        assertEquals("Buy any 4 products at 699* from The Man Company website", result.description)
+        assertEquals("Buy any 4 products at ₹699*", result.description)
     }
 
     @Test
@@ -130,7 +132,7 @@ class TextExtractorTest {
         val result = extractor.extractCouponInfoSync(text, baseDate)
 
         assertEquals("AGEasy", result.storeName)
-        assertEquals("One Touch Digital BP by AGEasy worth ₹1499 for ₹899", result.description)
+        assertEquals("One Touch Digital BP by AGEasy worth ₹1499 for ₹7899", result.description)
         assertEquals("CREDBP", result.redeemCode)
     }
 
@@ -150,6 +152,84 @@ class TextExtractorTest {
         assertEquals("IDFC FIRST BANK", result.storeName)
         assertEquals("Monthly Interest", result.description)
         assertNull(result.redeemCode)
+    }
+
+    @Test
+    fun `extractCouponInfoSync repairs missing rupee glyph in at price offer`() {
+        val baseDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse("2025-05-02 20:19:42")
+        val text = """
+            FACEMINC
+            CompanvJE MAN COHDANY
+            Lhe Man
+            BLANC
+            POUR HOMME EALU DE TOILETTE
+            Buy any 4 products at
+            699*
+            from The Man Company website
+            Code: TMCPe6990425SQTJ COPY
+            Expires on 31 May, 2025, 11:59 PM
+            About The Man Company
+            Scratch card received on offer
+            Buy any 4 products at 7699*
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("The Man Company", result.storeName)
+        assertEquals("Buy any 4 products at ₹699*", result.description)
+        assertEquals("TMCPE6990425SQTJ", result.redeemCode)
+    }
+
+    @Test
+    fun `extractCouponInfoSync keeps TecMarx at-price offer focused`() {
+        val text = """
+            TECMARY
+            TecMarx
+            Get Roar Bluetooth Earbuds @
+            299*
+            only on TecMarx website
+            BUY NOW
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text)
+
+        assertEquals("TecMarx", result.storeName)
+        assertEquals("Get Roar Bluetooth Earbuds @ ₹299*", result.description)
+        assertFalse(result.description.contains("TECMARY"))
+        assertFalse(result.description.contains("BUY NOW", ignoreCase = true))
+        assertFalse(result.description.contains("website", ignoreCase = true))
+    }
+
+    @Test
+    fun `extractCouponInfoSync does not rewrite real seven thousand price without artifact marker`() {
+        val text = """
+            Premium Store
+            Save on premium kit from 7999
+            Code: PREMIUM7999
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text)
+
+        assertEquals("Premium", result.storeName)
+        assertFalse(result.description.contains("₹999"))
+        assertTrue(result.description.contains("7999"))
+        assertEquals("PREMIUM7999", result.redeemCode)
+    }
+
+    @Test
+    fun `extractCouponInfoSync does not rewrite real seven thousand price with legal marker`() {
+        val text = """
+            Travel Store
+            Hotel stays from 7999*
+            Code: HOTEL7999
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text)
+
+        assertEquals("Travel", result.storeName)
+        assertFalse(result.description.contains("₹999"))
+        assertTrue(result.description.contains("7999"))
+        assertEquals("HOTEL7999", result.redeemCode)
     }
 
     @Test
@@ -503,6 +583,54 @@ class TextExtractorTest {
     }
 
     @Test
+    fun `extractCouponInfo trims previous wallet card before BigBasket card`() {
+        val baseDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse("2025-05-02")
+        val text = """
+            vouchers
+            X
+            active : 25 lifetime : 279
+            Beardo4.27
+            Details Redeem Now
+            O EXPIRES IN 06 DAYS
+            you won flat 150 off on orders
+            5 bigbasket above 400 on Bigbasket
+            now in 0mina
+            bbnow t 3.96
+            code: BBNOWCRED3-GZGEZF7BAHEXFY
+            Details Redeem Now
+            O EXPIRES IN 39 DAYS
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("Bigbasket", result.storeName)
+        assertEquals("you won flat ₹150 off on orders above ₹400 on Bigbasket", result.description)
+        assertEquals("BBNOWCRED3-GZGEZF7BAHEXFY", result.redeemCode)
+
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        assertEquals("2025-06-10", formatter.format(result.expiryDate as Date))
+    }
+
+    @Test
+    fun `extractCouponInfo preserves current card store header before expiry badge`() {
+        val baseDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse("2025-05-02")
+        val text = """
+            Croma
+            Expires in 5 days
+            Get ₹500 off on Apple accessories
+            Code: CROMA500
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("Croma", result.storeName)
+        assertEquals("CROMA500", result.redeemCode)
+
+        val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        assertEquals("2025-05-07", formatter.format(result.expiryDate as Date))
+    }
+
+    @Test
     fun `extractCouponInfo prefers merchant in offer over wallet watermark and uses capture date`() {
         val baseDate = SimpleDateFormat("yyyy-MM-dd", Locale.US).parse("2026-06-17")
         val text = """
@@ -527,6 +655,28 @@ class TextExtractorTest {
 
         val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         assertEquals("2026-07-16", formatter.format(result.expiryDate as Date))
+    }
+
+    @Test
+    fun `extractCouponInfo rejects Toothsi offer fragment as store`() {
+        val baseDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).parse("2026-06-24 14:38:49")
+        val text = """
+            T TOOTHSI
+            Flat 20k off
+            On toothsi invisible aligners
+            Expires in 16 days
+            TOOTHSI20KOFF
+            Claim Now 7
+            Offer Details
+            FAQs
+        """.trimIndent()
+
+        val result = extractor.extractCouponInfoSync(text, baseDate)
+
+        assertEquals("TOOTHSI", result.storeName)
+        assertFalse(result.storeName.contains("Flat", ignoreCase = true))
+        assertEquals("TOOTHSI20KOFF", result.redeemCode)
+        assertEquals("Flat 20k off On toothsi invisible aligners", result.description)
     }
 
     @Test

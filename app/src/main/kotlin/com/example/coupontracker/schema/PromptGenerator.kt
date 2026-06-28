@@ -38,24 +38,6 @@ object PromptGenerator {
                     }
                 }
                 
-                // Add examples if available
-                if (field.metadata.examples.isNotEmpty()) {
-                    val exampleLine = when {
-                        field.type is FieldType.ObjectType -> {
-                            // Use first example as-is for complex types
-                            "   - Example: ${field.metadata.examples.first()}"
-                        }
-                        field.metadata.examples.size > 1 -> {
-                            // Show multiple examples inline
-                            "   - Examples: ${field.metadata.examples.take(3).joinToString(", ") { "\"$it\"" }}"
-                        }
-                        else -> {
-                            "   - Example: \"${field.metadata.examples.first()}\""
-                        }
-                    }
-                    appendLine(exampleLine)
-                }
-                
                 appendLine()
             }
             
@@ -162,4 +144,3 @@ object PromptGenerator {
         }
     }
 }
-

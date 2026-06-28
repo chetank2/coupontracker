@@ -48,7 +48,19 @@ internal class StoreNameValidator(
     private val ctaStopwords: Set<String> =
         if (brandLexicon.ctaStopwords.isEmpty()) DEFAULT_CTA_STOPWORDS else brandLexicon.ctaStopwords
 
-    private val layoutStopwords = setOf("minimum", "order", "value", "validity", "details")
+    private val layoutStopwords = setOf(
+        "minimum",
+        "order",
+        "value",
+        "validity",
+        "details",
+        "flat",
+        "save",
+        "discount",
+        "claim",
+        "faq",
+        "faqs"
+    )
 
     fun assessCandidate(
         value: String?,

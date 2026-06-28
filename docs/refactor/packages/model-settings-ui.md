@@ -13,9 +13,11 @@ selection, download/import validation state, and error display.
 
 ## Solution
 
-UI calls model-management use cases or `ai/model` services. It displays model
-availability, role, size, validation status, and cleanup capability. It does not
-invoke capture extraction or route scanner behavior directly.
+UI calls model-management use cases or current model services. A future
+`ai/model` package may own those services after a dedicated migration. The UI
+displays model availability, role, size, validation status, and cleanup
+capability. It does not invoke capture extraction or route scanner behavior
+directly.
 
 ## Files
 
@@ -37,4 +39,5 @@ hardcode model paths outside model management.
 ## Definition Of Done
 
 Model settings manage model availability only, capture remains OCR-first, and
-model paths/roles are owned by `ai/model`.
+model paths/roles stay in current model packages until a future `ai/model`
+migration lands.

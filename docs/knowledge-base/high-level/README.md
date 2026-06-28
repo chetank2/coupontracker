@@ -59,11 +59,13 @@ Core jobs:
 The extraction architecture must be:
 
 ```text
-screenshot
--> coupon/card region
--> OCR/model extraction inside one region
+full screenshot
+-> coupon/card/modal ownership
+-> crop active region
+-> OCR exact text inside crop
+-> VLM field labels/states inside crop
 -> field bundle
--> validation
+-> validation/scoring
 -> save or needs review
 ```
 
@@ -74,6 +76,9 @@ full screenshot -> model -> final coupon
 ```
 
 That caused multi-card field mixing.
+
+For the stable rule set, read [Static Memory](../static-memory.md).
+For recent device-driven lessons, read [Dynamic Memory](../dynamic-memory.md).
 
 ## Current Extraction Rule
 
@@ -97,7 +102,14 @@ the coupon reviewable if that fallback changes trust.
 
 ## Current Model Rule
 
-Qwen/Gemma/MiniCPM can propose or clean fields.
+Qwen/Gemma/MiniCPM can propose or clean fields, but Gemma Vision has a specific
+role in the current architecture:
+
+```text
+Gemma Vision = layout ownership + visual field labels/states
+OCR = exact coupon text and code evidence
+validator/scorer = trust decision
+```
 
 They must not blindly overwrite protected fields.
 

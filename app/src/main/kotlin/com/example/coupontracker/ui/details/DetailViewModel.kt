@@ -11,6 +11,7 @@ import com.example.coupontracker.debug.ExtractionDebugRepository
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.extraction.merge.ModelCleanupMergePolicy
 import com.example.coupontracker.llm.LlmRuntimeManager
+import com.example.coupontracker.util.CleanupStatusFreshness
 import com.example.coupontracker.util.CouponNotificationManager
 import com.example.coupontracker.worker.VerifyCouponWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -79,6 +80,9 @@ class DetailViewModel @Inject constructor(
     fun verifyCoupon() {
         viewModelScope.launch {
             _coupon.value?.let { coupon ->
+                if (CleanupStatusFreshness.isFreshInProgress(coupon)) {
+                    return@let
+                }
                 repository.updateCoupon(
                     coupon.copy(
                         cleanupStatus = Coupon.CleanupStatus.PENDING,
@@ -180,8 +184,7 @@ class DetailViewModel @Inject constructor(
         val offerText = coupon.description.trim()
         return """
             You clean coupon offer text only.
-            Return one JSON object matching the app coupon schema:
-            {"storeName":"unknown","description":"...","redeemCode":"unknown","expiryDate":"unknown","storeNameSource":"unknown","storeNameEvidence":[],"needsAttention":false}
+            Return one JSON object with keys: storeName, description, redeemCode, expiryDate, storeNameSource, storeNameEvidence, needsAttention.
 
             Rules:
             - Put the cleaned offer sentence only in description.

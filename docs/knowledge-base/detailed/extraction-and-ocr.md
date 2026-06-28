@@ -11,6 +11,19 @@ Segment first. Extract second. Validate spatial consistency third.
 
 Extraction must be region-first and evidence-backed.
 
+The current VLM/OCR authority split is:
+
+```text
+OCR = exact visible text
+Gemma Vision = layout ownership and field labels/states
+validator/scorer = final trust gate
+```
+
+See also:
+
+- [Static Memory](../static-memory.md)
+- [Dynamic Memory](../dynamic-memory.md)
+
 ## Current Code Areas
 
 - `app/src/main/kotlin/com/example/coupontracker/extraction/rules`
@@ -94,6 +107,36 @@ Fix pattern:
 - require stronger evidence for short codes,
 - prefer explicit nearby `code:`/`use code`/`apply code` labels.
 
+### Background No-Code Overriding Active Code
+
+Symptoms:
+
+- foreground modal has a real code,
+- background card says `NO CODE NEEDED`,
+- saved coupon shows no-code state and drops the real code.
+
+Fix pattern:
+
+- scope code extraction to the active card/modal first,
+- treat no-code text as absence evidence only after scoped code search fails,
+- persist no-code through `codeState`, not as a `redeemCode` string,
+- require OCR/visible-text evidence before trusting a coupon code.
+
+### VLM Layout And Field-Label Failures
+
+Symptoms:
+
+- valid layout JSON parses empty because schema enforcement stripped `cards`,
+- raw parser errors appear in UI,
+- Gemma runs but saved fields remain wrong or partially trusted.
+
+Fix pattern:
+
+- use raw vision extraction for layout and field-label contracts,
+- keep layout JSON separate from final coupon field JSON,
+- store parse details in `debugVisionEvidence`,
+- route low-confidence/malformed VLM output to review while preserving OCR.
+
 ## Historical Docs
 
 Use for history only:
@@ -112,9 +155,13 @@ Use for history only:
 Add unit tests near the failing component:
 
 - `TextExtractorTest` for rule extraction.
+- `CouponCodeExtractorTest` for code/no-code conflicts.
+- `PostOcrCouponNormalizerTest` for OCR artifact repairs.
 - `GenericFieldHeuristicsTest` for generic/noise filtering.
 - `SpatialFieldConsistencyValidatorTest` for region/anchor behavior.
 - `ModelCleanupMergePolicyTest` for model merge decisions.
 - `ModelExpiryNormalizerTest` for model date parsing.
+- `VisionFieldJsonParserTest` and `VisionOcrMergePolicyTest` for VLM schema
+  and merge rules.
 
 Every real device failure should become a small regression test.
