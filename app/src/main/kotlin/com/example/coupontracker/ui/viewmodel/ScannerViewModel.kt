@@ -19,6 +19,8 @@ import com.example.coupontracker.debug.ExtractionDebugScorer
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.domain.usecase.SaveScannedCouponResult
 import com.example.coupontracker.domain.usecase.SaveScannedCouponUseCase
+import com.example.coupontracker.domain.usecase.SingleScanRouteDecision
+import com.example.coupontracker.domain.usecase.SingleScanRoutingUseCase
 import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.extraction.capture.decideFullImageFallback
@@ -96,7 +98,8 @@ class ScannerViewModel @Inject constructor(
     private val multiCouponExtractionService: MultiCouponExtractionService,
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Injected bitmap memory management
     private val validatorFeedbackRecorder: ValidatorFeedbackRecorder,
-    private val saveScannedCouponUseCase: SaveScannedCouponUseCase
+    private val saveScannedCouponUseCase: SaveScannedCouponUseCase,
+    private val singleScanRoutingUseCase: SingleScanRoutingUseCase
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -378,10 +381,14 @@ class ScannerViewModel @Inject constructor(
         val detector = twoStageDetector
         if (detector == null) {
             Log.w(TAG, "Single scan crop-first routing unavailable: ${detectorInitErrorMessage ?: "detector not initialized"}")
-            if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, "coupon_detector_unavailable")) {
+            val decision = singleScanRoutingUseCase.decideAfterCropDetection(
+                detectorAvailable = false,
+                detectedCropCount = 0
+            ) as SingleScanRouteDecision.TryLayoutThenGuardedFallback
+            if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, decision.reason)) {
                 return false
             }
-            scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, "coupon_detector_unavailable")
+            scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, decision.reason)
             return false
         }
 
@@ -390,15 +397,18 @@ class ScannerViewModel @Inject constructor(
         }
         Log.d(TAG, "Single scan crop-first detection found ${couponInstances.size} coupon(s)")
 
-        return when (couponInstances.size) {
-            0 -> {
-                if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, "no_coupon_crop_detected")) {
+        return when (val decision = singleScanRoutingUseCase.decideAfterCropDetection(
+            detectorAvailable = true,
+            detectedCropCount = couponInstances.size
+        )) {
+            is SingleScanRouteDecision.TryLayoutThenGuardedFallback -> {
+                if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, decision.reason)) {
                     return false
                 }
-                scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, "no_coupon_crop_detected")
+                scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, decision.reason)
                 false
             }
-            1 -> {
+            SingleScanRouteDecision.ProcessSingleCrop -> {
                 logStrategyExecution(
                     requested = strategy,
                     executed = "ocr_first_card_crop",
@@ -413,7 +423,7 @@ class ScannerViewModel @Inject constructor(
                 )
                 false
             }
-            else -> {
+            SingleScanRouteDecision.ShowMultiCouponSelection -> {
                 logStrategyExecution(
                     requested = strategy,
                     executed = "multi_coupon_selection",

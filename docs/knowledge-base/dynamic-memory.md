@@ -357,3 +357,122 @@ lastUpdateTime=2026-06-26 18:29:34
   and reusable vision merge policies.
 - Improve review UI to identify the uncertain field/stage.
 - Keep adding screenshot corpus cases from real device failures.
+
+## 2026-06-28: Production Shortcut Removal And Routing Seams
+
+### What Changed
+
+- Removed the user-visible API diagnostics placeholder route and its dead
+  `ApiTester`.
+- Removed the model checksum bypass sentinel from model config/downloaders.
+- Removed production Room destructive migration fallback.
+- Removed the reachable native-LLM-unavailable stub that returned fake coupon
+  data such as `Mock Store` and `MOCK50`.
+- Added `SingleScanRoutingUseCase` as the first pure domain seam for scanner
+  crop-count routing decisions.
+- Updated extraction docs to reflect current crop-first scanner routing instead
+  of old strategy-switched routes.
+
+### Why
+
+- User coupon data must not be wiped by a missing migration.
+- Model failures must fail closed or route to review; they must never synthesize
+  production-looking coupon fields.
+- Scanner routing needs to move out of `ScannerViewModel` incrementally without
+  changing crop-first behavior.
+- Docs should describe active routes so future agents do not patch stale paths.
+
+### How It Works
+
+- Room now uses only explicit migrations registered in `CouponDatabase`.
+- Model download config uses `null` for unknown upstream checksums; any supplied
+  checksum must be a real SHA-256.
+- `LlmRuntimeManager.createMLCEngine()` returns `null` when native runtime is
+  unavailable instead of creating a mock inference engine.
+- `ScannerViewModel.routeDetectedCouponCrops(...)` delegates crop-count route
+  choice to `SingleScanRoutingUseCase`, while the ViewModel still performs UI
+  state updates and persistence side effects.
+
+### Verification
+
+```bash
+git diff --check
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:assembleDebug
+```
+
+Focused tests added:
+
+- `CouponUseCaseBoundaryTest`
+- `RealModelConfigTest`
+- `SingleScanRoutingUseCaseTest`
+
+### Remaining Risk
+
+- `ScannerViewModel` still owns most scan orchestration and side effects.
+- `BatchScannerViewModel` still owns batch orchestration.
+- Screenshot regression corpus is still too small for the real coupon failures
+  seen on device.
+- Legacy XML fragments/navigation remain until a dedicated migration removes
+  Safe Args references.
+
+### Follow-Up
+
+- Move layout routing and guarded fallback execution behind scanner use cases.
+- Move batch routing into a batch use case/router.
+- Expand real screenshot regression fixtures for BigBasket, MakeMyTrip,
+  Lenskart no-code, crop OCR blank, and malformed Gemma JSON.
+
+## 2026-06-28: Scanner And Batch Refactor Slice
+
+### What Changed
+
+- Added `SingleScanRoutingUseCase` for crop-count scanner route decisions.
+- Added `BatchCaptureItemProcessor` for per-item batch routing.
+- Added regression harness cases for MakeMyTrip, BigBasket, Lenskart no-code,
+  and full-image evidence rejection.
+
+### Why
+
+- `ScannerViewModel` and `BatchScannerViewModel` are still too large, but route
+  moves must be behavior-preserving.
+- The safest first move is pure decision/routing code with focused tests while
+  leaving UI state and persistence side effects in the existing ViewModels.
+- Real screenshot failures need executable regression coverage before deeper
+  extractor refactors.
+
+### How It Works
+
+- `SingleScanRoutingUseCase` maps detector availability and crop count to:
+  layout-then-guarded-fallback, single-crop processing, or multi-coupon
+  selection.
+- `BatchCaptureItemProcessor` maps one selected batch item to PDF processing,
+  unsupported-file failure, bitmap decode failure, or image coupon extraction
+  while making bitmap release explicit.
+- Regression harness tests exercise merge and crop-evidence contracts without
+  requiring device Gemma runtime.
+
+### Verification
+
+```bash
+git diff --check
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest
+```
+
+Focused tests:
+
+- `SingleScanRoutingUseCaseTest`
+- `BatchCaptureItemProcessorTest`
+- `ScreenshotExtractionRegressionHarnessTest`
+
+### Remaining Risk
+
+- ViewModels still own side-effect execution and UI state transitions.
+- Layout route execution and guarded fallback execution are not yet extracted.
+- Batch save/review orchestration is still in `BatchScannerViewModel`.
+
+### Follow-Up
+
+- Move scanner layout execution into a use case after adding route-state tests.
+- Move batch save/review orchestration into a use case.
+- Continue splitting field extraction only with screenshot fixture coverage.

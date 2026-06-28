@@ -11,6 +11,8 @@ import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.extraction.capture.BatchCaptureInput
+import com.example.coupontracker.extraction.capture.BatchCaptureItemProcessor
 import com.example.coupontracker.extraction.capture.createCropIsolationFailedCoupon
 import com.example.coupontracker.extraction.capture.isFallbackOrFullImageRegion
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
@@ -52,6 +54,7 @@ class BatchScannerViewModel @Inject constructor(
 
     private val multiEngineOCR = com.example.coupontracker.util.MultiEngineOCR(context, ocrEngine)
     private val uriPersistenceManager = com.example.coupontracker.util.UriPersistenceManager(context)
+    private val batchCaptureItemProcessor = BatchCaptureItemProcessor()
     private val detectorInitializationResult = initializeTwoStageDetector()
     private val twoStageDetector = detectorInitializationResult.detector
     private val detectorInitErrorMessage = detectorInitializationResult.errorMessage
@@ -295,82 +298,52 @@ class BatchScannerViewModel @Inject constructor(
                 for ((index, selectedImage) in images.withIndex()) {
                     val uri = selectedImage.uri
                     updateState { it.copy(currentlyProcessingImage = selectedImage) }
-                    var bitmap: android.graphics.Bitmap? = null
                     try {
                         if (selectedImage.isPdf()) {
                             Log.d(TAG, "Batch: Processing PDF ${selectedImage.displayName}")
-                            val coupon = couponInputManager.processPdfUri(uri)
-                            processedCoupons.add(coupon)
-                            imageStatuses.add(
-                                ImageProcessingStatus(
-                                    image = selectedImage,
-                                    success = true,
-                                    message = null,
-                                    couponsFound = 1
-                                )
-                            )
-                            continue
-                        }
-
-                        if (!selectedImage.isImage()) {
+                        } else if (!selectedImage.isImage()) {
                             Log.w(TAG, "Batch: Unsupported file type ${selectedImage.mimeType} for uri=$uri")
-                            failedCount++
-                            imageStatuses.add(
-                                ImageProcessingStatus(
-                                    image = selectedImage,
-                                    success = false,
-                                    message = "Unsupported file type"
-                                )
-                            )
-                            continue
                         }
 
-                        // Load and track bitmap
-                        bitmap = android.graphics.BitmapFactory.decodeStream(
-                            context.contentResolver.openInputStream(uri)
+                        val itemResult = batchCaptureItemProcessor.process(
+                            input = selectedImage.toBatchCaptureInput(),
+                            decodeBitmap = { inputUri ->
+                                android.graphics.BitmapFactory.decodeStream(
+                                    context.contentResolver.openInputStream(inputUri)
+                                )
+                            },
+                            trackBitmap = { bitmapManager.trackBitmap(it) },
+                            releaseBitmap = { bitmapManager.releaseBitmap(it) },
+                            processPdf = { inputUri -> couponInputManager.processPdfUri(inputUri) },
+                            extractImageCoupons = { inputUri, imageBitmap ->
+                                detectAndExtractMultipleCoupons(inputUri, imageBitmap)
+                            }
                         )
 
-                        if (bitmap == null) {
-                            Log.e(TAG, "Batch: Failed to decode bitmap ${index + 1}")
-                            failedCount++
-                            imageStatuses.add(
-                                ImageProcessingStatus(
-                                    image = selectedImage,
-                                    success = false,
-                                    message = "Unable to open image"
-                                )
-                            )
-                            continue
-                        }
-                        
-                        bitmapManager.trackBitmap(bitmap)
-                        
-                        // V2.1: Detect multiple coupons per image using hybrid detector
-                        val imageCoupons = detectAndExtractMultipleCoupons(uri, bitmap)
-                        
-                        if (imageCoupons.isNotEmpty()) {
-                            processedCoupons.addAll(imageCoupons)
-                            Log.d(TAG, "Batch: Extracted ${imageCoupons.size} coupon(s) from image ${index + 1}/${images.size}")
-                            imageStatuses.add(
-                                ImageProcessingStatus(
-                                    image = selectedImage,
-                                    success = true,
-                                    message = null,
-                                    couponsFound = imageCoupons.size
-                                )
-                            )
+                        if (itemResult.success) {
+                            processedCoupons.addAll(itemResult.coupons)
+                            if (selectedImage.isImage()) {
+                                Log.d(TAG, "Batch: Extracted ${itemResult.couponsFound} coupon(s) from image ${index + 1}/${images.size}")
+                            }
                         } else {
-                            Log.w(TAG, "Batch: No coupons extracted from image ${index + 1}/${images.size}")
                             failedCount++
-                            imageStatuses.add(
-                                ImageProcessingStatus(
-                                    image = selectedImage,
-                                    success = false,
-                                    message = "No coupons detected"
-                                )
-                            )
                         }
 
+                        if (itemResult.message == "Unable to open image") {
+                            Log.e(TAG, "Batch: Failed to decode bitmap ${index + 1}")
+                        }
+                        if (itemResult.message == "No coupons detected") {
+                            Log.w(TAG, "Batch: No coupons extracted from image ${index + 1}/${images.size}")
+                        }
+
+                        imageStatuses.add(
+                            ImageProcessingStatus(
+                                image = selectedImage,
+                                success = itemResult.success,
+                                message = itemResult.message,
+                                couponsFound = itemResult.couponsFound
+                            )
+                        )
                     } catch (e: Exception) {
                         Log.e(TAG, "Batch: Error processing ${index + 1}/${images.size}", e)
                         failedCount++
@@ -381,10 +354,6 @@ class BatchScannerViewModel @Inject constructor(
                                 message = e.message ?: "Unexpected error"
                             )
                         )
-                    } finally {
-                        bitmap?.let {
-                            bitmapManager.releaseBitmap(it)
-                        }
                     }
 
                     // Update progress
@@ -857,6 +826,14 @@ data class SelectedImage(
 ) {
     fun isImage(): Boolean = mimeType.startsWith("image/") || mimeType == "image/*"
     fun isPdf(): Boolean = mimeType == "application/pdf"
+}
+
+private fun SelectedImage.toBatchCaptureInput(): BatchCaptureInput {
+    return BatchCaptureInput(
+        uri = uri,
+        displayName = displayName,
+        mimeType = mimeType
+    )
 }
 
 data class ImageProcessingStatus(

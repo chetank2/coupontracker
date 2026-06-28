@@ -123,6 +123,18 @@ Move order:
 4. scanner orchestration seams.
 5. ViewModel cleanup.
 
+Current progress:
+
+- `SingleScanRoutingUseCase` owns the first crop-count route decision:
+  detector unavailable, zero crops, one crop, or multiple crops.
+- `BatchCaptureItemProcessor` owns per-item batch routing for PDF,
+  unsupported files, bitmap decode failure, image extraction dispatch, and
+  bitmap release.
+- `ScannerViewModel` still owns route execution, UI state, persistence, and
+  fallback side effects.
+- Next safe slice is moving layout-route execution or guarded fallback execution
+  into an extraction/domain use case while preserving the same UI states.
+
 Risks:
 
 - changed extraction order,

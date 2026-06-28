@@ -28,6 +28,211 @@ class ScreenshotExtractionRegressionHarnessTest {
     private val cropPolicy = CropIsolationPolicy()
 
     @Test
+    fun `fixture MakeMyTrip crop code wins over hallucinated no-code state`() {
+        val fixture = RegressionFixture(
+            base = coupon(
+                storeName = "MakeMyTrip",
+                description = "Flat 15% off on domestic flights",
+                redeemCode = "MMTFLY",
+                rawOcrText = """
+                    MakeMyTrip
+                    Flat 15% off on domestic flights
+                    Use code MMTFLY
+                    Valid till 30 Jun 2026
+                """.trimIndent()
+            ),
+            visionJson = """
+                {
+                  "layoutState": "MODAL_FOREGROUND",
+                  "confidence": 0.91,
+                  "fields": {
+                    "store": {
+                      "state": "PRESENT",
+                      "text": "MakeMyTrip",
+                      "evidence": ["MakeMyTrip"],
+                      "confidence": 0.94
+                    },
+                    "description": {
+                      "state": "PRESENT",
+                      "text": "Flat 15% off on domestic flights",
+                      "evidence": ["Flat 15% off on domestic flights"],
+                      "confidence": 0.9
+                    },
+                    "code": {
+                      "state": "NO_CODE_NEEDED",
+                      "text": null,
+                      "evidence": ["No code needed"],
+                      "confidence": 0.72
+                    },
+                    "expiry": {
+                      "state": "PRESENT",
+                      "text": "Valid till 30 Jun 2026",
+                      "evidence": ["Valid till 30 Jun 2026"],
+                      "confidence": 0.88
+                    }
+                  }
+                }
+            """.trimIndent(),
+            mergeInput = cropInput(),
+            expected = ExpectedCouponContract(
+                storeName = "MakeMyTrip",
+                description = "Flat 15% off on domestic flights",
+                redeemCode = "MMTFLY",
+                codeState = Coupon.CodeState.PRESENT,
+                expiryState = Coupon.ExpiryState.PRESENT,
+                layoutState = Coupon.LayoutState.MODAL_FOREGROUND,
+                cleanupStatus = Coupon.CleanupStatus.CLEANED,
+                needsAttention = false,
+                trustedVision = true
+            )
+        )
+
+        val merged = runFixture(fixture)
+
+        assertExpected(fixture.expected, merged)
+        assertEquals(LocalDate.of(2026, 6, 30), merged.expiryDate!!.toLocalDate())
+        assertFalse(merged.debugVisionEvidence.orEmpty().contains("BACKGROUND123"))
+    }
+
+    @Test
+    fun `fixture BigBasket crop expiry wins over previous card expiry conflict`() {
+        val fixture = RegressionFixture(
+            base = coupon(
+                storeName = "Bigbasket",
+                description = "you won flat 150 off on orders above 400 on Bigbasket",
+                redeemCode = "BBNOWCRED3-GZGEZF7BAHEXFY",
+                expiryDate = localDate(2025, 5, 8),
+                extractionTimestamp = localDate(2025, 5, 2),
+                rawOcrText = """
+                    vouchers
+                    Beardo
+                    O EXPIRES IN 06 DAYS
+                    you won flat 150 off on orders above 400 on Bigbasket
+                    code: BBNOWCRED3-GZGEZF7BAHEXFY
+                    O EXPIRES IN 39 DAYS
+                """.trimIndent()
+            ),
+            visionJson = """
+                {
+                  "layoutState": "MODAL_FOREGROUND",
+                  "confidence": 0.94,
+                  "fields": {
+                    "store": {
+                      "state": "PRESENT",
+                      "text": "Bigbasket",
+                      "evidence": ["Bigbasket"],
+                      "confidence": 0.95
+                    },
+                    "description": {
+                      "state": "PRESENT",
+                      "text": "you won flat 150 off on orders above 400 on Bigbasket",
+                      "evidence": ["you won flat 150 off on orders above 400 on Bigbasket"],
+                      "confidence": 0.92
+                    },
+                    "code": {
+                      "state": "PRESENT",
+                      "text": "BBNOWCRED3-GZGEZF7BAHEXFY",
+                      "evidence": ["BBNOWCRED3-GZGEZF7BAHEXFY"],
+                      "confidence": 0.93
+                    },
+                    "expiry": {
+                      "state": "PRESENT",
+                      "text": "EXPIRES IN 39 DAYS",
+                      "evidence": ["O EXPIRES IN 39 DAYS"],
+                      "confidence": 0.91
+                    }
+                  },
+                  "noise": ["Beardo", "O EXPIRES IN 06 DAYS"]
+                }
+            """.trimIndent(),
+            mergeInput = cropInput(),
+            captureTimestamp = localDate(2025, 5, 2),
+            expected = ExpectedCouponContract(
+                storeName = "Bigbasket",
+                description = "you won flat 150 off on orders above 400 on Bigbasket",
+                redeemCode = "BBNOWCRED3-GZGEZF7BAHEXFY",
+                codeState = Coupon.CodeState.PRESENT,
+                expiryState = Coupon.ExpiryState.PRESENT,
+                layoutState = Coupon.LayoutState.MODAL_FOREGROUND,
+                cleanupStatus = Coupon.CleanupStatus.CLEANED,
+                needsAttention = false,
+                trustedVision = true
+            )
+        )
+
+        val merged = runFixture(fixture)
+
+        assertExpected(fixture.expected, merged)
+        assertEquals(LocalDate.of(2025, 6, 10), merged.expiryDate!!.toLocalDate())
+    }
+
+    @Test
+    fun `fixture Lenskart no-code modal persists explicit absence without a model code`() {
+        val fixture = RegressionFixture(
+            base = coupon(
+                storeName = Coupon.Defaults.UNKNOWN_STORE,
+                description = "Needs review",
+                redeemCode = null,
+                rawOcrText = """
+                    Lenskart
+                    Free Gold membership upgrade
+                    No code needed
+                    Tap to claim
+                """.trimIndent()
+            ),
+            visionJson = """
+                {
+                  "layoutState": "MODAL_FOREGROUND",
+                  "confidence": 0.93,
+                  "fields": {
+                    "store": {
+                      "state": "PRESENT",
+                      "text": "Lenskart",
+                      "evidence": ["Lenskart"],
+                      "confidence": 0.94
+                    },
+                    "description": {
+                      "state": "PRESENT",
+                      "text": "Free Gold membership upgrade",
+                      "evidence": ["Free Gold membership upgrade"],
+                      "confidence": 0.9
+                    },
+                    "code": {
+                      "state": "NO_CODE_NEEDED",
+                      "text": null,
+                      "evidence": ["No code needed"],
+                      "confidence": 0.95
+                    },
+                    "expiry": {
+                      "state": "NOT_VISIBLE",
+                      "text": null,
+                      "evidence": ["No expiry shown"],
+                      "confidence": 0.86
+                    }
+                  }
+                }
+            """.trimIndent(),
+            mergeInput = cropInput(),
+            expected = ExpectedCouponContract(
+                storeName = "Lenskart",
+                description = "Free Gold membership upgrade",
+                redeemCode = null,
+                codeState = Coupon.CodeState.NO_CODE_NEEDED,
+                expiryState = Coupon.ExpiryState.NOT_VISIBLE,
+                layoutState = Coupon.LayoutState.MODAL_FOREGROUND,
+                cleanupStatus = Coupon.CleanupStatus.CLEANED,
+                needsAttention = false,
+                trustedVision = true
+            )
+        )
+
+        val merged = runFixture(fixture)
+
+        assertExpected(fixture.expected, merged)
+        assertNull(merged.expiryDate)
+    }
+
+    @Test
     fun `fixture no-code modal persists explicit absent code and expiry states`() {
         val fixture = RegressionFixture(
             base = coupon(
@@ -155,6 +360,79 @@ class ScreenshotExtractionRegressionHarnessTest {
     }
 
     @Test
+    fun `fixture full-image MakeMyTrip evidence is rejected without crop authority`() {
+        val fixture = RegressionFixture(
+            base = coupon(
+                storeName = Coupon.Defaults.UNKNOWN_STORE,
+                description = "Needs review",
+                redeemCode = null,
+                rawOcrText = """
+                    Wallet rewards
+                    MakeMyTrip
+                    Flat 15% off on domestic flights
+                    Use code MMTFLY
+                    Grocery card below
+                    Bigbasket
+                    EXPIRES IN 39 DAYS
+                """.trimIndent()
+            ),
+            visionJson = """
+                {
+                  "layoutState": "MULTI_CARD",
+                  "confidence": 0.9,
+                  "fields": {
+                    "store": {
+                      "state": "PRESENT",
+                      "text": "MakeMyTrip",
+                      "evidence": ["MakeMyTrip"],
+                      "confidence": 0.91
+                    },
+                    "description": {
+                      "state": "PRESENT",
+                      "text": "Flat 15% off on domestic flights",
+                      "evidence": ["Flat 15% off on domestic flights"],
+                      "confidence": 0.9
+                    },
+                    "code": {
+                      "state": "PRESENT",
+                      "text": "MMTFLY",
+                      "evidence": ["Use code MMTFLY"],
+                      "confidence": 0.9
+                    },
+                    "expiry": {
+                      "state": "PRESENT",
+                      "text": "EXPIRES IN 39 DAYS",
+                      "evidence": ["EXPIRES IN 39 DAYS"],
+                      "confidence": 0.86
+                    }
+                  },
+                  "noise": ["Bigbasket", "Grocery card below"]
+                }
+            """.trimIndent(),
+            mergeInput = fullImageInput(),
+            expected = ExpectedCouponContract(
+                storeName = Coupon.Defaults.UNKNOWN_STORE,
+                description = "Needs review",
+                redeemCode = null,
+                codeState = Coupon.CodeState.UNKNOWN,
+                expiryState = Coupon.ExpiryState.UNKNOWN,
+                layoutState = Coupon.LayoutState.MULTI_CARD,
+                cleanupStatus = Coupon.CleanupStatus.FAILED,
+                needsAttention = true,
+                trustedVision = false
+            )
+        )
+
+        val merged = runFixture(fixture)
+
+        assertExpected(fixture.expected, merged)
+        assertNull(merged.expiryDate)
+        assertTrue(merged.debugVisionEvidence.orEmpty().contains("\"source\":\"full_image\""))
+        assertFalse(merged.debugVisionEvidence.orEmpty().contains("\"pixelCrop\""))
+        assertEquals("Vision verification needs review", merged.cleanupError)
+    }
+
+    @Test
     fun `fixture full image multi-card input routes to review before field extraction`() {
         val decision = cropPolicy.decide(
             CropIsolationInput(
@@ -187,7 +465,7 @@ class ScreenshotExtractionRegressionHarnessTest {
             vision = vision,
             rawOcr = fixture.base.rawOcrText,
             visionInput = fixture.mergeInput,
-            captureTimestamp = captureDate
+            captureTimestamp = fixture.captureTimestamp
         )
     }
 
@@ -211,15 +489,18 @@ class ScreenshotExtractionRegressionHarnessTest {
         storeName: String,
         description: String,
         redeemCode: String?,
+        expiryDate: Date? = null,
+        extractionTimestamp: Date? = captureDate,
         rawOcrText: String?
     ): Coupon {
         return Coupon(
             storeName = storeName,
             description = description,
             redeemCode = redeemCode,
+            expiryDate = expiryDate,
             imageUri = null,
             rawOcrText = rawOcrText,
-            extractionTimestamp = captureDate
+            extractionTimestamp = extractionTimestamp
         )
     }
 
@@ -249,6 +530,7 @@ class ScreenshotExtractionRegressionHarnessTest {
         val base: Coupon,
         val visionJson: String,
         val mergeInput: VisionFieldMergeInput,
+        val captureTimestamp: Date = captureDate,
         val expected: ExpectedCouponContract
     )
 
@@ -270,5 +552,17 @@ class ScreenshotExtractionRegressionHarnessTest {
                 .atStartOfDay(ZoneId.systemDefault())
                 .toInstant()
         )
+
+        private fun localDate(year: Int, month: Int, day: Int): Date {
+            return Date.from(
+                LocalDate.of(year, month, day)
+                    .atStartOfDay(ZoneId.systemDefault())
+                    .toInstant()
+            )
+        }
+    }
+
+    private fun Date.toLocalDate(): LocalDate {
+        return toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
     }
 }
