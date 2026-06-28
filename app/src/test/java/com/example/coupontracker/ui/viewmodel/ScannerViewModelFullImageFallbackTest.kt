@@ -1,15 +1,54 @@
 package com.example.coupontracker.ui.viewmodel
 
+import android.graphics.Bitmap
 import com.example.coupontracker.extraction.MultiCouponExtractionService
+import com.example.coupontracker.extraction.capture.FullImageFallbackProbe
 import com.example.coupontracker.extraction.capture.decideFullImageFallback
 import com.example.coupontracker.extraction.capture.shouldBlockFullImageFallback
 import com.example.coupontracker.ml.ScreenshotClassifier
+import com.example.coupontracker.util.MultiEngineOCR
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class ScannerViewModelFullImageFallbackTest {
+
+    private val probe = FullImageFallbackProbe()
+
+    @Test
+    fun `full image fallback probe uses OCR text from extracted info when OCR text is blank`() = runTest {
+        val result = probe.evaluate(testBitmap()) {
+            MultiEngineOCR.OCRResult.Success(
+                text = "",
+                extractedInfo = mapOf(
+                    "store" to "Big Store",
+                    "description" to "Flat 20% off",
+                    "code" to "Code SAVE20"
+                )
+            )
+        }
+
+        assertEquals("Big Store\nFlat 20% off\nCode SAVE20", result.rawOcrText)
+        assertTrue(result.decision.allowDirectOcr)
+        assertEquals("likely_single_coupon", result.decision.reason)
+    }
+
+    @Test
+    fun `full image fallback probe routes OCR errors to blank review decision`() = runTest {
+        val result = probe.evaluate(testBitmap()) {
+            MultiEngineOCR.OCRResult.Error("OCR failed")
+        }
+
+        assertEquals("", result.rawOcrText)
+        assertEquals("OCR failed", result.ocrErrorMessage)
+        assertFalse(result.decision.allowDirectOcr)
+        assertEquals("blank_ocr_classification", result.decision.reason)
+    }
 
     @Test
     fun `full image fallback allows direct ocr for likely single coupon`() {
@@ -95,6 +134,10 @@ class ScannerViewModelFullImageFallbackTest {
 
         assertFalse(shouldBlockFullImageFallback(null))
         assertFalse(shouldBlockFullImageFallback(result))
+    }
+
+    private fun testBitmap(): Bitmap {
+        return Bitmap.createBitmap(1080, 2400, Bitmap.Config.ARGB_8888)
     }
 
     private fun classification(

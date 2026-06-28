@@ -476,3 +476,46 @@ Focused tests:
 - Move scanner layout execution into a use case after adding route-state tests.
 - Move batch save/review orchestration into a use case.
 - Continue splitting field extraction only with screenshot fixture coverage.
+
+## 2026-06-28: Full-Image Fallback Probe Extraction
+
+### What Changed
+
+- Added `FullImageFallbackProbe` under `extraction/capture`.
+- `ScannerViewModel` no longer normalizes fallback OCR text or performs fallback
+  screenshot classification directly.
+- Existing fallback decision policy remains unchanged.
+
+### Why
+
+- Full-image fallback is a sensitive path because it can reintroduce background
+  card contamination if it grows unchecked.
+- Moving OCR-result normalization and classification into extraction/capture
+  makes the behavior testable while preserving the ViewModel's UI/persistence
+  responsibilities.
+
+### How It Works
+
+- The probe runs the provided OCR function, converts OCR success/error into
+  `rawOcrText`, classifies non-blank text, and returns a
+  `FullImageFallbackDecision`.
+- The ViewModel logs the route and either runs guarded full-image OCR or saves a
+  review coupon exactly as before.
+
+### Verification
+
+```bash
+git diff --check
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest --tests com.example.coupontracker.ui.viewmodel.ScannerViewModelFullImageFallbackTest
+```
+
+### Remaining Risk
+
+- The guarded full-image path still exists for likely single screenshots.
+- The next deeper slice is moving the final fallback execution/save behavior
+  behind a use case or route executor.
+
+### Follow-Up
+
+- Extract layout-route execution from `ScannerViewModel`.
+- Extract fallback save/review execution from `ScannerViewModel`.

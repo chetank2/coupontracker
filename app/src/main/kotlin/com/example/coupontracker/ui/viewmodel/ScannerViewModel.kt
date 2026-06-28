@@ -23,7 +23,7 @@ import com.example.coupontracker.domain.usecase.SingleScanRouteDecision
 import com.example.coupontracker.domain.usecase.SingleScanRoutingUseCase
 import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
-import com.example.coupontracker.extraction.capture.decideFullImageFallback
+import com.example.coupontracker.extraction.capture.FullImageFallbackProbe
 import com.example.coupontracker.extraction.capture.shouldBlockFullImageFallback
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.TextBlock
@@ -99,7 +99,8 @@ class ScannerViewModel @Inject constructor(
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Injected bitmap memory management
     private val validatorFeedbackRecorder: ValidatorFeedbackRecorder,
     private val saveScannedCouponUseCase: SaveScannedCouponUseCase,
-    private val singleScanRoutingUseCase: SingleScanRoutingUseCase
+    private val singleScanRoutingUseCase: SingleScanRoutingUseCase,
+    private val fullImageFallbackProbe: FullImageFallbackProbe
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -558,39 +559,13 @@ class ScannerViewModel @Inject constructor(
         persistImmediately: Boolean,
         routeReason: String
     ) {
-        val classifier = ScreenshotClassifier()
-        val ocrResult = runCatching {
-            multiEngineOCR.processImage(bitmap)
-        }.getOrElse { error ->
-            Log.e(TAG, "Full-image fallback OCR/classifier guard failed", error)
-            null
+        val probeResult = fullImageFallbackProbe.evaluate(bitmap) { image ->
+            multiEngineOCR.processImage(image)
         }
-
-        val rawOcrText = when (ocrResult) {
-            is MultiEngineOCR.OCRResult.Success -> ocrResult.text.ifBlank {
-                ocrResult.extractedInfo.values.joinToString("\n")
-            }
-            is MultiEngineOCR.OCRResult.Error -> {
-                Log.w(TAG, "Full-image fallback OCR guard returned error: ${ocrResult.message}")
-                ""
-            }
-            null -> ""
+        probeResult.ocrErrorMessage?.let { message ->
+            Log.w(TAG, "Full-image fallback OCR guard returned error: $message")
         }
-
-        val classification = if (rawOcrText.isNotBlank()) {
-            classifier.classify(bitmap, rawOcrText)
-        } else {
-            ScreenshotClassifier.ClassificationResult(
-                type = ScreenshotClassifier.ScreenshotType.SINGLE_SCREENSHOT,
-                confidence = 0f,
-                indicators = emptyMap()
-            )
-        }
-        val decision = decideFullImageFallback(
-            classification = classification,
-            rawOcrText = rawOcrText,
-            classifier = classifier
-        )
+        val decision = probeResult.decision
 
         logStrategyExecution(
             requested = ExtractionConfig.getStrategy(),
@@ -604,7 +579,7 @@ class ScannerViewModel @Inject constructor(
         } else {
             saveFullImageFallbackReviewCoupon(
                 imageUri = imageUri,
-                rawOcrText = rawOcrText,
+                rawOcrText = probeResult.rawOcrText,
                 persistImmediately = persistImmediately,
                 reason = "${routeReason}_${decision.reason}"
             )

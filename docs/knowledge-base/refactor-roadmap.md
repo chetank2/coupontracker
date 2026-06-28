@@ -130,6 +130,9 @@ Current progress:
 - `BatchCaptureItemProcessor` owns per-item batch routing for PDF,
   unsupported files, bitmap decode failure, image extraction dispatch, and
   bitmap release.
+- `FullImageFallbackProbe` owns full-image fallback OCR-result normalization
+  and screenshot classification before the ViewModel performs UI/persistence
+  side effects.
 - `ScannerViewModel` still owns route execution, UI state, persistence, and
   fallback side effects.
 - Next safe slice is moving layout-route execution or guarded fallback execution
