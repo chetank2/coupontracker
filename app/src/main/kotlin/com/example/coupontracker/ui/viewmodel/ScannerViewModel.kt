@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.RectF
 import android.net.Uri
 import android.util.Log
 import androidx.annotation.VisibleForTesting
@@ -21,9 +22,11 @@ import com.example.coupontracker.domain.usecase.SaveScannedCouponUseCase
 import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.extraction.FieldCandidate
+import com.example.coupontracker.extraction.TextBlock
 import com.example.coupontracker.extraction.rules.TextExtractor
 import com.example.coupontracker.extraction.validation.CouponFieldBundleValidator
 import com.example.coupontracker.extraction.validation.FieldValueBundle
+import com.example.coupontracker.ocr.OcrTextSpan
 import com.example.coupontracker.universal.ExtractionContext
 import com.example.coupontracker.universal.UniversalExtractionService
 import com.example.coupontracker.util.ExtractionPerformanceMonitor
@@ -31,6 +34,7 @@ import com.example.coupontracker.util.ExtractionMethod
 import com.example.coupontracker.util.FeedbackType
 import com.example.coupontracker.data.util.CouponDedupUtils
 import com.example.coupontracker.ml.MultiCouponDetectorDisabledException
+import com.example.coupontracker.ml.ScreenshotClassifier
 import com.example.coupontracker.ml.TwoStageDetector
 import com.example.coupontracker.ml.CouponInstance
 import com.example.coupontracker.util.AnalyticsTracker
@@ -54,6 +58,7 @@ import com.example.coupontracker.util.MultiEngineOCR
 import com.example.coupontracker.util.RunPath
 import com.example.coupontracker.util.UriPersistenceManager
 import com.example.coupontracker.util.LlmProgressUpdate
+import com.example.coupontracker.util.createMultiCouponImportReviewCoupon
 import com.example.coupontracker.util.normalizeExpiryDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -117,6 +122,40 @@ class ScannerViewModel @Inject constructor(
         private const val TAG = "ScannerViewModel"
         private const val STRATEGY_SURFACE_SINGLE = "single_capture"
         private const val OCR_CONFIDENCE_QUEUE_CLEANUP = 0.85f
+        private const val DETECTED_CROP_OCR_PENDING_REASON =
+            "Background vision verification pending for OCR-only detected crop"
+
+        @VisibleForTesting
+        internal data class FullImageFallbackDecision(
+            val allowDirectOcr: Boolean,
+            val reason: String
+        )
+
+        @VisibleForTesting
+        internal fun decideFullImageFallback(
+            classification: ScreenshotClassifier.ClassificationResult,
+            rawOcrText: String,
+            detectedRegionCount: Int = 0,
+            classifier: ScreenshotClassifier = ScreenshotClassifier()
+        ): FullImageFallbackDecision {
+            if (detectedRegionCount > 1) {
+                return FullImageFallbackDecision(false, "multiple_regions_detected")
+            }
+
+            if (rawOcrText.isBlank()) {
+                return FullImageFallbackDecision(false, "blank_ocr_classification")
+            }
+
+            if (classification.type == ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP) {
+                return FullImageFallbackDecision(false, "classified_multi_coupon")
+            }
+
+            return if (classifier.isLikelySingleCoupon(rawOcrText)) {
+                FullImageFallbackDecision(true, "likely_single_coupon")
+            } else {
+                FullImageFallbackDecision(false, "not_likely_single_coupon")
+            }
+        }
 
         @VisibleForTesting
         internal fun parseExpiryDate(
@@ -184,6 +223,34 @@ class ScannerViewModel @Inject constructor(
             }
 
             return null // Don't return fallback date - use null if parsing fails
+        }
+
+        @VisibleForTesting
+        internal fun markDetectedCropOcrProvisional(coupon: Coupon): Coupon {
+            val pendingEvidence = listOf(
+                "background_vision_verification=pending",
+                "source=single_detected_crop_ocr_only"
+            )
+            val mergedEvidence = sequenceOf(
+                coupon.debugVisionEvidence,
+                pendingEvidence.joinToString("; ")
+            )
+                .filterNot { it.isNullOrBlank() }
+                .joinToString("; ")
+
+            return coupon.copy(
+                needsAttention = true,
+                cleanupStatus = Coupon.CleanupStatus.PENDING,
+                cleanupStartedAt = null,
+                cleanupFinishedAt = null,
+                cleanupError = DETECTED_CROP_OCR_PENDING_REASON,
+                layoutState = if (coupon.layoutState == Coupon.LayoutState.COMPLETE) {
+                    Coupon.LayoutState.LOW_CONFIDENCE
+                } else {
+                    coupon.layoutState
+                },
+                debugVisionEvidence = mergedEvidence
+            )
         }
     }
 
@@ -344,7 +411,7 @@ class ScannerViewModel @Inject constructor(
             if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, "coupon_detector_unavailable")) {
                 return false
             }
-            scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
+            scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, "coupon_detector_unavailable")
             return false
         }
 
@@ -358,7 +425,7 @@ class ScannerViewModel @Inject constructor(
                 if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, "no_coupon_crop_detected")) {
                     return false
                 }
-                scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
+                scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, "no_coupon_crop_detected")
                 false
             }
             1 -> {
@@ -431,9 +498,12 @@ class ScannerViewModel @Inject constructor(
                 surface = STRATEGY_SURFACE_SINGLE,
                 reason = "${reason}_layout_no_candidates"
             )
-            if (multiResult?.screenshotType == com.example.coupontracker.ml.ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP) {
-                _uiState.value = ScannerUiState.Error(
-                    "Could not isolate the foreground coupon. Please crop the coupon or try Verify from the saved draft."
+            if (shouldBlockFullImageFallback(multiResult)) {
+                saveFullImageFallbackReviewCoupon(
+                    imageUri = imageUri,
+                    rawOcrText = "",
+                    persistImmediately = persistImmediately,
+                    reason = "${reason}_layout_${multiResult?.screenshotType}_detected_${multiResult?.totalDetected ?: 0}"
                 )
                 return true
             }
@@ -500,6 +570,111 @@ class ScannerViewModel @Inject constructor(
             _uiState.value = ScannerUiState.AllCouponsSaved(processedResults)
         }
         return true
+    }
+
+    private fun shouldBlockFullImageFallback(
+        multiResult: MultiCouponExtractionService.MultiCouponResult?
+    ): Boolean {
+        if (multiResult == null) return false
+        return multiResult.screenshotType == ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP ||
+            multiResult.totalDetected > 1
+    }
+
+    private suspend fun scanWithGuardedFullImageFallback(
+        imageUri: Uri,
+        bitmap: Bitmap,
+        persistImmediately: Boolean,
+        routeReason: String
+    ) {
+        val classifier = ScreenshotClassifier()
+        val ocrResult = runCatching {
+            multiEngineOCR.processImage(bitmap)
+        }.getOrElse { error ->
+            Log.e(TAG, "Full-image fallback OCR/classifier guard failed", error)
+            null
+        }
+
+        val rawOcrText = when (ocrResult) {
+            is MultiEngineOCR.OCRResult.Success -> ocrResult.text.ifBlank {
+                ocrResult.extractedInfo.values.joinToString("\n")
+            }
+            is MultiEngineOCR.OCRResult.Error -> {
+                Log.w(TAG, "Full-image fallback OCR guard returned error: ${ocrResult.message}")
+                ""
+            }
+            null -> ""
+        }
+
+        val classification = if (rawOcrText.isNotBlank()) {
+            classifier.classify(bitmap, rawOcrText)
+        } else {
+            ScreenshotClassifier.ClassificationResult(
+                type = ScreenshotClassifier.ScreenshotType.SINGLE_SCREENSHOT,
+                confidence = 0f,
+                indicators = emptyMap()
+            )
+        }
+        val decision = decideFullImageFallback(
+            classification = classification,
+            rawOcrText = rawOcrText,
+            classifier = classifier
+        )
+
+        logStrategyExecution(
+            requested = ExtractionConfig.getStrategy(),
+            executed = if (decision.allowDirectOcr) "ocr_first_full_image_guarded" else "full_image_review_only",
+            surface = STRATEGY_SURFACE_SINGLE,
+            reason = "${routeReason}_${decision.reason}"
+        )
+
+        if (decision.allowDirectOcr) {
+            scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
+        } else {
+            saveFullImageFallbackReviewCoupon(
+                imageUri = imageUri,
+                rawOcrText = rawOcrText,
+                persistImmediately = persistImmediately,
+                reason = "${routeReason}_${decision.reason}"
+            )
+        }
+    }
+
+    private suspend fun saveFullImageFallbackReviewCoupon(
+        imageUri: Uri,
+        rawOcrText: String,
+        persistImmediately: Boolean,
+        reason: String
+    ) {
+        val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
+        val persistedUri = uriPersistenceManager.persistUri(imageUri)
+        val finalImageUri = resolveImageUri(persistedUri, imageUri)
+        val coupon = createMultiCouponImportReviewCoupon(
+            reason = reason,
+            rawOcrText = rawOcrText,
+            captureTimestamp = captureTimestamp
+        ).copy(
+            imageUri = finalImageUri,
+            extractionRunPath = "scanner_view_model -> full_image_fallback_guard",
+            debugVisionEvidence = "full_image_fallback_guard; reason=$reason"
+        )
+        val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
+
+        if (persistImmediately) {
+            persistCoupon(
+                coupon = coupon,
+                normalizedDescription = normalizedDescription,
+                llmStatus = LlmProgress.NEEDS_REVIEW,
+                debugSnapshot = null
+            )
+        } else {
+            pendingPreview = PendingPreview(
+                coupon = coupon,
+                normalizedDescription = normalizedDescription,
+                llmStatus = LlmProgress.NEEDS_REVIEW,
+                debugSnapshot = null
+            )
+            _uiState.value = ScannerUiState.Success(coupon, LlmProgress.NEEDS_REVIEW)
+        }
     }
     
     /**
@@ -659,14 +834,16 @@ class ScannerViewModel @Inject constructor(
                     imageUri = scopedImageUri,
                     captureTimestamp = captureTimestamp
                 )
-            val coupon = finalizeCoupon(
-                base = validateDetectedCouponInstance(
-                    coupon = baseCoupon,
-                    extractionResult = extractionResult,
-                    expiryDateText = extractionResult.fields["expiryDate"]
-                ),
-                ocrText = extractionResult.fullOcrText,
-                captureTimestamp = captureTimestamp
+            val coupon = markDetectedCropOcrProvisional(
+                finalizeCoupon(
+                    base = validateDetectedCouponInstance(
+                        coupon = baseCoupon,
+                        extractionResult = extractionResult,
+                        expiryDateText = extractionResult.fields["expiryDate"]
+                    ),
+                    ocrText = extractionResult.fullOcrText,
+                    captureTimestamp = captureTimestamp
+                )
             )
 
             analyticsTracker.trackEvent(
@@ -1031,6 +1208,8 @@ class ScannerViewModel @Inject constructor(
             var fieldConfidences: Map<String, Float> = emptyMap()
             var sourceStage: ExtractionStage? = ExtractionStage.MLKIT
             var fullOcrText: String? = null
+            var ocrBlocks: List<TextBlock> = emptyList()
+            var imageHeight = 0
 
             extractedInfo["minicpmConfidence"] = couponInstance.confidence.toString()
             extractedInfo["minicpmDetectionStatus"] = couponInstance.status.name
@@ -1040,6 +1219,8 @@ class ScannerViewModel @Inject constructor(
                 val fallbackResult = runFallbackOcr(couponInstance.cropBitmap, captureTimestamp)
                 extractedInfo.putAll(fallbackResult.fields)
                 fullOcrText = fallbackResult.text
+                ocrBlocks = fallbackResult.ocrBlocks
+                imageHeight = fallbackResult.imageHeight
                 qualityScore = if (fallbackResult.fields.isNotEmpty()) 55 else 0
                 fieldConfidences = fallbackResult.fields.keys.associateWith { 0.55f }
                 Log.d(TAG, "OCR-only field extraction completed with ${fallbackResult.fields.size} fields")
@@ -1074,7 +1255,9 @@ class ScannerViewModel @Inject constructor(
                 qualityScore = qualityScore,
                 fieldConfidences = fieldConfidences,
                 sourceStage = sourceStage,
-                fullOcrText = fullOcrText
+                fullOcrText = fullOcrText,
+                ocrBlocks = ocrBlocks,
+                imageHeight = imageHeight
             )
 
             val snapshot = ExtractionDebugScorer.fromFieldExtraction(baseResult, runPath)
@@ -1135,16 +1318,26 @@ class ScannerViewModel @Inject constructor(
     }
 
     private suspend fun runFallbackOcr(bitmap: Bitmap, captureTimestamp: Date?): FallbackOcrResult {
-        val boxedText = runCatching {
+        val boxedResult = runCatching {
             val spans = ocrEngine.recognizeWithBoxes(bitmap)
-            CouponCardOcrNormalizer.normalize(bitmap.width, bitmap.height, spans)
+            BoxedOcrResult(
+                text = CouponCardOcrNormalizer.normalize(bitmap.width, bitmap.height, spans),
+                blocks = ocrSpansToTextBlocks(spans),
+                imageHeight = bitmap.height
+            )
         }.getOrNull()
 
+        val boxedText = boxedResult?.text
         if (!boxedText.isNullOrBlank()) {
             val couponInfo = textExtractor.extractCouponInfoSync(boxedText, captureTimestamp)
             val fields = mapCouponInfoToFields(couponInfo)
             if (fields.isNotEmpty()) {
-                return FallbackOcrResult(fields, boxedText)
+                return FallbackOcrResult(
+                    fields = fields,
+                    text = boxedText,
+                    ocrBlocks = boxedResult.blocks,
+                    imageHeight = boxedResult.imageHeight
+                )
             }
         }
 
@@ -1152,18 +1345,36 @@ class ScannerViewModel @Inject constructor(
             is MultiEngineOCR.OCRResult.Success -> {
                 val couponInfo = textExtractor.extractCouponInfoSync(result.text, captureTimestamp)
                 val fields = mapCouponInfoToFields(couponInfo).ifEmpty { result.extractedInfo }
-                FallbackOcrResult(fields, result.text)
+                FallbackOcrResult(
+                    fields = fields,
+                    text = result.text,
+                    ocrBlocks = boxedResult?.blocks.orEmpty(),
+                    imageHeight = boxedResult?.imageHeight ?: 0
+                )
             }
             is MultiEngineOCR.OCRResult.Error -> {
                 Log.w(TAG, "Fallback OCR failed: ${result.message}")
-                FallbackOcrResult(emptyMap(), null)
+                FallbackOcrResult(
+                    fields = emptyMap(),
+                    text = null,
+                    ocrBlocks = boxedResult?.blocks.orEmpty(),
+                    imageHeight = boxedResult?.imageHeight ?: 0
+                )
             }
         }
     }
 
     private data class FallbackOcrResult(
         val fields: Map<String, String>,
-        val text: String?
+        val text: String?,
+        val ocrBlocks: List<TextBlock> = emptyList(),
+        val imageHeight: Int = 0
+    )
+
+    private data class BoxedOcrResult(
+        val text: String,
+        val blocks: List<TextBlock>,
+        val imageHeight: Int
     )
 
     private fun formatNumeric(value: Double): String {
@@ -1270,8 +1481,8 @@ class ScannerViewModel @Inject constructor(
             ),
             fields = buildDetectedFieldCandidates(coupon, extractionResult, expiryDateText),
             rawOcrText = extractionResult.fullOcrText,
-            ocrBlocks = emptyList(),
-            imageHeight = 0
+            ocrBlocks = extractionResult.ocrBlocks,
+            imageHeight = extractionResult.imageHeight
         )
 
         val issueMessages = validation.issues.map { "${it.field.name}:${it.message}" }
@@ -1660,5 +1871,17 @@ data class FieldExtractionResult(
     val qualityScore: Int? = null,
     val fieldConfidences: Map<String, Float> = emptyMap(),
     val sourceStage: ExtractionStage? = null,
-    val fullOcrText: String? = null
+    val fullOcrText: String? = null,
+    val ocrBlocks: List<TextBlock> = emptyList(),
+    val imageHeight: Int = 0
 )
+
+internal fun ocrSpansToTextBlocks(spans: List<OcrTextSpan>): List<TextBlock> {
+    return spans.map { span ->
+        TextBlock(
+            text = span.text,
+            bounds = RectF(span.boundingBox),
+            confidence = span.confidence
+        )
+    }
+}
