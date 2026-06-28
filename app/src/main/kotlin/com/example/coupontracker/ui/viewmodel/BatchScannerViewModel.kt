@@ -11,12 +11,9 @@ import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.DescriptionUtils
-import com.example.coupontracker.extraction.capture.CandidateRegionType
-import com.example.coupontracker.extraction.capture.CaptureScreenshotType
+import com.example.coupontracker.extraction.capture.createCropIsolationFailedCoupon
+import com.example.coupontracker.extraction.capture.isFallbackOrFullImageRegion
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
-import com.example.coupontracker.extraction.capture.CropIsolationInput
-import com.example.coupontracker.extraction.capture.CropIsolationMode
-import com.example.coupontracker.extraction.capture.CropIsolationPolicy
 import com.example.coupontracker.util.AnalyticsTracker
 import com.example.coupontracker.util.CouponInputManager
 import com.example.coupontracker.ml.MultiCouponDetectorDisabledException
@@ -33,12 +30,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Locale
 import javax.inject.Inject
-
-/**
- * ViewModel for batch scanning of multiple coupons
- */
-private const val CROP_ISOLATION_FAILED_ERROR =
-    "Crop isolation failed; full-image OCR was not saved as a clean coupon."
 
 @HiltViewModel
 class BatchScannerViewModel @Inject constructor(
@@ -355,7 +346,7 @@ class BatchScannerViewModel @Inject constructor(
                         bitmapManager.trackBitmap(bitmap)
                         
                         // V2.1: Detect multiple coupons per image using hybrid detector
-                        val imageCoupons = detectAndExtractMultipleCoupons(uri, bitmap, strategy)
+                        val imageCoupons = detectAndExtractMultipleCoupons(uri, bitmap)
                         
                         if (imageCoupons.isNotEmpty()) {
                             processedCoupons.addAll(imageCoupons)
@@ -599,8 +590,7 @@ class BatchScannerViewModel @Inject constructor(
      */
     private suspend fun detectAndExtractMultipleCoupons(
         uri: Uri,
-        bitmap: android.graphics.Bitmap,
-        strategy: com.example.coupontracker.util.ExtractionStrategy
+        bitmap: android.graphics.Bitmap
     ): List<Coupon> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
         
         Log.d(TAG, "Detecting multiple coupons in image...")
@@ -875,67 +865,3 @@ data class ImageProcessingStatus(
     val message: String?,
     val couponsFound: Int = 0
 )
-
-internal fun isFallbackOrFullImageRegion(
-    bitmap: android.graphics.Bitmap,
-    region: com.example.coupontracker.ml.HybridCouponDetector.CouponRegion
-): Boolean {
-    val imageArea = bitmap.width.toLong() * bitmap.height.toLong()
-    if (imageArea <= 0L) return true
-
-    val left = region.boundingBox.left.coerceIn(0, bitmap.width)
-    val top = region.boundingBox.top.coerceIn(0, bitmap.height)
-    val right = region.boundingBox.right.coerceIn(left, bitmap.width)
-    val bottom = region.boundingBox.bottom.coerceIn(top, bitmap.height)
-    val regionArea = (right - left).toLong() * (bottom - top).toLong()
-    val coversMostWidth = (right - left) >= bitmap.width * 95 / 100
-    val coversMostHeight = (bottom - top) >= bitmap.height * 95 / 100
-    val fullImageLike = regionArea >= (imageArea * 95L / 100L) || (coversMostWidth && coversMostHeight)
-    val candidateRegionType =
-        if (
-            region.source == com.example.coupontracker.ml.HybridCouponDetector.DetectionSource.FALLBACK ||
-            fullImageLike
-        ) {
-            CandidateRegionType.FULL_IMAGE_FALLBACK
-        } else {
-            CandidateRegionType.ISOLATED_CROP
-        }
-
-    val decision = CropIsolationPolicy().decide(
-        CropIsolationInput(
-            detectedRegionCount = 1,
-            candidateRegionType = candidateRegionType,
-            screenshotType = CaptureScreenshotType.UNKNOWN,
-            rawOcrText = region.ocrText,
-            likelySingleCoupon = false
-        )
-    )
-    return decision.mode != CropIsolationMode.ISOLATED_CROP
-}
-
-internal fun createCropIsolationFailedCoupon(
-    uri: Uri,
-    reason: String
-): Coupon {
-    return Coupon(
-        storeName = Coupon.Defaults.UNKNOWN_STORE,
-        description = "Needs review: crop isolation failed",
-        redeemCode = null,
-        imageUri = uri.toString(),
-        status = Coupon.Status.ACTIVE,
-        needsAttention = true,
-        storeNameSource = "batch_crop_isolation",
-        storeNameEvidence = emptyList(),
-        extractionQualityScore = 0,
-        extractionConfidenceBreakdown = mapOf("layout" to 0f),
-        extractionStage = "BATCH_CROP_ISOLATION_FAILED",
-        extractionRunPath = "batch_region_detection -> review",
-        extractionTimestamp = java.util.Date(),
-        cleanupStatus = Coupon.CleanupStatus.FAILED,
-        cleanupError = "$CROP_ISOLATION_FAILED_ERROR reason=$reason",
-        extractionSource = "BATCH_CROP_ISOLATION_FAILED",
-        codeState = Coupon.CodeState.UNKNOWN,
-        expiryState = Coupon.ExpiryState.UNKNOWN,
-        layoutState = Coupon.LayoutState.LOW_CONFIDENCE
-    )
-}

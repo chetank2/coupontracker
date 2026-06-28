@@ -1,5 +1,6 @@
 package com.example.coupontracker.ui.viewmodel
 
+import com.example.coupontracker.extraction.capture.decideFullImageFallback
 import com.example.coupontracker.ml.ScreenshotClassifier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -10,7 +11,7 @@ class ScannerViewModelFullImageFallbackTest {
 
     @Test
     fun `full image fallback allows direct ocr for likely single coupon`() {
-        val decision = ScannerViewModel.decideFullImageFallback(
+        val decision = decideFullImageFallback(
             classification = classification(ScreenshotClassifier.ScreenshotType.SINGLE_SCREENSHOT),
             rawOcrText = """
                 Big Store
@@ -27,7 +28,7 @@ class ScannerViewModelFullImageFallbackTest {
 
     @Test
     fun `full image fallback blocks classified multi coupon screenshot`() {
-        val decision = ScannerViewModel.decideFullImageFallback(
+        val decision = decideFullImageFallback(
             classification = classification(ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP),
             rawOcrText = """
                 Offer one cashback copy code
@@ -42,7 +43,7 @@ class ScannerViewModelFullImageFallbackTest {
 
     @Test
     fun `full image fallback blocks multiple detected regions even with single classification`() {
-        val decision = ScannerViewModel.decideFullImageFallback(
+        val decision = decideFullImageFallback(
             classification = classification(ScreenshotClassifier.ScreenshotType.SINGLE_SCREENSHOT),
             rawOcrText = "Big Store\nCode: SAVE20\nCopy code",
             detectedRegionCount = 2
@@ -54,7 +55,7 @@ class ScannerViewModelFullImageFallbackTest {
 
     @Test
     fun `full image fallback blocks blank classifier text`() {
-        val decision = ScannerViewModel.decideFullImageFallback(
+        val decision = decideFullImageFallback(
             classification = classification(ScreenshotClassifier.ScreenshotType.SINGLE_SCREENSHOT),
             rawOcrText = ""
         )

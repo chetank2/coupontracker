@@ -20,13 +20,8 @@ import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.domain.usecase.SaveScannedCouponResult
 import com.example.coupontracker.domain.usecase.SaveScannedCouponUseCase
 import com.example.coupontracker.extraction.MultiCouponExtractionService
-import com.example.coupontracker.extraction.capture.CandidateRegionType
-import com.example.coupontracker.extraction.capture.CaptureScreenshotType
-import com.example.coupontracker.extraction.capture.CropIsolationInput
-import com.example.coupontracker.extraction.capture.CropIsolationMode
-import com.example.coupontracker.extraction.capture.CropIsolationPolicy
-import com.example.coupontracker.extraction.capture.CropIsolationReason
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
+import com.example.coupontracker.extraction.capture.decideFullImageFallback
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.TextBlock
 import com.example.coupontracker.extraction.rules.TextExtractor
@@ -130,53 +125,6 @@ class ScannerViewModel @Inject constructor(
         private const val OCR_CONFIDENCE_QUEUE_CLEANUP = 0.85f
         private const val DETECTED_CROP_OCR_PENDING_REASON =
             "Background vision verification pending for OCR-only detected crop"
-
-        @VisibleForTesting
-        internal data class FullImageFallbackDecision(
-            val allowDirectOcr: Boolean,
-            val reason: String
-        )
-
-        @VisibleForTesting
-        internal fun decideFullImageFallback(
-            classification: ScreenshotClassifier.ClassificationResult,
-            rawOcrText: String,
-            detectedRegionCount: Int = 0,
-            classifier: ScreenshotClassifier = ScreenshotClassifier()
-        ): FullImageFallbackDecision {
-            val decision = CropIsolationPolicy().decide(
-                CropIsolationInput(
-                    detectedRegionCount = detectedRegionCount,
-                    candidateRegionType = CandidateRegionType.FULL_IMAGE_FALLBACK,
-                    screenshotType = classification.type.toCaptureScreenshotType(),
-                    rawOcrText = rawOcrText,
-                    likelySingleCoupon = rawOcrText.isNotBlank() && classifier.isLikelySingleCoupon(rawOcrText)
-                )
-            )
-            return FullImageFallbackDecision(
-                allowDirectOcr = decision.mode == CropIsolationMode.GUARDED_FULL_IMAGE_OCR,
-                reason = decision.reason.toLegacyFallbackReason()
-            )
-        }
-
-        private fun CropIsolationReason.toLegacyFallbackReason(): String {
-            return when (this) {
-                CropIsolationReason.MULTIPLE_REGIONS_DETECTED -> "multiple_regions_detected"
-                CropIsolationReason.CLASSIFIED_MULTI_COUPON -> "classified_multi_coupon"
-                CropIsolationReason.BLANK_OCR -> "blank_ocr_classification"
-                CropIsolationReason.LIKELY_SINGLE_FULL_IMAGE_FALLBACK -> "likely_single_coupon"
-                CropIsolationReason.NO_ISOLATED_CROP -> "not_likely_single_coupon"
-                CropIsolationReason.ISOLATED_CROP_AVAILABLE -> "isolated_crop_available"
-            }
-        }
-
-        private fun ScreenshotClassifier.ScreenshotType.toCaptureScreenshotType(): CaptureScreenshotType {
-            return when (this) {
-                ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP -> CaptureScreenshotType.MULTI_COUPON_APP
-                ScreenshotClassifier.ScreenshotType.CAMERA_CAPTURE -> CaptureScreenshotType.CAMERA_CAPTURE
-                ScreenshotClassifier.ScreenshotType.SINGLE_SCREENSHOT -> CaptureScreenshotType.SINGLE_SCREENSHOT
-            }
-        }
 
         @VisibleForTesting
         internal fun parseExpiryDate(

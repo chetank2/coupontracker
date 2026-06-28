@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import android.graphics.Rect
 import android.net.Uri
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.extraction.capture.createCropIsolationFailedCoupon
+import com.example.coupontracker.extraction.capture.isFallbackOrFullImageRegion
 import com.example.coupontracker.ml.HybridCouponDetector
 import io.mockk.every
 import io.mockk.mockk
