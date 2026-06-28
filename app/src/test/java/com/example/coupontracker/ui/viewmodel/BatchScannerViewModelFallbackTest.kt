@@ -41,6 +41,28 @@ class BatchScannerViewModelFallbackTest {
     }
 
     @Test
+    fun `near full image region is review only even when detector source is not fallback`() {
+        val bitmap = bitmap(width = 1000, height = 2000)
+        val region = region(
+            boundingBox = Rect(10, 20, 970, 1930),
+            source = HybridCouponDetector.DetectionSource.OCR_ANCHOR_ONLY
+        )
+
+        assertTrue(isFallbackOrFullImageRegion(bitmap, region))
+
+        val coupon = createCropIsolationFailedCoupon(
+            uri("content://batch/full-image-fallback.png"),
+            reason = "no_isolated_coupon_regions"
+        )
+        assertNull(coupon.redeemCode)
+        assertTrue(coupon.needsAttention)
+        assertEquals(Coupon.CleanupStatus.FAILED, coupon.cleanupStatus)
+        assertEquals(Coupon.LayoutState.LOW_CONFIDENCE, coupon.layoutState)
+        assertEquals(Coupon.CodeState.UNKNOWN, coupon.codeState)
+        assertEquals(Coupon.ExpiryState.UNKNOWN, coupon.expiryState)
+    }
+
+    @Test
     fun `real cropped region remains safe for per region extraction`() {
         val bitmap = bitmap(width = 1000, height = 2000)
         val region = region(

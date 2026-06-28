@@ -220,8 +220,8 @@ class VerifyCouponWorkerTest {
         )
     }
 
-    private fun cropInput(): VerifyCouponWorker.VisionInput {
-        return VerifyCouponWorker.VisionInput(
+    private fun cropInput(): VisionInput {
+        return VisionInput(
             bitmap = mockk(relaxed = true),
             usedTargetedCrop = true,
             source = "layout",
@@ -232,8 +232,8 @@ class VerifyCouponWorkerTest {
         )
     }
 
-    private fun fullImageInput(): VerifyCouponWorker.VisionInput {
-        return VerifyCouponWorker.VisionInput(
+    private fun fullImageInput(): VisionInput {
+        return VisionInput(
             bitmap = mockk(relaxed = true),
             usedTargetedCrop = false,
             source = "full_image",

@@ -1,5 +1,6 @@
 package com.example.coupontracker.extraction.vision
 
+import android.graphics.Rect
 import com.example.coupontracker.data.model.Coupon
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -184,6 +185,90 @@ class VisionEvidenceMergePolicyTest {
         assertTrue(merged.needsAttention)
     }
 
+    @Test
+    fun `crop evidence rejects unsupported vision store code and expiry`() {
+        val base = coupon(
+            storeName = "CRED",
+            description = "Flat 20% off on bill payments",
+            redeemCode = null,
+            rawOcrText = """
+                CRED
+                Flat 20% off on bill payments
+                Tap to claim
+            """.trimIndent()
+        )
+        val vision = extraction(
+            card = card(
+                storeName = "Amazon",
+                description = "Flat 20% off on bill payments",
+                redeemCode = "SAVE20",
+                expiryText = "EXPIRES IN 7 DAYS",
+                codeState = Coupon.CodeState.PRESENT,
+                expiryState = Coupon.ExpiryState.PRESENT,
+                evidence = """
+                    store: Amazon
+                    offer: Flat 20% off on bill payments
+                    code: SAVE20
+                    expiry: EXPIRES IN 7 DAYS
+                """.trimIndent()
+            )
+        )
+
+        val merged = policy.mergeFieldLabels(
+            current = base,
+            vision = vision,
+            rawOcr = base.rawOcrText,
+            visionInput = cropInput(),
+            captureTimestamp = localDate(2026, 6, 28)
+        )
+
+        assertEquals("CRED", merged.storeName)
+        assertNull(merged.redeemCode)
+        assertNull(merged.expiryDate)
+        assertEquals(Coupon.CodeState.UNKNOWN, merged.codeState)
+        assertEquals(Coupon.CleanupStatus.FAILED, merged.cleanupStatus)
+        assertTrue(merged.needsAttention)
+    }
+
+    @Test
+    fun `no-code modal state is not trusted without visible no-code evidence`() {
+        val base = coupon(
+            storeName = "IDFC FIRST Bank",
+            description = "No cost EMI on credit card",
+            redeemCode = null,
+            rawOcrText = """
+                IDFC FIRST Bank
+                No cost EMI on credit card
+                Terms apply
+            """.trimIndent()
+        )
+        val vision = extraction(
+            card = card(
+                storeName = "IDFC FIRST Bank",
+                description = "No cost EMI on credit card",
+                codeState = Coupon.CodeState.NO_CODE_NEEDED,
+                expiryState = Coupon.ExpiryState.NOT_VISIBLE,
+                evidence = """
+                    store: IDFC FIRST Bank
+                    offer: No cost EMI on credit card
+                """.trimIndent()
+            )
+        )
+
+        val merged = policy.mergeFieldLabels(
+            current = base,
+            vision = vision,
+            rawOcr = base.rawOcrText,
+            visionInput = cropInput(),
+            captureTimestamp = localDate(2026, 6, 28)
+        )
+
+        assertNull(merged.redeemCode)
+        assertEquals(Coupon.CodeState.UNKNOWN, merged.codeState)
+        assertEquals(Coupon.CleanupStatus.FAILED, merged.cleanupStatus)
+        assertTrue(merged.needsAttention)
+    }
+
     private fun coupon(
         storeName: String,
         description: String,
@@ -233,6 +318,17 @@ class VisionEvidenceMergePolicyTest {
             evidence = evidence,
             bounds = null,
             active = true
+        )
+    }
+
+    private fun cropInput(): VisionFieldMergeInput {
+        return VisionFieldMergeInput(
+            usedTargetedCrop = true,
+            source = "layout",
+            normalizedBoundsJson = null,
+            pixelCrop = Rect(0, 0, 200, 120),
+            layoutState = Coupon.LayoutState.MODAL_FOREGROUND,
+            debugEvidence = null
         )
     }
 

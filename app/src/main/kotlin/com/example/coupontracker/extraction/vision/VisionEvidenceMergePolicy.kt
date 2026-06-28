@@ -83,8 +83,8 @@ class VisionEvidenceMergePolicy : VisionOcrMergePolicy() {
             ?.takeIf { hasCropEvidence && OcrEvidenceValidator.isPhraseSupported(it, rawOcr) }
         val exactCode = currentSupportedCode ?: visionSupportedCode
         val noCodeRequired = exactCode == null &&
-            card.codeState != Coupon.CodeState.PRESENT &&
-            (card.codeState == Coupon.CodeState.NO_CODE_NEEDED || hasNoCodeEvidence(rawOcr))
+            card.codeState == Coupon.CodeState.NO_CODE_NEEDED &&
+            (hasNoCodeEvidence(rawOcr) || hasNoCodeEvidence(card.evidence))
         val presentCodeContradictedByNoCodeEvidence = exactCode == null &&
             card.codeState == Coupon.CodeState.PRESENT &&
             hasNoCodeEvidence(rawOcr)
@@ -97,7 +97,8 @@ class VisionEvidenceMergePolicy : VisionOcrMergePolicy() {
             exactCode != null -> Coupon.CodeState.PRESENT
             noCodeRequired -> Coupon.CodeState.NO_CODE_NEEDED
             card.codeState == Coupon.CodeState.PRESENT -> Coupon.CodeState.UNKNOWN
-            card.codeState in VALID_CODE_STATES_FOR_FIELD_LABELS -> card.codeState
+            card.codeState in VALID_CODE_STATES_FOR_FIELD_LABELS &&
+                card.codeState != Coupon.CodeState.NO_CODE_NEEDED -> card.codeState
             else -> Coupon.CodeState.UNKNOWN
         }
         val visionExpirySupported = !card.expiryText.isNullOrBlank() &&

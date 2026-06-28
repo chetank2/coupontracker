@@ -446,6 +446,28 @@ class VisionFieldJsonParserSchemaTest {
     }
 
     @Test
+    fun `parseFieldLabels rejects malformed Gemma JSON before trusting fields`() {
+        val error = assertThrows(IllegalArgumentException::class.java) {
+            parser.parseFieldLabels(
+                """
+                Gemma field labels:
+                ```json
+                {
+                  "layoutState": "MODAL_FOREGROUND",
+                  "confidence": 0.91,
+                  "fields": {
+                    "store": { "state": "PRESENT", "text": "CRED", "evidence": ["CRED"], "confidence": 0.9 },
+                    "description": { "state": "PRESENT", "text": "Save 10%", "evidence": ["Save 10%"], "confidence": 0.9 },
+                    "code": { "state": "PRESENT", "text": "SAVE10", "evidence": ["SAVE10"], "confidence": 0.9 },
+                    "expiry": { "state": "NOT_VISIBLE", "text": null, "evidence": ["not visible"], "confidence": 0.8 }
+                """.trimIndent()
+            )
+        }
+
+        assertEquals("Unterminated JSON object in field-label response", error.message)
+    }
+
+    @Test
     fun `parseLayout rejects final coupon fields in full screenshot response`() {
         val error = assertThrows(IllegalArgumentException::class.java) {
             parser.parseLayout(
