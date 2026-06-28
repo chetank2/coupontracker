@@ -8,6 +8,94 @@ here. Dynamic memory should capture dated fixes, commit summaries, device/logcat
 observations, failed approaches, regression tests added, installed APK evidence,
 known current bugs, and open follow-ups.
 
+## 2026-06-28: Multi-Agent Architecture Completion Pass
+
+Files changed:
+
+- `app/src/main/kotlin/com/example/coupontracker/domain/usecase/ExtractCouponUseCase.kt`
+- `app/src/main/kotlin/com/example/coupontracker/ui/viewmodel/ScannerViewModel.kt`
+- `app/src/main/kotlin/com/example/coupontracker/ui/viewmodel/BatchScannerViewModel.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/capture/BatchImageExtractionOrchestrator.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/TextExtractor.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/TextCouponInfoExtractor.kt`
+- `app/build.gradle.kts`
+- `app/src/androidTest/java/com/example/coupontracker/HiltTestRunner.kt`
+- `scripts/run_android_extraction_smoke.sh`
+- `scripts/prove_real_screenshot_regressions.py`
+- `scripts/prove_github_actions_runtime.sh`
+- `.github/workflows/ci.yml`
+- Focused unit tests for single-scan routing, batch image extraction, text coupon
+  info extraction, and screenshot proof automation.
+
+Why:
+
+- The remaining agent-roster items were to move scanner execution out of
+  ViewModels, make `ExtractCouponUseCase` own real single-scan routing, thin
+  batch orchestration, split the remaining `TextExtractor` facade, and add
+  recurring proof for screenshot and workflow checks.
+- Prior device proof also had a test-infra blocker: Hilt android tests were
+  launched with the production application.
+
+What it solves:
+
+- `ExtractCouponUseCase.routeSingleScan(...)` now owns crop detection routing,
+  layout probe routing, guarded full-image fallback choice, and OCR fallback
+  extraction outcome selection.
+- `ScannerViewModel` now handles UI/save/preview presentation for route
+  outcomes instead of executing the route itself.
+- `BatchImageExtractionOrchestrator` owns image-level batch crop isolation,
+  crop extraction, pipeline selection, OCR-first crop fallback, URI persistence,
+  and batch strategy telemetry.
+- `BatchScannerViewModel` now delegates image extraction to the orchestrator.
+- `TextCouponInfoExtractor` owns full coupon-info assembly while
+  `TextExtractor` stays as the public compatibility facade.
+- Connected Hilt android tests now use `HiltTestRunner`.
+- Screenshot proof automation now verifies committed golden replay fixtures and
+  inventories the real screenshot corpus without pretending inventory-only
+  screenshots are field-level goldens.
+- GitHub Actions proof has a scriptable check path, and CI can run the replay
+  fixture proof.
+
+How it works:
+
+- The ViewModels pass runtime callbacks for detector/OCR/UI-owned resources to
+  domain/capture orchestrators, keeping bitmap ownership and UI state local.
+- The new extraction/use-case tests exercise route outcomes and crop-first
+  batch behavior directly.
+- The connected smoke script treats the Gradle connected test result as the
+  pass/fail signal and makes report pulling best-effort because AGP cleanup can
+  remove the target package before `adb pull`.
+
+How good it is:
+
+- Good architectural progress. `ScannerViewModel` is now about 1,252 LOC,
+  `BatchScannerViewModel` about 524 LOC, and `TextExtractor` about 240 LOC.
+  The code is more modular without changing crop-first/OCR-first semantics.
+
+Remaining risk:
+
+- `ScannerViewModel` still owns UI/save/preview handling after route outcomes.
+- Real manual app-flow proof is still needed for re-uploading/verifying
+  BigBasket, MakeMyTrip, Lenskart/no-code, Leaf-style modal, and multi-card
+  screenshots, then pulling DB/logcat.
+- GitHub Actions runtime proof is blocked locally until `gh auth` is refreshed.
+- The connected smoke report file may not be pullable after AGP package cleanup,
+  although the on-device test itself passes.
+
+Tests/evidence:
+
+- `git diff --check`
+- `JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:compileDebugKotlin`
+- `JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest --tests 'com.example.coupontracker.domain.usecase.*' --tests 'com.example.coupontracker.extraction.capture.*' --tests 'com.example.coupontracker.extraction.rules.TextCouponInfoExtractorTest' --tests 'com.example.coupontracker.util.TextExtractorTest'`
+- `python3 scripts/prove_real_screenshot_regressions.py`
+- `bash -n scripts/prove_github_actions_runtime.sh`
+- `PYTHONPYCACHEPREFIX=/tmp/coupontracker-pycache python3 -m py_compile scripts/prove_real_screenshot_regressions.py tests/proof/test_screenshot_regression_proof.py`
+- `JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest`
+- `JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:assembleDebug`
+- `PATH="/Users/C/Library/Android/sdk/platform-tools:$PATH" JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./scripts/run_android_extraction_smoke.sh`
+- `scripts/prove_github_actions_runtime.sh` reported invalid `gh` auth for
+  account `chetank2`.
+
 ## 2026-06-28: Branch Cleanup Workflow Review Fix
 
 Files changed:

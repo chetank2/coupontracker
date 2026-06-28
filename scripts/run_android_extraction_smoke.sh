@@ -22,5 +22,8 @@ mkdir -p "$(dirname "$REPORT_DEST")"
 ./gradlew :app:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class="$TEST_CLASS"
 
-adb pull "$REPORT_DEVICE" "$REPORT_DEST"
-echo "Pulled Android extraction smoke report to $REPORT_DEST"
+if adb pull "$REPORT_DEVICE" "$REPORT_DEST"; then
+  echo "Pulled Android extraction smoke report to $REPORT_DEST"
+else
+  echo "WARN: Connected smoke test passed, but report was not available at $REPORT_DEVICE after test cleanup." >&2
+fi

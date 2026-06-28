@@ -9,21 +9,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.data.model.Coupon
-import com.example.coupontracker.data.util.DescriptionUtils
 import com.example.coupontracker.domain.usecase.BatchScanReadinessDecision
 import com.example.coupontracker.domain.usecase.BatchScanReadinessUseCase
 import com.example.coupontracker.domain.usecase.SaveBatchCouponsUseCase
 import com.example.coupontracker.extraction.capture.BatchCaptureInput
 import com.example.coupontracker.extraction.capture.BatchCaptureItemStatus
 import com.example.coupontracker.extraction.capture.BatchCaptureOrchestrator
-import com.example.coupontracker.extraction.capture.BatchRegionIsolationCoordinator
-import com.example.coupontracker.extraction.capture.BatchRegionExtractionRunner
-import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
-import com.example.coupontracker.util.AnalyticsTracker
+import com.example.coupontracker.extraction.capture.BatchImageExtractionOrchestrator
 import com.example.coupontracker.util.CouponInputManager
 import com.example.coupontracker.ml.MultiCouponDetectorDisabledException
 import com.example.coupontracker.util.ExtractionTelemetryService
-import com.example.coupontracker.util.ImageMetadataExtractor
 import com.example.coupontracker.util.MultiCouponDetectorState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -31,7 +26,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -40,17 +34,11 @@ class BatchScannerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val ocrEngine: com.example.coupontracker.ocr.OcrEngine,  // Tesseract OCR engine
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Bitmap memory management
-    private val universalExtractionService: com.example.coupontracker.universal.UniversalExtractionService,  // V2: Universal extraction
-    private val ocrFirstCouponExtractor: OcrFirstCouponExtractor,
     private val couponInputManager: CouponInputManager,
-    private val analyticsTracker: AnalyticsTracker,
     private val telemetryService: ExtractionTelemetryService,
-    private val regionPipeline: com.example.coupontracker.extraction.multi.CouponRegionPipeline,
-    private val batchPipelineFlag: com.example.coupontracker.extraction.multi.BatchPipelineFeatureFlag,
     private val batchScanReadinessUseCase: BatchScanReadinessUseCase,
     private val batchCaptureOrchestrator: BatchCaptureOrchestrator,
-    private val batchRegionIsolationCoordinator: BatchRegionIsolationCoordinator,
-    private val batchRegionExtractionRunner: BatchRegionExtractionRunner,
+    private val batchImageExtractionOrchestrator: BatchImageExtractionOrchestrator,
     private val saveBatchCouponsUseCase: SaveBatchCouponsUseCase
 ) : AndroidViewModel(application) {
 
@@ -58,7 +46,6 @@ class BatchScannerViewModel @Inject constructor(
     val uiState: StateFlow<BatchScannerUiState> = _uiState.asStateFlow()
 
     private val multiEngineOCR = com.example.coupontracker.util.MultiEngineOCR(context, ocrEngine)
-    private val uriPersistenceManager = com.example.coupontracker.util.UriPersistenceManager(context)
     private val detectorInitializationResult = initializeTwoStageDetector()
     private val twoStageDetector = detectorInitializationResult.detector
     private val detectorInitErrorMessage = detectorInitializationResult.errorMessage
@@ -68,7 +55,6 @@ class BatchScannerViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "BatchScannerViewModel"
-        private const val STRATEGY_SURFACE_BATCH = "batch_capture"
     }
 
     private data class DetectorInitializationResult(
@@ -314,7 +300,16 @@ class BatchScannerViewModel @Inject constructor(
                     releaseBitmap = { bitmapManager.releaseBitmap(it) },
                     processPdf = { inputUri -> couponInputManager.processPdfUri(inputUri) },
                     extractImageCoupons = { inputUri, imageBitmap ->
-                        detectAndExtractMultipleCoupons(inputUri, imageBitmap)
+                        batchImageExtractionOrchestrator.extract(
+                            uri = inputUri,
+                            bitmap = imageBitmap,
+                            runOcr = { sourceBitmap -> multiEngineOCR.processImage(sourceBitmap) },
+                            detectRegions = { sourceBitmap, ocrResult ->
+                                hybridDetector.detectCoupons(sourceBitmap, ocrResult)
+                            },
+                            trackBitmap = bitmapManager::trackBitmap,
+                            releaseBitmap = bitmapManager::releaseBitmap
+                        )
                     },
                     onItemStarted = { input ->
                         updateState {
@@ -427,77 +422,6 @@ class BatchScannerViewModel @Inject constructor(
         _uiState.value = BatchScannerUiState()
     }
 
-    /**
-     * Process one image through the shared OCR-first capture path. Qwen cleanup
-     * is intentionally not part of capture.
-     */
-    private suspend fun processWithOcrFirstPath(
-        uri: Uri,
-        bitmap: android.graphics.Bitmap
-    ): Coupon {
-        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            val persistedUri = persistUri(uri)
-            val captureTimestamp = extractCaptureTimestamp(persistedUri, uri)
-            val extraction = ocrFirstCouponExtractor.extract(
-                bitmap = bitmap,
-                imageUri = persistedUri,
-                captureTimestamp = captureTimestamp
-            )
-            if (!extraction.success) {
-                Log.w(TAG, "OCR_FIRST low confidence; returning shared OCR review result")
-            }
-            extraction.coupon
-        }
-    }
-
-    private fun extractCaptureTimestamp(persistedUri: String?, originalUri: Uri): java.util.Date? {
-        return runCatching {
-            persistedUri?.let { ImageMetadataExtractor.extractCaptureTimestamp(context, Uri.parse(it)) }
-        }.getOrNull()
-            ?: runCatching {
-                ImageMetadataExtractor.extractCaptureTimestamp(context, originalUri)
-            }.getOrNull()
-    }
-
-    private suspend fun logStrategyExecution(
-        requested: com.example.coupontracker.util.ExtractionStrategy,
-        executed: String,
-        reason: String? = null
-    ) {
-        val normalizedExecuted = executed.lowercase(Locale.getDefault())
-        val message = buildString {
-            append("Strategy[batch]: requested=")
-            append(requested.name)
-            append(", executed=")
-            append(normalizedExecuted)
-            if (!reason.isNullOrBlank()) {
-                append(", reason=")
-                append(reason)
-            }
-        }
-
-        Log.i(TAG, message)
-        analyticsTracker.trackStrategyExecution(
-            STRATEGY_SURFACE_BATCH,
-            requested,
-            normalizedExecuted,
-            reason
-        )
-
-        if (!requested.name.equals(normalizedExecuted, ignoreCase = true) && !reason.isNullOrBlank()) {
-            analyticsTracker.trackStrategyFallback(
-                STRATEGY_SURFACE_BATCH,
-                requested,
-                normalizedExecuted,
-                reason
-            )
-        }
-    }
-
-    private suspend fun persistUri(uri: Uri): String? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-        uriPersistenceManager.persistUri(uri)?.toString()
-    }
-    
     override fun onCleared() {
         super.onCleared()
         // V2: Cleanup detector bitmap crops to prevent memory leaks
@@ -509,104 +433,6 @@ class BatchScannerViewModel @Inject constructor(
         }
     }
     
-    /**
-     * V2.1: Detect and extract multiple coupons from a single image
-     * Uses HybridCouponDetector to find coupon regions, then extracts each
-     */
-    private suspend fun detectAndExtractMultipleCoupons(
-        uri: Uri,
-        bitmap: android.graphics.Bitmap
-    ): List<Coupon> = batchRegionIsolationCoordinator.extract(
-        uri = uri,
-        bitmap = bitmap,
-        runOcr = { sourceBitmap -> multiEngineOCR.processImage(sourceBitmap) },
-        detectRegions = { sourceBitmap, ocrResult -> hybridDetector.detectCoupons(sourceBitmap, ocrResult) },
-        extractIsolatedRegions = { isolatedRegions ->
-            batchRegionExtractionRunner.extract(
-                bitmap = bitmap,
-                couponRegions = isolatedRegions,
-                usePipeline = batchPipelineFlag.isEnabled(),
-                trackBitmap = bitmapManager::trackBitmap,
-                releaseBitmap = bitmapManager::releaseBitmap,
-                extractPipeline = { crops -> extractPipelineCrops(crops, uri) },
-                extractSingleRegion = { regionBitmap ->
-                    extractCouponFromRegion(
-                        regionBitmap = regionBitmap,
-                        uri = uri
-                    )
-                }
-            )
-        }
-    )
-    
-    /**
-     * Extract single coupon using standard strategy
-     */
-    private suspend fun extractSingleCoupon(
-        uri: Uri,
-        bitmap: android.graphics.Bitmap,
-        strategy: com.example.coupontracker.util.ExtractionStrategy
-    ): Coupon {
-        logStrategyExecution(
-            requested = strategy,
-            executed = "ocr_first_manual_clean"
-        )
-        return processWithOcrFirstPath(uri, bitmap)
-    }
-    
-    /**
-     * Extract coupon from a detected region
-     */
-    private suspend fun extractCouponFromRegion(
-        regionBitmap: android.graphics.Bitmap,
-        uri: Uri
-    ): Coupon {
-        return extractSingleCoupon(uri, regionBitmap, com.example.coupontracker.util.ExtractionStrategy.OCR_FIRST)
-    }
-
-    /**
-     * Converts pipeline canonical JSON into coupons. Crop ownership lives in
-     * BatchRegionExtractionRunner; dedup + cap are applied by the pipeline.
-     */
-    private suspend fun extractPipelineCrops(
-        crops: List<android.graphics.Bitmap>,
-        uri: android.net.Uri
-    ): List<com.example.coupontracker.data.model.Coupon> {
-        val canonicalJsons = regionPipeline.extractFromCrops(crops)
-        return canonicalJsons.map { json ->
-            com.example.coupontracker.extraction.multi.JsonToCouponConverter.convert(json, uri)
-        }
-    }
-    
-    /**
-     * Convert ExtractResult to Coupon
-     */
-    private fun convertExtractResultToCoupon(result: com.example.coupontracker.util.ExtractResult.Good, uri: Uri): Coupon {
-        val couponInfo = result.info
-        val signals = result.signals
-        val runPath = result.runPath
-        val runPathSummary = runPath.final.takeIf { it.isNotBlank() }?.let { final ->
-            "${runPath.strategy} → $final"
-        }
-        val description = DescriptionUtils.appendDetails(couponInfo.description, couponInfo.cashbackDetail)
-        return Coupon(
-            storeName = couponInfo.storeName,
-            description = description,
-            expiryDate = couponInfo.expiryDate,
-            redeemCode = couponInfo.redeemCode,
-            imageUri = uri.toString(),
-            status = com.example.coupontracker.data.model.Coupon.Status.ACTIVE,
-            needsAttention = couponInfo.needsAttention,
-            storeNameSource = couponInfo.storeNameSource,
-            storeNameEvidence = couponInfo.storeNameEvidence,
-            extractionQualityScore = signals.qualityScore,
-            extractionConfidenceBreakdown = signals.fieldConfidences,
-            extractionStage = signals.stage.name,
-            extractionRunPath = runPathSummary,
-            extractionTimestamp = java.util.Date()
-        )
-    }
-
     private fun createSelectedImage(
         uri: Uri,
         selectionOrder: Int,

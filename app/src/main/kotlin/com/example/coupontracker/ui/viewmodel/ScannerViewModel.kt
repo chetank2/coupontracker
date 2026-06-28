@@ -13,19 +13,18 @@ import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.debug.ExtractionDebugSnapshot
+import com.example.coupontracker.domain.usecase.ExtractCouponUseCase
 import com.example.coupontracker.domain.usecase.SaveScannedCouponResult
 import com.example.coupontracker.domain.usecase.SaveScannedCouponUseCase
 import com.example.coupontracker.domain.usecase.GuardedFullImageFallbackResult
 import com.example.coupontracker.domain.usecase.GuardedFullImageFallbackUseCase
-import com.example.coupontracker.domain.usecase.SingleScanRouteAction
-import com.example.coupontracker.domain.usecase.SingleScanRoutingUseCase
+import com.example.coupontracker.domain.usecase.SingleScanExtractionOutcome
+import com.example.coupontracker.domain.usecase.SingleScanExtractionRequest
+import com.example.coupontracker.domain.usecase.SingleScanRouteEvent
 import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.extraction.capture.DetectedCropCouponBuilder
 import com.example.coupontracker.extraction.capture.DetectedCropFieldExtractor
 import com.example.coupontracker.extraction.capture.LlmProgress
-import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
-import com.example.coupontracker.extraction.capture.FullImageFallbackProbe
-import com.example.coupontracker.extraction.capture.shouldBlockFullImageFallback
 import com.example.coupontracker.extraction.capture.toDetectedCropFieldExtraction
 import com.example.coupontracker.universal.ExtractionContext
 import com.example.coupontracker.universal.UniversalExtractionService
@@ -42,7 +41,6 @@ import com.example.coupontracker.util.CouponExtractionConfidenceScorer
 import com.example.coupontracker.util.CouponPostProcessor
 import com.example.coupontracker.util.ExtractResult
 import com.example.coupontracker.util.ExtractionRecommendation
-import com.example.coupontracker.util.ExtractionConfig
 import com.example.coupontracker.util.ExtractionLogBuffer
 import com.example.coupontracker.util.ExtractionStage
 import com.example.coupontracker.util.ExtractionTelemetryService
@@ -81,14 +79,11 @@ class ScannerViewModel @Inject constructor(
     private val universalExtractionService: UniversalExtractionService,
     private val performanceMonitor: ExtractionPerformanceMonitor,
     private val analyticsTracker: AnalyticsTracker,
-    private val ocrFirstCouponExtractor: OcrFirstCouponExtractor,
-    private val multiCouponExtractionService: MultiCouponExtractionService,
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Injected bitmap memory management
     private val validatorFeedbackRecorder: ValidatorFeedbackRecorder,
+    private val extractCouponUseCase: ExtractCouponUseCase,
     private val saveScannedCouponUseCase: SaveScannedCouponUseCase,
     private val guardedFullImageFallbackUseCase: GuardedFullImageFallbackUseCase,
-    private val singleScanRoutingUseCase: SingleScanRoutingUseCase,
-    private val fullImageFallbackProbe: FullImageFallbackProbe,
     private val detectedCropFieldExtractor: DetectedCropFieldExtractor
 ) : AndroidViewModel(application) {
 
@@ -279,126 +274,106 @@ class ScannerViewModel @Inject constructor(
         bitmap: Bitmap,
         persistImmediately: Boolean
     ): Boolean {
-        val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
         val detector = twoStageDetector
         if (detector == null) {
             Log.w(TAG, "Single scan crop-first routing unavailable: ${detectorInitErrorMessage ?: "detector not initialized"}")
-            val action = singleScanRoutingUseCase.planAfterCropDetection(
-                detectorAvailable = false,
-                detectedCropCount = 0
-            ) as SingleScanRouteAction.TryLayoutThenGuardedFallback
-            if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, action.reason)) {
-                return false
-            }
-            scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, action.reason)
-            return false
         }
-
-        val couponInstances = withContext(Dispatchers.IO) {
-            detector.detectMultiCoupons(bitmap)
-        }
-        Log.d(TAG, "Single scan crop-first detection found ${couponInstances.size} coupon(s)")
-
-        return when (val action = singleScanRoutingUseCase.planAfterCropDetection(
-            detectorAvailable = true,
-            detectedCropCount = couponInstances.size
-        )) {
-            is SingleScanRouteAction.TryLayoutThenGuardedFallback -> {
-                if (routeLayoutDetectedCoupons(imageUri, bitmap, persistImmediately, action.reason)) {
-                    return false
+        val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
+        val persistedUri = uriPersistenceManager.persistUri(imageUri)
+        val finalImageUri = resolveImageUri(persistedUri, imageUri)
+        val routeStartTime = System.currentTimeMillis()
+        val outcome = extractCouponUseCase.routeSingleScan(
+            SingleScanExtractionRequest(
+                bitmap = bitmap,
+                imageUri = finalImageUri,
+                captureTimestamp = captureTimestamp,
+                detectorAvailable = detector != null,
+                detectCouponCrops = { image ->
+                    withContext(Dispatchers.IO) {
+                        detector?.detectMultiCoupons(image).orEmpty()
+                    }.also { couponInstances ->
+                        Log.d(TAG, "Single scan crop-first detection found ${couponInstances.size} coupon(s)")
+                    }
+                },
+                processFullImageOcr = { image ->
+                    multiEngineOCR.processImage(image)
                 }
-                scanWithGuardedFullImageFallback(imageUri, bitmap, persistImmediately, action.reason)
-                false
-            }
-            is SingleScanRouteAction.ProcessSingleCrop -> {
-                logStrategyExecution(
-                    requested = strategy,
-                    executed = action.executedStrategy,
-                    surface = STRATEGY_SURFACE_SINGLE,
-                    reason = action.reason
-                )
+            )
+        )
+
+        logRouteEvents(outcome.events)
+
+        return when (outcome) {
+            is SingleScanExtractionOutcome.ProcessSingleCrop -> {
                 processSingleCoupon(
-                    couponInstance = couponInstances.first(),
+                    couponInstance = outcome.couponInstance,
                     imageUri = imageUri.toString(),
                     persistImmediately = persistImmediately,
-                    captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
+                    captureTimestamp = captureTimestamp
                 )
                 false
             }
-            is SingleScanRouteAction.ShowMultiCouponSelection -> {
-                logStrategyExecution(
-                    requested = strategy,
-                    executed = action.executedStrategy,
-                    surface = STRATEGY_SURFACE_SINGLE,
-                    reason = action.reason
-                )
+            is SingleScanExtractionOutcome.ShowMultiCouponSelection -> {
                 _uiState.value = ScannerUiState.MultiCouponDetected(
-                    couponInstances = couponInstances,
+                    couponInstances = outcome.couponInstances,
                     originalBitmap = bitmap,
                     imageUri = imageUri.toString()
                 )
                 true
             }
+            is SingleScanExtractionOutcome.LayoutCoupons -> {
+                handleLayoutCoupons(
+                    multiResult = outcome.multiResult,
+                    captureTimestamp = captureTimestamp,
+                    persistImmediately = persistImmediately
+                )
+                false
+            }
+            is SingleScanExtractionOutcome.FullImageOcr -> {
+                outcome.probeResult.ocrErrorMessage?.let { message ->
+                    Log.w(TAG, "Full-image fallback OCR guard returned error: $message")
+                }
+                handleOcrFirstExtraction(
+                    extraction = outcome.extraction,
+                    imageUri = imageUri,
+                    persistImmediately = persistImmediately,
+                    startTime = routeStartTime
+                )
+                false
+            }
+            is SingleScanExtractionOutcome.FullImageReviewFallback -> {
+                outcome.ocrErrorMessage?.let { message ->
+                    Log.w(TAG, "Full-image fallback OCR guard returned error: $message")
+                }
+                saveFullImageFallbackReviewCoupon(
+                    imageUri = imageUri,
+                    rawOcrText = outcome.rawOcrText,
+                    persistImmediately = persistImmediately,
+                    reason = outcome.reason
+                )
+                false
+            }
         }
     }
 
-    private suspend fun routeLayoutDetectedCoupons(
-        imageUri: Uri,
-        bitmap: Bitmap,
-        persistImmediately: Boolean,
-        reason: String
-    ): Boolean {
+    private suspend fun logRouteEvents(events: List<SingleScanRouteEvent>) {
         val strategy = com.example.coupontracker.util.ExtractionConfig.getStrategy()
-        val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
-        val persistedUri = uriPersistenceManager.persistUri(imageUri)
-        val finalImageUri = resolveImageUri(persistedUri, imageUri)
-
-        logStrategyExecution(
-            requested = strategy,
-            executed = "layout_multi_coupon_probe",
-            surface = STRATEGY_SURFACE_SINGLE,
-            reason = reason
-        )
-
-        val multiResult = runCatching {
-            multiCouponExtractionService.extractMultipleCoupons(
-                bitmap = bitmap,
-                imageUri = finalImageUri,
-                captureTimestamp = captureTimestamp,
-                allowProgressiveFallback = false
-            )
-        }.getOrElse { error ->
-            Log.e(TAG, "Layout multi-coupon probe failed", error)
-            null
-        }
-
-        val extractedCoupons = multiResult?.coupons.orEmpty()
-        if (extractedCoupons.isEmpty()) {
+        events.forEach { event ->
             logStrategyExecution(
                 requested = strategy,
-                executed = "ocr_first_manual_clean",
+                executed = event.executedStrategy,
                 surface = STRATEGY_SURFACE_SINGLE,
-                reason = "${reason}_layout_no_candidates"
+                reason = event.reason
             )
-            if (shouldBlockFullImageFallback(multiResult)) {
-                saveFullImageFallbackReviewCoupon(
-                    imageUri = imageUri,
-                    rawOcrText = "",
-                    persistImmediately = persistImmediately,
-                    reason = "${reason}_layout_${multiResult?.screenshotType}_detected_${multiResult?.totalDetected ?: 0}"
-                )
-                return true
-            }
-            return false
         }
+    }
 
-        logStrategyExecution(
-            requested = strategy,
-            executed = if (extractedCoupons.size > 1) "layout_multi_coupon_extraction" else "layout_single_coupon_extraction",
-            surface = STRATEGY_SURFACE_SINGLE,
-            reason = "${reason}_layout_detected_${extractedCoupons.size}"
-        )
-
+    private suspend fun handleLayoutCoupons(
+        multiResult: MultiCouponExtractionService.MultiCouponResult,
+        captureTimestamp: Date?,
+        persistImmediately: Boolean,
+    ) {
+        val extractedCoupons = multiResult.coupons
         if (!persistImmediately) {
             val previews = extractedCoupons.map { result ->
                 CouponProcessingSummary(
@@ -424,7 +399,7 @@ class ScannerViewModel @Inject constructor(
                 pendingMultiCouponPreview = previews
                 _uiState.value = ScannerUiState.MultiCouponPreview(previews)
             }
-            return true
+            return
         }
 
         val processedResults = mutableListOf<CouponProcessingSummary>()
@@ -450,40 +425,6 @@ class ScannerViewModel @Inject constructor(
 
         if (processedResults.size > 1) {
             _uiState.value = ScannerUiState.AllCouponsSaved(processedResults)
-        }
-        return true
-    }
-
-    private suspend fun scanWithGuardedFullImageFallback(
-        imageUri: Uri,
-        bitmap: Bitmap,
-        persistImmediately: Boolean,
-        routeReason: String
-    ) {
-        val probeResult = fullImageFallbackProbe.evaluate(bitmap) { image ->
-            multiEngineOCR.processImage(image)
-        }
-        probeResult.ocrErrorMessage?.let { message ->
-            Log.w(TAG, "Full-image fallback OCR guard returned error: $message")
-        }
-        val decision = probeResult.decision
-
-        logStrategyExecution(
-            requested = ExtractionConfig.getStrategy(),
-            executed = if (decision.allowDirectOcr) "ocr_first_full_image_guarded" else "full_image_review_only",
-            surface = STRATEGY_SURFACE_SINGLE,
-            reason = "${routeReason}_${decision.reason}"
-        )
-
-        if (decision.allowDirectOcr) {
-            scanWithOcrFirstPath(imageUri, bitmap, persistImmediately)
-        } else {
-            saveFullImageFallbackReviewCoupon(
-                imageUri = imageUri,
-                rawOcrText = probeResult.rawOcrText,
-                persistImmediately = persistImmediately,
-                reason = "${routeReason}_${decision.reason}"
-            )
         }
     }
 
@@ -514,24 +455,13 @@ class ScannerViewModel @Inject constructor(
         }
     }
     
-    /**
-     * V2: OCR_FIRST extraction path - REAL IMPLEMENTATION
-     * OCR extracts all text → Universal detector applies patterns → Build coupon
-     */
-    private suspend fun scanWithOcrFirstPath(imageUri: Uri, bitmap: Bitmap, persistImmediately: Boolean) {
-        val startTime = System.currentTimeMillis()
-        Log.d(TAG, "OCR_FIRST: Running multi-engine OCR for comprehensive text extraction")
-        
+    private suspend fun handleOcrFirstExtraction(
+        extraction: com.example.coupontracker.extraction.capture.OcrFirstExtractionResult,
+        imageUri: Uri,
+        persistImmediately: Boolean,
+        startTime: Long
+    ) {
         try {
-            val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
-            val persistedUri = uriPersistenceManager.persistUri(imageUri)
-            val finalImageUri = resolveImageUri(persistedUri, imageUri)
-
-            val extraction = ocrFirstCouponExtractor.extract(
-                bitmap = bitmap,
-                imageUri = finalImageUri,
-                captureTimestamp = captureTimestamp
-            )
             val finalCoupon = extraction.coupon
             val processingTime = System.currentTimeMillis() - startTime
             val fieldsExtracted = mutableSetOf<String>()

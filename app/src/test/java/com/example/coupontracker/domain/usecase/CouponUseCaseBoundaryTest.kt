@@ -3,6 +3,8 @@ package com.example.coupontracker.domain.usecase
 import android.graphics.Bitmap
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
+import com.example.coupontracker.extraction.MultiCouponExtractionService
+import com.example.coupontracker.extraction.capture.FullImageFallbackProbe
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.extraction.capture.OcrFirstExtractionResult
 import io.mockk.coEvery
@@ -115,7 +117,7 @@ class CouponUseCaseBoundaryTest {
     @Test
     fun `extract coupon forwards bitmap uri and capture timestamp`() = runTest {
         val extractor = mockk<OcrFirstCouponExtractor>()
-        val useCase = ExtractCouponUseCase(extractor)
+        val useCase = extractCouponUseCase(extractor)
         val bitmap = mockk<Bitmap>()
         val timestamp = Date(1_735_689_600_000L)
         val expected = OcrFirstExtractionResult(
@@ -153,7 +155,7 @@ class CouponUseCaseBoundaryTest {
     @Test
     fun `extract coupon scoped ocr request forwards crop scoped text`() = runTest {
         val extractor = mockk<OcrFirstCouponExtractor>()
-        val useCase = ExtractCouponUseCase(extractor)
+        val useCase = extractCouponUseCase(extractor)
         val bitmap = mockk<Bitmap>()
         val timestamp = Date(1_735_689_600_000L)
         val expected = OcrFirstExtractionResult(
@@ -201,4 +203,13 @@ class CouponUseCaseBoundaryTest {
             )
         }
     }
+
+    private fun extractCouponUseCase(
+        extractor: OcrFirstCouponExtractor
+    ): ExtractCouponUseCase = ExtractCouponUseCase(
+        extractor = extractor,
+        multiCouponExtractionService = mockk<MultiCouponExtractionService>(),
+        routingUseCase = SingleScanRoutingUseCase(),
+        fullImageFallbackProbe = mockk<FullImageFallbackProbe>()
+    )
 }

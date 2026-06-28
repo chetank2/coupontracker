@@ -83,7 +83,7 @@ android {
         buildConfigField("String", "PRIVACY_POLICY_URL", "\"${escapeBuildConfigString(privacyPolicyUrl)}\"")
         buildConfigField("String", "LLM_BACKEND", "\"${escapeBuildConfigString(llmBackend)}\"")
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.example.coupontracker.HiltTestRunner"
 
         // Native library configuration
         ndk {
