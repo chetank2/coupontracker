@@ -27,9 +27,12 @@ class CouponInputManagerTest {
         assertEquals(Coupon.LayoutState.LOW_CONFIDENCE, coupon.layoutState)
         assertEquals("MULTI_COUPON_IMPORT_REVIEW", coupon.extractionStage)
         assertEquals("MULTI_COUPON_IMPORT_REVIEW", coupon.extractionSource)
+        assertEquals("coupon_input_manager -> multi_coupon_review", coupon.extractionRunPath)
         assertEquals(Coupon.CodeState.UNKNOWN, coupon.codeState)
         assertEquals(Coupon.ExpiryState.UNKNOWN, coupon.expiryState)
         assertTrue(coupon.cleanupError.orEmpty().contains("multi_extraction_returned_no_coupons"))
+        assertTrue(coupon.debugVisionEvidence.orEmpty().contains("multi_coupon_import_review"))
+        assertTrue(coupon.debugVisionEvidence.orEmpty().contains("multi_extraction_returned_no_coupons"))
         assertEquals("Store A\nCode A1\nStore B\nCode B2", coupon.rawOcrText)
         assertEquals(captureTimestamp, coupon.extractionTimestamp)
     }

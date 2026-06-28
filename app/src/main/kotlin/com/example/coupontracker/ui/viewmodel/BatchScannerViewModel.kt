@@ -11,7 +11,12 @@ import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.extraction.capture.CandidateRegionType
+import com.example.coupontracker.extraction.capture.CaptureScreenshotType
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
+import com.example.coupontracker.extraction.capture.CropIsolationInput
+import com.example.coupontracker.extraction.capture.CropIsolationMode
+import com.example.coupontracker.extraction.capture.CropIsolationPolicy
 import com.example.coupontracker.util.AnalyticsTracker
 import com.example.coupontracker.util.CouponInputManager
 import com.example.coupontracker.ml.MultiCouponDetectorDisabledException
@@ -875,10 +880,6 @@ internal fun isFallbackOrFullImageRegion(
     bitmap: android.graphics.Bitmap,
     region: com.example.coupontracker.ml.HybridCouponDetector.CouponRegion
 ): Boolean {
-    if (region.source == com.example.coupontracker.ml.HybridCouponDetector.DetectionSource.FALLBACK) {
-        return true
-    }
-
     val imageArea = bitmap.width.toLong() * bitmap.height.toLong()
     if (imageArea <= 0L) return true
 
@@ -889,7 +890,27 @@ internal fun isFallbackOrFullImageRegion(
     val regionArea = (right - left).toLong() * (bottom - top).toLong()
     val coversMostWidth = (right - left) >= bitmap.width * 95 / 100
     val coversMostHeight = (bottom - top) >= bitmap.height * 95 / 100
-    return regionArea >= (imageArea * 95L / 100L) || (coversMostWidth && coversMostHeight)
+    val fullImageLike = regionArea >= (imageArea * 95L / 100L) || (coversMostWidth && coversMostHeight)
+    val candidateRegionType =
+        if (
+            region.source == com.example.coupontracker.ml.HybridCouponDetector.DetectionSource.FALLBACK ||
+            fullImageLike
+        ) {
+            CandidateRegionType.FULL_IMAGE_FALLBACK
+        } else {
+            CandidateRegionType.ISOLATED_CROP
+        }
+
+    val decision = CropIsolationPolicy().decide(
+        CropIsolationInput(
+            detectedRegionCount = 1,
+            candidateRegionType = candidateRegionType,
+            screenshotType = CaptureScreenshotType.UNKNOWN,
+            rawOcrText = region.ocrText.ifBlank { "region text unavailable" },
+            likelySingleCoupon = false
+        )
+    )
+    return decision.mode != CropIsolationMode.ISOLATED_CROP
 }
 
 internal fun createCropIsolationFailedCoupon(

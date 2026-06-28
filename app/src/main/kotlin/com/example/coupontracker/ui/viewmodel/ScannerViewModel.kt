@@ -20,6 +20,12 @@ import com.example.coupontracker.debug.ExtractionDebugSnapshot
 import com.example.coupontracker.domain.usecase.SaveScannedCouponResult
 import com.example.coupontracker.domain.usecase.SaveScannedCouponUseCase
 import com.example.coupontracker.extraction.MultiCouponExtractionService
+import com.example.coupontracker.extraction.capture.CandidateRegionType
+import com.example.coupontracker.extraction.capture.CaptureScreenshotType
+import com.example.coupontracker.extraction.capture.CropIsolationInput
+import com.example.coupontracker.extraction.capture.CropIsolationMode
+import com.example.coupontracker.extraction.capture.CropIsolationPolicy
+import com.example.coupontracker.extraction.capture.CropIsolationReason
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.TextBlock
@@ -138,22 +144,37 @@ class ScannerViewModel @Inject constructor(
             detectedRegionCount: Int = 0,
             classifier: ScreenshotClassifier = ScreenshotClassifier()
         ): FullImageFallbackDecision {
-            if (detectedRegionCount > 1) {
-                return FullImageFallbackDecision(false, "multiple_regions_detected")
-            }
+            val decision = CropIsolationPolicy().decide(
+                CropIsolationInput(
+                    detectedRegionCount = detectedRegionCount,
+                    candidateRegionType = CandidateRegionType.FULL_IMAGE_FALLBACK,
+                    screenshotType = classification.type.toCaptureScreenshotType(),
+                    rawOcrText = rawOcrText,
+                    likelySingleCoupon = rawOcrText.isNotBlank() && classifier.isLikelySingleCoupon(rawOcrText)
+                )
+            )
+            return FullImageFallbackDecision(
+                allowDirectOcr = decision.mode == CropIsolationMode.GUARDED_FULL_IMAGE_OCR,
+                reason = decision.reason.toLegacyFallbackReason()
+            )
+        }
 
-            if (rawOcrText.isBlank()) {
-                return FullImageFallbackDecision(false, "blank_ocr_classification")
+        private fun CropIsolationReason.toLegacyFallbackReason(): String {
+            return when (this) {
+                CropIsolationReason.MULTIPLE_REGIONS_DETECTED -> "multiple_regions_detected"
+                CropIsolationReason.CLASSIFIED_MULTI_COUPON -> "classified_multi_coupon"
+                CropIsolationReason.BLANK_OCR -> "blank_ocr_classification"
+                CropIsolationReason.LIKELY_SINGLE_FULL_IMAGE_FALLBACK -> "likely_single_coupon"
+                CropIsolationReason.NO_ISOLATED_CROP -> "not_likely_single_coupon"
+                CropIsolationReason.ISOLATED_CROP_AVAILABLE -> "isolated_crop_available"
             }
+        }
 
-            if (classification.type == ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP) {
-                return FullImageFallbackDecision(false, "classified_multi_coupon")
-            }
-
-            return if (classifier.isLikelySingleCoupon(rawOcrText)) {
-                FullImageFallbackDecision(true, "likely_single_coupon")
-            } else {
-                FullImageFallbackDecision(false, "not_likely_single_coupon")
+        private fun ScreenshotClassifier.ScreenshotType.toCaptureScreenshotType(): CaptureScreenshotType {
+            return when (this) {
+                ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP -> CaptureScreenshotType.MULTI_COUPON_APP
+                ScreenshotClassifier.ScreenshotType.CAMERA_CAPTURE -> CaptureScreenshotType.CAMERA_CAPTURE
+                ScreenshotClassifier.ScreenshotType.SINGLE_SCREENSHOT -> CaptureScreenshotType.SINGLE_SCREENSHOT
             }
         }
 

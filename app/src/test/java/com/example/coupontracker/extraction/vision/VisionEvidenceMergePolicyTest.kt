@@ -3,6 +3,8 @@ package com.example.coupontracker.extraction.vision
 import android.graphics.Rect
 import com.example.coupontracker.data.model.Coupon
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -269,6 +271,54 @@ class VisionEvidenceMergePolicyTest {
         assertTrue(merged.needsAttention)
     }
 
+    @Test
+    fun `full image vision labels without crop evidence stay review only`() {
+        val base = coupon(
+            storeName = Coupon.Defaults.UNKNOWN_STORE,
+            description = "Needs review",
+            redeemCode = null,
+            rawOcrText = null
+        )
+        val vision = extraction(
+            card = card(
+                storeName = "AJIO",
+                description = "Flat 50% off on fashion",
+                redeemCode = "SAVE50",
+                expiryText = "EXPIRES IN 7 DAYS",
+                codeState = Coupon.CodeState.PRESENT,
+                expiryState = Coupon.ExpiryState.PRESENT,
+                layoutState = Coupon.LayoutState.MULTI_CARD,
+                evidence = """
+                    store: AJIO
+                    offer: Flat 50% off on fashion
+                    code: SAVE50
+                    expiry: EXPIRES IN 7 DAYS
+                """.trimIndent()
+            )
+        )
+
+        val merged = policy.mergeFieldLabels(
+            current = base,
+            vision = vision,
+            rawOcr = null,
+            visionInput = fullImageInput(),
+            captureTimestamp = localDate(2026, 6, 28)
+        )
+
+        assertEquals(Coupon.Defaults.UNKNOWN_STORE, merged.storeName)
+        assertEquals("Needs review", merged.description)
+        assertNull(merged.redeemCode)
+        assertNull(merged.expiryDate)
+        assertEquals(Coupon.CodeState.UNKNOWN, merged.codeState)
+        assertEquals(Coupon.ExpiryState.UNKNOWN, merged.expiryState)
+        assertEquals(Coupon.LayoutState.MULTI_CARD, merged.layoutState)
+        assertTrue(merged.needsAttention)
+        assertEquals(Coupon.CleanupStatus.FAILED, merged.cleanupStatus)
+        assertNotEquals(Coupon.ExtractionSource.VISION_VERIFIED, merged.extractionSource)
+        assertTrue(merged.debugVisionEvidence.orEmpty().contains("\"source\":\"full_image\""))
+        assertFalse(merged.debugVisionEvidence.orEmpty().contains("\"pixelCrop\""))
+    }
+
     private fun coupon(
         storeName: String,
         description: String,
@@ -304,6 +354,7 @@ class VisionEvidenceMergePolicyTest {
         expiryText: String? = null,
         codeState: String = Coupon.CodeState.PRESENT,
         expiryState: String = Coupon.ExpiryState.PRESENT,
+        layoutState: String = Coupon.LayoutState.MODAL_FOREGROUND,
         evidence: String
     ): VisionCouponCard {
         return VisionCouponCard(
@@ -313,7 +364,7 @@ class VisionEvidenceMergePolicyTest {
             expiryText = expiryText,
             codeState = codeState,
             expiryState = expiryState,
-            layoutState = Coupon.LayoutState.MODAL_FOREGROUND,
+            layoutState = layoutState,
             confidence = 0.95f,
             evidence = evidence,
             bounds = null,
@@ -328,6 +379,17 @@ class VisionEvidenceMergePolicyTest {
             normalizedBoundsJson = null,
             pixelCrop = Rect(0, 0, 200, 120),
             layoutState = Coupon.LayoutState.MODAL_FOREGROUND,
+            debugEvidence = null
+        )
+    }
+
+    private fun fullImageInput(): VisionFieldMergeInput {
+        return VisionFieldMergeInput(
+            usedTargetedCrop = false,
+            source = "full_image",
+            normalizedBoundsJson = null,
+            pixelCrop = null,
+            layoutState = Coupon.LayoutState.MULTI_CARD,
             debugEvidence = null
         )
     }

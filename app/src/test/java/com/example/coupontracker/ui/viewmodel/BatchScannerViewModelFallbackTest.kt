@@ -57,6 +57,8 @@ class BatchScannerViewModelFallbackTest {
         assertNull(coupon.redeemCode)
         assertTrue(coupon.needsAttention)
         assertEquals(Coupon.CleanupStatus.FAILED, coupon.cleanupStatus)
+        assertEquals("BATCH_CROP_ISOLATION_FAILED", coupon.extractionSource)
+        assertEquals("batch_region_detection -> review", coupon.extractionRunPath)
         assertEquals(Coupon.LayoutState.LOW_CONFIDENCE, coupon.layoutState)
         assertEquals(Coupon.CodeState.UNKNOWN, coupon.codeState)
         assertEquals(Coupon.ExpiryState.UNKNOWN, coupon.expiryState)
@@ -88,7 +90,11 @@ class BatchScannerViewModelFallbackTest {
         assertTrue(coupon.cleanupError.orEmpty().contains("Crop isolation failed"))
         assertTrue(coupon.cleanupError.orEmpty().contains("no_isolated_coupon_regions"))
         assertEquals(Coupon.LayoutState.LOW_CONFIDENCE, coupon.layoutState)
+        assertEquals(Coupon.CodeState.UNKNOWN, coupon.codeState)
+        assertEquals(Coupon.ExpiryState.UNKNOWN, coupon.expiryState)
         assertEquals("BATCH_CROP_ISOLATION_FAILED", coupon.extractionStage)
+        assertEquals("BATCH_CROP_ISOLATION_FAILED", coupon.extractionSource)
+        assertEquals("batch_region_detection -> review", coupon.extractionRunPath)
     }
 
     private fun bitmap(width: Int, height: Int): Bitmap {

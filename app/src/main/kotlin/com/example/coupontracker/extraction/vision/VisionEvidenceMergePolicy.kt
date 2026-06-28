@@ -132,6 +132,7 @@ class VisionEvidenceMergePolicy : VisionOcrMergePolicy() {
             card.expiryState == Coupon.ExpiryState.NOT_VISIBLE
         val expiryState = when {
             selectedExpiry != null -> Coupon.ExpiryState.PRESENT
+            !hasCropEvidence -> Coupon.ExpiryState.UNKNOWN
             card.expiryState in VALID_EXPIRY_STATES_FOR_FIELD_LABELS -> card.expiryState
             else -> Coupon.ExpiryState.UNKNOWN
         }
