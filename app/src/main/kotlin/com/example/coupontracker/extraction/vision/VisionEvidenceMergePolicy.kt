@@ -38,7 +38,8 @@ class VisionEvidenceMergePolicy : VisionOcrMergePolicy() {
             )
         }
 
-        val hasCropEvidence = !rawOcr.isNullOrBlank()
+        val hasOcrEvidence = !rawOcr.isNullOrBlank()
+        val hasCropEvidence = visionInput.usedTargetedCrop && hasOcrEvidence
         val supportedVisionStore = card.storeName
             ?.trim()
             ?.takeIf { it.isNotBlank() }
@@ -84,10 +85,10 @@ class VisionEvidenceMergePolicy : VisionOcrMergePolicy() {
         val exactCode = currentSupportedCode ?: visionSupportedCode
         val noCodeRequired = exactCode == null &&
             card.codeState == Coupon.CodeState.NO_CODE_NEEDED &&
-            (hasNoCodeEvidence(rawOcr) || hasNoCodeEvidence(card.evidence))
+            (hasCropEvidence && hasNoCodeEvidence(rawOcr) || hasNoCodeEvidence(card.evidence))
         val presentCodeContradictedByNoCodeEvidence = exactCode == null &&
             card.codeState == Coupon.CodeState.PRESENT &&
-            hasNoCodeEvidence(rawOcr)
+            hasOcrEvidence && hasNoCodeEvidence(rawOcr)
         val currentHasUnsupportedCode = current.redeemCode
             ?.trim()
             ?.takeIf { it.isNotBlank() && !GenericFieldHeuristics.isGenericOrMissingCode(it) }

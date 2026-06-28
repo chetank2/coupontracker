@@ -20,7 +20,6 @@ import com.example.coupontracker.extraction.quality.OfferTextQuality
 import com.example.coupontracker.extraction.vision.VisionFieldExtraction
 import com.example.coupontracker.extraction.vision.VisionFieldJsonParser
 import com.example.coupontracker.extraction.vision.VisionEvidenceMergePolicy
-import com.example.coupontracker.extraction.vision.VisionVerificationConfig
 import com.example.coupontracker.model.ModelPaths
 import com.example.coupontracker.ocr.OcrEngine
 import com.example.coupontracker.util.CouponExtractionConfidenceScorer
@@ -38,7 +37,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
 import java.util.Date
 import java.util.Locale
@@ -57,6 +55,11 @@ class VerifyCouponWorker @AssistedInject constructor(
     private val visionEvidenceMergePolicy = VisionEvidenceMergePolicy()
     private val cleanupStatusWriter = CouponCleanupStatusWriter(couponRepository)
     private val verifyCouponUseCase = VerifyCouponUseCase()
+    private val visionFieldLabelReader = VisionFieldLabelReader(
+        ocrEngine = ocrEngine,
+        gemmaVisionCouponModel = gemmaVisionCouponModel,
+        visionFieldJsonParser = visionFieldJsonParser
+    )
     private val visionCropPreparer = VisionCropPreparer(
         ocrEngine = ocrEngine,
         gemmaVisionCouponModel = gemmaVisionCouponModel,
@@ -147,51 +150,30 @@ class VerifyCouponWorker @AssistedInject constructor(
                 return Result.success()
             }
             try {
-                val cropOcrText = withContext(Dispatchers.IO) {
-                    ocrEngine.recognize(visionInput.bitmap)
-                }
-                Log.i(
-                    TAG,
-                    "CROP_OCR_DONE couponId=$couponId source=${visionInput.source} " +
-                        "textLength=${cropOcrText.length} pixelCrop=${visionInput.pixelCrop?.flattenToString()}"
-                )
-                // Do not fall back to full-screen OCR here: it can prove fields
-                // from background cards for a foreground crop.
-                val cropEvidenceText = cropOcrText.takeIf { it.isNotBlank() }
-                val visionResult = withTimeout(VisionVerificationConfig.FIELD_LABEL_TIMEOUT_MS) {
-                    gemmaVisionCouponModel.extractRawFromImage(
-                        image = visionInput.bitmap,
-                        ocrText = cropEvidenceText,
-                        prompt = VisionVerificationPrompts.fieldLabels()
-                    )
-                }
+                val readResult = visionFieldLabelReader.read(couponId, visionInput)
                 val current = couponRepository.getCouponById(couponId) ?: return Result.success()
-                val fieldLabels = runCatching {
-                    visionFieldJsonParser.parse(visionResult.canonicalJson)
-                }.getOrElse { error ->
-                    markVisionFailed(
-                        current = mergeLatestCouponState(visionBaseCoupon, current),
-                        visionInput = visionInput,
-                        error = error,
-                        stage = "field_label_parse_failed",
-                        rawVisionJson = visionResult.canonicalJson,
-                        rawOcr = cropEvidenceText
-                    )
-                    return Result.success()
+                when (readResult) {
+                    is VisionFieldLabelReadResult.Failure -> {
+                        markVisionFailed(
+                            current = mergeLatestCouponState(visionBaseCoupon, current),
+                            visionInput = visionInput,
+                            error = readResult.error,
+                            stage = readResult.stage,
+                            rawVisionJson = readResult.rawVisionJson,
+                            rawOcr = readResult.rawOcr
+                        )
+                        return Result.success()
+                    }
+                    is VisionFieldLabelReadResult.Success -> {
+                        val verified = mergeVisionFieldLabels(
+                            current = mergeLatestCouponState(visionBaseCoupon, current),
+                            vision = readResult.fieldLabels,
+                            rawOcr = readResult.rawOcr,
+                            visionInput = visionInput
+                        )
+                        couponRepository.updateCoupon(verified)
+                    }
                 }
-                Log.i(
-                    TAG,
-                    "GEMMA_FIELD_LABEL_PARSED couponId=$couponId source=${visionInput.source} cards=${fieldLabels.cards.size} " +
-                        "confidence=${"%.2f".format(fieldLabels.confidence)} " +
-                        "activeCode=${fieldLabels.activeCard?.codeState} activeExpiry=${fieldLabels.activeCard?.expiryState}"
-                )
-                val verified = mergeVisionFieldLabels(
-                    current = mergeLatestCouponState(visionBaseCoupon, current),
-                    vision = fieldLabels,
-                    rawOcr = cropEvidenceText,
-                    visionInput = visionInput
-                )
-                couponRepository.updateCoupon(verified)
                 Result.success()
             } finally {
                 if (visionInput.bitmap !== bitmap && !visionInput.bitmap.isRecycled) {

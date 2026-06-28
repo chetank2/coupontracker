@@ -50,15 +50,8 @@ class DefaultFieldProvider {
             }
         }
         
-        // Amount: 0.0 (but marked as uncertain)
-        if (FieldType.AMOUNT in missingFields) {
-            defaults[FieldType.AMOUNT] = FieldCandidate(
-                value = "0.0",
-                confidence = 0.0f,
-                source = "default_zero",
-                context = "No amount found"
-            )
-        }
+        // Amount: leave missing. A synthetic 0.0 amount looks like extracted
+        // data and can leak into saved descriptions.
         
         // Code: only mark no-code when OCR explicitly says so.
         if (FieldType.COUPON_CODE in missingFields) {

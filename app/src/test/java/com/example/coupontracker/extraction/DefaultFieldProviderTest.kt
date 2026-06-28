@@ -41,6 +41,16 @@ class DefaultFieldProviderTest {
         assertNull(defaults[FieldType.DESCRIPTION])
     }
 
+    @Test
+    fun `missing amount stays missing instead of defaulting to zero`() {
+        val defaults = provider.provideDefaults(
+            context = context("Flat 25% off on accessories"),
+            missingFields = setOf(FieldType.AMOUNT)
+        )
+
+        assertNull(defaults[FieldType.AMOUNT])
+    }
+
     private fun context(text: String): ExtractionContext {
         return ExtractionContext(
             imageUri = "test://coupon",

@@ -7,11 +7,17 @@ import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.preferences.SecurePreferencesManager
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.extraction.model.GemmaVisionCouponModel
+import com.example.coupontracker.extraction.model.ModelExtractionResult
 import com.example.coupontracker.extraction.vision.VisionCouponCard
 import com.example.coupontracker.extraction.vision.VisionFieldExtraction
+import com.example.coupontracker.extraction.vision.VisionFieldJsonParser
 import com.example.coupontracker.model.ModelCatalog
 import com.example.coupontracker.ocr.OcrEngine
+import io.mockk.coEvery
+import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -218,6 +224,66 @@ class VerifyCouponWorkerTest {
             "Gemma Vision could not return a usable structured result. The OCR result is still saved for review.",
             message
         )
+    }
+
+    @Test
+    fun `field label reader returns parsed labels with crop OCR evidence`() = runTest {
+        val ocrEngine = mockk<OcrEngine>()
+        val gemma = mockk<GemmaVisionCouponModel>()
+        val reader = VisionFieldLabelReader(
+            ocrEngine = ocrEngine,
+            gemmaVisionCouponModel = gemma,
+            visionFieldJsonParser = VisionFieldJsonParser()
+        )
+        val input = cropInput()
+        every { input.bitmap.width } returns 20
+        every { input.bitmap.height } returns 20
+        coEvery { ocrEngine.recognize(input.bitmap) } returns "MakeMyTrip\nFlat 15% off\nNo code needed"
+        coEvery { gemma.extractRawFromImage(input.bitmap, any(), any()) } returns ModelExtractionResult(
+            canonicalJson = """{"cards":[{"active":true,"storeName":"MakeMyTrip","description":"Flat 15% off","codeState":"NO_CODE_NEEDED","expiryState":"NOT_VISIBLE","layoutState":"MODAL_FOREGROUND","confidence":0.95}],"confidence":0.95}""",
+            latencyMs = 5L,
+            usedFallback = false
+        )
+
+        val result = reader.read(couponId = 42L, visionInput = input)
+
+        assertTrue(result is VisionFieldLabelReadResult.Success)
+        result as VisionFieldLabelReadResult.Success
+        assertEquals("MakeMyTrip", result.fieldLabels.activeCard?.storeName)
+        assertEquals("MakeMyTrip\nFlat 15% off\nNo code needed", result.rawOcr)
+        coVerify {
+            gemma.extractRawFromImage(
+                image = input.bitmap,
+                ocrText = "MakeMyTrip\nFlat 15% off\nNo code needed",
+                prompt = any()
+            )
+        }
+    }
+
+    @Test
+    fun `field label reader packages parse failure for worker status update`() = runTest {
+        val ocrEngine = mockk<OcrEngine>()
+        val gemma = mockk<GemmaVisionCouponModel>()
+        val reader = VisionFieldLabelReader(
+            ocrEngine = ocrEngine,
+            gemmaVisionCouponModel = gemma,
+            visionFieldJsonParser = VisionFieldJsonParser()
+        )
+        val input = cropInput()
+        coEvery { ocrEngine.recognize(input.bitmap) } returns ""
+        coEvery { gemma.extractRawFromImage(input.bitmap, null, any()) } returns ModelExtractionResult(
+            canonicalJson = """{"notCards":[]}""",
+            latencyMs = 5L,
+            usedFallback = false
+        )
+
+        val result = reader.read(couponId = 42L, visionInput = input)
+
+        assertTrue(result is VisionFieldLabelReadResult.Failure)
+        result as VisionFieldLabelReadResult.Failure
+        assertEquals("field_label_parse_failed", result.stage)
+        assertEquals("""{"notCards":[]}""", result.rawVisionJson)
+        assertNull(result.rawOcr)
     }
 
     private fun cropInput(): VisionInput {
