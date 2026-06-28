@@ -64,6 +64,50 @@ preferring active-card scoped code extraction.
 
 Dynamic memory belongs in [Dynamic Memory](dynamic-memory.md).
 
+## 2.1 Code-Change Update Protocol
+
+Every non-trivial code change must update the knowledge base in the same work
+item. The update can be short, but it must be explicit enough that the next
+developer or agent understands the reason for the change instead of rediscovering
+it from git history.
+
+Use this decision:
+
+```text
+Stable rule or architecture boundary changed -> Static Memory or detailed topic.
+Recent fix, device lesson, branch behavior, or open follow-up -> Dynamic Memory.
+Source ownership changed -> source map / detailed topic.
+Regression fixed -> Dynamic Memory plus failure playbook/test note.
+Pure mechanical change with no durable lesson -> final/handoff says no KB update
+needed and why.
+```
+
+Required entry fields for code changes:
+
+```text
+Date:
+Files changed:
+Why:
+What it solves:
+How it works:
+How good it is:
+Remaining risk:
+Tests/evidence:
+Follow-up:
+```
+
+Quality scale:
+
+```text
+Durable: matches the ideal flow and has tests/evidence.
+Good: fixes the issue with clear boundaries but needs broader coverage.
+Temporary: safe or review-only, but should be replaced by a better architecture.
+Risky: works for one path or fixture and must not be generalized.
+```
+
+Do not write vague entries such as "fixed extraction." Name the exact failure,
+the code path, the guardrail, and the proof.
+
 ## 3. Source Map
 
 The knowledge base must tell readers where important behavior lives.

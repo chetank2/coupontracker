@@ -39,6 +39,11 @@ between `worker/` and `work/`.
   extraction pipeline classes.
 - Keep AI cleanup separate from capture. Capture is OCR-first; model cleanup is
   explicit/background verification.
+- When code changes, update the knowledge base in the same work item. Record
+  why the change was made, what failure or architecture gap it solves, how good
+  the fix is, remaining risk, and tests/evidence. If a code change is purely
+  mechanical and adds no durable lesson, state that explicitly in the handoff or
+  final answer.
 
 ## Required Checks
 

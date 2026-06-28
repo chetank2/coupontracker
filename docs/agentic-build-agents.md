@@ -22,6 +22,8 @@ Each agent must preserve the root `AGENTS.md` rules.
   without a scoped migration plan and tests.
 - Turn every real extraction failure into a regression test or documented
   playbook entry.
+- After every non-trivial code change, run the Knowledge Base Agent update
+  protocol. Do not leave why/what/quality/risk only in chat.
 - Keep saved coupons traceable to screenshot, crop, OCR text, model output,
   validator decision, final database row, and review state.
 - Never duplicate a coupon only because the screenshot URI, filename, or scroll
@@ -282,15 +284,24 @@ Useful checks:
 
 ### 10. Knowledge Base Agent
 
-Use after discoveries, repeated failures, architecture decisions, or completed
-refactor slices.
+Use after any non-trivial code change, discovery, repeated failure, architecture
+decision, or completed refactor slice. This agent is the automatic documentation
+gate for code-changing work.
 
 Responsibilities:
 
+- Inspect `git diff --name-only` and identify changed code, tests, migrations,
+  docs, model/config, or release files.
+- Decide whether the change belongs in static memory, dynamic memory, a detailed
+  topic doc, a source map, a failure playbook, or no KB entry.
+- For every non-trivial code change, record:
+  why it was done, what it solves, how it works, how good the fix is, remaining
+  risk, and tests/evidence.
 - Keep durable rules in static memory.
 - Keep dated/device-specific lessons in dynamic memory.
 - Add failure playbook entries for real bugs.
 - Do not leave final project knowledge only in private chat notes.
+- If no KB update is needed, write the reason in the handoff/final answer.
 
 Primary docs:
 
@@ -298,6 +309,21 @@ Primary docs:
 - `docs/knowledge-base/static-memory.md`
 - `docs/knowledge-base/dynamic-memory.md`
 - `docs/knowledge-base/roadmap.md`
+
+Required output:
+
+```text
+KB decision:
+Files changed:
+Entry target:
+Why:
+What it solves:
+How it works:
+Quality: Durable | Good | Temporary | Risky
+Remaining risk:
+Tests/evidence:
+Follow-up:
+```
 
 ### 11. Dataset And Annotation Agent
 
@@ -580,5 +606,6 @@ Dataset/fixtures touched:
 Evidence available:
 Known risk:
 Tests already run:
+Knowledge base decision:
 Next required check:
 ```

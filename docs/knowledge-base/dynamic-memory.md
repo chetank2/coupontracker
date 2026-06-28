@@ -8,6 +8,110 @@ here. Dynamic memory should capture dated fixes, commit summaries, device/logcat
 observations, failed approaches, regression tests added, installed APK evidence,
 known current bugs, and open follow-ups.
 
+## 2026-06-28: VerifyCouponWorker Thin-Slice Use Case Extraction
+
+Files changed:
+
+- `app/src/main/kotlin/com/example/coupontracker/worker/VerifyCouponWorker.kt`
+- `app/src/main/kotlin/com/example/coupontracker/domain/usecase/VerifyCouponUseCase.kt`
+- `app/src/test/java/com/example/coupontracker/domain/usecase/VerifyCouponUseCaseTest.kt`
+
+Why:
+
+- `VerifyCouponWorker` mixed WorkManager orchestration with pure cleanup-state
+  decisions, making future worker thinning risky.
+- The first safe slice was to extract state transitions and verification gating
+  without touching crop-first extraction, model prompts, merge policy, Room, or
+  WorkManager enqueue behavior.
+
+What it solves:
+
+- The worker no longer owns the pure decisions for starting cleanup, holding a
+  deterministic baseline in `RUNNING` while vision runs, deciding whether
+  automatic vision verification should run, or merging latest cleanup state.
+
+How it works:
+
+- `VerifyCouponWorker` delegates pure cleanup-state decisions to
+  `VerifyCouponUseCase`.
+- The use case is Android-free and testable with a fixed clock, while the worker
+  still owns repository IO, bitmap lifecycle, WorkManager result handling, and
+  model/crop orchestration.
+
+How good it is:
+
+- Narrow architecture refactor. Behavior should be unchanged because the moved
+  code is copied behind the same call sites and covered by focused tests.
+
+Remaining risk:
+
+- Low. The worker still owns most IO, bitmap/model work, deterministic cleanup,
+  and persistence orchestration, so this is only the first thinning slice.
+
+Tests/evidence:
+
+- `JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest --tests com.example.coupontracker.domain.usecase.VerifyCouponUseCaseTest`
+- `JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest --tests com.example.coupontracker.worker.VerifyCouponWorkerTest`
+- `git diff --check`
+
+Follow-up:
+
+- Continue moving deterministic cleanup construction, crop/model orchestration,
+  and vision failure persistence into focused use cases or policies.
+
+## 2026-06-28: Knowledge Base Update Gate For Code Changes
+
+Files changed:
+
+- `AGENTS.md`
+- `docs/agentic-build-agents.md`
+- `docs/knowledge-base/knowledge-base-contract.md`
+- `docs/knowledge-base/dynamic-memory.md`
+
+Why:
+
+- Agents were able to diagnose and patch code, but the reasoning behind changes
+  could remain only in chat or in a one-off audit.
+- When the reason for a change is not captured in the repo, later agents must
+  reconstruct it from diffs and can confuse current behavior with older audits.
+
+What it solves:
+
+- Every non-trivial code change now has an explicit knowledge-base update
+  checkpoint.
+- The update must explain why the change was made, what it solves, how it works,
+  how good the fix is, remaining risk, tests/evidence, and follow-up.
+
+How it works:
+
+- Root `AGENTS.md` now requires a knowledge-base update decision whenever code
+  changes.
+- `docs/knowledge-base/knowledge-base-contract.md` defines the code-change entry
+  format and quality scale.
+- `docs/agentic-build-agents.md` makes the Knowledge Base Agent the automatic
+  documentation gate after code-changing work and adds a handoff field for the
+  KB decision.
+
+How good it is:
+
+- Good process fix. It makes future agent behavior explicit and reviewable.
+- It is not a runtime automation or CI hook yet; it depends on agents following
+  the repo instructions.
+
+Remaining risk:
+
+- A future agent can still forget the rule unless a CI/check script or commit
+  hook validates KB updates against code diffs.
+
+Tests/evidence:
+
+- Documentation-only change. Verified with `git diff --check`.
+
+Follow-up:
+
+- Add a lightweight script or CI check that warns when `app/src/main` changes
+  without a matching knowledge-base update or an explicit no-update rationale.
+
 ## 2026-06-27: State-Aware Vision Pipeline Follow-Ups
 
 Context:
