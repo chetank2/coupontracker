@@ -730,16 +730,8 @@ class LlmRuntimeManager private constructor(private val context: Context) {
         return try {
             // Check if the real native llama.cpp library is available
             if (!MlcLlmNative.isAvailable()) {
-                Log.w(TAG, "⚠️ Native LLM library not available - using stub implementation")
-                Log.w(TAG, "LLM_FIRST strategy will return mock data until real libraries are integrated")
-                Log.w(TAG, "See MLC_LLM_INTEGRATION_GUIDE.md for integration instructions")
-
-                return MLCEngineStub(
-                    modelPath = modelDir.absolutePath,
-                    configPath = configPath.absolutePath,
-                    tokenizerPath = tokenizerPath.absolutePath,
-                    maxMemoryMB = MAX_MEMORY_MB
-                )
+                Log.w(TAG, "Native LLM library not available; model inference is disabled")
+                return null
             }
 
             // Real llama.cpp backend is available - create native engine
@@ -983,45 +975,5 @@ private class MLCEngineReal(
             .flatMap { it.split(Regex("\\s+")) }
             .count { it.isNotBlank() }
             .coerceAtLeast(1)
-    }
-}
-
-/**
- * Stub implementation for development
- * This will be replaced with the real llama.cpp integration.
- */
-private class MLCEngineStub(
-    private val modelPath: String,
-    private val configPath: String,
-    private val tokenizerPath: String,
-    private val maxMemoryMB: Int
-) : MLCEngine {
-    
-    override fun generate(
-        prompt: String,
-        image: ProcessedImage,
-        maxTokens: Int,
-        temperature: Float,
-        timeoutMs: Long
-    ): String? {
-        // Stub implementation - returns mock JSON response
-        // In real implementation, this would call the native llama.cpp backend
-        Log.d("MLCEngineStub", "Mock inference for image ${image.width}x${image.height}")
-        
-        return """
-        {
-            "storeName": "Mock Store",
-            "description": "Mock coupon offer - 50% off",
-            "code": "MOCK50",
-            "expiryDate": "31/12/2024",
-            "storeNameSource": "stub",
-            "storeNameEvidence": ["Mock Store"],
-            "needsAttention": true
-        }
-        """.trimIndent()
-    }
-    
-    override fun release() {
-        Log.d("MLCEngineStub", "Released mock MLC engine")
     }
 }

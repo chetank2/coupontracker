@@ -26,25 +26,26 @@ The helper methods (`detectCompoundAmount`, `detectCouponCode`,
 `extractStoreFromContext`, and `extractMeaningfulSnippet`) are kept alongside
 the pass for quick tuning during incident response.【F:app/src/main/kotlin/com/example/coupontracker/universal/UniversalExtractionService.kt†L607-L647】
 
-## Toggling heuristic participation
-Heuristic fallbacks ride on the universal extraction pipeline. You can steer the
-app toward or away from that pipeline through the existing strategy controls:
+## Current scanner routing
+Heuristic fallbacks ride on the universal extraction pipeline, but the current
+Compose scanner does not branch into separate `LEGACY`, `OCR_FIRST`,
+`LLM_FIRST`, and `HYBRID` scan routes. `ScannerViewModel.scanImage(...)` reads
+and logs the configured strategy for telemetry, then routes through crop-first
+detection with `routeDetectedCouponCrops(...)`.
 
-1. **Enable or disable advanced strategies** with
-   `ExtractionConfig.setAdvancedStrategiesEnabled(enabled, persist)`; this
-   feature flag persists via `SharedPreferences` and automatically reverts to
-   `OCR_FIRST` when advanced runtime support disappears.【F:app/src/main/kotlin/com/example/coupontracker/util/ExtractionStrategy.kt†L240-L294】
-2. **Select the active pipeline** via `ExtractionConfig.setStrategy(...)`. The
-   `ScannerViewModel` reads the strategy on every scan and routes execution to
-   `LEGACY`, `OCR_FIRST`, `LLM_FIRST`, or `HYBRID`, which determines whether the
-   universal extractor (and its heuristics) runs.【F:app/src/main/kotlin/com/example/coupontracker/util/ExtractionStrategy.kt†L157-L194】【F:app/src/main/kotlin/com/example/coupontracker/ui/viewmodel/ScannerViewModel.kt†L263-L319】
+Current behavior:
 
-Practical combinations:
+1. Decode the shared/uploaded image.
+2. Try coupon crop detection and layout routing.
+3. Run crop OCR extraction for isolated single coupons.
+4. Use `MultiCouponExtractionService` for multi-region screenshots.
+5. Fall back to review-safe OCR only when crop/layout isolation is unavailable
+   and the screenshot is not classified as multi-coupon.
 
-- Toggle **off** advanced strategies *and* set the strategy to `LEGACY` for
-  fully disabling the universal + heuristic stack during debugging.
-- Keep advanced strategies enabled and switch to `LLM_FIRST`/`HYBRID` when you
-  want heuristics to backfill edge cases without waiting for model retraining.
+The extraction strategy setting still influences downstream services that use
+`ExtractionConfig`, but it is no longer a top-level scanner switch between four
+separate capture paths. Any future domain-owned scanner router should preserve
+this crop-first contract and make strategy selection explicit in one place.
 
 ## Troubleshooting notes
 - **Manual field removals remain respected.** When a reviewer clears or edits a
