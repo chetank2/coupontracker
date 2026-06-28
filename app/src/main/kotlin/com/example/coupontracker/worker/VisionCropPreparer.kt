@@ -10,6 +10,7 @@ import com.example.coupontracker.extraction.vision.VisionEvidenceMergePolicy
 import com.example.coupontracker.extraction.vision.VisionFieldJsonParser
 import com.example.coupontracker.extraction.vision.VisionFieldMergeInput
 import com.example.coupontracker.extraction.vision.VisionLayoutCard
+import com.example.coupontracker.extraction.vision.VisionVerificationConfig
 import com.example.coupontracker.ocr.OcrEngine
 import com.example.coupontracker.ocr.OcrTextSpan
 import com.example.coupontracker.util.GenericFieldHeuristics
@@ -52,7 +53,7 @@ internal class VisionCropPreparer(
         var layoutFailureEvidence: String? = null
         var layoutRawJson: String? = null
         val layoutCrop = runCatching {
-            val result = withTimeout(LAYOUT_TIMEOUT_MS) {
+            val result = withTimeout(VisionVerificationConfig.LAYOUT_TIMEOUT_MS) {
                 gemmaVisionCouponModel.extractRawFromImage(
                     image = source,
                     ocrText = null,
@@ -67,7 +68,11 @@ internal class VisionCropPreparer(
                 "GEMMA_LAYOUT_PARSED cards=${detection.cards.size} confidence=${"%.2f".format(detection.confidence)} " +
                     "selectedConfidence=${"%.2f".format(selected?.confidence ?: 0f)} bounds=${selected?.bounds}"
             )
-            if (selected == null || detection.confidence < MIN_LAYOUT_CONFIDENCE || selected.confidence < MIN_LAYOUT_CONFIDENCE) {
+            if (
+                selected == null ||
+                detection.confidence < VisionVerificationConfig.MIN_LAYOUT_CONFIDENCE ||
+                selected.confidence < VisionVerificationConfig.MIN_LAYOUT_CONFIDENCE
+            ) {
                 Log.w(TAG, "GEMMA_LAYOUT_REJECTED reason=low_confidence")
                 null
             } else {
@@ -88,14 +93,14 @@ internal class VisionCropPreparer(
     }
 
     private fun cropBitmapToLayoutCard(source: Bitmap, card: VisionLayoutCard): VisionInput? {
-        val pixelCrop = card.bounds.toPixelRect(source, LAYOUT_CROP_PADDING_RATIO)
+        val pixelCrop = card.bounds.toPixelRect(source, VisionVerificationConfig.LAYOUT_CROP_PADDING_RATIO)
         val widthRatio = pixelCrop.width().toFloat() / source.width.toFloat()
         val heightRatio = pixelCrop.height().toFloat() / source.height.toFloat()
         val areaRatio = (pixelCrop.width().toFloat() * pixelCrop.height().toFloat()) /
             (source.width.toFloat() * source.height.toFloat())
-        if (widthRatio >= MAX_LAYOUT_CROP_WIDTH_RATIO ||
-            heightRatio >= MAX_LAYOUT_CROP_HEIGHT_RATIO ||
-            areaRatio >= MAX_LAYOUT_CROP_AREA_RATIO
+        if (widthRatio >= VisionVerificationConfig.MAX_LAYOUT_CROP_WIDTH_RATIO ||
+            heightRatio >= VisionVerificationConfig.MAX_LAYOUT_CROP_HEIGHT_RATIO ||
+            areaRatio >= VisionVerificationConfig.MAX_LAYOUT_CROP_AREA_RATIO
         ) {
             Log.w(
                 TAG,
@@ -175,15 +180,15 @@ internal class VisionCropPreparer(
             ?.takeIf { !GenericFieldHeuristics.isGenericOrMissingCode(it) }
             ?.let { code -> anchorSpans.count { normalizeEvidence(it.text).contains(normalizeEvidence(code)) } }
             ?: 0
-        if (anchorSpans.size < MIN_VISION_CROP_ANCHORS && exactCodeAnchors == 0) return null
+        if (anchorSpans.size < VisionVerificationConfig.MIN_OCR_CROP_ANCHORS && exactCodeAnchors == 0) return null
 
         val minAnchorY = anchorSpans.minOf { it.boundingBox.top }
         val maxAnchorY = anchorSpans.maxOf { it.boundingBox.bottom }
-        val verticalPadding = (source.height * VISION_CROP_VERTICAL_PADDING_RATIO).toInt()
-            .coerceAtLeast(MIN_VISION_CROP_PADDING_PX)
+        val verticalPadding = (source.height * VisionVerificationConfig.OCR_CROP_VERTICAL_PADDING_RATIO).toInt()
+            .coerceAtLeast(VisionVerificationConfig.MIN_OCR_CROP_PADDING_PX)
         val cropTop = (minAnchorY - verticalPadding).coerceAtLeast(0)
         val initialCropBottom = (maxAnchorY + verticalPadding).coerceAtMost(source.height)
-        val maxCropHeight = (source.height * MAX_VISION_CROP_HEIGHT_RATIO).toInt().coerceAtLeast(1)
+        val maxCropHeight = (source.height * VisionVerificationConfig.MAX_OCR_CROP_HEIGHT_RATIO).toInt().coerceAtLeast(1)
         val cropBottom = if (initialCropBottom - cropTop > maxCropHeight) {
             (cropTop + maxCropHeight).coerceAtMost(source.height)
         } else {
@@ -196,10 +201,10 @@ internal class VisionCropPreparer(
             .filter { centerY(it.boundingBox) in cropTop..cropBottom }
             .map { it.boundingBox }
         val cropLeft = (horizontalBounds.minOfOrNull { it.left } ?: 0)
-            .minus((source.width * VISION_CROP_HORIZONTAL_PADDING_RATIO).toInt())
+            .minus((source.width * VisionVerificationConfig.OCR_CROP_HORIZONTAL_PADDING_RATIO).toInt())
             .coerceAtLeast(0)
         val cropRight = (horizontalBounds.maxOfOrNull { it.right } ?: source.width)
-            .plus((source.width * VISION_CROP_HORIZONTAL_PADDING_RATIO).toInt())
+            .plus((source.width * VisionVerificationConfig.OCR_CROP_HORIZONTAL_PADDING_RATIO).toInt())
             .coerceAtMost(source.width)
         val cropWidth = cropRight - cropLeft
         if (cropWidth <= 0) return null
@@ -253,19 +258,8 @@ internal class VisionCropPreparer(
 
     private companion object {
         private const val TAG = "VisionCropPreparer"
-        private const val LAYOUT_TIMEOUT_MS = 45_000L
-        private const val MIN_VISION_CROP_ANCHORS = 2
-        private const val MIN_VISION_CROP_PADDING_PX = 120
         private const val MIN_EVIDENCE_TOKEN_LENGTH = 4
         private const val MAX_SCOPED_ANCHOR_TOKENS = 18
-        private const val VISION_CROP_VERTICAL_PADDING_RATIO = 0.08f
-        private const val VISION_CROP_HORIZONTAL_PADDING_RATIO = 0.04f
-        private const val MAX_VISION_CROP_HEIGHT_RATIO = 0.52f
-        private const val MIN_LAYOUT_CONFIDENCE = 0.5f
-        private const val LAYOUT_CROP_PADDING_RATIO = 0.07f
-        private const val MAX_LAYOUT_CROP_WIDTH_RATIO = 0.92f
-        private const val MAX_LAYOUT_CROP_HEIGHT_RATIO = 0.68f
-        private const val MAX_LAYOUT_CROP_AREA_RATIO = 0.62f
         private val GENERIC_DESCRIPTION_ANCHORS = setOf(
             "coupon",
             "offer",

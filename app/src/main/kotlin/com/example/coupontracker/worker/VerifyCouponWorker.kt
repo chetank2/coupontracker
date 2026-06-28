@@ -19,6 +19,7 @@ import com.example.coupontracker.extraction.quality.OfferTextQuality
 import com.example.coupontracker.extraction.vision.VisionFieldExtraction
 import com.example.coupontracker.extraction.vision.VisionFieldJsonParser
 import com.example.coupontracker.extraction.vision.VisionEvidenceMergePolicy
+import com.example.coupontracker.extraction.vision.VisionVerificationConfig
 import com.example.coupontracker.model.ModelPaths
 import com.example.coupontracker.ocr.OcrEngine
 import com.example.coupontracker.util.CouponExtractionConfidenceScorer
@@ -170,7 +171,7 @@ class VerifyCouponWorker @AssistedInject constructor(
                 // Do not fall back to full-screen OCR here: it can prove fields
                 // from background cards for a foreground crop.
                 val cropEvidenceText = cropOcrText.takeIf { it.isNotBlank() }
-                val visionResult = withTimeout(FIELD_LABEL_TIMEOUT_MS) {
+                val visionResult = withTimeout(VisionVerificationConfig.FIELD_LABEL_TIMEOUT_MS) {
                     gemmaVisionCouponModel.extractRawFromImage(
                         image = visionInput.bitmap,
                         ocrText = cropEvidenceText,
@@ -577,7 +578,6 @@ class VerifyCouponWorker @AssistedInject constructor(
         private const val KEY_COUPON_ID = "coupon_id"
         private const val KEY_USER_REQUESTED = "user_requested"
         private const val KEY_AUTOMATIC_VERIFICATION = "automatic_verification"
-        private const val FIELD_LABEL_TIMEOUT_MS = 90_000L
         private const val FIELD_SOURCE_OCR_RULE = "OCR_RULE"
         private const val FIELD_SOURCE_MISSING = "MISSING"
         private const val FIELD_SOURCE_USER_EDITED = "USER_EDITED"

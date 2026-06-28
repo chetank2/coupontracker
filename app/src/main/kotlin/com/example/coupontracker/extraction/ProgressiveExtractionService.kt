@@ -96,20 +96,6 @@ class ProgressiveExtractionService @Inject constructor(
             "JUST"
         )
 
-        private val PLACEHOLDER_VALUES = setOf(
-            "UNKNOWN",
-            "NA",
-            "N/A",
-            "NONE",
-            "NULL",
-            "NO CODE",
-            "NO_CODE_NEEDED",
-            "NO CODE NEEDED",
-            "NOCO",
-            "TBD",
-            "-",
-            "--"
-        )
     }
     
     /**
@@ -412,7 +398,7 @@ class ProgressiveExtractionService @Inject constructor(
             fieldType == FieldType.EXPIRY_DATE &&
             currentValue.length < 6 &&
             replacementValue.length >= 6 &&
-            replacementValue.trim().uppercase(Locale.ROOT) !in PLACEHOLDER_VALUES
+            !MissingFieldPolicy.isPlaceholderValue(replacementValue)
         ) {
             return true
         }
@@ -425,27 +411,7 @@ class ProgressiveExtractionService @Inject constructor(
     }
 
     private fun isPlaceholderCandidate(fieldType: FieldType, candidate: FieldCandidate?): Boolean {
-        if (candidate == null) {
-            return true
-        }
-
-        val value = candidate.value.trim()
-        if (value.isEmpty()) {
-            return true
-        }
-
-        val normalized = value.uppercase(Locale.ROOT)
-        if (normalized in PLACEHOLDER_VALUES) {
-            return true
-        }
-
-        return when (fieldType) {
-            FieldType.STORE_NAME -> !isValidStoreName(value)
-            FieldType.DESCRIPTION -> !GenericFieldHeuristics.isMeaningfulDescription(value)
-            FieldType.COUPON_CODE -> GenericFieldHeuristics.isGenericOrMissingCode(value) || value.length < 4
-            FieldType.EXPIRY_DATE -> normalized in PLACEHOLDER_VALUES || value.length < 4
-            else -> false
-        }
+        return MissingFieldPolicy.isPlaceholderCandidate(fieldType, candidate, ::isValidStoreName)
     }
     
     /**
@@ -512,12 +478,12 @@ class ProgressiveExtractionService @Inject constructor(
             ?.takeIf { GenericFieldHeuristics.isMeaningfulDescription(it) }
             ?: context.ocrText.take(200).trim()
                 .takeIf { GenericFieldHeuristics.isMeaningfulDescription(it) }
-            ?: "Needs review: description not visible"
+            ?: MissingFieldPolicy.reviewDescription()
         val description = buildSupplementalDescription(extractedFields, descriptionCandidate)
         
         // Redeem Code
         val redeemCode = extractedFields[FieldType.COUPON_CODE]?.value
-            ?.takeIf { it != "NO_CODE_NEEDED" }
+            ?.takeIf { it != MissingFieldPolicy.explicitNoCodeValue() }
         
         // Expiry Date
         val expiryDate = extractedFields[FieldType.EXPIRY_DATE]
@@ -525,7 +491,7 @@ class ProgressiveExtractionService @Inject constructor(
             ?.let { resolveExpiryDate(it, context.captureTimestamp, context.ocrText) }
         
         val confidenceBreakdown = buildConfidenceBreakdown(filterPrimaryFields(extractedFields)).toMutableMap()
-        val syntheticStoreName = storeName == com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE
+        val syntheticStoreName = storeName == MissingFieldPolicy.unknownStoreName()
         if (syntheticStoreName) {
             confidenceBreakdown[FieldType.STORE_NAME.name.lowercase(Locale.ROOT)] = 0f
         }
@@ -565,7 +531,7 @@ class ProgressiveExtractionService @Inject constructor(
             return fallback.trim()
         }
 
-        return primary.trim().ifBlank { com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE }
+        return primary.trim().ifBlank { MissingFieldPolicy.unknownStoreName() }
     }
 
     private fun isValidStoreName(value: String?): Boolean {
@@ -617,7 +583,7 @@ class ProgressiveExtractionService @Inject constructor(
         }
 
         if (segments.isEmpty()) {
-            return "Needs review: description not visible"
+            return MissingFieldPolicy.reviewDescription()
         }
 
         return segments.joinToString(separator = "\n")

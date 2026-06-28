@@ -1,7 +1,6 @@
 package com.example.coupontracker.extraction
 
 import com.example.coupontracker.data.model.FieldType
-import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.util.OcrTextCleaner
 import java.util.Locale
 
@@ -35,27 +34,19 @@ class DefaultFieldProvider {
         }
         
         if (FieldType.DESCRIPTION in missingFields) {
-            // Description: use OCR only when it is concrete offer text.
-            val cleanedOcr = OcrTextCleaner.cleanOcrText(context.ocrText)
-            val description = cleanedOcr.take(200).trim()
-            if (description.isNotBlank() && !isGenericDescription(description)) {
+            val cleanedDescription = OcrTextCleaner.cleanOcrText(context.ocrText).take(200).trim()
+            MissingFieldPolicy.lowConfidenceDescriptionFromOcr(context.ocrText)?.let { description ->
+                val fromCleanedOcr = description == cleanedDescription
                 defaults[FieldType.DESCRIPTION] = FieldCandidate(
                     value = description,
-                    confidence = 0.35f,
-                    source = "default_ocr_text",
-                    context = "Using cleaned OCR text as low-confidence description"
+                    confidence = if (fromCleanedOcr) 0.35f else 0.2f,
+                    source = if (fromCleanedOcr) "default_ocr_text" else "default_raw_ocr",
+                    context = if (fromCleanedOcr) {
+                        "Using cleaned OCR text as low-confidence description"
+                    } else {
+                        "Using raw OCR text as low-confidence description"
+                    }
                 )
-            } else {
-                // Fallback to raw OCR if cleaning removed a meaningful offer line.
-                val rawDescription = context.ocrText.take(200).trim()
-                if (rawDescription.isNotBlank() && !isGenericDescription(rawDescription)) {
-                    defaults[FieldType.DESCRIPTION] = FieldCandidate(
-                        value = rawDescription,
-                        confidence = 0.2f,
-                        source = "default_raw_ocr",
-                        context = "Using raw OCR text as low-confidence description"
-                    )
-                }
             }
         }
         
@@ -71,11 +62,11 @@ class DefaultFieldProvider {
         
         // Code: only mark no-code when OCR explicitly says so.
         if (FieldType.COUPON_CODE in missingFields) {
-            if (hasNoCodeNeededEvidence(context.ocrText)) {
+            if (MissingFieldPolicy.hasExplicitNoCodeEvidence(context.ocrText)) {
                 defaults[FieldType.COUPON_CODE] = FieldCandidate(
-                    value = "NO_CODE_NEEDED",
+                    value = MissingFieldPolicy.explicitNoCodeValue(),
                     confidence = 0.65f,
-                    source = "explicit_no_code_evidence",
+                    source = MissingFieldPolicy.EXPLICIT_NO_CODE_SOURCE,
                     context = "OCR explicitly says no coupon code is needed"
                 )
             }
@@ -100,30 +91,4 @@ class DefaultFieldProvider {
         return normalized.any { it.isDigit() }
     }
 
-    private fun isGenericDescription(description: String): Boolean {
-        val normalized = description.trim().lowercase(Locale.ROOT)
-        if (normalized.isEmpty()) return true
-        if (!GenericFieldHeuristics.isMeaningfulDescription(description)) return true
-        val disqualifiers = listOf(
-            "tap to view", "swipe", "screenshot", "copy code", "details", "scan to pay",
-            "shop now", "click here", "open app", "android", "ios", "claim now", "apply now",
-            "download", "loyalty", "profile", "limited time", "verify", "coupon offer"
-        )
-        return disqualifiers.any { normalized.contains(it) }
-    }
-
-    private fun hasNoCodeNeededEvidence(text: String): Boolean {
-        val normalized = text
-            .lowercase(Locale.ROOT)
-            .replace(Regex("[^a-z0-9]+"), " ")
-            .replace(Regex("\\s+"), " ")
-            .trim()
-        return listOf(
-            Regex("\\bno\\s+code\\s+(?:needed|required)\\b"),
-            Regex("\\bno\\s+coupon\\s+code\\s+(?:needed|required)\\b"),
-            Regex("\\bcode\\s+(?:not\\s+)?required\\b"),
-            Regex("\\bwithout\\s+(?:a\\s+)?(?:coupon\\s+)?code\\b"),
-            Regex("\\bauto(?:matically)?\\s+applied\\b")
-        ).any { it.containsMatchIn(normalized) }
-    }
 }
