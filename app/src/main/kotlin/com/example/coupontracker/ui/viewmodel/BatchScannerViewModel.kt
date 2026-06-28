@@ -9,8 +9,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.coupontracker.BuildConfig
 import com.example.coupontracker.data.model.Coupon
-import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.DescriptionUtils
+import com.example.coupontracker.domain.usecase.SaveBatchCouponsUseCase
 import com.example.coupontracker.extraction.capture.BatchCaptureInput
 import com.example.coupontracker.extraction.capture.BatchCaptureItemProcessor
 import com.example.coupontracker.extraction.capture.createCropIsolationFailedCoupon
@@ -37,7 +37,6 @@ import javax.inject.Inject
 class BatchScannerViewModel @Inject constructor(
     application: Application,
     @ApplicationContext private val context: Context,
-    private val couponRepository: CouponRepository,
     private val ocrEngine: com.example.coupontracker.ocr.OcrEngine,  // Tesseract OCR engine
     private val bitmapManager: com.example.coupontracker.util.BitmapManager,  // V2: Bitmap memory management
     private val universalExtractionService: com.example.coupontracker.universal.UniversalExtractionService,  // V2: Universal extraction
@@ -46,7 +45,8 @@ class BatchScannerViewModel @Inject constructor(
     private val analyticsTracker: AnalyticsTracker,
     private val telemetryService: ExtractionTelemetryService,
     private val regionPipeline: com.example.coupontracker.extraction.multi.CouponRegionPipeline,
-    private val batchPipelineFlag: com.example.coupontracker.extraction.multi.BatchPipelineFeatureFlag
+    private val batchPipelineFlag: com.example.coupontracker.extraction.multi.BatchPipelineFeatureFlag,
+    private val saveBatchCouponsUseCase: SaveBatchCouponsUseCase
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(BatchScannerUiState())
@@ -434,10 +434,7 @@ class BatchScannerViewModel @Inject constructor(
 
                 // Save all coupons in a transaction if possible
                 try {
-                    for (coupon in coupons) {
-                        couponRepository.insertCoupon(coupon)
-                    }
-
+                    saveBatchCouponsUseCase(coupons)
                     // Reset state after saving
                     resetState()
                 } catch (e: Exception) {

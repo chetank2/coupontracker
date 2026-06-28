@@ -24,6 +24,7 @@ import com.example.coupontracker.domain.usecase.SingleScanRoutingUseCase
 import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.extraction.capture.FullImageFallbackProbe
+import com.example.coupontracker.extraction.capture.FullImageFallbackReviewCouponFactory
 import com.example.coupontracker.extraction.capture.shouldBlockFullImageFallback
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.TextBlock
@@ -62,7 +63,6 @@ import com.example.coupontracker.util.MultiEngineOCR
 import com.example.coupontracker.util.RunPath
 import com.example.coupontracker.util.UriPersistenceManager
 import com.example.coupontracker.util.LlmProgressUpdate
-import com.example.coupontracker.util.createMultiCouponImportReviewCoupon
 import com.example.coupontracker.util.normalizeExpiryDate
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -100,7 +100,8 @@ class ScannerViewModel @Inject constructor(
     private val validatorFeedbackRecorder: ValidatorFeedbackRecorder,
     private val saveScannedCouponUseCase: SaveScannedCouponUseCase,
     private val singleScanRoutingUseCase: SingleScanRoutingUseCase,
-    private val fullImageFallbackProbe: FullImageFallbackProbe
+    private val fullImageFallbackProbe: FullImageFallbackProbe,
+    private val fullImageFallbackReviewCouponFactory: FullImageFallbackReviewCouponFactory
 ) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow<ScannerUiState>(ScannerUiState.Initial)
@@ -595,14 +596,11 @@ class ScannerViewModel @Inject constructor(
         val captureTimestamp = ImageMetadataExtractor.extractCaptureTimestamp(context, imageUri)
         val persistedUri = uriPersistenceManager.persistUri(imageUri)
         val finalImageUri = resolveImageUri(persistedUri, imageUri)
-        val coupon = createMultiCouponImportReviewCoupon(
-            reason = reason,
-            rawOcrText = rawOcrText,
-            captureTimestamp = captureTimestamp
-        ).copy(
+        val coupon = fullImageFallbackReviewCouponFactory.create(
             imageUri = finalImageUri,
-            extractionRunPath = "scanner_view_model -> full_image_fallback_guard",
-            debugVisionEvidence = "full_image_fallback_guard; reason=$reason"
+            rawOcrText = rawOcrText,
+            reason = reason,
+            captureTimestamp = captureTimestamp
         )
         val normalizedDescription = CouponDedupUtils.normalizeDescription(coupon.description)
 

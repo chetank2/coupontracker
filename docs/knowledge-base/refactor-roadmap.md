@@ -133,6 +133,10 @@ Current progress:
 - `FullImageFallbackProbe` owns full-image fallback OCR-result normalization
   and screenshot classification before the ViewModel performs UI/persistence
   side effects.
+- `FullImageFallbackReviewCouponFactory` owns fallback review coupon
+  field/evidence construction.
+- `SaveBatchCouponsUseCase` owns repository insertion for processed batch
+  coupons.
 - `ScannerViewModel` still owns route execution, UI state, persistence, and
   fallback side effects.
 - Next safe slice is moving layout-route execution or guarded fallback execution

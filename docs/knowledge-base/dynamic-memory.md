@@ -519,3 +519,46 @@ JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradl
 
 - Extract layout-route execution from `ScannerViewModel`.
 - Extract fallback save/review execution from `ScannerViewModel`.
+
+## 2026-06-28: Fallback Review Factory And Batch Save Use Case
+
+### What Changed
+
+- Added `FullImageFallbackReviewCouponFactory`.
+- Added `SaveBatchCouponsUseCase`.
+- `ScannerViewModel` no longer owns fallback review coupon field/evidence
+  construction.
+- `BatchScannerViewModel` no longer owns the repository insert loop for saving
+  processed batch coupons.
+
+### Why
+
+- Fallback review coupon metadata must remain consistent and tested because it
+  protects against unsafe full-image extraction.
+- Batch save behavior belongs at a use-case boundary, not inside UI state code.
+
+### How It Works
+
+- `FullImageFallbackReviewCouponFactory` builds the low-confidence review coupon
+  with fallback guard evidence, raw OCR, image URI, and capture timestamp.
+- `SaveBatchCouponsUseCase` inserts processed coupons in order through
+  `CouponRepository`.
+- ViewModels still own UI state, errors, and reset behavior.
+
+### Verification
+
+```bash
+git diff --check
+JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest --tests com.example.coupontracker.domain.usecase.SaveBatchCouponsUseCaseTest --tests com.example.coupontracker.extraction.capture.FullImageFallbackReviewCouponFactoryTest
+```
+
+### Remaining Risk
+
+- Fallback review persistence and preview routing are still in
+  `ScannerViewModel`.
+- Batch save success/error UI handling is still in `BatchScannerViewModel`.
+
+### Follow-Up
+
+- Extract fallback review persistence/preview routing.
+- Extract batch save result state mapping.
