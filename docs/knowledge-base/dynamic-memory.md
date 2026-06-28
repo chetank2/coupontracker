@@ -8,6 +8,51 @@ here. Dynamic memory should capture dated fixes, commit summaries, device/logcat
 observations, failed approaches, regression tests added, installed APK evidence,
 known current bugs, and open follow-ups.
 
+## 2026-06-28: Debug Build Installed After Description Extractor Refactor
+
+Files changed:
+
+- `docs/knowledge-base/dynamic-memory.md`
+
+Why:
+
+- After the description-extractor refactor and required Gradle checks passed,
+  the connected phone needed proof that the verified build was actually
+  installed.
+
+What it solves:
+
+- Records the device-side install evidence for the same branch that contains
+  `refactor extraction agent architecture` and
+  `refactor coupon description extraction`.
+
+How it works:
+
+- Installed `app/build/outputs/apk/debug/app-universal-debug-v1.1.29.apk` using
+  `adb install -r`.
+- Verified package metadata with `adb shell dumpsys package
+  com.example.coupontracker`.
+
+How good it is:
+
+- Good install proof. It confirms the phone has the latest debug package, but it
+  is not a coupon-regression proof because no fresh screenshot upload/DB/logcat
+  verification was run after install.
+
+Remaining risk:
+
+- Still need user/device interaction to re-upload or re-verify the target
+  coupon cases, then pull DB/logcat and confirm no background OCR corruption.
+
+Tests/evidence:
+
+- `/Users/C/Library/Android/sdk/platform-tools/adb devices` returned
+  `ZD2226NNY9	device`.
+- `/Users/C/Library/Android/sdk/platform-tools/adb install -r app/build/outputs/apk/debug/app-universal-debug-v1.1.29.apk`
+  returned `Success`.
+- Package metadata: `versionCode=10129`, `versionName=1.1.29`,
+  `lastUpdateTime=2026-06-28 18:57:19`.
+
 ## 2026-06-28: Coupon Description Rules Extracted From TextExtractor
 
 Files changed:
