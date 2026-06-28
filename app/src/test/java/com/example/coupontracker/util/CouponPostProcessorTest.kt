@@ -105,4 +105,19 @@ class CouponPostProcessorTest {
         assertEquals(null, refined.redeemCode)
         assertEquals(Coupon.CodeState.NO_CODE_NEEDED, refined.codeState)
     }
+
+    @Test
+    fun `refine uses review-safe description when placeholder cannot be resolved`() {
+        val coupon = Coupon(
+            storeName = "",
+            description = "Coupon offer",
+            redeemCode = null,
+            imageUri = null,
+        )
+
+        val refined = CouponPostProcessor.refine(coupon)
+
+        assertEquals("", refined.storeName)
+        assertEquals("Needs review: offer details not extracted", refined.description)
+    }
 }

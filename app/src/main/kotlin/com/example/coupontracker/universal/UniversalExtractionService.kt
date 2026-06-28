@@ -83,6 +83,27 @@ class UniversalExtractionService @Inject constructor(
             "no description",
             "error processing coupon"
         )
+        private val EXPLICIT_NO_CODE_PHRASES = listOf(
+            Regex("\\bno\\s+(?:coupon\\s+|promo\\s+|voucher\\s+)?code\\s+(?:needed|required)\\b", RegexOption.IGNORE_CASE),
+            Regex("\\b(?:coupon\\s+|promo\\s+|voucher\\s+)?code\\s+(?:not\\s+required|is\\s+not\\s+required)\\b", RegexOption.IGNORE_CASE),
+            Regex("\\bwithout\\s+(?:a\\s+)?(?:coupon\\s+|promo\\s+|voucher\\s+)?code\\b", RegexOption.IGNORE_CASE),
+            Regex("\\bauto[-\\s]?applied\\b", RegexOption.IGNORE_CASE),
+            Regex("\\bautomatically\\s+applied\\b", RegexOption.IGNORE_CASE)
+        )
+        private val STANDALONE_NO_CODE_LINES = setOf(
+            "no code",
+            "no coupon code",
+            "no promo code",
+            "no voucher code"
+        )
+        private val NON_CODE_PLACEHOLDER_TOKENS = setOf(
+            "NEEDED",
+            "REQUIRED",
+            "FOUND",
+            "DETECTED",
+            "MISSING",
+            "UNKNOWN"
+        )
     }
 
     suspend fun extractCoupon(
@@ -208,7 +229,7 @@ class UniversalExtractionService @Inject constructor(
             return
         }
 
-        val progressiveCandidates = convertProgressiveCandidates(progressiveResult)
+        val progressiveCandidates = convertProgressiveCandidates(progressiveResult, cleanedOcr)
         val rescored = progressiveCandidates.mapValues { (field, candidates) ->
             candidates.map { scoreCandidate(field, it) }
         }
@@ -358,7 +379,7 @@ class UniversalExtractionService @Inject constructor(
         }
 
         if (accumulator[FieldType.COUPON_CODE].isNullOrEmpty()) {
-            if (cleanedOcr.contains("no code", ignoreCase = true)) {
+            if (hasExplicitNoCodeEvidence(cleanedOcr, context)) {
                 val candidate = ExtractionCandidate(
                     text = "NO_CODE_NEEDED",
                     confidence = 0.4f,
@@ -481,7 +502,11 @@ class UniversalExtractionService @Inject constructor(
             FieldType.COUPON_CODE -> {
                 val normalized = text.trim().uppercase(Locale.ROOT)
                 if (normalized.contains("NO_CODE")) {
-                    confidence = min(confidence, 0.45f)
+                    confidence = if (hasExplicitNoCodeEvidence(cleanedOcr, context)) {
+                        min(confidence, 0.45f)
+                    } else {
+                        0f
+                    }
                 } else if (!normalized.matches(Regex("[A-Z0-9-]{4,}"))) {
                     confidence *= 0.6f
                 }
@@ -665,9 +690,17 @@ class UniversalExtractionService @Inject constructor(
     }
 
     private fun convertProgressiveCandidates(
-        result: ProgressiveExtractionResult
+        result: ProgressiveExtractionResult,
+        evidenceText: String
     ): Map<FieldType, List<ExtractionCandidate>> {
-        return result.extractedFields.mapValues { (field, candidate) ->
+        return result.extractedFields.mapNotNull { (field, candidate) ->
+            if (
+                field == FieldType.COUPON_CODE &&
+                candidate.value.equals("NO_CODE_NEEDED", ignoreCase = true) &&
+                !hasExplicitNoCodeEvidence(evidenceText)
+            ) {
+                return@mapNotNull null
+            }
             val source = when (candidate.source) {
                 "explicit_pattern", "all_caps", "title_case_early", "repeated_word" -> ExtractionSource.PATTERN_MATCHING
                 "compound_cashback", "simple_amount", "percentage", "upto_amount" -> ExtractionSource.PATTERN_MATCHING
@@ -691,8 +724,34 @@ class UniversalExtractionService @Inject constructor(
                     put("pass", "progressive")
                 }
             )
-            listOf(extractionCandidate)
-        }
+            field to listOf(extractionCandidate)
+        }.toMap()
+    }
+
+    private fun hasExplicitNoCodeEvidence(
+        text: String?,
+        context: ExtractionContext? = null
+    ): Boolean {
+        val evidenceText = listOfNotNull(
+            text,
+            context?.cleanedOcrText,
+            context?.originalOcrText
+        )
+            .joinToString("\n")
+            .trim()
+
+        if (evidenceText.isBlank()) return false
+
+        if (EXPLICIT_NO_CODE_PHRASES.any { it.containsMatchIn(evidenceText) }) return true
+
+        return evidenceText.lineSequence()
+            .map { line ->
+                line.lowercase(Locale.ROOT)
+                    .replace(Regex("[^a-z0-9]+"), " ")
+                    .replace(Regex("\\s+"), " ")
+                    .trim()
+            }
+            .any { it in STANDALONE_NO_CODE_LINES }
     }
 
     private fun applyLearnedPattern(pattern: String, text: String): String {
@@ -712,8 +771,15 @@ class UniversalExtractionService @Inject constructor(
 
     private fun detectCouponCode(text: String): String? {
         val regex = Regex("""(?i)(?:code|apply|use)[:\s-]*([A-Z0-9]{4,})""")
-        val match = regex.find(text) ?: return null
-        return match.groupValues.getOrNull(1)?.uppercase(Locale.ROOT)
+        return regex.findAll(text)
+            .mapNotNull { match ->
+                val matchedText = match.value.lowercase(Locale.ROOT)
+                val code = match.groupValues.getOrNull(1)?.uppercase(Locale.ROOT)
+                code
+                    ?.takeUnless { it in NON_CODE_PLACEHOLDER_TOKENS }
+                    ?.takeUnless { matchedText.contains(Regex("\\bno\\s+code\\b")) }
+            }
+            .firstOrNull()
     }
 
     private fun extractStoreFromContext(text: String, context: ExtractionContext): String? {

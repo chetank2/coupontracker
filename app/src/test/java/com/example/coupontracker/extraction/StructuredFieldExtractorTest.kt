@@ -1,6 +1,7 @@
 package com.example.coupontracker.extraction
 
 import com.example.coupontracker.data.model.FieldType
+import org.junit.Assert.assertFalse
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -104,6 +105,55 @@ class StructuredFieldExtractorTest {
         assertTrue(
             "Expected store candidates to include XYXX, but found: ${storeCandidates.map { it.value }}",
             storeCandidates.any { it.value == "XYXX" }
+        )
+    }
+
+    @Test
+    fun `code detection marks no code only with explicit evidence`() = runTest {
+        val context = ExtractionContext(
+            imageUri = "test://coupon",
+            ocrText = "IDFC FIRST Bank\nMonthly Interest\nNo code needed",
+            ocrBlocks = emptyList(),
+            metadata = emptyMap(),
+            captureTimestamp = null
+        )
+
+        val results = extractor.detectFieldsStructured(context)
+        val codeCandidates = results[FieldType.COUPON_CODE].orEmpty()
+
+        assertTrue(
+            "Expected explicit no-code evidence to produce NO_CODE_NEEDED, but found: ${codeCandidates.map { it.value }}",
+            codeCandidates.any { it.value == "NO_CODE_NEEDED" }
+        )
+    }
+
+    @Test
+    fun `code detection does not mark no code from cashback or missing-code diagnostics`() = runTest {
+        val cashbackContext = ExtractionContext(
+            imageUri = "test://coupon",
+            ocrText = "MEGA DEAL\n₹599 + ₹50 cashback on orders above ₹999",
+            ocrBlocks = emptyList(),
+            metadata = emptyMap(),
+            captureTimestamp = null
+        )
+        val diagnosticContext = ExtractionContext(
+            imageUri = "test://coupon",
+            ocrText = "Store offer\nNo code found in this OCR pass",
+            ocrBlocks = emptyList(),
+            metadata = emptyMap(),
+            captureTimestamp = null
+        )
+
+        val cashbackCandidates = extractor.detectFieldsStructured(cashbackContext)[FieldType.COUPON_CODE].orEmpty()
+        val diagnosticCandidates = extractor.detectFieldsStructured(diagnosticContext)[FieldType.COUPON_CODE].orEmpty()
+
+        assertFalse(
+            "Cashback copy alone should not produce NO_CODE_NEEDED, but found: ${cashbackCandidates.map { it.value }}",
+            cashbackCandidates.any { it.value == "NO_CODE_NEEDED" }
+        )
+        assertFalse(
+            "Missing-code diagnostics should not produce NO_CODE_NEEDED, but found: ${diagnosticCandidates.map { it.value }}",
+            diagnosticCandidates.any { it.value == "NO_CODE_NEEDED" }
         )
     }
 }

@@ -4,6 +4,7 @@ import com.example.coupontracker.util.IndianCurrencyParser
 import java.util.Locale
 
 object DescriptionUtils {
+    const val NEEDS_REVIEW_DESCRIPTION = "Needs review: offer details not extracted"
 
     private val helperTextPatterns = listOf(
         Regex("(?i)copy exact wording"),
@@ -12,6 +13,14 @@ object DescriptionUtils {
         Regex("(?i)never promote cta"),
         Regex("(?i)output only the keys"),
         Regex("(?i)storeName must not be null")
+    )
+    private val descriptionPlaceholders = setOf(
+        "coupon offer",
+        "no description",
+        "extracted via llm",
+        "multi coupon detected",
+        "scanned from qr code",
+        "needs review offer details not extracted"
     )
 
     private val savingsPrefixRegex = Regex("^(cashback|discount|savings)\\s*:", RegexOption.IGNORE_CASE)
@@ -47,11 +56,7 @@ object DescriptionUtils {
             detail?.lines()?.forEach { addLine(it) }
         }
 
-        return if (lines.isEmpty()) {
-            "Coupon offer"
-        } else {
-            lines.joinToString(separator = "\n")
-        }
+        return if (lines.isEmpty()) NEEDS_REVIEW_DESCRIPTION else lines.joinToString(separator = "\n")
     }
 
     private fun sanitizeLine(raw: String?): String? {
@@ -62,6 +67,7 @@ object DescriptionUtils {
         }
 
         val cleaned = initial.trimEnd('.', ' ').replace(Regex("\\s+"), " ")
+        if (isPlaceholderDescription(cleaned)) return null
         if (cleaned.equals("copy exact wording", ignoreCase = true)) return null
         if (standalonePercentRegex.matches(cleaned)) return null
         if (isZeroSavingsLine(cleaned)) return null
@@ -149,7 +155,7 @@ object DescriptionUtils {
         redeemCode: String? = null
     ): String {
         val raw = description.trim()
-        if (raw.isEmpty()) return "Coupon offer"
+        if (raw.isEmpty()) return NEEDS_REVIEW_DESCRIPTION
 
         val lines = raw
             .lines()
@@ -161,7 +167,7 @@ object DescriptionUtils {
                     normalized == normalizeToken(storeName.orEmpty())
             }
 
-        if (lines.isEmpty()) return "Coupon offer"
+        if (lines.isEmpty()) return NEEDS_REVIEW_DESCRIPTION
 
         val meaningfulLines = lines.filterNot { isDisplayMetadataLine(it, storeName, redeemCode) }
         val multilineNoise = raw.lines().count { it.isNotBlank() } >= 6 ||
@@ -171,7 +177,7 @@ object DescriptionUtils {
             return meaningfulLines
                 .ifEmpty { lines }
                 .joinToString(separator = "\n")
-                .ifBlank { "Coupon offer" }
+                .ifBlank { NEEDS_REVIEW_DESCRIPTION }
         }
 
         val offerTokens = collectOfferTokens(lines, storeName, redeemCode)
@@ -184,7 +190,7 @@ object DescriptionUtils {
 
         return displayText.takeIf { it.isNotBlank() }
             ?: meaningfulLines.firstOrNull()
-            ?: "Coupon offer"
+            ?: NEEDS_REVIEW_DESCRIPTION
     }
 
     private fun collectOfferTokens(
@@ -218,8 +224,13 @@ object DescriptionUtils {
             .replace(Regex("\\s+"), " ")
             .replace(Regex("""^[•*\-]+\s*"""), "")
             .trim()
+        if (isPlaceholderDescription(cleaned)) return null
         if (isZeroSavingsLine(cleaned)) return null
         return cleaned.takeIf { it.isNotEmpty() }
+    }
+
+    private fun isPlaceholderDescription(text: String): Boolean {
+        return normalizeToken(text) in descriptionPlaceholders
     }
 
     private fun isZeroSavingsLine(text: String): Boolean {

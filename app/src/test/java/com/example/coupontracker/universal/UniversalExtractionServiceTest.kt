@@ -16,6 +16,7 @@ import java.time.ZoneId
 import java.util.Date
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
@@ -163,6 +164,48 @@ class UniversalExtractionServiceTest {
         assertEquals("Zepto Mart", storeCandidate!!.text)
         assertEquals("Zepto Mart", result.coupon.storeName)
         assertTrue(result.coupon.description.startsWith("Get 20% off"))
+    }
+
+    @Test
+    fun `explicit no-code evidence can produce no-code sentinel`() = runBlocking {
+        val ocrText = "IDFC FIRST Bank\nMonthly Interest\nNo code needed"
+
+        val result = service.extractCoupon(bitmap, ocrText)
+
+        assertEquals("NO_CODE_NEEDED", result.extractedFields[FieldType.COUPON_CODE]?.text)
+        assertNull(result.coupon.redeemCode)
+    }
+
+    @Test
+    fun `cashback and missing-code diagnostics do not produce no-code sentinel`() = runBlocking {
+        val cashbackText = "MEGA DEAL\n₹599 + ₹50 cashback on orders above ₹999"
+        val diagnosticText = "Store offer\nNo code found in this OCR pass"
+
+        coEvery {
+            progressiveExtractionService.extractCoupon(any(), any(), any(), any(), any(), any())
+        } returns progressiveResult(
+            mapOf(
+                FieldType.COUPON_CODE to FieldCandidate(
+                    value = "NO_CODE_NEEDED",
+                    confidence = 0.85f,
+                    source = "default_no_code",
+                    context = null
+                )
+            )
+        )
+
+        val cashbackResult = service.extractCoupon(bitmap, cashbackText)
+
+        coEvery {
+            progressiveExtractionService.extractCoupon(any(), any(), any(), any(), any(), any())
+        } returns emptyProgressiveResult()
+
+        val diagnosticResult = service.extractCoupon(bitmap, diagnosticText)
+
+        assertNull(cashbackResult.extractedFields[FieldType.COUPON_CODE])
+        assertNull(diagnosticResult.extractedFields[FieldType.COUPON_CODE])
+        assertNull(cashbackResult.coupon.redeemCode)
+        assertNull(diagnosticResult.coupon.redeemCode)
     }
 
     private fun emptyProgressiveResult(): ProgressiveExtractionResult =

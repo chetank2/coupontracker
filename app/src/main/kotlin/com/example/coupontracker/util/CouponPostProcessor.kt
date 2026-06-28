@@ -1,6 +1,7 @@
 package com.example.coupontracker.util
 
 import com.example.coupontracker.data.model.Coupon
+import com.example.coupontracker.data.util.DescriptionUtils
 import java.util.Date
 
 /**
@@ -15,6 +16,7 @@ object CouponPostProcessor {
         "",
         "No description",
         "Coupon offer",
+        DescriptionUtils.NEEDS_REVIEW_DESCRIPTION,
         "Extracted via LLM",
         "Multi-coupon detected",
         "Scanned from QR code"
@@ -75,7 +77,7 @@ object CouponPostProcessor {
             return ocrCandidate
         }
 
-        return current.ifBlank { com.example.coupontracker.data.model.Coupon.Defaults.UNKNOWN_STORE }
+        return current.trim()
     }
 
     private fun isFullerStoreCandidate(current: String, candidate: String): Boolean {
@@ -166,19 +168,25 @@ object CouponPostProcessor {
     }
 
     private fun resolveDescription(current: String, ocrText: String?): String {
-        if (current.isNotBlank() && current !in descriptionPlaceholders) {
+        if (current.isNotBlank() && !isDescriptionPlaceholder(current)) {
             return current
         }
 
         if (!ocrText.isNullOrBlank()) {
             val extracted = textExtractor.extractDescription(ocrText)
             val cleaned = LocalLlmOcrService.cleanDescription(extracted)
-            if (cleaned.isNotBlank() && cleaned !in descriptionPlaceholders) {
+            if (cleaned.isNotBlank() && !isDescriptionPlaceholder(cleaned)) {
                 return cleaned
             }
 
         }
 
-        return current.ifBlank { "Coupon offer" }
+        return DescriptionUtils.NEEDS_REVIEW_DESCRIPTION
+    }
+
+    private fun isDescriptionPlaceholder(value: String): Boolean {
+        return descriptionPlaceholders.any { placeholder ->
+            value.trim().equals(placeholder, ignoreCase = true)
+        }
     }
 }

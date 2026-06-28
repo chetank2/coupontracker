@@ -133,6 +133,36 @@ private fun buildDescriptionFromInfo(info: CouponInfo): String {
     return segments.joinToString(separator = "\n")
 }
 
+internal fun createMultiCouponImportReviewCoupon(
+    reason: String,
+    rawOcrText: String,
+    captureTimestamp: Date?
+): Coupon {
+    return Coupon(
+        storeName = Coupon.Defaults.UNKNOWN_STORE,
+        description = "Needs review: multiple coupons could not be isolated",
+        redeemCode = null,
+        imageUri = null,
+        status = Coupon.Status.ACTIVE,
+        needsAttention = true,
+        storeNameSource = "multi_coupon_import_review",
+        storeNameEvidence = emptyList(),
+        extractionQualityScore = 0,
+        extractionConfidenceBreakdown = mapOf("layout" to 0f),
+        extractionStage = "MULTI_COUPON_IMPORT_REVIEW",
+        extractionRunPath = "coupon_input_manager -> multi_coupon_review",
+        extractionTimestamp = captureTimestamp,
+        cleanupStatus = Coupon.CleanupStatus.FAILED,
+        cleanupError = "Multi-coupon image needs crop selection before full-image OCR. reason=$reason",
+        rawOcrText = rawOcrText.takeIf { it.isNotBlank() },
+        extractionSource = "MULTI_COUPON_IMPORT_REVIEW",
+        codeState = Coupon.CodeState.UNKNOWN,
+        expiryState = Coupon.ExpiryState.UNKNOWN,
+        layoutState = Coupon.LayoutState.LOW_CONFIDENCE,
+        debugVisionEvidence = "multi_coupon_import_review; reason=$reason"
+    )
+}
+
 /**
  * Manager class for handling various coupon input methods
  */
@@ -348,11 +378,16 @@ class CouponInputManager(
                     if (!shouldAttemptMulti) {
                         Log.d(
                             TAG,
-                            "Skipping multi-coupon pipeline: uniqueIndicators=$uniqueIndicatorCount, totalIndicators=$indicatorCount, codes=$codeCount, ctaTokens=$ctaTokenCount, confidence=${classification.confidence}"
+                            "Blocking full-image OCR for suspected multi-coupon input: uniqueIndicators=$uniqueIndicatorCount, totalIndicators=$indicatorCount, codes=$codeCount, ctaTokens=$ctaTokenCount, confidence=${classification.confidence}"
                         )
                         ExtractionLogBuffer.appendInfo(
                             TAG,
-                            "Skipping multi-coupon pipeline (unique=$uniqueIndicatorCount, total=$indicatorCount, codes=$codeCount, ctas=$ctaTokenCount, confidence=${classification.confidence})"
+                            "Multi-coupon suspected; blocked full-image OCR (unique=$uniqueIndicatorCount, total=$indicatorCount, codes=$codeCount, ctas=$ctaTokenCount, confidence=${classification.confidence})"
+                        )
+                        return@withContext createMultiCouponImportReviewCoupon(
+                            reason = "multi_suspected_below_extraction_threshold",
+                            rawOcrText = quickOcrText,
+                            captureTimestamp = captureTimestamp
                         )
                     } else {
                         Log.d(TAG, "🚨 Multi-coupon screenshot detected (indicator hits=$indicatorCount, unique=$uniqueIndicatorCount)")
@@ -367,7 +402,7 @@ class CouponInputManager(
                                     allowProgressiveFallback = false
                                 )
                             }.getOrElse { error ->
-                                Log.e(TAG, "Multi-coupon extraction failed, falling back to single extraction", error)
+                                Log.e(TAG, "Multi-coupon extraction failed; blocking full-image OCR", error)
                                 ExtractionLogBuffer.appendError(TAG, "Multi-coupon extraction failed", error)
                                 null
                             }
@@ -404,11 +439,18 @@ class CouponInputManager(
                                 return@withContext refined
                             }
                         } else {
-                            Log.w(TAG, "⚠️ Multi-coupon extraction returned no coupons, falling back to single extraction")
+                            Log.w(TAG, "⚠️ Multi-coupon extraction returned no coupons; blocking full-image OCR")
                             ExtractionLogBuffer.appendWarning(TAG, "Multi-coupon extraction returned no coupons")
+                            return@withContext createMultiCouponImportReviewCoupon(
+                                reason = if (multiResult == null) {
+                                    "multi_extraction_failed_or_unavailable"
+                                } else {
+                                    "multi_extraction_returned_no_coupons"
+                                },
+                                rawOcrText = quickOcrText,
+                                captureTimestamp = captureTimestamp
+                            )
                         }
-
-                        // Continue with single-coupon extraction after fallback logic
                     }
                 }
 

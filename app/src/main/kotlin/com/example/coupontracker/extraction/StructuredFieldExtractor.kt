@@ -36,6 +36,19 @@ class StructuredFieldExtractor {
         private val WATERMARK_WORDS = setOf(
             "SHARE", "DETAILS", "TERMS", "NOW", "TODAY"
         )
+        private val EXPLICIT_NO_CODE_PHRASES = listOf(
+            Regex("\\bno\\s+(?:coupon\\s+|promo\\s+|voucher\\s+)?code\\s+(?:needed|required)\\b", RegexOption.IGNORE_CASE),
+            Regex("\\b(?:coupon\\s+|promo\\s+|voucher\\s+)?code\\s+(?:not\\s+required|is\\s+not\\s+required)\\b", RegexOption.IGNORE_CASE),
+            Regex("\\bwithout\\s+(?:a\\s+)?(?:coupon\\s+|promo\\s+|voucher\\s+)?code\\b", RegexOption.IGNORE_CASE),
+            Regex("\\bauto[-\\s]?applied\\b", RegexOption.IGNORE_CASE),
+            Regex("\\bautomatically\\s+applied\\b", RegexOption.IGNORE_CASE)
+        )
+        private val STANDALONE_NO_CODE_LINES = setOf(
+            "no code",
+            "no coupon code",
+            "no promo code",
+            "no voucher code"
+        )
 
         private inline fun safeLogDebug(tag: String, message: () -> String) {
             try {
@@ -479,26 +492,38 @@ class StructuredFieldExtractor {
             }
         }
         
-        // Pattern 3: Check for "no code" indicators
-        val noCodePatterns = listOf(
-            "no code needed", "no code required", "cashback", "automatic",
-            "auto-applied", "auto applied", "automatically applied"
-        )
-        val hasNoCodeIndicator = noCodePatterns.any {
-            context.ocrText.contains(it, ignoreCase = true)
-        }
-        
-        if (hasNoCodeIndicator && candidates.isEmpty()) {
+        // Pattern 3: Check for explicit no-code UI/OCR evidence only.
+        if (hasExplicitNoCodeEvidence(context) && candidates.isEmpty()) {
             candidates.add(FieldCandidate(
                 value = "NO_CODE_NEEDED",
                 confidence = 0.8f,
                 source = "no_code_indicator",
-                context = "Cashback/auto-applied offer"
+                context = "Explicit no-code offer text"
             ))
         }
         
         return candidates.filter { it.confidence >= minConfidence }
             .sortedByDescending { it.confidence }
+    }
+
+    private fun hasExplicitNoCodeEvidence(context: ExtractionContext): Boolean {
+        val evidenceText = buildList {
+            add(context.ocrText)
+            addAll(context.metadata.values)
+        }.joinToString("\n").trim()
+
+        if (evidenceText.isBlank()) return false
+
+        if (EXPLICIT_NO_CODE_PHRASES.any { it.containsMatchIn(evidenceText) }) return true
+
+        return evidenceText.lineSequence()
+            .map { line ->
+                line.lowercase(Locale.ROOT)
+                    .replace(Regex("[^a-z0-9]+"), " ")
+                    .replace(Regex("\\s+"), " ")
+                    .trim()
+            }
+            .any { it in STANDALONE_NO_CODE_LINES }
     }
     
     /**

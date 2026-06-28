@@ -19,6 +19,13 @@ class DescriptionUtilsTest {
     }
 
     @Test
+    fun `append details uses review-safe text when no offer detail remains`() {
+        val description = DescriptionUtils.appendDetails("Coupon offer", "82%")
+
+        assertEquals("Needs review: offer details not extracted", description)
+    }
+
+    @Test
     fun `append details drops zero cashback line`() {
         val description = DescriptionUtils.appendDetails(
             "Get 33% off on Domino's",
@@ -98,6 +105,14 @@ class DescriptionUtilsTest {
                 storeName = "Store",
                 redeemCode = "SAVE100"
             )
+        )
+    }
+
+    @Test
+    fun `display description does not surface placeholder as offer`() {
+        assertEquals(
+            "Needs review: offer details not extracted",
+            DescriptionUtils.formatDisplayDescription("Coupon offer")
         )
     }
 }
