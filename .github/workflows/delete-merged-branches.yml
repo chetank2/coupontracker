@@ -12,56 +12,56 @@ jobs:
   delete-merged-branches:
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-      
+
       - name: Delete branch after PR merge
         if: github.event_name == 'pull_request'
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
           echo "Deleting merged branch: $BRANCH_NAME"
           git push origin --delete "$BRANCH_NAME" || echo "Branch already deleted or doesn't exist"
-      
+
       - name: Delete all merged branches (scheduled)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
           echo "🔍 Finding branches merged into feature/qwen-multi-coupon-extraction..."
-          
+
           # Fetch all branches
           git fetch --prune --all
-          
+
           # Protected branches
           PROTECTED="origin/main|origin/feature/qwen-multi-coupon-extraction|origin/gh-pages"
-          
+
           # Get branches merged into feature branch
           MERGED_BRANCHES=$(git branch -r --merged origin/feature/qwen-multi-coupon-extraction | \
             grep "origin/codex/" | \
             sed 's/^[[:space:]]*//' | \
             sed 's/origin\///' | \
             grep -vE "$PROTECTED" || true)
-          
+
           if [ -z "$MERGED_BRANCHES" ]; then
             echo "✅ No merged branches to delete"
             exit 0
           fi
-          
+
           echo "Found branches to delete:"
           echo "$MERGED_BRANCHES"
-          
+
           # Delete branches
           DELETED=0
           FAILED=0
-          
+
           while IFS= read -r branch; do
             if [ -n "$branch" ]; then
               echo "Deleting: $branch"
@@ -74,12 +74,12 @@ jobs:
               fi
             fi
           done <<< "$MERGED_BRANCHES"
-          
+
           echo ""
           echo "📊 Summary:"
           echo "  Deleted: $DELETED"
           echo "  Failed: $FAILED"
-      
+
       - name: Create cleanup summary
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: |
@@ -92,4 +92,3 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Total remote branches:**" >> $GITHUB_STEP_SUMMARY
           git branch -r | wc -l >> $GITHUB_STEP_SUMMARY
-
