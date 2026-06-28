@@ -8,6 +8,45 @@ here. Dynamic memory should capture dated fixes, commit summaries, device/logcat
 observations, failed approaches, regression tests added, installed APK evidence,
 known current bugs, and open follow-ups.
 
+## 2026-06-28: Branch Cleanup Workflow Review Fix
+
+Files changed:
+
+- `.github/workflows/delete-merged-branches.yml`
+- `docs/knowledge-base/dynamic-memory.md`
+
+Why:
+
+- Review found the branch-cleanup workflow still had active correctness risks,
+  not just architectural follow-up work.
+
+What it solves:
+
+- Prevents the pull-request closed path from trying to delete protected branches
+  such as `main`, `feature/qwen-multi-coupon-extraction`, or `gh-pages`.
+- Prevents bash `set -e` from aborting scheduled cleanup on the first
+  successful or failed counter increment.
+
+How it works:
+
+- Adds an explicit protected-branch `case` guard before PR-triggered deletion.
+- Replaces post-increment arithmetic with pre-increment arithmetic for cleanup
+  counters.
+
+How good it is:
+
+- Narrow workflow-only fix. It does not affect Android extraction behavior.
+
+Remaining risk:
+
+- Workflow behavior still needs GitHub Actions runtime proof on the next PR
+  close or scheduled/manual run.
+
+Tests/evidence:
+
+- `git diff --check`
+- `bash -n` on the extracted workflow shell blocks.
+
 ## 2026-06-28: Debug Build Installed After Description Extractor Refactor
 
 Files changed:

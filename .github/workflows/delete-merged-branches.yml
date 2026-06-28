@@ -29,6 +29,12 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           BRANCH_NAME="${{ github.event.pull_request.head.ref }}"
+          case "$BRANCH_NAME" in
+            main|feature/qwen-multi-coupon-extraction|gh-pages)
+              echo "Skipping protected branch: $BRANCH_NAME"
+              exit 0
+              ;;
+          esac
           echo "Deleting merged branch: $BRANCH_NAME"
           git push origin --delete "$BRANCH_NAME" || echo "Branch already deleted or doesn't exist"
 
@@ -67,10 +73,10 @@ jobs:
               echo "Deleting: $branch"
               if git push origin --delete "$branch" 2>/dev/null; then
                 echo "  ✓ Deleted"
-                ((DELETED++))
+                ((++DELETED))
               else
                 echo "  ✗ Failed or already deleted"
-                ((FAILED++))
+                ((++FAILED))
               fi
             fi
           done <<< "$MERGED_BRANCHES"
