@@ -8,6 +8,57 @@ here. Dynamic memory should capture dated fixes, commit summaries, device/logcat
 observations, failed approaches, regression tests added, installed APK evidence,
 known current bugs, and open follow-ups.
 
+## 2026-06-28: Coupon Description Rules Extracted From TextExtractor
+
+Files changed:
+
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/CouponDescriptionExtractor.kt`
+- `app/src/main/kotlin/com/example/coupontracker/extraction/rules/TextExtractor.kt`
+- `app/src/test/java/com/example/coupontracker/extraction/rules/CouponDescriptionExtractorTest.kt`
+
+Why:
+
+- `TextExtractor` owned store, code, expiry, metadata, and a large coupon
+  description rule cluster, making the next modularity slices harder to review.
+- Description extraction has its own sensitive behavior around offer wording,
+  OCR cleanup, code/action stripping, and rupee artifact repair, so it needs a
+  dedicated rules owner.
+
+What it solves:
+
+- Moves deterministic coupon-description parsing into
+  `CouponDescriptionExtractor` while keeping `TextExtractor.extractDescription`
+  and `extractCouponInfoSync` as compatibility call sites.
+- Keeps crop-first/OCR-first semantics unchanged because no capture routing,
+  model cleanup, merge policy, or validation ownership changed.
+
+How it works:
+
+- `TextExtractor` now delegates description extraction and raw offer fallback to
+  `CouponDescriptionExtractor`.
+- The new extractor contains the existing pattern priority, protected
+  code/expiry/action filtering, offer continuation rules, monetary summaries,
+  and rupee OCR artifact repairs.
+
+How good it is:
+
+- Narrow refactor. Behavior should be preserved because the moved rules are
+  wired behind the same public `TextExtractor` methods and backed by both the
+  existing `TextExtractorTest` surface and direct description-extractor tests.
+
+Remaining risk:
+
+- Low. The new class constructs its own `StoreNameExtractor` for one monetary
+  summary fallback, matching the previous behavior path through
+  `TextExtractor.extractStoreName`.
+
+Tests/evidence:
+
+- `git diff --check`
+- `JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest --tests com.example.coupontracker.extraction.rules.CouponDescriptionExtractorTest --tests com.example.coupontracker.util.TextExtractorTest`
+- `JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:testDebugUnitTest`
+- `JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew :app:assembleDebug`
+
 ## 2026-06-28: VerifyCouponWorker Thin-Slice Use Case Extraction
 
 Files changed:
