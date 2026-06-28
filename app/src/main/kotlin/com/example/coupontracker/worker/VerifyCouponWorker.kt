@@ -14,6 +14,7 @@ import androidx.work.workDataOf
 import com.example.coupontracker.data.model.Coupon
 import com.example.coupontracker.data.repository.CouponRepository
 import com.example.coupontracker.data.util.CouponDedupUtils
+import com.example.coupontracker.domain.usecase.VerifyCouponUseCase
 import com.example.coupontracker.extraction.model.GemmaVisionCouponModel
 import com.example.coupontracker.extraction.quality.OfferTextQuality
 import com.example.coupontracker.extraction.vision.VisionFieldExtraction
@@ -55,6 +56,7 @@ class VerifyCouponWorker @AssistedInject constructor(
     private val visionFieldJsonParser = VisionFieldJsonParser()
     private val visionEvidenceMergePolicy = VisionEvidenceMergePolicy()
     private val cleanupStatusWriter = CouponCleanupStatusWriter(couponRepository)
+    private val verifyCouponUseCase = VerifyCouponUseCase()
     private val visionCropPreparer = VisionCropPreparer(
         ocrEngine = ocrEngine,
         gemmaVisionCouponModel = gemmaVisionCouponModel,
@@ -74,15 +76,7 @@ class VerifyCouponWorker @AssistedInject constructor(
         }
 
         val coupon = couponRepository.getCouponById(couponId) ?: return Result.success()
-        couponRepository.updateCoupon(
-            coupon.copy(
-                cleanupStatus = Coupon.CleanupStatus.RUNNING,
-                cleanupStartedAt = Date(),
-                cleanupFinishedAt = null,
-                cleanupError = null,
-                updatedAt = Date()
-            )
-        )
+        couponRepository.updateCoupon(verifyCouponUseCase.markRunning(coupon))
 
         return try {
             val ocrText = coupon.rawOcrText?.takeIf { it.isNotBlank() }
@@ -96,7 +90,7 @@ class VerifyCouponWorker @AssistedInject constructor(
             val gemmaStatus = ModelPaths.getGemmaVisionInstallStatus(applicationContext)
 
             val deterministicCleaned = buildDeterministicCleanedCoupon(coupon, ocrText)
-            val shouldRunVision = shouldRunVisionVerification(
+            val shouldRunVision = verifyCouponUseCase.shouldRunVisionVerification(
                 userRequested = userRequested,
                 automaticVerification = automaticVerification,
                 deterministicCleaned = deterministicCleaned,
@@ -107,14 +101,7 @@ class VerifyCouponWorker @AssistedInject constructor(
             val visionBaseCoupon = deterministicCleaned ?: coupon
             if (deterministicCleaned != null) {
                 val deterministicState = if (shouldRunVision) {
-                    deterministicCleaned.copy(
-                        cleanupStatus = Coupon.CleanupStatus.RUNNING,
-                        cleanupStartedAt = Date(),
-                        cleanupFinishedAt = null,
-                        cleanupError = null,
-                        lastCleanedBy = null,
-                        updatedAt = Date()
-                    )
+                    verifyCouponUseCase.markDeterministicBaselineRunning(deterministicCleaned)
                 } else {
                     deterministicCleaned
                 }
@@ -283,32 +270,6 @@ class VerifyCouponWorker @AssistedInject constructor(
         return cleanupStatusWriter.userFacingFailure(rawMessage)
     }
 
-    private fun shouldRunVisionVerification(
-        userRequested: Boolean,
-        automaticVerification: Boolean,
-        deterministicCleaned: Coupon?,
-        rawOcr: String,
-        gemmaEnabled: Boolean,
-        gemmaInstalled: Boolean
-    ): Boolean {
-        if (!gemmaEnabled || !gemmaInstalled) return false
-        if (userRequested) return true
-        return automaticVerification &&
-            deterministicCleaned?.needsVisionReviewAfterDeterministicCleanup(rawOcr) == true
-    }
-
-    private fun Coupon.needsVisionReviewAfterDeterministicCleanup(rawOcr: String): Boolean {
-        val assessment = CouponExtractionConfidenceScorer.score(this, rawOcr)
-        val missingCodeState = redeemCode.isNullOrBlank() && codeState == Coupon.CodeState.UNKNOWN
-        val missingExpiryState = expiryDate == null && expiryState == Coupon.ExpiryState.UNKNOWN
-        return needsAttention ||
-            cleanupStatus == Coupon.CleanupStatus.FAILED ||
-            assessment.recommendation == ExtractionRecommendation.VERIFY_WITH_VISION ||
-            assessment.recommendation == ExtractionRecommendation.MANUAL_REVIEW ||
-            missingCodeState ||
-            missingExpiryState
-    }
-
     private fun buildDeterministicCleanedCoupon(current: Coupon, rawOcr: String): Coupon? {
         val allowUserEditedFallback = current.extractionSource == Coupon.ExtractionSource.USER_EDITED
         val captureTimestamp = extractCaptureTimestamp(current) ?: current.createdAt
@@ -458,18 +419,7 @@ class VerifyCouponWorker @AssistedInject constructor(
     }
 
     private fun mergeLatestCouponState(baseline: Coupon, latest: Coupon): Coupon {
-        val cleanupBaseline = baseline.copy(
-            cleanupStatus = latest.cleanupStatus,
-            cleanupStartedAt = latest.cleanupStartedAt,
-            cleanupFinishedAt = latest.cleanupFinishedAt,
-            cleanupError = latest.cleanupError,
-            updatedAt = latest.updatedAt
-        )
-        return if (latest.extractionSource == Coupon.ExtractionSource.USER_EDITED) {
-            latest
-        } else {
-            cleanupBaseline
-        }
+        return verifyCouponUseCase.mergeLatestCouponState(baseline, latest)
     }
 
     private fun buildFieldSourceRunPath(

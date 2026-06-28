@@ -1,5 +1,6 @@
 package com.example.coupontracker.extraction.capture
 
+import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.ml.ScreenshotClassifier
 
 data class FullImageFallbackDecision(
@@ -27,6 +28,14 @@ fun decideFullImageFallback(
         allowDirectOcr = decision.mode == CropIsolationMode.GUARDED_FULL_IMAGE_OCR,
         reason = decision.reason.toLegacyFallbackReason()
     )
+}
+
+fun shouldBlockFullImageFallback(
+    multiResult: MultiCouponExtractionService.MultiCouponResult?
+): Boolean {
+    if (multiResult == null) return false
+    return multiResult.screenshotType == ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP ||
+        multiResult.totalDetected > 1
 }
 
 private fun CropIsolationReason.toLegacyFallbackReason(): String {

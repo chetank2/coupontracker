@@ -22,6 +22,7 @@ import com.example.coupontracker.domain.usecase.SaveScannedCouponUseCase
 import com.example.coupontracker.extraction.MultiCouponExtractionService
 import com.example.coupontracker.extraction.capture.OcrFirstCouponExtractor
 import com.example.coupontracker.extraction.capture.decideFullImageFallback
+import com.example.coupontracker.extraction.capture.shouldBlockFullImageFallback
 import com.example.coupontracker.extraction.FieldCandidate
 import com.example.coupontracker.extraction.TextBlock
 import com.example.coupontracker.extraction.rules.TextExtractor
@@ -539,14 +540,6 @@ class ScannerViewModel @Inject constructor(
             _uiState.value = ScannerUiState.AllCouponsSaved(processedResults)
         }
         return true
-    }
-
-    private fun shouldBlockFullImageFallback(
-        multiResult: MultiCouponExtractionService.MultiCouponResult?
-    ): Boolean {
-        if (multiResult == null) return false
-        return multiResult.screenshotType == ScreenshotClassifier.ScreenshotType.MULTI_COUPON_APP ||
-            multiResult.totalDetected > 1
     }
 
     private suspend fun scanWithGuardedFullImageFallback(

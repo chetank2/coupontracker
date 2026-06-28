@@ -8,7 +8,6 @@ import com.example.coupontracker.util.GenericFieldHeuristics
 import com.example.coupontracker.util.LocalLlmOcrService
 import com.example.coupontracker.util.PlatformDetector
 import com.example.coupontracker.util.RedeemCodeSanitizer
-import com.example.coupontracker.util.StoreCandidateValidator
 import java.io.Serializable
 import java.text.ParseException
 import java.text.SimpleDateFormat
@@ -75,6 +74,7 @@ data class CouponInfo(
  */
 class TextExtractor {
     private val TAG = "TextExtractor"
+    private val storeCandidatePolicy = StoreCandidatePolicy()
 
     private inline fun safeLogDebug(tag: String, message: () -> String) {
         try {
@@ -287,7 +287,7 @@ class TextExtractor {
         val brandMatcher = brandPattern.matcher(text)
         if (brandMatcher.find()) {
             val brand = cleanCandidate(brandMatcher.group(1), text)
-            if (StoreCandidateValidator.isAcceptable(brand, text)) {
+            if (brand != null && storeCandidatePolicy.isAcceptedStoreCandidate(brand, text)) {
                 safeLogDebug(TAG) { "Found brand from 'Brand:' pattern: $brand" }
                 return brand
             }
@@ -322,11 +322,8 @@ class TextExtractor {
                 return
             }
             val candidate = cleanCandidate(raw, text) ?: return
-            if (!StoreCandidateValidator.isAcceptable(candidate, text)) {
-                return
-            }
             val normalized = candidate.lowercase(Locale.ROOT)
-            if (COMMON_WORDS.contains(normalized)) {
+            if (!storeCandidatePolicy.isAcceptedStoreCandidate(candidate, text)) {
                 return
             }
 
@@ -459,7 +456,7 @@ class TextExtractor {
             val storeMatcher = pattern.matcher(text)
             if (storeMatcher.find()) {
                 val name = cleanCandidate(storeMatcher.group(1), text) ?: continue
-                if (!StoreCandidateValidator.isAcceptable(name, text)) continue
+                if (!storeCandidatePolicy.isAcceptedStoreCandidate(name, text)) continue
                 safeLogDebug(TAG) { "Found store name from pattern: $name" }
                 return name
             }
@@ -503,7 +500,7 @@ class TextExtractor {
             val matcher = pattern.matcher(text)
             while (matcher.find()) {
                 val candidate = cleanCandidate(matcher.group(1), text) ?: continue
-                if (StoreCandidateValidator.isAcceptable(candidate, text)) {
+                if (storeCandidatePolicy.isAcceptedStoreCandidate(candidate, text)) {
                     return candidate
                 }
             }
@@ -536,7 +533,7 @@ class TextExtractor {
                 val matcher = pattern.matcher(line)
                 while (matcher.find()) {
                     val candidate = cleanCandidate(matcher.group(1), text) ?: continue
-                    if (StoreCandidateValidator.isAcceptable(candidate, text)) {
+                    if (storeCandidatePolicy.isAcceptedStoreCandidate(candidate, text)) {
                         return candidate
                     }
                 }
@@ -560,91 +557,7 @@ class TextExtractor {
     }
 
     private fun cleanCandidate(raw: String?, fullText: String? = null): String? {
-        val initial = raw?.trim()?.takeIf { it.length >= 3 } ?: return null
-        val normalizedInitial = stripNumericCounterArtifact(initial, fullText)
-        val tokens = normalizedInitial.split("\\s+".toRegex())
-            .filter { it.isNotBlank() }
-            .toMutableList()
-        if (tokens.isEmpty()) {
-            return null
-        }
-
-        while (tokens.isNotEmpty() &&
-            GENERIC_LEADING_STORE_TOKENS.contains(tokens.first().lowercase(Locale.ROOT))
-        ) {
-            tokens.removeAt(0)
-        }
-
-        if (tokens.isEmpty()) {
-            return null
-        }
-
-        val builder = mutableListOf<String>()
-        for (token in tokens) {
-            val trimmedToken = token.trim().trimEnd(',', '.', ';', ':')
-            if (trimmedToken.isEmpty()) continue
-
-            val leadingLetter = trimmedToken.firstOrNull { it.isLetter() }
-            if (builder.isNotEmpty() && leadingLetter != null && leadingLetter.isLowerCase()) {
-                break
-            }
-
-            builder.add(trimmedToken)
-        }
-
-        while (builder.isNotEmpty() && GENERIC_TRAILING_TOKENS.contains(builder.last().uppercase(Locale.ROOT))) {
-            builder.removeAt(builder.lastIndex)
-        }
-
-        val cleaned = builder.joinToString(" ").trim()
-        if (cleaned.length < 3) {
-            return null
-        }
-
-        if (!cleaned.any { it.isLetter() }) {
-            // Guard against numeric dashboard counters like "428"
-            return null
-        }
-
-        val lower = cleaned.lowercase(Locale.ROOT)
-        val allCapsAcronym = cleaned
-            .filter { it.isLetterOrDigit() }
-            .let { compact ->
-                compact.length in 3..8 &&
-                    compact.any(Char::isLetter) &&
-                    compact.all { !it.isLetter() || it.isUpperCase() }
-            }
-
-        if (!allCapsAcronym && !lower.any { it in "aeiouy" }) {
-            return null
-        }
-
-        val trailingConsonants = lower.takeLastWhile { it.isLetter() && it !in "aeiouy" }
-        if (!allCapsAcronym && trailingConsonants.length >= 3) {
-            return null
-        }
-
-        return cleaned
-    }
-
-    private fun stripNumericCounterArtifact(candidate: String, fullText: String?): String {
-        val matcher = STORE_COUNTER_ARTIFACT_PATTERN.matcher(candidate)
-        if (!matcher.matches()) {
-            return candidate
-        }
-
-        val prefix = matcher.group(1) ?: return candidate
-        val suffix = matcher.group(2) ?: return candidate
-        val hasDecimalCounter = suffix.contains('.') || suffix.contains(',')
-        val prefixAppearsStandalone = fullText
-            ?.let {
-                Pattern.compile("\\b${Pattern.quote(prefix)}\\b", Pattern.CASE_INSENSITIVE or Pattern.UNICODE_CASE)
-                    .matcher(it)
-                    .find()
-            }
-            ?: false
-
-        return if (hasDecimalCounter || prefixAppearsStandalone) prefix else candidate
+        return storeCandidatePolicy.cleanCandidate(raw, fullText)
     }
 
     /**
@@ -1880,20 +1793,6 @@ class TextExtractor {
             "MMMM d yyyy"
         )
 
-        private val COMMON_WORDS = setOf(
-            "the", "and", "for", "with", "off", "use", "get", "code", "coupon",
-            "offer", "valid", "till", "from", "upto", "free", "save", "discount",
-            "multi", "product", "products", "kit", "combo", "pack", "value", "special",
-            "now", "today", "details", "redeem", "claim", "activate", "shop", "buy",
-            "view", "apply", "tap", "click", "pastm", "patm", "just", "expires",
-            "expired", "cashback"
-        )
-
-        private val GENERIC_LEADING_STORE_TOKENS = setOf(
-            "details", "detail", "coupon", "coupons", "voucher", "vouchers",
-            "offer", "offers", "store", "brand", "merchant", "shop"
-        )
-
         private val GENERIC_DESCRIPTION_PATTERN = Pattern.compile("(?i)^(coupon\\s*offer|offer\\s*details|coupon\\s*details|details|offer)")
         private val MONETARY_LINE_PATTERN = Pattern.compile("(?i)(flat|up\\s*to|upto|extra|save).*(off|cashback|discount)")
         private val LEADING_AMOUNT_PATTERN = Pattern.compile("(?i)(flat|up\\s*to|upto|extra|save)\\s+(\\d[\\d,]{2,})")
@@ -1915,8 +1814,6 @@ class TextExtractor {
         )
         private val GENERIC_HEADING_PATTERN = Pattern.compile("(?i)(offer|details|coupon|code|cashback)")
         private val RUPEE_VALUE_PATTERN = "(?i)(?:₹|rs\\.?\\s*)?\\d[\\d,]{2,}(?=\\s*(?:cashback|off|discount|\\+|$))".toRegex()
-        private val STORE_COUNTER_ARTIFACT_PATTERN =
-            Pattern.compile("^([\\p{L}\\p{M}]{3,})(\\d+(?:[.,]\\d+)?)$", Pattern.UNICODE_CASE)
         private const val ALL_CAPS_LOGO_PREFERENCE_MARGIN = 3.0
         private val DESCRIPTION_BOUNDARY_PATTERN = Pattern.compile(
             "(?i)\\b(?:details|offer\\s+details|redeem\\s+now|redeem|copy|copy\\s+code|use\\s+code|apply\\s+code|redeem\\s+code|code\\s*[:\\-–—]?|coupon\\s+code|promo\\s+code|expires?\\s+in|valid\\s+(?:till|until))\\b",
@@ -1951,22 +1848,6 @@ class TextExtractor {
             "Entertainment" to listOf(
                 "movie", "movies", "ott", "stream", "streaming", "subscription", "concert"
             )
-        )
-
-        private val GENERIC_TRAILING_TOKENS = setOf(
-            "ANNUAL",
-            "PLAN",
-            "PLANS",
-            "OFFER",
-            "OFFERS",
-            "SALE",
-            "DEAL",
-            "DEALS",
-            "REWARDS",
-            "PROGRAM",
-            "MEMBERSHIP",
-            "SUBSCRIPTION",
-            "CARD"
         )
     }
 }
