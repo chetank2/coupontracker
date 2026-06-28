@@ -40,6 +40,21 @@ class CropIsolationPolicyTest {
     }
 
     @Test
+    fun `multiple regions keep multi selection target even when ocr is blank`() {
+        val decision = policy.decide(
+            input(
+                detectedRegionCount = 2,
+                candidateRegionType = CandidateRegionType.ISOLATED_CROP,
+                rawOcrText = "   "
+            )
+        )
+
+        assertEquals(CropIsolationMode.REVIEW_ONLY, decision.mode)
+        assertEquals(CropIsolationReason.MULTIPLE_REGIONS_DETECTED, decision.reason)
+        assertEquals(ReviewTarget.MULTI_SELECTION, decision.reviewTarget)
+    }
+
+    @Test
     fun `classified multi coupon screenshot is review only without isolated crop`() {
         val decision = policy.decide(
             input(

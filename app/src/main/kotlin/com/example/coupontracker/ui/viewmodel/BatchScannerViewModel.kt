@@ -906,7 +906,7 @@ internal fun isFallbackOrFullImageRegion(
             detectedRegionCount = 1,
             candidateRegionType = candidateRegionType,
             screenshotType = CaptureScreenshotType.UNKNOWN,
-            rawOcrText = region.ocrText.ifBlank { "region text unavailable" },
+            rawOcrText = region.ocrText,
             likelySingleCoupon = false
         )
     )

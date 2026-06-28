@@ -76,6 +76,18 @@ class BatchScannerViewModelFallbackTest {
     }
 
     @Test
+    fun `blank ocr cropped region is not safe for clean extraction`() {
+        val bitmap = bitmap(width = 1000, height = 2000)
+        val region = region(
+            boundingBox = Rect(80, 120, 900, 900),
+            source = HybridCouponDetector.DetectionSource.OCR_ANCHOR_ONLY,
+            ocrText = "   "
+        )
+
+        assertTrue(isFallbackOrFullImageRegion(bitmap, region))
+    }
+
+    @Test
     fun `crop isolation fallback coupon is review only`() {
         val uri = uri("content://batch/coupon.png")
 
@@ -109,11 +121,12 @@ class BatchScannerViewModelFallbackTest {
 
     private fun region(
         boundingBox: Rect,
-        source: HybridCouponDetector.DetectionSource
+        source: HybridCouponDetector.DetectionSource,
+        ocrText: String = "coupon text"
     ): HybridCouponDetector.CouponRegion {
         return HybridCouponDetector.CouponRegion(
             boundingBox = boundingBox,
-            ocrText = "coupon text",
+            ocrText = ocrText,
             confidence = 0.5f,
             source = source
         )

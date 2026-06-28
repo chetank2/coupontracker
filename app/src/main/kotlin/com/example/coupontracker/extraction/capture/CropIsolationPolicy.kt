@@ -11,17 +11,17 @@ class CropIsolationPolicy {
             "detectedRegionCount must be non-negative"
         }
 
-        if (input.rawOcrText.isBlank()) {
-            return CropIsolationDecision.reviewOnly(
-                reason = CropIsolationReason.BLANK_OCR,
-                reviewTarget = ReviewTarget.SINGLE_SCAN
-            )
-        }
-
         if (input.detectedRegionCount > 1) {
             return CropIsolationDecision.reviewOnly(
                 reason = CropIsolationReason.MULTIPLE_REGIONS_DETECTED,
                 reviewTarget = ReviewTarget.MULTI_SELECTION
+            )
+        }
+
+        if (input.rawOcrText.isBlank()) {
+            return CropIsolationDecision.reviewOnly(
+                reason = CropIsolationReason.BLANK_OCR,
+                reviewTarget = ReviewTarget.SINGLE_SCAN
             )
         }
 
